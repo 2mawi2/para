@@ -3,64 +3,15 @@
 # Integration test suite for pursor
 # Tests complete workflows in isolated temporary directories
 
+# Source common test functions
+. "$(dirname "${BATS_TEST_FILENAME}")/test_common.sh"
+
 setup() {
-    # Save current directory and environment for restoration
-    export ORIGINAL_DIR="$PWD"
-    export ORIGINAL_REPO_ROOT="$REPO_ROOT"
-    
-    # Create fresh temporary directory for each test
-    export TEST_REPO=$(mktemp -d)
-    
-    # Mock Cursor IDE - don't actually open it
-    export CURSOR_CMD="true"
-    
-    # Clear any pursor-related environment variables to ensure isolation
-    unset REPO_ROOT
-    unset STATE_DIR
-    unset SUBTREES_DIR
-    unset BASE_BRANCH
-    unset SUBTREES_DIR_NAME
-    unset STATE_DIR_NAME
-    
-    # Set up minimal git config in the isolated test directory
-    (
-        cd "$TEST_REPO"
-        git init
-        git config user.email "test@example.com"
-        git config user.name "Test User"
-        
-        # Disable git hooks in test repositories to prevent interference
-        git config core.hooksPath /dev/null
-        
-        # Create initial commit
-        echo "Initial content" > test-file.py
-        git add test-file.py
-        git commit -m "Initial commit"
-    )
-    
-    # Get absolute path to pursor script
-    export PURSOR_SCRIPT="$(dirname "${BATS_TEST_DIRNAME}")/pursor.sh"
+    setup_temp_git_repo
 }
 
 teardown() {
-    # Clean up temporary directory
-    if [ -n "$TEST_REPO" ] && [ -d "$TEST_REPO" ]; then
-        rm -rf "$TEST_REPO"
-    fi
-    
-    # Restore original directory and environment
-    cd "$ORIGINAL_DIR" 2>/dev/null || true
-    export REPO_ROOT="$ORIGINAL_REPO_ROOT"
-}
-
-# Helper function to run pursor in the test directory
-run_pursor() {
-    cd "$TEST_REPO" && "$PURSOR_SCRIPT" "$@"
-}
-
-# Helper function to run commands in test directory
-run_in_test_repo() {
-    cd "$TEST_REPO" && "$@"
+    teardown_temp_git_repo
 }
 
 @test "IT-1: Happy path - create session, edit file, merge successfully" {
@@ -72,17 +23,17 @@ run_in_test_repo() {
     cd "$TEST_REPO"
     [ -d "subtrees" ]
     
-    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    session_dir=$(find_session_dir)
     [ -n "$session_dir" ]
-    [ -d "$session_dir" ]
+    assert_session_exists "$session_dir"
     
     # Verify state tracking
     [ -d ".pursor_state" ]
-    session_count=$(ls .pursor_state | wc -l)
+    session_count=$(count_sessions)
     [ "$session_count" -eq 1 ]
     
     # 2. Edit file in worktree
-    cd "$session_dir"
+    cd "$TEST_REPO/$session_dir"
     echo "Modified in session" >> test-file.py
     
     # 3. Merge with message
@@ -93,14 +44,13 @@ run_in_test_repo() {
     cd "$TEST_REPO"
     
     # Verify commit exists on main
-    run git log --oneline
-    [[ "$output" == *"Integration test commit"* ]]
+    assert_commit_exists "Integration test commit"
     
     # Verify changes are in main
-    grep -q "Modified in session" test-file.py
+    assert_file_contains "test-file.py" "Modified in session"
     
     # Verify cleanup - session directory should not exist after successful merge
-    [ ! -d "$session_dir" ]
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-2: Cancel session" {
@@ -109,11 +59,11 @@ run_in_test_repo() {
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
-    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    [ -d "$session_dir" ]
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
     
     # Get branch name
-    cd "$session_dir"
+    cd "$TEST_REPO/$session_dir"
     branch_name=$(git branch --show-current)
     
     # 2. Cancel from within worktree
@@ -128,7 +78,7 @@ run_in_test_repo() {
     [ -z "$output" ]
     
     # Verify worktree directory is gone
-    [ ! -d "$session_dir" ]
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-3: Conflict resolution with continue" {
@@ -139,12 +89,12 @@ run_in_test_repo() {
     cd "$TEST_REPO"
     
     # Store session A path immediately
-    session_a=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    session_a=$(find_session_dir)
     [ -n "$session_a" ]
-    [ -d "$session_a" ]
+    assert_session_exists "$session_a"
     
     # Edit the existing file - replace the line with session A content
-    cd "$session_a"
+    cd "$TEST_REPO/$session_a"
     echo "Change from session A" > test-file.py
     cd "$TEST_REPO"
     
@@ -164,10 +114,10 @@ run_in_test_repo() {
         fi
     done
     [ -n "$session_b" ]
-    [ -d "$session_b" ]
+    assert_session_exists "$session_b"
     
     # Edit the same file in a conflicting way - replace with different content
-    cd "$session_b"
+    cd "$TEST_REPO/$session_b"
     echo "Change from session B" > test-file.py
     
     # 3. Merge A (should succeed)
@@ -179,9 +129,9 @@ run_in_test_repo() {
     
     # 4. Try to merge B (should have conflict)
     # Session B directory should still exist even after A is cleaned up
-    [ -d "$session_b" ]
+    assert_session_exists "$session_b"
     
-    cd "$session_b"
+    cd "$TEST_REPO/$session_b"
     run "$PURSOR_SCRIPT" merge "Session B changes"
     # The merge command should now fail due to rebase conflicts (this is the fix)
     [ "$status" -eq 1 ]
@@ -191,30 +141,29 @@ run_in_test_repo() {
     cd "$TEST_REPO"
     
     # The session should still be active (not cleaned up due to conflict)
-    [ -d "$session_b" ]
+    assert_session_exists "$session_b"
     
     # 5. Manually resolve conflict
     # Remove conflict markers and combine both changes
-    cat > "$session_b/test-file.py" << 'EOF'
+    cat > "$TEST_REPO/$session_b/test-file.py" << 'EOF'
 Change from session A
 Change from session B
 EOF
     
     # Continue the merge
-    cd "$session_b"
+    cd "$TEST_REPO/$session_b"
     run "$PURSOR_SCRIPT" continue
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
     # Verify both changes are in history
-    run git log --oneline
-    [[ "$output" == *"Session A changes"* ]]
-    [[ "$output" == *"Session B changes"* ]]
+    assert_commit_exists "Session A changes"
+    assert_commit_exists "Session B changes"
     
     # Verify final content has both changes
-    grep -q "Change from session A" test-file.py
-    grep -q "Change from session B" test-file.py
+    assert_file_contains "test-file.py" "Change from session A"
+    assert_file_contains "test-file.py" "Change from session B"
 }
 
 @test "IT-4: Clean all sessions" {
@@ -227,7 +176,7 @@ EOF
     # Verify first session was created
     [ -d "subtrees" ]
     [ -d ".pursor_state" ]
-    first_session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
+    first_session_count=$(count_sessions)
     [ "$first_session_count" -eq 1 ]
     
     # Small delay to ensure different timestamps
@@ -237,12 +186,12 @@ EOF
     [ "$status" -eq 0 ]
     
     # Verify two sessions exist
-    session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
+    session_count=$(count_sessions)
     [ "$session_count" -eq 2 ]
     
     # Verify state files exist
     [ -d ".pursor_state" ]
-    state_count=$(find .pursor_state -name '*.state' | wc -l)
+    state_count=$(count_state_files)
     [ "$state_count" -eq 2 ]
     
     # 2. Clean all sessions
@@ -250,13 +199,12 @@ EOF
     [ "$status" -eq 0 ]
     
     # Verify all worktrees removed
-    session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | wc -l || echo 0)
+    session_count=$(count_sessions)
     [ "$session_count" -eq 0 ]
     
     # Verify original repo is untouched
     [ -f "test-file.py" ]
-    run git log --oneline
-    [[ "$output" == *"Initial commit"* ]]
+    assert_commit_exists "Initial commit"
 }
 
 @test "IT-5: Auto-detect session from worktree directory" {
@@ -265,11 +213,11 @@ EOF
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
-    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    [ -d "$session_dir" ]
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
     
     # 2. Navigate to worktree and edit file
-    cd "$session_dir"
+    cd "$TEST_REPO/$session_dir"
     echo "Auto-detect test change" >> test-file.py
     
     # 3. Test merge from within worktree (should auto-detect session)
@@ -280,14 +228,13 @@ EOF
     cd "$TEST_REPO"
     
     # Verify commit exists on main
-    run git log --oneline
-    [[ "$output" == *"Auto-detect test commit"* ]]
+    assert_commit_exists "Auto-detect test commit"
     
     # Verify changes are in main
-    grep -q "Auto-detect test change" test-file.py
+    assert_file_contains "test-file.py" "Auto-detect test change"
     
     # Verify cleanup - session should be cleaned up after successful merge
-    [ ! -d "$session_dir" ]
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-6: Auto-detect session for cancel from worktree directory" {
@@ -296,11 +243,11 @@ EOF
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
-    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    [ -d "$session_dir" ]
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
     
     # Get the branch name before navigating
-    cd "$session_dir"
+    cd "$TEST_REPO/$session_dir"
     branch_name=$(git branch --show-current)
     
     # 2. Test cancel from within worktree (should auto-detect session)
@@ -315,7 +262,7 @@ EOF
     [ -z "$output" ]
     
     # Verify worktree directory is gone
-    [ ! -d "$session_dir" ]
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-7: Merge uncommitted changes should auto-stage and commit" {
@@ -326,11 +273,11 @@ EOF
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
-    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    [ -d "$session_dir" ]
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
     
     # 2. Navigate to worktree and make changes WITHOUT committing them
-    cd "$session_dir"
+    cd "$TEST_REPO/$session_dir"
     echo "Uncommitted change line 1" >> test-file.py
     echo "Uncommitted change line 2" >> test-file.py
     
@@ -352,39 +299,31 @@ EOF
     cd "$TEST_REPO"
     
     # Verify commit exists on main
-    run git log --oneline
-    [[ "$output" == *"Test commit with uncommitted changes"* ]]
+    assert_commit_exists "Test commit with uncommitted changes"
     
     # Verify all changes are in main (both modified and new files)
-    grep -q "Uncommitted change line 1" test-file.py
-    grep -q "Uncommitted change line 2" test-file.py
+    assert_file_contains "test-file.py" "Uncommitted change line 1"
+    assert_file_contains "test-file.py" "Uncommitted change line 2"
     [ -f "new-file.txt" ]
-    grep -q "New file content" new-file.txt
+    assert_file_contains "new-file.txt" "New file content"
     
     # Verify cleanup - session should be cleaned up after successful merge  
-    [ ! -d "$session_dir" ]
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-8: Merge conflict should not complete with unresolved markers" {
     # This tests the justfile conflict issue the user reported
     
-    # 1. Create a file that will conflict in main repo
-    cd "$TEST_REPO"
-    cat > justfile << 'EOF'
-# Original justfile content
-test:
-    @echo "Running original tests..."
-    @bats test.bats
-EOF
-    git add justfile
-    git commit -m "Add original justfile"
+    # Use the helper to set up a repo with files for conflict testing
+    teardown_temp_git_repo
+    setup_temp_git_repo_with_files
     
     # 2. Create session A and modify justfile
     run run_pursor
     [ "$status" -eq 0 ]
     
-    session_a=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    cd "$session_a"
+    session_a=$(find_session_dir)
+    cd "$TEST_REPO/$session_a"
     cat > justfile << 'EOF'
 # Modified justfile content A
 test:
@@ -393,30 +332,32 @@ test:
 EOF
     
     # 3. Go back and modify main branch
-    cd "$TEST_REPO"
-    cat > justfile << 'EOF'
-# Modified justfile content B
+    create_main_conflict "justfile" "# Modified justfile content B
 test:
-    @echo "Running modified tests B..."
-    @bats test_b.bats
-EOF
-    git add justfile
-    git commit -m "Modify justfile in main"
+    @echo \"Running modified tests B...\"
+    @bats test_b.bats"
     
-    # 4. Try to merge session A (should create conflict)
-    cd "$session_a"
+    # 4. Try to merge session A (should fail due to conflict)
+    cd "$TEST_REPO/$session_a"
     run "$PURSOR_SCRIPT" merge "Modify justfile in session A"
-    # This should fail due to rebase conflict
     [ "$status" -eq 1 ]
     [[ "$output" == *"rebase conflicts"* ]]
     
-    # 5. Try to continue without properly resolving conflicts
+    # Session should still exist due to unresolved conflict
+    cd "$TEST_REPO"
+    assert_session_exists "$session_a"
+    
+    # 5. Check that conflict markers exist
+    cd "$TEST_REPO/$session_a"
+    run grep "<<<<<<< HEAD" justfile
+    [ "$status" -eq 0 ]
+    
+    # 6. Try continue without resolving (should fail)
     run "$PURSOR_SCRIPT" continue
     [ "$status" -eq 1 ]
-    # Should detect unresolved conflicts
-    [[ "$output" == *"still unresolved conflicts"* ]] || [[ "$output" == *"conflict markers"* ]]
+    [[ "$output" == *"unresolved conflicts"* ]]
     
-    # 6. Properly resolve conflicts
+    # 7. Resolve conflict and continue
     cat > justfile << 'EOF'
 # Resolved justfile content
 test:
@@ -424,16 +365,15 @@ test:
     @bats test_resolved.bats
 EOF
     
-    # 7. Now continue should work
     run "$PURSOR_SCRIPT" continue
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
-    # Verify the conflict was properly resolved
-    grep -q "Running resolved tests" justfile
-    # Should NOT contain conflict markers
-    ! grep -q "<<<<<<< HEAD" justfile
-    ! grep -q "=======" justfile
-    ! grep -q ">>>>>>> " justfile
+    # Verify commit exists and content is resolved
+    assert_commit_exists "Modify justfile in session A"
+    assert_file_contains "justfile" "Resolved justfile content"
+    
+    # Session should be cleaned up after successful resolution
+    assert_session_not_exists "$session_a"
 } 
