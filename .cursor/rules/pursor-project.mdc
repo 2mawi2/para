@@ -1,0 +1,56 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Pursor - Parallel Cursor Workflow Helper
+
+## Project Overview
+This project provides a POSIX shell script for creating multiple ephemeral Cursor IDE sessions on Git worktrees, enabling parallel development with easy merge/discard workflow.
+
+## Key Files
+- **[pursor.sh](mdc:pursor.sh)** - Main script with clean subcommand interface for parallel session management
+- **[README.md](mdc:README.md)** - Comprehensive documentation with examples and configuration options
+- **[test-file.py](mdc:test-file.py)** - Test file used for development and testing workflows
+
+## Core Commands
+- `pursor` - Create new parallel session (opens Cursor)
+- `pursor merge "message"` - Auto-stage & merge session with commit message
+- `pursor list` - Show all active sessions
+- `pursor continue` - Resume after resolving merge conflicts (auto-stages)
+- `pursor cancel` - Discard current session
+- `pursor clean` - Remove all sessions
+
+## Testing Workflows
+**Basic Test:**
+```bash
+./pursor.sh                          # Create session
+cd subtrees/pc/*/                    # Enter worktree
+echo 'test change' >> test-file.py   # Make changes
+./pursor.sh merge "test commit"      # Auto-stage & merge
+```
+
+**Conflict Test:**
+```bash
+./pursor.sh && ./pursor.sh           # Create 2 sessions
+cd subtrees/pc/20*/                  # Session 1: modify same file
+echo 'change A' >> test-file.py && ../../../pursor.sh merge "A"
+cd ../20*/                           # Session 2: conflicting change
+echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
+# Edit file to resolve conflicts, then:
+./pursor.sh continue                 # Auto-stages & completes
+```
+
+## How It Works
+1. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
+2. **State Tracking**: Uses `.pursor_state/` directory to track sessions
+3. **Context-Aware**: Auto-detects current session from working directory
+4. **Auto-Staging**: Automatically stages all changes during merge and conflict resolution
+5. **Clean Workflow**: No manual `git add` required anywhere
+
+## Development Notes
+- Pure POSIX shell for maximum compatibility
+- Uses Git worktrees for complete isolation
+- Context-aware session detection from directory path
+- Automatic conflict resolution with staging
+- Subcommand interface following CLI best practices
