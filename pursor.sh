@@ -82,39 +82,41 @@ need_git_repo() {
 }
 
 setup_gitignore() {
-  REPO_GITIGNORE="$REPO_ROOT/.gitignore"
+  GIT_EXCLUDE_FILE="$REPO_ROOT/.git/info/exclude"
   SUBTREES_GITIGNORE="$SUBTREES_DIR/.gitignore"
   
   # Entries to ensure are ignored
   SUBTREES_ENTRY="$SUBTREES_DIR_NAME/"
   STATE_ENTRY="$STATE_DIR_NAME/"
   
-  # Setup main repository .gitignore
-  if [ ! -f "$REPO_GITIGNORE" ]; then
-    echo "▶ creating .gitignore in repository root"
-    cat > "$REPO_GITIGNORE" <<EOF
-# pursor - parallel cursor sessions
+  # Setup git exclude file (local to repository, not tracked)
+  # This is non-intrusive and doesn't modify user's .gitignore
+  if [ ! -f "$GIT_EXCLUDE_FILE" ]; then
+    echo "▶ creating git exclude file for pursor directories"
+    mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
+    cat > "$GIT_EXCLUDE_FILE" <<EOF
+# pursor - parallel cursor sessions (local excludes)
 $SUBTREES_ENTRY
 $STATE_ENTRY
 EOF
   else
     # Check and add entries if missing
     NEEDS_UPDATE=0
-    if ! grep -q "^$SUBTREES_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null; then
+    if ! grep -q "^$SUBTREES_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null; then
       NEEDS_UPDATE=1
     fi
-    if ! grep -q "^$STATE_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null; then
+    if ! grep -q "^$STATE_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null; then
       NEEDS_UPDATE=1
     fi
     
     if [ "$NEEDS_UPDATE" -eq 1 ]; then
-      echo "▶ updating .gitignore with pursor entries"
+      echo "▶ updating git exclude file with pursor entries"
       {
         echo ""
-        echo "# pursor - parallel cursor sessions"
-        grep -q "^$SUBTREES_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null || echo "$SUBTREES_ENTRY"
-        grep -q "^$STATE_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null || echo "$STATE_ENTRY"
-      } >> "$REPO_GITIGNORE"
+        echo "# pursor - parallel cursor sessions (local excludes)"
+        grep -q "^$SUBTREES_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$SUBTREES_ENTRY"
+        grep -q "^$STATE_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$STATE_ENTRY"
+      } >> "$GIT_EXCLUDE_FILE"
     fi
   fi
   
