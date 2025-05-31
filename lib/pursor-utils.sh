@@ -6,7 +6,8 @@ usage() {
   cat >&2 <<EOF
 Usage:
   pursor [session-name]           # create new session & open Cursor
-  pursor merge "message"          # merge current session with commit message
+  pursor merge "message"          # squash all changes into one commit (default)
+  pursor merge --rebase "message" # rebase individual commits (preserve history)
   pursor list                     # list all active sessions (alias: ls)
   pursor continue                 # continue merge after resolving conflicts
   pursor cancel                   # cancel current session (alias: abort)
@@ -16,7 +17,8 @@ Usage:
 Examples:
   pursor                          # start new parallel session
   pursor feature-auth             # start named session "feature-auth"
-  pursor merge "Add new feature"  # merge with commit message
+  pursor merge "Add new feature"  # squash all changes into one commit
+  pursor merge --rebase "Feature" # preserve individual commit history
   pursor continue                 # resume after fixing conflicts
   pursor resume feature-auth      # reconnect to named session
   pursor cancel                   # discard current session
@@ -33,7 +35,7 @@ die() {
 # Check if argument is a known command
 is_known_command() {
   case "$1" in
-    list|ls|clean|--help|-h|merge|continue|cancel|abort|resume)
+    list|ls|clean|--help|-h|merge|continue|cancel|abort|resume|--rebase)
       return 0
       ;;
     *)

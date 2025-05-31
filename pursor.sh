@@ -83,20 +83,30 @@ handle_command() {
 
 # Handle merge command
 handle_merge_command() {
+  REBASE_MODE="squash"  # Default to squash mode
+  COMMIT_MSG=""
+  
   if [ "$#" -eq 1 ]; then
     die "merge requires a commit message"
   elif [ "$#" -eq 2 ]; then
     COMMIT_MSG="$2"
     SESSION_ID=$(auto_detect_session)
+  elif [ "$#" -eq 3 ] && [ "$2" = "--rebase" ]; then
+    REBASE_MODE="rebase"
+    COMMIT_MSG="$3"
+    SESSION_ID=$(auto_detect_session)
   else
-    die "merge requires a commit message and optionally a session ID"
+    die "merge requires a commit message, optionally with --rebase flag"
   fi
 
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  echo "▶ merging session $SESSION_ID"
-  if merge_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG"; then
+  # Store the merge mode in session state for potential continue operations
+  update_session_merge_mode "$SESSION_ID" "$REBASE_MODE"
+
+  echo "▶ merging session $SESSION_ID (mode: $REBASE_MODE)"
+  if merge_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
@@ -104,7 +114,6 @@ handle_merge_command() {
     echo "🎉 You can safely close this Cursor session now."
     return 0
   else
-    # merge_session failed, return error code
     return 1
   fi
 }
@@ -122,8 +131,8 @@ handle_continue_command() {
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  echo "▶ continuing merge for session $SESSION_ID"
-  if continue_merge "$WORKTREE_DIR" "$TEMP_BRANCH" "$BASE_BRANCH"; then
+  echo "▶ continuing merge for session $SESSION_ID (mode: $MERGE_MODE)"
+  if continue_merge "$WORKTREE_DIR" "$TEMP_BRANCH" "$BASE_BRANCH" "$MERGE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
@@ -131,7 +140,6 @@ handle_continue_command() {
     echo "🎉 You can safely close this Cursor session now."
     return 0
   else
-    # continue_merge failed, return error code
     return 1
   fi
 }
