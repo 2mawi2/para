@@ -16,6 +16,9 @@ setup() {
     git config user.email "test@example.com"
     git config user.name "Test User"
     
+    # Disable git hooks in test repositories to prevent interference
+    git config core.hooksPath /dev/null
+    
     # Create initial commit
     echo "Initial content" > test-file.py
     git add test-file.py
