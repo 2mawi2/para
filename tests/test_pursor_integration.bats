@@ -69,38 +69,38 @@ run_in_test_repo() {
     [ "$status" -eq 0 ]
     
     # Verify session was created (all checks in test directory)
-    run_in_test_repo test -d "subtrees"
-    [ "$?" -eq 0 ]
+    cd "$TEST_REPO"
+    [ -d "subtrees" ]
     
-    session_dir=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
     [ -n "$session_dir" ]
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -eq 0 ]
+    [ -d "$session_dir" ]
     
     # Verify state tracking
-    run_in_test_repo test -d ".pursor_state"
-    [ "$?" -eq 0 ]
-    session_count=$(run_in_test_repo ls .pursor_state | wc -l)
+    [ -d ".pursor_state" ]
+    session_count=$(ls .pursor_state | wc -l)
     [ "$session_count" -eq 1 ]
     
     # 2. Edit file in worktree
-    (cd "$TEST_REPO/$session_dir" && echo "Modified in session" >> test-file.py)
+    cd "$session_dir"
+    echo "Modified in session" >> test-file.py
     
     # 3. Merge with message
-    run bash -c "cd '$TEST_REPO/$session_dir' && '$PURSOR_SCRIPT' merge 'Integration test commit'"
+    run "$PURSOR_SCRIPT" merge "Integration test commit"
     [ "$status" -eq 0 ]
     
+    # Go back to test repo
+    cd "$TEST_REPO"
+    
     # Verify commit exists on main
-    run run_in_test_repo git log --oneline
+    run git log --oneline
     [[ "$output" == *"Integration test commit"* ]]
     
     # Verify changes are in main
-    run_in_test_repo grep "Modified in session" test-file.py
-    [ "$?" -eq 0 ]
+    grep -q "Modified in session" test-file.py
     
-    # Verify cleanup - either directory doesn't exist or has no .state files
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -ne 0 ]  # Should not exist after successful merge
+    # Verify cleanup - session directory should not exist after successful merge
+    [ ! -d "$session_dir" ]
 }
 
 @test "IT-2: Cancel session" {
@@ -108,25 +108,27 @@ run_in_test_repo() {
     run run_pursor
     [ "$status" -eq 0 ]
     
-    session_dir=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -eq 0 ]
+    cd "$TEST_REPO"
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
     
     # Get branch name
-    branch_name=$(cd "$TEST_REPO/$session_dir" && git branch --show-current)
+    cd "$session_dir"
+    branch_name=$(git branch --show-current)
     
     # 2. Cancel from within worktree
-    run bash -c "cd '$TEST_REPO/$session_dir' && '$PURSOR_SCRIPT' cancel"
+    run "$PURSOR_SCRIPT" cancel
     [ "$status" -eq 0 ]
     
+    cd "$TEST_REPO"
+    
     # Verify branch is deleted
-    run run_in_test_repo git branch --list "$branch_name"
+    run git branch --list "$branch_name"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     
     # Verify worktree directory is gone
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -ne 0 ]  # Should not exist
+    [ ! -d "$session_dir" ]
 }
 
 @test "IT-3: Conflict resolution with continue" {
@@ -134,14 +136,17 @@ run_in_test_repo() {
     run run_pursor
     [ "$status" -eq 0 ]
     
+    cd "$TEST_REPO"
+    
     # Store session A path immediately
-    session_a=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    session_a=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
     [ -n "$session_a" ]
-    run_in_test_repo test -d "$session_a"
-    [ "$?" -eq 0 ]
+    [ -d "$session_a" ]
     
     # Edit the existing file - replace the line with session A content
-    (cd "$TEST_REPO/$session_a" && echo "Change from session A" > test-file.py)
+    cd "$session_a"
+    echo "Change from session A" > test-file.py
+    cd "$TEST_REPO"
     
     # Small delay to ensure different timestamps
     sleep 1
@@ -152,59 +157,64 @@ run_in_test_repo() {
     
     # Store session B path immediately - find the one that's NOT session A
     session_b=""
-    for dir in $(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*"); do
+    for dir in $(find subtrees/pc -maxdepth 1 -type d -name "20*"); do
         if [ "$dir" != "$session_a" ]; then
             session_b="$dir"
             break
         fi
     done
     [ -n "$session_b" ]
-    run_in_test_repo test -d "$session_b"
-    [ "$?" -eq 0 ]
+    [ -d "$session_b" ]
     
     # Edit the same file in a conflicting way - replace with different content
-    (cd "$TEST_REPO/$session_b" && echo "Change from session B" > test-file.py)
+    cd "$session_b"
+    echo "Change from session B" > test-file.py
     
     # 3. Merge A (should succeed)
-    run bash -c "cd '$TEST_REPO/$session_a' && '$PURSOR_SCRIPT' merge 'Session A changes'"
+    cd "$TEST_REPO/$session_a"
+    run "$PURSOR_SCRIPT" merge "Session A changes"
     [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
     
     # 4. Try to merge B (should have conflict)
     # Session B directory should still exist even after A is cleaned up
-    run_in_test_repo test -d "$session_b"
-    [ "$?" -eq 0 ]
+    [ -d "$session_b" ]
     
-    run bash -c "cd '$TEST_REPO/$session_b' && '$PURSOR_SCRIPT' merge 'Session B changes'"
+    cd "$session_b"
+    run "$PURSOR_SCRIPT" merge "Session B changes"
     # The merge command succeeds in setting up the conflict state
     [ "$status" -eq 0 ]
     # But it should output conflict information
     [[ "$output" == *"conflict"* ]]
     
+    cd "$TEST_REPO"
+    
     # The session should still be active (not cleaned up due to conflict)
-    run_in_test_repo test -d "$session_b"
-    [ "$?" -eq 0 ]
+    [ -d "$session_b" ]
     
     # 5. Manually resolve conflict
     # Remove conflict markers and combine both changes
-    cat > "$TEST_REPO/$session_b/test-file.py" << 'EOF'
+    cat > "$session_b/test-file.py" << 'EOF'
 Change from session A
 Change from session B
 EOF
     
     # Continue the merge
-    run bash -c "cd '$TEST_REPO/$session_b' && '$PURSOR_SCRIPT' continue"
+    cd "$session_b"
+    run "$PURSOR_SCRIPT" continue
     [ "$status" -eq 0 ]
     
+    cd "$TEST_REPO"
+    
     # Verify both changes are in history
-    run run_in_test_repo git log --oneline
+    run git log --oneline
     [[ "$output" == *"Session A changes"* ]]
     [[ "$output" == *"Session B changes"* ]]
     
     # Verify final content has both changes
-    run_in_test_repo grep "Change from session A" test-file.py
-    [ "$?" -eq 0 ]
-    run_in_test_repo grep "Change from session B" test-file.py
-    [ "$?" -eq 0 ]
+    grep -q "Change from session A" test-file.py
+    grep -q "Change from session B" test-file.py
 }
 
 @test "IT-4: Clean all sessions" {
@@ -212,12 +222,12 @@ EOF
     run run_pursor
     [ "$status" -eq 0 ]
     
+    cd "$TEST_REPO"
+    
     # Verify first session was created
-    run_in_test_repo test -d "subtrees"
-    [ "$?" -eq 0 ]
-    run_in_test_repo test -d ".pursor_state"
-    [ "$?" -eq 0 ]
-    first_session_count=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
+    [ -d "subtrees" ]
+    [ -d ".pursor_state" ]
+    first_session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
     [ "$first_session_count" -eq 1 ]
     
     # Small delay to ensure different timestamps
@@ -227,13 +237,12 @@ EOF
     [ "$status" -eq 0 ]
     
     # Verify two sessions exist
-    session_count=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
+    session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | wc -l)
     [ "$session_count" -eq 2 ]
     
     # Verify state files exist
-    run_in_test_repo test -d ".pursor_state"
-    [ "$?" -eq 0 ]
-    state_count=$(run_in_test_repo find .pursor_state -name '*.state' | wc -l)
+    [ -d ".pursor_state" ]
+    state_count=$(find .pursor_state -name '*.state' | wc -l)
     [ "$state_count" -eq 2 ]
     
     # 2. Clean all sessions
@@ -241,13 +250,12 @@ EOF
     [ "$status" -eq 0 ]
     
     # Verify all worktrees removed
-    session_count=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | wc -l || echo 0)
+    session_count=$(find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | wc -l || echo 0)
     [ "$session_count" -eq 0 ]
     
     # Verify original repo is untouched
-    run_in_test_repo test -f "test-file.py"
-    [ "$?" -eq 0 ]
-    run run_in_test_repo git log --oneline
+    [ -f "test-file.py" ]
+    run git log --oneline
     [[ "$output" == *"Initial commit"* ]]
 }
 
@@ -256,28 +264,30 @@ EOF
     run run_pursor
     [ "$status" -eq 0 ]
     
-    session_dir=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -eq 0 ]
+    cd "$TEST_REPO"
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
     
     # 2. Navigate to worktree and edit file
-    (cd "$TEST_REPO/$session_dir" && echo "Auto-detect test change" >> test-file.py)
+    cd "$session_dir"
+    echo "Auto-detect test change" >> test-file.py
     
     # 3. Test merge from within worktree (should auto-detect session)
-    run bash -c "cd '$TEST_REPO/$session_dir' && '$PURSOR_SCRIPT' merge 'Auto-detect test commit'"
+    run "$PURSOR_SCRIPT" merge "Auto-detect test commit"
     [ "$status" -eq 0 ]
     
+    # Go back to main repo to verify
+    cd "$TEST_REPO"
+    
     # Verify commit exists on main
-    run run_in_test_repo git log --oneline
+    run git log --oneline
     [[ "$output" == *"Auto-detect test commit"* ]]
     
     # Verify changes are in main
-    run_in_test_repo grep "Auto-detect test change" test-file.py
-    [ "$?" -eq 0 ]
+    grep -q "Auto-detect test change" test-file.py
     
     # Verify cleanup - session should be cleaned up after successful merge
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -ne 0 ]  # Should not exist
+    [ ! -d "$session_dir" ]
 }
 
 @test "IT-6: Auto-detect session for cancel from worktree directory" {
@@ -285,23 +295,25 @@ EOF
     run run_pursor
     [ "$status" -eq 0 ]
     
-    session_dir=$(run_in_test_repo find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -eq 0 ]
+    cd "$TEST_REPO"
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
     
     # Get the branch name before navigating
-    branch_name=$(cd "$TEST_REPO/$session_dir" && git branch --show-current)
+    cd "$session_dir"
+    branch_name=$(git branch --show-current)
     
     # 2. Test cancel from within worktree (should auto-detect session)
-    run bash -c "cd '$TEST_REPO/$session_dir' && '$PURSOR_SCRIPT' cancel"
+    run "$PURSOR_SCRIPT" cancel
     [ "$status" -eq 0 ]
     
+    cd "$TEST_REPO"
+    
     # Verify branch is deleted
-    run run_in_test_repo git branch --list "$branch_name"
+    run git branch --list "$branch_name"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     
     # Verify worktree directory is gone
-    run_in_test_repo test -d "$session_dir"
-    [ "$?" -ne 0 ]  # Should not exist
+    [ ! -d "$session_dir" ]
 } 
