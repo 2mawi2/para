@@ -68,6 +68,7 @@ run_config_setup() {
   echo ""
   
   save_config
+  load_config  # Reload configuration into memory after saving
   echo "💾 Saved to $CONFIG_FILE"
   echo ""
   echo "You're all set! Run 'para start' to create your first session."
@@ -110,6 +111,7 @@ auto_setup() {
   BASE_BRANCH=""
   
   save_config
+  load_config  # Reload configuration into memory after saving
   echo "✅ Auto-configuration complete!"
   echo "  Using: $(get_ide_display_name)"
 } 
