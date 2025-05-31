@@ -62,6 +62,75 @@ pursor cancel             # Cancel/delete session (alias: abort)
 pursor clean              # Cancel ALL sessions (clean everything)
 ```
 
+### Merge Strategies
+
+Choose how to integrate your changes back into the main branch:
+
+```bash
+# Default: Rebase strategy (clean linear history)
+pursor merge "Add feature"
+
+# Explicit strategies
+pursor merge "Add feature" --strategy=rebase      # Clean linear history (default)
+pursor merge "Add feature" --strategy=merge       # Preserve branch structure
+pursor merge "Add feature" --strategy=squash      # Single commit with all changes
+pursor merge "Hotfix" --strategy=cherry-pick      # Apply specific commits only
+pursor merge "Feature" --strategy=branch          # Create permanent feature branch
+```
+
+#### Strategy Details
+
+**🔄 Rebase (default)**
+- Rebases your session commits onto the latest main branch
+- Creates clean, linear history
+- Best for: Most development work, clean commit history
+- Handles conflicts during rebase phase
+
+**🌿 Merge**
+- Direct merge without rebasing
+- Preserves branch structure in git history
+- Best for: When you want to preserve the parallel development story
+- Handles conflicts during merge phase
+
+**📦 Squash**
+- Combines all session commits into a single commit
+- Clean, single commit with all changes
+- Best for: Feature completion, cleanup commits, experimental work
+- Perfect commit message describes the entire feature
+
+**🍒 Cherry-pick**
+- Applies only committed changes as individual commits
+- Skips any uncommitted changes in the worktree
+- Best for: Applying specific fixes, selective integration
+- Each commit maintains its original message
+
+**🌳 Branch**
+- Creates a permanent feature branch instead of merging
+- Preserves all work for later integration
+- Best for: Work-in-progress, features needing review, experimental branches
+- Allows for standard git workflows (pull requests, etc.)
+
+#### Strategy Examples
+
+```bash
+# Clean feature development
+pursor merge "Implement user authentication" --strategy=rebase
+
+# Complex feature with multiple developers
+pursor merge "Payment system integration" --strategy=merge
+
+# Cleanup experimental work into single commit  
+pursor merge "Refactor data layer" --strategy=squash
+
+# Apply only the critical bugfix commits
+pursor merge "Fix security issues" --strategy=cherry-pick
+
+# Create feature branch for code review
+pursor merge "New dashboard UI" --strategy=branch
+# → Creates feature/new-dashboard-ui branch
+# Later: git checkout main && git merge feature/new-dashboard-ui
+```
+
 ### Multi-Session Workflow
 
 ```bash
@@ -179,10 +248,11 @@ This makes it perfect for seamless workflow entirely within subtrees.
 Set environment variables to customize behavior:
 
 ```bash
-export BASE_BRANCH="develop"           # Base branch (default: current branch)
-export SUBTREES_DIR_NAME="worktrees"  # Directory name (default: subtrees)
-export STATE_DIR_NAME=".my_state"     # State directory (default: .pursor_state)
-export CURSOR_CMD="code"               # Editor command (default: cursor)
+export BASE_BRANCH="develop"                    # Base branch (default: current branch)
+export SUBTREES_DIR_NAME="worktrees"           # Directory name (default: subtrees)
+export STATE_DIR_NAME=".my_state"              # State directory (default: .pursor_state)
+export CURSOR_CMD="code"                       # Editor command (default: cursor)
+export DEFAULT_MERGE_STRATEGY="squash"         # Default merge strategy (default: rebase)
 ```
 
 ## 🎯 Perfect For
