@@ -102,6 +102,10 @@ handle_merge_command() {
     remove_session_state "$SESSION_ID"
     echo "merge complete for session $SESSION_ID ✅"
     echo "🎉 You can safely close this Cursor session now."
+    return 0
+  else
+    # merge_session failed, return error code
+    return 1
   fi
 }
 
@@ -125,6 +129,10 @@ handle_continue_command() {
     remove_session_state "$SESSION_ID"
     echo "merge complete for session $SESSION_ID ✅"
     echo "🎉 You can safely close this Cursor session now."
+    return 0
+  else
+    # continue_merge failed, return error code
+    return 1
   fi
 }
 
