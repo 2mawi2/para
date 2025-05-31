@@ -205,11 +205,45 @@ Pursor can be configured via environment variables:
 
 ```bash
 # Override default settings
-export BASE_BRANCH="develop"           # Use different base branch
-export SUBTREES_DIR_NAME="worktrees"   # Change worktree directory name
-export STATE_DIR_NAME=".pursor"        # Change state directory name
-export CURSOR_CMD="code"               # Use different editor command
+export BASE_BRANCH="develop"                 # Use different base branch
+export SUBTREES_DIR_NAME="worktrees"         # Change worktree directory name
+export STATE_DIR_NAME=".pursor"              # Change state directory name
+export CURSOR_CMD="code"                     # Use different editor command
+export CURSOR_USER_DATA_DIR=".cursor-userdata"  # Isolated user data directory for each session
 ```
+
+### Cursor Isolation Feature
+
+By default, Pursor launches each session with an isolated user data directory (`.cursor-userdata` within each worktree). This provides complete separation from your main Cursor workspace.
+
+**Benefits:**
+- **Complete isolation**: Parallel sessions have their own recent files, settings, and extensions
+- **No clutter**: Your main Cursor "recent projects" list stays clean
+- **Fresh start**: Each session starts with a clean environment
+- **Easy cleanup**: Session data is automatically removed when sessions are cleaned up
+
+**Default behavior:**
+```bash
+pursor                    # Uses isolated user data directory automatically
+```
+
+**Custom user data directory name:**
+```bash
+export CURSOR_USER_DATA_DIR=".my-cursor-data"
+pursor                    # Uses custom directory name
+```
+
+**Disable isolation (use main Cursor instance):**
+```bash
+unset CURSOR_USER_DATA_DIR
+pursor                    # Uses your main Cursor instance
+```
+
+**How it works:**
+- Each worktree gets its own `.cursor-userdata/` directory
+- Cursor launches with `--user-data-dir` pointing to this isolated directory
+- Settings, extensions, and recent files are completely separate per session
+- When you clean up sessions, the isolated data is removed too
 
 ## 🚀 Extensibility
 
