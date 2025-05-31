@@ -185,13 +185,15 @@ else
 fi
 
 echo ""
-echo "📖 Quick usage reminder:"
-echo "   pursor                    # create new session & open Cursor"
-echo "   pursor merge \"message\"    # merge current session"
-echo "   pursor list               # list all active sessions"
-echo "   pursor continue           # continue merge after conflicts"
+echo "🎯 USAGE:"
+echo "   pursor                    # create new session"
+echo "   pursor feature-auth       # create named session"
+echo "   pursor list               # list active sessions"
+echo "   pursor rebase \"message\"    # rebase current session"
 echo "   pursor cancel             # cancel current session"
-echo "   pursor clean              # clean up all sessions"
+echo "   pursor continue           # continue rebase after conflicts"
+echo "   pursor clean              # clean all sessions"
+echo ""
 
 echo ""
 echo "📁 Installation structure:"

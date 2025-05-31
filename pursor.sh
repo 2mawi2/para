@@ -51,8 +51,8 @@ handle_command() {
       usage
       ;;
 
-    merge)
-      handle_merge_command "$@"
+    rebase)
+      handle_rebase_command "$@"
       ;;
 
     continue)
@@ -81,36 +81,36 @@ handle_command() {
   esac
 }
 
-# Handle merge command
-handle_merge_command() {
+# Handle rebase command
+handle_rebase_command() {
   REBASE_MODE="squash"  # Default to squash mode
   COMMIT_MSG=""
   
   if [ "$#" -eq 1 ]; then
-    die "merge requires a commit message"
+    die "rebase requires a commit message"
   elif [ "$#" -eq 2 ]; then
     COMMIT_MSG="$2"
     SESSION_ID=$(auto_detect_session)
-  elif [ "$#" -eq 3 ] && [ "$2" = "--rebase" ]; then
+  elif [ "$#" -eq 3 ] && [ "$2" = "--preserve" ]; then
     REBASE_MODE="rebase"
     COMMIT_MSG="$3"
     SESSION_ID=$(auto_detect_session)
   else
-    die "merge requires a commit message, optionally with --rebase flag"
+    die "rebase requires a commit message, optionally with --preserve flag"
   fi
 
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  # Store the merge mode in session state for potential continue operations
+  # Store the rebase mode in session state for potential continue operations
   update_session_merge_mode "$SESSION_ID" "$REBASE_MODE"
 
-  echo "▶ merging session $SESSION_ID (mode: $REBASE_MODE)"
+  echo "▶ rebasing session $SESSION_ID (mode: $REBASE_MODE)"
   if merge_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
-    echo "merge complete for session $SESSION_ID ✅"
+    echo "rebase complete for session $SESSION_ID ✅"
     echo "🎉 You can safely close this Cursor session now."
     return 0
   else
@@ -131,12 +131,12 @@ handle_continue_command() {
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  echo "▶ continuing merge for session $SESSION_ID (mode: $MERGE_MODE)"
+  echo "▶ continuing rebase for session $SESSION_ID (mode: $MERGE_MODE)"
   if continue_merge "$WORKTREE_DIR" "$TEMP_BRANCH" "$BASE_BRANCH" "$MERGE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
-    echo "merge complete for session $SESSION_ID ✅"
+    echo "rebase complete for session $SESSION_ID ✅"
     echo "🎉 You can safely close this Cursor session now."
     return 0
   else
@@ -198,8 +198,8 @@ create_new_session() {
   # Launch IDE
   launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
   
-  echo "initialized session $SESSION_ID. Use 'pursor merge \"msg\"' to merge or 'pursor cancel' to cancel."
+  echo "initialized session $SESSION_ID. Use 'pursor rebase \"msg\"' to rebase or 'pursor cancel' to cancel."
 }
 
-# Run main function
+# Execute main function
 main "$@" 

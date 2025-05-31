@@ -53,7 +53,7 @@ setup() {
 # Tests for is_known_command function
 @test "is_known_command returns true for known commands" {
     # Known commands from the case statement
-    run is_known_command "merge"
+    run is_known_command "rebase"
     [ "$status" -eq 0 ]
     
     run is_known_command "clean"
@@ -81,6 +81,9 @@ setup() {
     [ "$status" -eq 0 ]
     
     run is_known_command "-h"
+    [ "$status" -eq 0 ]
+    
+    run is_known_command "--preserve"
     [ "$status" -eq 0 ]
 }
 
