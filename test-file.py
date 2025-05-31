@@ -1,18 +1,1 @@
-print("Hello, World!")
-print("Hello from parallel session!")
-print("Feature A: new functionality")
-print("Feature C: different approach")
-print("Running from subtree works!")
-print("Auto-commit test feature")
-print("Unstaged change")
-print("This change will be auto-staged!")
-print("Feature from session 120227")
-print("Feature from session 120228")
-print("Change from session 1")
-print("Different change from session 2")
-print("Testing new interface!")
-print("Test if subtree ignored")
-# Test change for merge strategy
-# First change for squash test
-# Second change for squash test
-# Third uncommitted change
+Initial content
