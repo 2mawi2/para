@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# para.sh - Parallel Cursor Workflow Helper
+# para.sh - Parallel IDE Workflow Helper
 # Main entry point that orchestrates the modular components
 
 set -eu
@@ -111,7 +111,7 @@ handle_rebase_command() {
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
     echo "rebase complete for session $SESSION_ID ✅"
-    echo "🎉 You can safely close this Cursor session now."
+    echo "🎉 You can safely close this $(get_ide_display_name) session now."
     return 0
   else
     return 1
@@ -137,7 +137,7 @@ handle_continue_command() {
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
     echo "rebase complete for session $SESSION_ID ✅"
-    echo "🎉 You can safely close this Cursor session now."
+    echo "🎉 You can safely close this $(get_ide_display_name) session now."
     return 0
   else
     return 1
@@ -159,7 +159,7 @@ handle_cancel_command() {
   remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
   remove_session_state "$SESSION_ID"
   echo "cancelled session $SESSION_ID"
-  echo "🎉 You can safely close this Cursor session now."
+  echo "🎉 You can safely close this $(get_ide_display_name) session now."
 }
 
 # Handle resume command
@@ -198,8 +198,13 @@ create_new_session() {
   # Launch IDE
   launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
   
-  echo "initialized session $SESSION_ID. Use 'para rebase \"msg\"' to rebase or 'para cancel' to cancel."
+  echo "created parallel session $SESSION_ID"
+  echo "  Branch: $TEMP_BRANCH"
+  echo "  Worktree: $WORKTREE_DIR"
+  echo "▶ working in $(get_ide_display_name) session - commit & rebase when ready"
 }
 
-# Execute main function
-main "$@" 
+# Execute main function if script is run directly
+if [ "$0" = "${BASH_SOURCE[0]:-}" ] || [ "$0" = "$_" ]; then
+  main "$@"
+fi 

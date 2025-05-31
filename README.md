@@ -1,8 +1,10 @@
-# Para - Parallel Cursor Workflow Helper
+# Para - Parallel IDE Workflow Helper
 
-A modular POSIX shell script for creating multiple ephemeral Cursor IDE sessions on temporary Git worktrees, enabling parallel development with easy rebase/discard workflow.
+A modular POSIX shell script for creating multiple ephemeral IDE sessions on temporary Git worktrees, enabling parallel development with easy rebase/discard workflow.
 
 Perfect for prototyping multiple features simultaneously while keeping your main branch clean.
+
+**Supports multiple IDEs:** Cursor, Claude Code, VS Code, and extensible for others.
 
 ## 🚀 Quick Start
 
@@ -10,11 +12,46 @@ Perfect for prototyping multiple features simultaneously while keeping your main
 # Create a new parallel session (gets friendly name like "swift_phoenix_20250531-143022")
 para
 
-# Work in the new Cursor window that opens...
+# Work in the new IDE window that opens...
 
 # Rebase your changes back
 para rebase "Add new feature"
 ```
+
+## ⚙️ IDE Configuration
+
+Para supports multiple IDEs with easy configuration:
+
+### Claude Code (Recommended for Claude AI users)
+```bash
+export IDE_NAME="claude"
+export IDE_CMD="claude"
+# Note: Claude Code doesn't support --user-data-dir isolation
+para  # Now launches Claude Code instead of Cursor
+```
+
+### Cursor (Default)
+```bash
+export IDE_NAME="cursor"  # Default
+export IDE_CMD="cursor"   # Default
+export IDE_USER_DATA_DIR=".cursor-userdata"  # Default
+```
+
+### VS Code
+```bash
+export IDE_NAME="code"
+export IDE_CMD="code"
+export IDE_USER_DATA_DIR=".vscode-userdata"
+```
+
+### Custom IDE
+```bash
+export IDE_NAME="my-editor"
+export IDE_CMD="my-editor-command"
+export IDE_USER_DATA_DIR=".my-editor-userdata"
+```
+
+**Make configuration persistent:** Add these exports to your shell configuration file (`~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`, etc.)
 
 ## 🛠️ Development
 
@@ -125,7 +162,7 @@ para feature-auth       # Creates custom named session "feature-auth"
 ### Basic Commands
 
 ```bash
-para                    # Create new session → opens Cursor
+para                    # Create new session → opens your configured IDE
 para list               # List all active sessions (alias: ls)
 para rebase "message"    # Rebase session back to main
 para continue           # Continue rebase after resolving conflicts
@@ -156,8 +193,8 @@ para resume feature-auth
 
 ```bash
 # Create multiple sessions
-para                    # Session 1 (opens Cursor)
-para feature-auth       # Named session (opens Cursor) 
+para                    # Session 1 (opens your IDE)
+para feature-auth       # Named session (opens your IDE) 
 
 # List active sessions
 para list
@@ -219,21 +256,28 @@ para continue
 Para can be configured via environment variables:
 
 ```bash
-# Override default settings
+# IDE Configuration
+export IDE_NAME="claude"                     # IDE to use (claude, cursor, code, etc.)
+export IDE_CMD="claude"                      # Command to launch IDE
+export IDE_USER_DATA_DIR=".claude-userdata" # Isolated user data directory
+
+# Other settings
 export BASE_BRANCH="develop"                 # Use different base branch
 export SUBTREES_DIR_NAME="worktrees"         # Change worktree directory name
 export STATE_DIR_NAME=".para"              # Change state directory name
-export CURSOR_CMD="code"                     # Use different editor command
-export CURSOR_USER_DATA_DIR=".cursor-userdata"  # Isolated user data directory for each session
+
+# Legacy compatibility (still supported)
+export CURSOR_CMD="cursor"                   # Backwards compatible
+export CURSOR_USER_DATA_DIR=".cursor-userdata"  # Backwards compatible
 ```
 
-### Cursor Isolation Feature
+### IDE Isolation Feature
 
-By default, Para launches each session with an isolated user data directory (`.cursor-userdata` within each worktree). This provides complete separation from your main Cursor workspace.
+By default, Para launches each session with an isolated user data directory (e.g., `.claude-userdata` within each worktree). This provides complete separation from your main IDE workspace.
 
 **Benefits:**
 - **Complete isolation**: Parallel sessions have their own recent files, settings, and extensions
-- **No clutter**: Your main Cursor "recent projects" list stays clean
+- **No clutter**: Your main IDE "recent projects" list stays clean
 - **Fresh start**: Each session starts with a clean environment
 - **Easy cleanup**: Session data is automatically removed when sessions are cleaned up
 
@@ -244,19 +288,19 @@ para                    # Uses isolated user data directory automatically
 
 **Custom user data directory name:**
 ```bash
-export CURSOR_USER_DATA_DIR=".my-cursor-data"
+export IDE_USER_DATA_DIR=".my-ide-data"
 para                    # Uses custom directory name
 ```
 
-**Disable isolation (use main Cursor instance):**
+**Disable isolation (use main IDE instance):**
 ```bash
-unset CURSOR_USER_DATA_DIR
-para                    # Uses your main Cursor instance
+unset IDE_USER_DATA_DIR
+para                    # Uses your main IDE instance
 ```
 
 **How it works:**
-- Each worktree gets its own `.cursor-userdata/` directory
-- Cursor launches with `--user-data-dir` pointing to this isolated directory
+- Each worktree gets its own user data directory (e.g., `.claude-userdata/`)
+- IDE launches with `--user-data-dir` pointing to this isolated directory
 - Settings, extensions, and recent files are completely separate per session
 - When you clean up sessions, the isolated data is removed too
 
@@ -270,14 +314,14 @@ To add support for a new IDE, extend `lib/para-ide.sh`:
 
 ```bash
 # Add new IDE implementation
-launch_vscode() {
+launch_neovim() {
   worktree_dir="$1"
-  if command -v code >/dev/null 2>&1; then
-    echo "▶ launching VS Code..."
-    code "$worktree_dir" &
-    echo "✅ VS Code opened"
+  if command -v nvim >/dev/null 2>&1; then
+    echo "▶ launching Neovim..."
+    nvim "$worktree_dir" &
+    echo "✅ Neovim opened"
   else
-    echo "⚠️  VS Code not found"
+    echo "⚠️  Neovim not found"
   fi
 }
 
@@ -288,7 +332,9 @@ launch_ide() {
   
   case "$ide_name" in
     cursor) launch_cursor "$worktree_dir" ;;
-    vscode) launch_vscode "$worktree_dir" ;;
+    claude) launch_claude "$worktree_dir" ;;
+    code) launch_vscode "$worktree_dir" ;;
+    neovim) launch_neovim "$worktree_dir" ;;
     *) die "unsupported IDE: $ide_name" ;;
   esac
 }
@@ -344,7 +390,7 @@ The modular architecture makes contributions easier:
 
 - **Git** with worktree support (Git 2.5+)
 - **POSIX shell** (bash, zsh, fish, dash, ash, etc.)
-- **Cursor IDE** (or configure `CURSOR_CMD` for different editor)
+- **Your preferred IDE** with CLI support (configure via `IDE_CMD`)
 
 ## 🐛 Troubleshooting
 
@@ -353,18 +399,26 @@ The modular architecture makes contributions easier:
 **"not in a Git repository"**
 - Run para from within a Git repository
 
-**"Cursor CLI not found"**
-- Install Cursor CLI or set `CURSOR_CMD` environment variable
+**"IDE CLI not found"**
+- Install your IDE's CLI or set `IDE_CMD` environment variable
+- For Claude Code: ensure `claude` command is in PATH
+- For Cursor: ensure `cursor` command is in PATH
+- For VS Code: ensure `code` command is in PATH
 
 **"session not found"**
 - Use `para list` to see active sessions
 - Ensure you're in the correct directory for auto-detection
 
-### Debug Mode
+### IDE-Specific Setup
 
-For debugging, you can trace execution:
-```bash
-set -x  # Enable shell tracing
-./para.sh your-command
-set +x  # Disable tracing
-```
+**Claude Code:**
+- Install Claude Code with CLI support
+- Run `claude --help` to verify CLI is working
+
+**Cursor:**
+- Install Cursor CLI: https://cursor.sh/cli
+- Run `cursor --help` to verify CLI is working
+
+**VS Code:**
+- Install VS Code with CLI: `code --install-extension` should work
+- Or install via: https://code.visualstudio.com/docs/setup/mac#_launching-from-the-command-line

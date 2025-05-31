@@ -12,6 +12,12 @@ launch_ide() {
     cursor)
       launch_cursor "$worktree_dir"
       ;;
+    claude)
+      launch_claude "$worktree_dir"
+      ;;
+    code)
+      launch_vscode "$worktree_dir"
+      ;;
     *)
       die "unsupported IDE: $ide_name"
       ;;
@@ -72,15 +78,57 @@ launch_cursor() {
     fi
     echo "✅ Cursor opened"
   else
-    echo "⚠️  Cursor CLI not found. Please install Cursor CLI or set CURSOR_CMD environment variable." >&2
+    echo "⚠️  Cursor CLI not found. Please install Cursor CLI or set IDE_CMD environment variable." >&2
     echo "   Alternatively, manually open: $worktree_dir" >&2
     echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
   fi
 }
 
-# Get default IDE (currently always Cursor, but designed for future configuration)
+# Claude Code implementation
+launch_claude() {
+  worktree_dir="$1"
+  
+  # Skip actual IDE launch in test mode
+  if [ "${IDE_CMD:-}" = "true" ]; then
+    echo "▶ skipping Claude Code launch (test stub)"
+    echo "✅ Claude Code (test stub) opened"
+    return 0
+  fi
+
+  if command -v "$IDE_CMD" >/dev/null 2>&1; then
+    echo "▶ launching Claude Code..."
+    "$IDE_CMD" "$worktree_dir" &
+    echo "✅ Claude Code opened"
+  else
+    echo "⚠️  Claude Code CLI not found. Please install Claude Code CLI or set IDE_CMD environment variable." >&2
+    echo "   Alternatively, manually open: $worktree_dir" >&2
+  fi
+}
+
+# VS Code implementation (for completeness)
+launch_vscode() {
+  worktree_dir="$1"
+  
+  # Skip actual IDE launch in test mode
+  if [ "${IDE_CMD:-}" = "true" ]; then
+    echo "▶ skipping VS Code launch (test stub)"
+    echo "✅ VS Code (test stub) opened"
+    return 0
+  fi
+
+  if command -v "$IDE_CMD" >/dev/null 2>&1; then
+    echo "▶ launching VS Code..."
+    "$IDE_CMD" "$worktree_dir" &
+    echo "✅ VS Code opened"
+  else
+    echo "⚠️  VS Code CLI not found. Please install VS Code CLI or set IDE_CMD environment variable." >&2
+    echo "   Alternatively, manually open: $worktree_dir" >&2
+  fi
+}
+
+# Get default IDE from configuration
 get_default_ide() {
-  echo "cursor"
+  echo "$IDE_NAME"
 }
 
 # Check if IDE is available
@@ -88,8 +136,8 @@ is_ide_available() {
   ide_name="$1"
   
   case "$ide_name" in
-    cursor)
-      command -v "$CURSOR_CMD" >/dev/null 2>&1
+    cursor|claude|code)
+      command -v "$IDE_CMD" >/dev/null 2>&1
       ;;
     *)
       return 1

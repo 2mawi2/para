@@ -75,8 +75,8 @@ teardown() {
     # Extract session ID from directory name
     session_id=$(echo "$session_name" | sed 's|pc/||')
     
-    # Mock cursor command to avoid launching actual IDE
-    export CURSOR_CMD="echo"
+    # Set IDE to test mode to avoid launching actual IDE
+    export IDE_CMD="echo"
     
     # Resume session by friendly name
     run run_para resume "$session_id"
