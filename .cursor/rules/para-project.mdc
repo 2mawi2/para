@@ -6,7 +6,7 @@ alwaysApply: true
 # Para - Parallel IDE Workflow Helper
 
 ## Project Overview
-This project provides a POSIX shell script for creating multiple ephemeral IDE sessions on Git worktrees, enabling parallel development with easy rebase/discard workflow.
+This project provides a POSIX shell script for creating multiple ephemeral IDE sessions on Git worktrees, enabling parallel development with easy finish/discard workflow.
 
 **Supports multiple IDEs:** Cursor, Claude Code, VS Code, and extensible for others.
 
@@ -68,29 +68,29 @@ export IDE_USER_DATA_DIR=".vscode-userdata"
 - **Status**: `just status` - Check dependencies and project health
 
 ## Core Commands
-- `para` - Create new parallel session (opens configured IDE)
-- `para rebase "message"` - Auto-stage & rebase session with commit message
+- `para start` - Create new parallel session (opens configured IDE)
+- `para finish "message"` - Auto-stage & finish session with commit message
 - `para list` - Show all active sessions
-- `para continue` - Resume after resolving rebase conflicts (auto-stages)
+- `para continue` - Resume after resolving finish conflicts (auto-stages)
 - `para cancel` - Discard current session
 - `para clean` - Remove all sessions
 
 ## Testing Workflows
 **Basic Test:**
 ```bash
-./para.sh                          # Create session
+./para.sh start                     # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./para.sh rebase "test commit"      # Auto-stage & rebase
+./para.sh finish "test commit"      # Auto-stage & finish
 ```
 
 **Conflict Test:**
 ```bash
-./para.sh && ./para.sh           # Create 2 sessions
+./para.sh start && ./para.sh start  # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../para.sh rebase "A"
+echo 'change A' >> test-file.py && ../../../para.sh finish "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!
 # Edit file to resolve conflicts, then:
 ./para.sh continue                 # Auto-stages & completes
 ```
@@ -99,7 +99,7 @@ echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
 1. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
 2. **State Tracking**: Uses `.para_state/` directory to track sessions
 3. **Context-Aware**: Auto-detects current session from working directory
-4. **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
+4. **Auto-Staging**: Automatically stages all changes during finish and conflict resolution
 5. **Clean Workflow**: No manual `git add` required anywhere
 6. **IDE Agnostic**: Works with any IDE that supports command-line launching
 

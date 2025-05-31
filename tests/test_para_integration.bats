@@ -14,43 +14,57 @@ teardown() {
     teardown_temp_git_repo
 }
 
-@test "IT-1: Happy path - create session, edit file, rebase successfully" {
-    # 1. Create session
-    run run_para
+@test "IT-1: Happy path - create session, edit file, finish successfully" {
+    # Create temporary test directory
+    TEST_DIR=$(mktemp -d)
+    cd "$TEST_DIR"
+    
+    # Initialize git repo
+    git init
+    git config user.name "Test User"
+    git config user.email "test@example.com"
+    echo "test" > README.md
+    git add README.md
+    git commit -m "Initial commit"
+    
+    # 1. Create a new session
+    run "$PARA_SCRIPT" start
     [ "$status" -eq 0 ]
+    [[ "$output" == *"initialized session"* ]]
     
-    # Verify session was created (all checks in test directory)
-    cd "$TEST_REPO"
-    [ -d "subtrees" ]
+    # Extract session ID from output for cleanup
+    SESSION_ID=$(echo "$output" | grep "initialized session" | cut -d' ' -f3 | sed 's/\.//')
     
-    session_dir=$(find_session_dir)
-    [ -n "$session_dir" ]
-    assert_session_exists "$session_dir"
-    
-    # Verify state tracking
-    [ -d ".para_state" ]
-    session_count=$(count_sessions)
-    [ "$session_count" -eq 1 ]
-    
-    # 2. Edit file in worktree
-    cd "$TEST_REPO/$session_dir"
-    echo "Modified in session" >> test-file.py
-    
-    # 3. Rebase with message
-    run "$PARA_SCRIPT" rebase "Integration test commit"
+    # Verify session was created
+    run "$PARA_SCRIPT" list
     [ "$status" -eq 0 ]
+    [[ "$output" == *"$SESSION_ID"* ]]
     
-    # Go back to test repo
-    cd "$TEST_REPO"
+    # 2. Edit a file in the worktree
+    WORKTREE_DIR="subtrees/pc/$SESSION_ID"
+    [ -d "$WORKTREE_DIR" ]
+    echo "test content" > "$WORKTREE_DIR/test-file.py"
     
-    # Verify commit exists on main
-    assert_commit_exists "Integration test commit"
+    # 3. Finish with message
+    cd "$WORKTREE_DIR"
+    run "$PARA_SCRIPT" finish "Integration test commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"finish complete"* ]]
     
-    # Verify changes are in main
-    assert_file_contains "test-file.py" "Modified in session"
+    # 4. Verify the worktree is cleaned up
+    cd "$TEST_DIR"
+    [ ! -d "$WORKTREE_DIR" ]
     
-    # Verify cleanup - session directory should not exist after successful rebase
-    assert_session_not_exists "$session_dir"
+    # 5. Verify commit was made on main branch
+    git log --oneline | head -1 | grep "Integration test commit"
+    
+    # Verify cleanup - session directory should not exist after successful finish
+    run "$PARA_SCRIPT" list  
+    [[ "$output" == *"No active parallel sessions"* ]]
+    
+    # Cleanup
+    cd /
+    rm -rf "$TEST_DIR"
 }
 
 @test "IT-2: Cancel session" {
@@ -125,23 +139,23 @@ teardown() {
     cd "$TEST_REPO/$session_b"
     echo "Change from session B" > test-file.py
     
-    # 3. Rebase A (should succeed)
+    # 3. Finish A (should succeed)
     cd "$TEST_REPO/$session_a"
-    run "$PARA_SCRIPT" rebase "Session A changes"
+    run "$PARA_SCRIPT" finish "Session A changes"
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
-    # 4. Try to rebase B (should have conflict)
+    # 4. Try to finish B (should have conflict)
     # Session B directory should still exist even after A is cleaned up
     assert_session_exists "$session_b"
     
     cd "$TEST_REPO/$session_b"
-    run "$PARA_SCRIPT" rebase "Session B changes"
-    # The rebase command should now fail due to rebase conflicts (this is the fix)
+    run "$PARA_SCRIPT" finish "Session B changes"
+    # The finish command should now fail due to finish conflicts (this is the fix)
     [ "$status" -eq 1 ]
     # Should output conflict information
-    [[ "$output" == *"rebase conflicts"* ]]
+    [[ "$output" == *"finish conflicts"* ]]
     
     cd "$TEST_REPO"
     
@@ -155,7 +169,7 @@ Change from session A
 Change from session B
 EOF
     
-    # Continue the rebase
+    # Continue the finish
     cd "$TEST_REPO/$session_b"
     run "$PARA_SCRIPT" continue
     [ "$status" -eq 0 ]
@@ -225,8 +239,8 @@ EOF
     cd "$TEST_REPO/$session_dir"
     echo "Auto-detect test change" >> test-file.py
     
-    # 3. Test rebase from within worktree (should auto-detect session)
-    run "$PARA_SCRIPT" rebase "Auto-detect test commit"
+    # 3. Test finish from within worktree (should auto-detect session)
+    run "$PARA_SCRIPT" finish "Auto-detect test commit"
     [ "$status" -eq 0 ]
     
     # Go back to main repo to verify
@@ -238,7 +252,7 @@ EOF
     # Verify changes are in main
     assert_file_contains "test-file.py" "Auto-detect test change"
     
-    # Verify cleanup - session should be cleaned up after successful rebase
+    # Verify cleanup - session should be cleaned up after successful finish
     assert_session_not_exists "$session_dir"
 }
 
@@ -270,7 +284,7 @@ EOF
     assert_session_not_exists "$session_dir"
 }
 
-@test "IT-7: Rebase uncommitted changes should auto-stage and commit" {
+@test "IT-7: Finish uncommitted changes should auto-stage and commit" {
     # 1. Create session
     run run_para
     [ "$status" -eq 0 ]
@@ -296,8 +310,8 @@ EOF
     [ "$status" -eq 0 ]
     [ -n "$output" ]  # Should have output indicating changes
     
-    # 3. Try to rebase with uncommitted changes - this should work automatically
-    run "$PARA_SCRIPT" rebase "Test commit with uncommitted changes"
+    # 3. Try to finish with uncommitted changes - this should work automatically
+    run "$PARA_SCRIPT" finish "Test commit with uncommitted changes"
     [ "$status" -eq 0 ]
     # Should NOT see error about uncommitted changes
     [[ "$output" == *"staging all changes"* ]]
@@ -313,11 +327,11 @@ EOF
     assert_file_contains "test-file.py" "Uncommitted modification"
     assert_file_contains "new-file.txt" "New file content"
     
-    # Verify cleanup - session should be cleaned up after successful rebase  
+    # Verify cleanup - session should be cleaned up after successful finish  
     assert_session_not_exists "$session_dir"
 }
 
-@test "IT-8: Rebase conflict should not complete with unresolved markers" {
+@test "IT-8: Finish conflict should not complete with unresolved markers" {
     # 1. Create session and edit the justfile (to cause conflicts)
     run run_para
     [ "$status" -eq 0 ]
@@ -348,11 +362,11 @@ EOF
 @bats test_b.bats
 EOF
     
-    # 4. Try to rebase session A (should fail due to conflict)
+    # 4. Try to finish session A (should fail due to conflict)
     cd "$TEST_REPO/$session_a"
-    run "$PARA_SCRIPT" rebase "Modify justfile in session A"
+    run "$PARA_SCRIPT" finish "Modify justfile in session A"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"rebase conflicts"* ]]
+    [[ "$output" == *"finish conflicts"* ]]
     
     # Verify the session still exists (not cleaned up due to conflict)
     cd "$TEST_REPO"
@@ -373,7 +387,7 @@ EOF
     assert_session_exists "$session_a"
 }
 
-@test "IT-9: Squash rebase mode - multiple commits become one (default behavior)" {
+@test "IT-9: Squash finish mode - multiple commits become one (default behavior)" {
     # 1. Create session
     run run_para
     [ "$status" -eq 0 ]
@@ -404,8 +418,8 @@ EOF
     commit_count=$(git rev-list --count HEAD ^master)
     [ "$commit_count" -eq 3 ]
     
-    # 3. Rebase using default squash mode
-    run "$PARA_SCRIPT" rebase "Feature complete with squashed changes"
+    # 3. Finish using default squash mode
+    run "$PARA_SCRIPT" finish "Feature complete with squashed changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: squash"* ]]
     [[ "$output" == *"squashed 3 commits"* ]]
@@ -434,7 +448,7 @@ EOF
     assert_session_not_exists "$session_dir"
 }
 
-@test "IT-10: Rebase preserve mode - preserve individual commits" {
+@test "IT-10: Finish preserve mode - preserve individual commits" {
     # 1. Create session
     run run_para
     [ "$status" -eq 0 ]
@@ -464,9 +478,9 @@ EOF
     initial_commit_count=$(git rev-list --count HEAD)
     [ "$initial_commit_count" -eq 1 ]
     
-    # 3. Rebase using preserve mode
+    # 3. Finish using preserve mode
     cd "$TEST_REPO/$session_dir"
-    run "$PARA_SCRIPT" rebase --preserve "Final uncommitted changes"
+    run "$PARA_SCRIPT" finish --preserve "Final uncommitted changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: rebase"* ]]
     
@@ -488,7 +502,7 @@ EOF
     assert_file_contains "test-file.py" "Uncommitted changes"
 }
 
-@test "IT-11: Rebase conflict resolution with preserve mode" {
+@test "IT-11: Finish conflict resolution with preserve mode" {
     # 1. Create session A
     run run_para
     [ "$status" -eq 0 ]
@@ -529,18 +543,18 @@ EOF
     git add conflict-file.txt 
     git commit -m "Session B: Conflicting commit"
     
-    # 3. Rebase session A with preserve mode (should succeed)
+    # 3. Finish session A with preserve mode (should succeed)
     cd "$TEST_REPO/$session_a"
-    run "$PARA_SCRIPT" rebase --preserve "Session A complete"
+    run "$PARA_SCRIPT" finish --preserve "Session A complete"
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
-    # 4. Try to rebase session B with preserve mode (should conflict)
+    # 4. Try to finish session B with preserve mode (should conflict)
     cd "$TEST_REPO/$session_b"
-    run "$PARA_SCRIPT" rebase --preserve "Session B final"
+    run "$PARA_SCRIPT" finish --preserve "Session B final"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"rebase conflicts"* ]]
+    [[ "$output" == *"finish conflicts"* ]]
     
     # Session should still exist
     cd "$TEST_REPO"

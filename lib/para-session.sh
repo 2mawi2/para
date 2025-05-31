@@ -6,19 +6,19 @@ get_session_info() {
   SESSION_ID="$1"
   STATE_FILE="$STATE_DIR/$SESSION_ID.state"
   [ -f "$STATE_FILE" ] || die "session '$SESSION_ID' not found"
-  
+
   # Read state file with backward compatibility
   STATE_CONTENT=$(cat "$STATE_FILE")
   case "$STATE_CONTENT" in
-    *"|"*"|"*"|"*)
-      # New format with merge mode
-      IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$STATE_FILE"
-      ;;
-    *)
-      # Old format without merge mode, default to squash
-      IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$STATE_FILE"
-      MERGE_MODE="squash"
-      ;;
+  *"|"*"|"*"|"*)
+    # New format with merge mode
+    IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$STATE_FILE"
+    ;;
+  *)
+    # Old format without merge mode, default to squash
+    IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$STATE_FILE"
+    MERGE_MODE="squash"
+    ;;
   esac
 }
 
@@ -28,17 +28,17 @@ save_session_state() {
   temp_branch="$2"
   worktree_dir="$3"
   base_branch="$4"
-  merge_mode="${5:-squash}"  # Default to squash if not provided
-  
+  merge_mode="${5:-squash}" # Default to squash if not provided
+
   mkdir -p "$STATE_DIR"
-  echo "$temp_branch|$worktree_dir|$base_branch|$merge_mode" > "$STATE_DIR/$session_id.state"
+  echo "$temp_branch|$worktree_dir|$base_branch|$merge_mode" >"$STATE_DIR/$session_id.state"
 }
 
 # Update merge mode for existing session
 update_session_merge_mode() {
   session_id="$1"
   merge_mode="$2"
-  
+
   get_session_info "$session_id"
   save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$merge_mode"
 }
@@ -47,7 +47,7 @@ update_session_merge_mode() {
 remove_session_state() {
   session_id="$1"
   rm -f "$STATE_DIR/$session_id.state"
-  
+
   # Clean up state directory if empty
   if [ -d "$STATE_DIR" ]; then
     rmdir "$STATE_DIR" 2>/dev/null || true
@@ -92,12 +92,12 @@ auto_detect_session() {
           # Use backward-compatible state reading
           STATE_CONTENT=$(cat "$state_file")
           case "$STATE_CONTENT" in
-            *"|"*"|"*"|"*)
-              IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$state_file"
-              ;;
-            *)
-              IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
-              ;;
+          *"|"*"|"*"|"*)
+            IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$state_file"
+            ;;
+          *)
+            IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
+            ;;
           esac
 
           if [ "pc/$PC_DIR_NAME" = "$TEMP_BRANCH" ]; then
@@ -138,16 +138,16 @@ list_sessions() {
     echo "No active parallel sessions."
     return 0
   fi
-  
+
   SESSIONS_FOUND=0
   for state_file in "$STATE_DIR"/*.state; do
     [ -f "$state_file" ] || continue
     SESSIONS_FOUND=1
     session_id=$(basename "$state_file" .state)
-    
+
     # Use get_session_info for backward compatibility
     get_session_info "$session_id"
-    
+
     # Make session display more user-friendly
     if echo "$session_id" | grep -q "^pc-[0-9]\{8\}-[0-9]\{6\}$"; then
       timestamp=$(echo "$session_id" | sed 's/pc-//')
@@ -157,7 +157,7 @@ list_sessions() {
     else
       display_name="$session_id (custom)"
     fi
-    
+
     echo "Session: $display_name"
     echo "  Branch: $TEMP_BRANCH"
     echo "  Worktree: $WORKTREE_DIR"
@@ -180,11 +180,11 @@ list_sessions() {
     else
       echo "  Status: ❌ Worktree missing"
     fi
-    
+
     echo "  Resume: para resume $session_id"
     echo ""
   done
-  
+
   if [ "$SESSIONS_FOUND" -eq 0 ]; then
     echo "No active parallel sessions."
   else
@@ -202,7 +202,7 @@ session_exists() {
 create_session() {
   session_name="$1"
   base_branch="$2"
-  
+
   if [ -n "$session_name" ]; then
     SESSION_ID="$session_name"
     TS=$(generate_timestamp)
@@ -219,11 +219,11 @@ create_session() {
   fi
 
   echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $base_branch)" >&2
-  
+
   # Create worktree and save state
   create_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
   save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$base_branch"
-  
+
   echo "$SESSION_ID"
 }
 
@@ -233,37 +233,37 @@ clean_all_sessions() {
     echo "No active parallel sessions to clean."
     return 0
   fi
-  
+
   SESSIONS_FOUND=0
   CLEANED_COUNT=0
-  
+
   echo "▶ cleaning up all active sessions..."
-  
+
   for state_file in "$STATE_DIR"/*.state; do
     [ -f "$state_file" ] || continue
     SESSIONS_FOUND=1
-    
+
     session_id=$(basename "$state_file" .state)
-    
+
     # Use get_session_info for backward compatibility
     get_session_info "$session_id"
-    
+
     echo "  → cleaning session $session_id"
-    
+
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$session_id"
-    
+
     CLEANED_COUNT=$((CLEANED_COUNT + 1))
   done
-  
+
   # Clean up state directory if empty
   if [ -d "$STATE_DIR" ]; then
     rmdir "$STATE_DIR" 2>/dev/null || true
   fi
-  
+
   if [ "$SESSIONS_FOUND" -eq 0 ]; then
     echo "No active parallel sessions to clean."
   else
     echo "✅ cleaned up $CLEANED_COUNT session(s)"
   fi
-} 
+}

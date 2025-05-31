@@ -77,7 +77,12 @@ teardown_temp_git_repo() {
 
 # Helper function to run para in the test directory
 run_para() {
-    cd "$TEST_REPO" && "$PARA_SCRIPT" "$@"
+    if [ "$#" -eq 0 ]; then
+        # No arguments - use start command
+        cd "$TEST_REPO" && "$PARA_SCRIPT" start
+    else
+        cd "$TEST_REPO" && "$PARA_SCRIPT" "$@"
+    fi
 }
 
 # Helper function to run commands in test directory

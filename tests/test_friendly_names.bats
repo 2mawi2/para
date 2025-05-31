@@ -98,8 +98,8 @@ teardown() {
     # Make some changes
     echo "auto-detect test with friendly name" >> test-file.py
     
-    # Rebase from within worktree (should auto-detect)
-    run "$PARA_SCRIPT" rebase "Friendly name auto-detect test"
+    # Finish from within worktree (should auto-detect)
+    run "$PARA_SCRIPT" finish "Friendly name auto-detect test"
     [ "$status" -eq 0 ]
     
     # Go back to main repo
@@ -181,7 +181,7 @@ teardown() {
     auto_session_dir=$(find_session_dir)
     
     # Create custom named session
-    run run_para "my-feature"
+    run run_para start "my-feature"
     [ "$status" -eq 0 ]
     
     # Should have 2 sessions
