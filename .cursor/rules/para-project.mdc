@@ -3,10 +3,12 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Para - Parallel Cursor Workflow Helper
+# Para - Parallel IDE Workflow Helper
 
 ## Project Overview
-This project provides a POSIX shell script for creating multiple ephemeral Cursor IDE sessions on Git worktrees, enabling parallel development with easy rebase/discard workflow.
+This project provides a POSIX shell script for creating multiple ephemeral IDE sessions on Git worktrees, enabling parallel development with easy rebase/discard workflow.
+
+**Supports multiple IDEs:** Cursor, Claude Code, VS Code, and extensible for others.
 
 ## Key Files
 - **[para.sh](mdc:para.sh)** - Main script with clean subcommand interface for parallel session management
@@ -18,11 +20,11 @@ This project provides a POSIX shell script for creating multiple ephemeral Curso
 ## Modular Architecture
 ```
 lib/
-├── para-config.sh   # Configuration management
+├── para-config.sh   # Configuration management (IDE-agnostic)
 ├── para-utils.sh    # Utility functions and validation  
 ├── para-git.sh      # Git operations and worktree management
 ├── para-session.sh  # Session lifecycle and state management
-└── para-ide.sh      # IDE integration (extensible)
+└── para-ide.sh      # IDE integration (supports Cursor, Claude Code, VS Code)
 
 tests/
 ├── test_para.bats   # Main test suite using bats-core
@@ -31,6 +33,30 @@ tests/
 scripts/
 ├── pre-commit         # Git hook for running tests
 └── pre-push           # Git hook for running linting
+```
+
+## IDE Configuration
+The script is now IDE-agnostic and supports multiple editors:
+
+**Claude Code (Recommended for Claude AI users):**
+```bash
+export IDE_NAME="claude"
+export IDE_CMD="claude"
+# Note: Claude Code doesn't support --user-data-dir isolation
+```
+
+**Cursor (Default):**
+```bash
+export IDE_NAME="cursor"  # Default
+export IDE_CMD="cursor"   # Default
+export IDE_USER_DATA_DIR=".cursor-userdata"  # Default
+```
+
+**VS Code:**
+```bash
+export IDE_NAME="code"
+export IDE_CMD="code"
+export IDE_USER_DATA_DIR=".vscode-userdata"
 ```
 
 ## Development Workflow
@@ -42,7 +68,7 @@ scripts/
 - **Status**: `just status` - Check dependencies and project health
 
 ## Core Commands
-- `para` - Create new parallel session (opens Cursor)
+- `para` - Create new parallel session (opens configured IDE)
 - `para rebase "message"` - Auto-stage & rebase session with commit message
 - `para list` - Show all active sessions
 - `para continue` - Resume after resolving rebase conflicts (auto-stages)
@@ -75,6 +101,7 @@ echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
 3. **Context-Aware**: Auto-detects current session from working directory
 4. **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
 5. **Clean Workflow**: No manual `git add` required anywhere
+6. **IDE Agnostic**: Works with any IDE that supports command-line launching
 
 ## Development Notes
 - Pure POSIX shell for maximum compatibility
@@ -85,4 +112,6 @@ echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
 - Automated testing with bats-core framework
 - Linting with shellcheck + shfmt for code quality
 - Git hooks prevent commits/pushes with issues
-- When writing integration tests always use 'mktemp -d' to ensure git commands do not interfere with the main repository, or choose an alternative strategy that is non-intrusive 
+- IDE-agnostic design with configurable IDE support
+- Backwards compatible with existing Cursor-specific configurations
+- When writing integration tests always use 'mktemp -d' to ensure git commands do not interfere with the main repository, or choose an alternative strategy that is non-intrusive

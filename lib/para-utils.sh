@@ -3,8 +3,9 @@
 
 # Usage message
 usage() {
+  ide_display_name=$(get_ide_display_name)
   cat <<EOF
-para - Parallel Cursor IDE workflow helper
+para - Parallel IDE workflow helper
 
 USAGE:
   para                        # create new session with friendly name (e.g., swift_phoenix_20250531-233056)
@@ -15,7 +16,7 @@ USAGE:
   para continue                 # continue rebase after resolving conflicts
   para cancel [session]       # cancel/delete session
   para clean                  # delete all sessions
-  para resume <session>       # resume session in Cursor
+  para resume <session>       # resume session in $ide_display_name
 
 EXAMPLES:
   para                        # auto-named session (e.g., swift_phoenix_20250531-233056)
@@ -32,6 +33,14 @@ SESSION NAMES:
   - Auto-generated sessions now use friendly names like "swift_phoenix_20250531-233056"
   - Much easier to remember and type than pure timestamps
   - You can still provide custom names for specific features
+
+CONFIGURATION:
+  export IDE_NAME="claude"        # Use Claude Code (default: cursor)
+  export IDE_CMD="claude"         # IDE command to run (default: cursor)
+  export IDE_USER_DATA_DIR=".claude-userdata"  # User data directory (for Cursor/VS Code only)
+
+  Note: Claude Code doesn't support --user-data-dir isolation.
+        Only Cursor and VS Code support user data directory isolation.
 
 For more information, see the README.md
 EOF
@@ -116,19 +125,44 @@ generate_session_id() {
   echo "${friendly}_${timestamp}"
 }
 
-# Get the main Cursor user data directory path
-get_main_cursor_user_data_dir() {
-  case "$(uname)" in
-    Darwin)
-      echo "$HOME/Library/Application Support/Cursor"
+# Get the main IDE user data directory path
+get_main_ide_user_data_dir() {
+  case "$IDE_NAME" in
+    cursor)
+      case "$(uname)" in
+        Darwin) echo "$HOME/Library/Application Support/Cursor" ;;
+        Linux) echo "$HOME/.config/Cursor" ;;
+        *) echo "$HOME/.config/Cursor" ;;
+      esac
       ;;
-    Linux)
-      echo "$HOME/.config/Cursor"
+    claude)
+      case "$(uname)" in
+        Darwin) echo "$HOME/Library/Application Support/Claude" ;;
+        Linux) echo "$HOME/.config/Claude" ;;
+        *) echo "$HOME/.config/Claude" ;;
+      esac
+      ;;
+    code)
+      case "$(uname)" in
+        Darwin) echo "$HOME/Library/Application Support/Code" ;;
+        Linux) echo "$HOME/.config/Code" ;;
+        *) echo "$HOME/.config/Code" ;;
+      esac
       ;;
     *)
-      echo "$HOME/.config/Cursor"
+      # Generic fallback
+      case "$(uname)" in
+        Darwin) echo "$HOME/Library/Application Support/$IDE_NAME" ;;
+        Linux) echo "$HOME/.config/$IDE_NAME" ;;
+        *) echo "$HOME/.config/$IDE_NAME" ;;
+      esac
       ;;
   esac
+}
+
+# Backwards compatibility alias
+get_main_cursor_user_data_dir() {
+  get_main_ide_user_data_dir
 }
 
 # Check if para template exists
@@ -136,34 +170,35 @@ template_exists() {
   [ -d "$TEMPLATE_DIR" ]
 }
 
-# Setup para template by copying main Cursor user data
+# Setup para template by copying main IDE user data
 setup_para_template() {
-  main_cursor_dir=$(get_main_cursor_user_data_dir)
+  ide_display_name=$(get_ide_display_name)
+  main_ide_dir=$(get_main_ide_user_data_dir)
   
-  if [ ! -d "$main_cursor_dir" ]; then
-    echo "⚠️  Main Cursor user data directory not found at: $main_cursor_dir"
-    echo "   Starting with fresh Cursor environment for para sessions."
+  if [ ! -d "$main_ide_dir" ]; then
+    echo "⚠️  Main $ide_display_name user data directory not found at: $main_ide_dir"
+    echo "   Starting with fresh $ide_display_name environment for para sessions."
     return 1
   fi
   
-  echo "🔧 Setting up para template from your main Cursor configuration..."
-  echo "   Copying from: $main_cursor_dir"
+  echo "🔧 Setting up para template from your main $ide_display_name configuration..."
+  echo "   Copying from: $main_ide_dir"
   echo "   To template: $TEMPLATE_DIR"
   
   # Create template directory
   mkdir -p "$TEMPLATE_DIR"
   
-  # Copy main Cursor user data to template (excluding logs, cache, and problematic files)
+  # Copy main IDE user data to template (excluding logs, cache, and problematic files)
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --exclude='logs/' --exclude='Cache/' --exclude='CachedData/' \
           --exclude='GPUCache/' --exclude='Code Cache/' --exclude='DawnWebGPUCache/' \
           --exclude='DawnGraphiteCache/' --exclude='*.lock' --exclude='*.sock' \
           --exclude='Local Storage/' --exclude='Session Storage/' \
           --exclude='blob_storage/' --exclude='Shared Dictionary/' \
-          "$main_cursor_dir/" "$TEMPLATE_DIR/"
+          "$main_ide_dir/" "$TEMPLATE_DIR/"
   else
     # Fallback to cp if rsync is not available
-    cp -r "$main_cursor_dir"/* "$TEMPLATE_DIR/" 2>/dev/null || true
+    cp -r "$main_ide_dir"/* "$TEMPLATE_DIR/" 2>/dev/null || true
     # Remove cache directories and problematic files that shouldn't be copied
     rm -rf "$TEMPLATE_DIR/logs" "$TEMPLATE_DIR/Cache" "$TEMPLATE_DIR/CachedData" \
            "$TEMPLATE_DIR/GPUCache" "$TEMPLATE_DIR/Code Cache" \

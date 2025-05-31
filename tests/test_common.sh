@@ -15,7 +15,9 @@ setup_temp_git_repo() {
     
     export TEST_REPO=$(mktemp -d)
     
-    export CURSOR_CMD="true"
+    # Set IDE to test mode to avoid launching actual IDE
+    export IDE_CMD="true"
+    export CURSOR_CMD="true"  # Backwards compatibility
     
     unset REPO_ROOT
     unset STATE_DIR
