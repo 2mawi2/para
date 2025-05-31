@@ -120,7 +120,11 @@ install-dev:
 
 # Run tests using bats
 test FILE="": install-dev
+<<<<<<< HEAD
     @echo "🧪 Running all tests..."
+=======
+    @echo "🧪 Running tests..."
+>>>>>>> e0e9dab (allow executing unit tests seperately)
     @if [ ! -d "tests" ]; then \
         echo "Creating tests directory..."; \
         mkdir -p tests; \
@@ -132,7 +136,10 @@ test FILE="": install-dev
         echo "Running all tests..."; \
         echo "Running unit tests..."; \
         bats tests/test_pursor.bats || true; \
+<<<<<<< HEAD
         bats tests/test_pursor_units.bats || true; \
+=======
+>>>>>>> e0e9dab (allow executing unit tests seperately)
         echo "Running integration tests..."; \
         bats tests/test_pursor_integration.bats || true; \
     fi
