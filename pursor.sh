@@ -305,6 +305,7 @@ continue_merge() {
   git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
   rm -f "$STATE_DIR/$SESSION_ID.state"
   echo "merge complete for session $SESSION_ID ✅"
+  echo "🎉 You can safely close this Cursor session now."
 }
 
 clean_all_sessions() {
@@ -428,6 +429,7 @@ else
       git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
       rm -f "$STATE_DIR/$SESSION_ID.state"
       echo "merge complete for session $SESSION_ID ✅"
+      echo "🎉 You can safely close this Cursor session now."
       ;;
 
     continue)
@@ -461,6 +463,7 @@ else
       git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH" 2>/dev/null || true
       rm -f "$STATE_DIR/$SESSION_ID.state"
       echo "cancelled session $SESSION_ID"
+      echo "🎉 You can safely close this Cursor session now."
       ;;
 
     clean)
