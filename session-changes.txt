@@ -1,1 +1,2 @@
 Changes from session
+Session modification
