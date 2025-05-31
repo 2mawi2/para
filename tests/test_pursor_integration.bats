@@ -376,4 +376,215 @@ EOF
     
     # Session should be cleaned up after successful resolution
     assert_session_not_exists "$session_a"
+}
+
+@test "IT-9: Squash merge mode - multiple commits become one (default behavior)" {
+    # 1. Create session
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    [ -n "$session_dir" ]
+    assert_session_exists "$session_dir"
+    
+    # 2. Make multiple commits in the session
+    cd "$TEST_REPO/$session_dir"
+    
+    # First commit
+    echo "change 1" >> test-file.py
+    git add test-file.py
+    git commit -m "First change in session"
+    
+    # Second commit
+    echo "change 2" >> test-file.py
+    git add test-file.py
+    git commit -m "Second change in session"
+    
+    # Third commit
+    echo "change 3" >> test-file.py
+    git add test-file.py
+    git commit -m "Third change in session"
+    
+    # Add uncommitted change to test auto-staging
+    echo "uncommitted change" >> test-file.py
+    
+    # Verify we have multiple commits beyond the base
+    commit_count=$(git rev-list --count HEAD ^master)
+    [ "$commit_count" -eq 3 ]
+    
+    # 3. Merge using default squash mode
+    run "$PURSOR_SCRIPT" merge "Feature complete with squashed changes"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode: squash"* ]]
+    [[ "$output" == *"squashing all changes into single commit"* ]]
+    [[ "$output" == *"created squash commit"* ]]
+    
+    cd "$TEST_REPO"
+    
+    # 4. Verify only ONE new commit was added to master (the squash commit)
+    new_commit_count=$(git rev-list --count HEAD ^master~1)
+    [ "$new_commit_count" -eq 1 ]
+    
+    # Verify the squash commit has the user's message
+    assert_commit_exists "Feature complete with squashed changes"
+    
+    # Verify all changes are present in the final file
+    assert_file_contains "test-file.py" "Initial content"
+    assert_file_contains "test-file.py" "change 1"
+    assert_file_contains "test-file.py" "change 2"
+    assert_file_contains "test-file.py" "change 3"
+    assert_file_contains "test-file.py" "uncommitted change"
+    
+    # Verify individual session commits are NOT in master history
+    if git log --oneline | grep -q "First change in session"; then
+        echo "Individual session commit should not be in master history in squash mode"
+        return 1
+    fi
+    
+    # Verify cleanup
+    assert_session_not_exists "$session_dir"
+}
+
+@test "IT-10: Rebase merge mode - preserve individual commits" {
+    # 1. Create session
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    [ -n "$session_dir" ]
+    assert_session_exists "$session_dir"
+    
+    # 2. Make multiple commits in the session
+    cd "$TEST_REPO/$session_dir"
+    
+    # First commit
+    echo "rebase change 1" >> test-file.py
+    git add test-file.py
+    git commit -m "Rebase: First change in session"
+    
+    # Second commit
+    echo "rebase change 2" >> test-file.py
+    git add test-file.py
+    git commit -m "Rebase: Second change in session"
+    
+    # Add uncommitted change to test auto-staging
+    echo "rebase uncommitted change" >> test-file.py
+    
+    # Verify we have multiple commits beyond the base
+    commit_count=$(git rev-list --count HEAD ^master)
+    [ "$commit_count" -eq 2 ]
+    
+    # 3. Merge using rebase mode
+    run "$PURSOR_SCRIPT" merge --rebase "Final uncommitted changes"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode: rebase"* ]]
+    [[ "$output" == *"staging all changes"* ]]
+    [[ "$output" == *"committing changes"* ]]
+    
+    cd "$TEST_REPO"
+    
+    # 4. Verify ALL commits are preserved in master history (rebased)
+    # Should have: original + 2 session commits + 1 uncommitted commit = 4 total
+    total_commits=$(git rev-list --count HEAD)
+    [ "$total_commits" -eq 4 ]
+    
+    # Verify all individual commits are present in master history
+    assert_commit_exists "Rebase: First change in session"
+    assert_commit_exists "Rebase: Second change in session"
+    assert_commit_exists "Final uncommitted changes"
+    
+    # Verify all changes are present in the final file
+    assert_file_contains "test-file.py" "Initial content"
+    assert_file_contains "test-file.py" "rebase change 1"
+    assert_file_contains "test-file.py" "rebase change 2"
+    assert_file_contains "test-file.py" "rebase uncommitted change"
+    
+    # Verify cleanup
+    assert_session_not_exists "$session_dir"
+}
+
+@test "IT-11: Rebase mode conflict resolution preserves individual commits" {
+    # 1. Create first session and commit changes
+    run run_pursor  
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_a=$(find_session_dir)
+    assert_session_exists "$session_a"
+    
+    cd "$TEST_REPO/$session_a"
+    echo "Session A: line 1" >> test-file.py
+    git add test-file.py
+    git commit -m "Session A: First commit"
+    
+    echo "Session A: line 2" >> test-file.py
+    git add test-file.py  
+    git commit -m "Session A: Second commit"
+    
+    # 2. Create second session with conflicting changes
+    cd "$TEST_REPO"
+    sleep 1  # Ensure different timestamp
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    session_b=""
+    for dir in $(find subtrees/pc -maxdepth 1 -type d -name "20*"); do
+        if [ "$dir" != "$session_a" ]; then
+            session_b="$dir"
+            break
+        fi
+    done
+    assert_session_exists "$session_b"
+    
+    cd "$TEST_REPO/$session_b"
+    echo "Session B: conflicting line" >> test-file.py
+    git add test-file.py
+    git commit -m "Session B: Conflicting commit"
+    
+    # 3. Merge session A with rebase mode (should succeed)
+    cd "$TEST_REPO/$session_a"
+    run "$PURSOR_SCRIPT" merge --rebase "Session A complete"
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    
+    # 4. Try to merge session B with rebase mode (should conflict)
+    cd "$TEST_REPO/$session_b"
+    run "$PURSOR_SCRIPT" merge --rebase "Session B final"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"rebase conflicts"* ]]
+    
+    # 5. Check that session state preserves rebase mode
+    cd "$TEST_REPO"
+    run "$PURSOR_SCRIPT" list
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Mode: rebase"* ]]
+    
+    # 6. Resolve conflict manually
+    cd "$TEST_REPO/$session_b"
+    cat > test-file.py << 'EOF'
+Initial content
+Session A: line 1
+Session A: line 2
+Session B: conflicting line
+EOF
+    
+    # 7. Continue with rebase mode (should preserve mode from state)
+    run "$PURSOR_SCRIPT" continue
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode: rebase"* ]]
+    
+    cd "$TEST_REPO"
+    
+    # 8. Verify all commits are preserved (no squashing occurred)
+    assert_commit_exists "Session A: First commit"
+    assert_commit_exists "Session A: Second commit" 
+    assert_commit_exists "Session B: Conflicting commit"
+    
+    # Verify final content includes resolved changes
+    assert_file_contains "test-file.py" "Session A: line 1"
+    assert_file_contains "test-file.py" "Session A: line 2"  
+    assert_file_contains "test-file.py" "Session B: conflicting line"
 } 

@@ -133,12 +133,14 @@ merge_session() {
   worktree_dir="$2"
   base_branch="$3"
   commit_msg="$4"
+  merge_mode="${5:-squash}"  # Default to squash mode if not provided
   
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
   
-  # Auto-stage and commit all changes if any exist
   cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
+  
+  # Always commit any uncommitted changes first (both modes need this)
   if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
     echo "▶ staging all changes"
     git add -A || die "failed to stage changes"
@@ -148,6 +150,7 @@ merge_session() {
     echo "ℹ️  no changes to commit"
   fi
 
+  # Always try rebase first to detect conflicts
   echo "▶ rebasing $temp_branch onto $base_branch"
   if ! git rebase "$base_branch"; then
     echo "❌ rebase conflicts" >&2
@@ -155,6 +158,21 @@ merge_session() {
     echo "   → then run: pursor continue" >&2
     cd "$ORIGINAL_DIR" || true
     return 1
+  fi
+
+  # If squash mode, squash all commits after successful rebase
+  if [ "$merge_mode" = "squash" ]; then
+    echo "▶ squashing all commits into single commit"
+    # Count commits to squash (everything after base branch)
+    COMMIT_COUNT=$(git rev-list --count HEAD ^"$base_branch")
+    if [ "$COMMIT_COUNT" -gt 1 ]; then
+      # Reset to squash all commits, but keep the changes staged
+      git reset --soft "$base_branch" || die "failed to reset to base branch for squashing"
+      git commit -m "$commit_msg" || die "failed to create squash commit"
+      echo "✅ squashed $COMMIT_COUNT commits into single commit with message: $commit_msg"
+    else
+      echo "ℹ️  only one commit, no squashing needed"
+    fi
   fi
 
   # Change to main repository root for merge operations
@@ -175,7 +193,15 @@ merge_session() {
   git checkout "$base_branch" || die "failed to checkout $base_branch"
   if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
     echo "▶ using non-fast-forward merge"
-    if ! git merge --no-ff -m "$commit_msg" "$temp_branch"; then
+    # For squash mode, we want a clean merge commit message
+    # For rebase mode, we want to preserve the individual commits
+    if [ "$merge_mode" = "squash" ]; then
+      merge_commit_msg="$commit_msg"
+    else
+      merge_commit_msg="Merge session $temp_branch"
+    fi
+    
+    if ! git merge --no-ff -m "$merge_commit_msg" "$temp_branch"; then
       echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
       cd "$ORIGINAL_DIR" || true
       return 1
@@ -192,6 +218,7 @@ continue_merge() {
   worktree_dir="$1"
   temp_branch="$2"
   base_branch="$3"
+  merge_mode="${4:-squash}"  # Default to squash if not provided
   
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
@@ -263,7 +290,13 @@ continue_merge() {
   git checkout "$base_branch" || die "failed to checkout $base_branch"
   if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
     echo "▶ using non-fast-forward merge"
-    COMMIT_MSG="Merge session after resolving conflicts"
+    # Use appropriate merge commit message based on mode
+    if [ "$merge_mode" = "squash" ]; then
+      COMMIT_MSG="Merge session after resolving conflicts"
+    else
+      COMMIT_MSG="Merge session $temp_branch after resolving conflicts"
+    fi
+    
     if ! git merge --no-ff -m "$COMMIT_MSG" "$temp_branch"; then
       echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
       cd "$ORIGINAL_DIR" || true

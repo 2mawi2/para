@@ -6,7 +6,20 @@ get_session_info() {
   SESSION_ID="$1"
   STATE_FILE="$STATE_DIR/$SESSION_ID.state"
   [ -f "$STATE_FILE" ] || die "session '$SESSION_ID' not found"
-  IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$STATE_FILE"
+  
+  # Read state file with backward compatibility
+  STATE_CONTENT=$(cat "$STATE_FILE")
+  case "$STATE_CONTENT" in
+    *"|"*"|"*"|"*)
+      # New format with merge mode
+      IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$STATE_FILE"
+      ;;
+    *)
+      # Old format without merge mode, default to squash
+      IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$STATE_FILE"
+      MERGE_MODE="squash"
+      ;;
+  esac
 }
 
 # Save session state to file
@@ -15,9 +28,19 @@ save_session_state() {
   temp_branch="$2"
   worktree_dir="$3"
   base_branch="$4"
+  merge_mode="${5:-squash}"  # Default to squash if not provided
   
   mkdir -p "$STATE_DIR"
-  echo "$temp_branch|$worktree_dir|$base_branch" > "$STATE_DIR/$session_id.state"
+  echo "$temp_branch|$worktree_dir|$base_branch|$merge_mode" > "$STATE_DIR/$session_id.state"
+}
+
+# Update merge mode for existing session
+update_session_merge_mode() {
+  session_id="$1"
+  merge_mode="$2"
+  
+  get_session_info "$session_id"
+  save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$merge_mode"
 }
 
 # Remove session state file
@@ -57,7 +80,16 @@ auto_detect_session() {
           [ -f "$state_file" ] || continue
           SESSION_ID=$(basename "$state_file" .state)
 
-          IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
+          # Use backward-compatible state reading
+          STATE_CONTENT=$(cat "$state_file")
+          case "$STATE_CONTENT" in
+            *"|"*"|"*"|"*)
+              IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$state_file"
+              ;;
+            *)
+              IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
+              ;;
+          esac
 
           if [ "pc/$PC_DIR_NAME" = "$TEMP_BRANCH" ]; then
             echo "$SESSION_ID"
@@ -103,7 +135,9 @@ list_sessions() {
     [ -f "$state_file" ] || continue
     SESSIONS_FOUND=1
     session_id=$(basename "$state_file" .state)
-    IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
+    
+    # Use get_session_info for backward compatibility
+    get_session_info "$session_id"
     
     # Make session display more user-friendly
     if echo "$session_id" | grep -q "^pc-[0-9]\{8\}-[0-9]\{6\}$"; then
@@ -117,6 +151,7 @@ list_sessions() {
     echo "  Branch: $TEMP_BRANCH"
     echo "  Worktree: $WORKTREE_DIR"
     echo "  Base: $BASE_BRANCH"
+    echo "  Mode: $MERGE_MODE"
     if [ -d "$WORKTREE_DIR" ]; then
       cd "$WORKTREE_DIR" || die "failed to change to worktree directory"
       if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
@@ -199,7 +234,9 @@ clean_all_sessions() {
     SESSIONS_FOUND=1
     
     session_id=$(basename "$state_file" .state)
-    IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
+    
+    # Use get_session_info for backward compatibility
+    get_session_info "$session_id"
     
     echo "  → cleaning session $session_id"
     
