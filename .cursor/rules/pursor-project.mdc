@@ -85,3 +85,4 @@ echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
 - Automated testing with bats-core framework
 - Linting with shellcheck + shfmt for code quality
 - Git hooks prevent commits/pushes with issues
+- When writing integration tests always use 'mktemp -d' to ensure git commands do not interfere with the main repository, or choose an alternative strategy that is non-intrusive 

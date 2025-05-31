@@ -201,18 +201,37 @@ continue_merge() {
   # Check if we're in the middle of a rebase
   GIT_DIR=$(git rev-parse --git-dir)
   if [ -d "$GIT_DIR/rebase-merge" ] || [ -d "$GIT_DIR/rebase-apply" ]; then
-    # Check for remaining conflict markers in any files
-    if git diff --check 2>/dev/null; then
-      # No conflict markers found, auto-stage resolved files
-      echo "▶ auto-staging resolved conflicts"
-      git add -u || die "failed to stage resolved conflicts"
-    else
+    # Check for conflict markers in ALL files, not just git diff --check
+    echo "▶ checking for unresolved conflict markers"
+    
+    # Search for conflict markers in all files
+    CONFLICT_FILES=""
+    if command -v grep >/dev/null 2>&1; then
+      # Use find + grep to search for conflict markers in all files
+      CONFLICT_FILES=$(find . -type f -not -path './.git/*' -exec grep -l "^<<<<<<< \|^=======$\|^>>>>>>> " {} \; 2>/dev/null || true)
+    fi
+    
+    if [ -n "$CONFLICT_FILES" ]; then
       echo "❌ There are still unresolved conflicts:" >&2
       echo "Files with conflict markers:" >&2
-      git diff --check 2>&1 || true
+      echo "$CONFLICT_FILES" | sed 's/^/  /' >&2
+      echo "" >&2
+      echo "Please resolve all conflicts manually and run 'pursor continue' again." >&2
       cd "$ORIGINAL_DIR" || true
       return 1
     fi
+    
+    # Also check git diff --check for whitespace conflict markers
+    if ! git diff --check 2>/dev/null; then
+      echo "❌ git diff --check found conflict-related issues:" >&2
+      git diff --check 2>&1 | sed 's/^/  /' >&2
+      cd "$ORIGINAL_DIR" || true
+      return 1
+    fi
+    
+    # Auto-stage all resolved files
+    echo "▶ auto-staging resolved conflicts"
+    git add -A || die "failed to stage resolved conflicts"
     
     echo "▶ continuing rebase"
     if ! GIT_EDITOR=true git rebase --continue; then

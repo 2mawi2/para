@@ -183,10 +183,10 @@ run_in_test_repo() {
     
     cd "$session_b"
     run "$PURSOR_SCRIPT" merge "Session B changes"
-    # The merge command succeeds in setting up the conflict state
-    [ "$status" -eq 0 ]
-    # But it should output conflict information
-    [[ "$output" == *"conflict"* ]]
+    # The merge command should now fail due to rebase conflicts (this is the fix)
+    [ "$status" -eq 1 ]
+    # Should output conflict information
+    [[ "$output" == *"rebase conflicts"* ]]
     
     cd "$TEST_REPO"
     
@@ -316,4 +316,124 @@ EOF
     
     # Verify worktree directory is gone
     [ ! -d "$session_dir" ]
+}
+
+@test "IT-7: Merge uncommitted changes should auto-stage and commit" {
+    # This reproduces the user's reported issue
+    
+    # 1. Create session
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
+    
+    # 2. Navigate to worktree and make changes WITHOUT committing them
+    cd "$session_dir"
+    echo "Uncommitted change line 1" >> test-file.py
+    echo "Uncommitted change line 2" >> test-file.py
+    
+    # Create a new file as well (untracked)
+    echo "New file content" > new-file.txt
+    
+    # Verify we have uncommitted changes
+    run git status --porcelain
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]  # Should have output indicating changes
+    
+    # 3. Try to merge with uncommitted changes - this should work automatically
+    run "$PURSOR_SCRIPT" merge "Test commit with uncommitted changes"
+    [ "$status" -eq 0 ]
+    # Should NOT see error about uncommitted changes
+    [[ "$output" != *"You have unstaged changes"* ]]
+    
+    # Go back to main repo to verify
+    cd "$TEST_REPO"
+    
+    # Verify commit exists on main
+    run git log --oneline
+    [[ "$output" == *"Test commit with uncommitted changes"* ]]
+    
+    # Verify all changes are in main (both modified and new files)
+    grep -q "Uncommitted change line 1" test-file.py
+    grep -q "Uncommitted change line 2" test-file.py
+    [ -f "new-file.txt" ]
+    grep -q "New file content" new-file.txt
+    
+    # Verify cleanup - session should be cleaned up after successful merge  
+    [ ! -d "$session_dir" ]
+}
+
+@test "IT-8: Merge conflict should not complete with unresolved markers" {
+    # This tests the justfile conflict issue the user reported
+    
+    # 1. Create a file that will conflict in main repo
+    cd "$TEST_REPO"
+    cat > justfile << 'EOF'
+# Original justfile content
+test:
+    @echo "Running original tests..."
+    @bats test.bats
+EOF
+    git add justfile
+    git commit -m "Add original justfile"
+    
+    # 2. Create session A and modify justfile
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    session_a=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    cd "$session_a"
+    cat > justfile << 'EOF'
+# Modified justfile content A
+test:
+    @echo "Running modified tests A..."
+    @bats test_a.bats
+EOF
+    
+    # 3. Go back and modify main branch
+    cd "$TEST_REPO"
+    cat > justfile << 'EOF'
+# Modified justfile content B
+test:
+    @echo "Running modified tests B..."
+    @bats test_b.bats
+EOF
+    git add justfile
+    git commit -m "Modify justfile in main"
+    
+    # 4. Try to merge session A (should create conflict)
+    cd "$session_a"
+    run "$PURSOR_SCRIPT" merge "Modify justfile in session A"
+    # This should fail due to rebase conflict
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"rebase conflicts"* ]]
+    
+    # 5. Try to continue without properly resolving conflicts
+    run "$PURSOR_SCRIPT" continue
+    [ "$status" -eq 1 ]
+    # Should detect unresolved conflicts
+    [[ "$output" == *"still unresolved conflicts"* ]] || [[ "$output" == *"conflict markers"* ]]
+    
+    # 6. Properly resolve conflicts
+    cat > justfile << 'EOF'
+# Resolved justfile content
+test:
+    @echo "Running resolved tests..."
+    @bats test_resolved.bats
+EOF
+    
+    # 7. Now continue should work
+    run "$PURSOR_SCRIPT" continue
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    
+    # Verify the conflict was properly resolved
+    grep -q "Running resolved tests" justfile
+    # Should NOT contain conflict markers
+    ! grep -q "<<<<<<< HEAD" justfile
+    ! grep -q "=======" justfile
+    ! grep -q ">>>>>>> " justfile
 } 
