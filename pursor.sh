@@ -81,6 +81,54 @@ need_git_repo() {
   esac
 }
 
+setup_gitignore() {
+  REPO_GITIGNORE="$REPO_ROOT/.gitignore"
+  SUBTREES_GITIGNORE="$SUBTREES_DIR/.gitignore"
+  
+  # Entries to ensure are ignored
+  SUBTREES_ENTRY="$SUBTREES_DIR_NAME/"
+  STATE_ENTRY="$STATE_DIR_NAME/"
+  
+  # Setup main repository .gitignore
+  if [ ! -f "$REPO_GITIGNORE" ]; then
+    echo "▶ creating .gitignore in repository root"
+    cat > "$REPO_GITIGNORE" <<EOF
+# pursor - parallel cursor sessions
+$SUBTREES_ENTRY
+$STATE_ENTRY
+EOF
+  else
+    # Check and add entries if missing
+    NEEDS_UPDATE=0
+    if ! grep -q "^$SUBTREES_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null; then
+      NEEDS_UPDATE=1
+    fi
+    if ! grep -q "^$STATE_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null; then
+      NEEDS_UPDATE=1
+    fi
+    
+    if [ "$NEEDS_UPDATE" -eq 1 ]; then
+      echo "▶ updating .gitignore with pursor entries"
+      {
+        echo ""
+        echo "# pursor - parallel cursor sessions"
+        grep -q "^$SUBTREES_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null || echo "$SUBTREES_ENTRY"
+        grep -q "^$STATE_ENTRY\$" "$REPO_GITIGNORE" 2>/dev/null || echo "$STATE_ENTRY"
+      } >> "$REPO_GITIGNORE"
+    fi
+  fi
+  
+  # Setup subtrees directory .gitignore to ignore all contents
+  if [ ! -f "$SUBTREES_GITIGNORE" ]; then
+    echo "▶ creating .gitignore in subtrees directory"
+    cat > "$SUBTREES_GITIGNORE" <<EOF
+# Ignore all pursor worktree contents
+*
+!.gitignore
+EOF
+  fi
+}
+
 list_sessions() {
   if [ ! -d "$STATE_DIR" ]; then
     echo "No active parallel sessions."
@@ -305,6 +353,10 @@ if [ "$#" -eq 0 ]; then
   echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $BASE_BRANCH)"
   mkdir -p "$SUBTREES_DIR"
   mkdir -p "$STATE_DIR"
+  
+  # Setup gitignore files to ensure pursor directories are ignored
+  setup_gitignore
+  
   git -C "$REPO_ROOT" worktree add -b "$TEMP_BRANCH" "$WORKTREE_DIR" HEAD || die "git worktree add failed"
 
   echo "$TEMP_BRANCH|$WORKTREE_DIR|$BASE_BRANCH" > "$STATE_DIR/$SESSION_ID.state"
