@@ -200,18 +200,6 @@ pursor continue
 - **Context-Aware**: Auto-detects which session you're working on from your current directory
 - **Clean Merging**: Attempts fast-forward, falls back to merge commit if needed
 - **Auto-Cleanup**: Removes worktrees, branches, and state files after successful merge
-- **History Clean**: Automatically removes temporary session directories from Cursor's workspace history to prevent IDE pollution
-
-## 🧹 Cursor History Management
-
-Pursor automatically prevents temporary session directories from polluting your Cursor IDE's workspace history:
-
-- **Automatic Cleanup**: When sessions are merged, cancelled, or cleaned, pursor removes the temporary worktree paths from Cursor's recent folders list
-- **Cross-Platform**: Works on macOS, Linux, and Windows with platform-specific cleanup routines
-- **Non-Intrusive**: Only removes pursor-created session directories, leaving your other workspace history intact
-- **Background Operation**: History cleanup happens automatically - no manual intervention required
-
-This ensures that ephemeral development sessions don't clutter your Cursor workspace history with folders that no longer exist.
 
 ## 💡 Tips
 

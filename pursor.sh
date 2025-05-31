@@ -18,13 +18,8 @@
 #   • **List**     – show all active parallel sessions.
 #   • **Merge**    – auto-stage all changes, commit, rebase temp → base, merge locally, prune.
 #   • **Continue** – auto-stage resolved conflicts, continue merge after conflicts are resolved.
-#   • **Cancel**   – force‑remove worktree & branch, clean Cursor history.
-#   • **Clean**    – cancel ALL sessions, clean everything including Cursor history.
-# -----------------------------------------------------------------------------
-# FEATURES
-#   • **History Clean**  – automatically removes temporary worktrees from Cursor's workspace
-#                          history when sessions are merged, cancelled, or cleaned up to
-#                          prevent pollution of the IDE's recent folders list.
+#   • **Cancel**   – force‑remove worktree & branch, kill Cursor (best‑effort).
+#   • **Clean**    – cancel ALL sessions and clean everything.
 # -----------------------------------------------------------------------------
 # CONFIGURATION (override in env before running)
 BASE_BRANCH="${BASE_BRANCH:-}"          # empty → detect current branch on init
@@ -69,104 +64,6 @@ is_known_command() {
       ;;
     *)
       return 1
-      ;;
-  esac
-}
-
-# Clean up Cursor workspace history for pursor session directories
-clean_cursor_history() {
-  WORKTREE_PATH="$1"
-  
-  if [ -z "$WORKTREE_PATH" ]; then
-    return 0
-  fi
-  
-  # Get the absolute path to ensure proper matching
-  case "$WORKTREE_PATH" in
-    /*) ABSOLUTE_WORKTREE_PATH="$WORKTREE_PATH" ;;
-    *) ABSOLUTE_WORKTREE_PATH="$PWD/$WORKTREE_PATH" ;;
-  esac
-  
-  # Platform-specific cleanup of Cursor workspace history
-  case "$(uname)" in
-    Darwin)
-      # macOS: Clean Cursor workspace history from ~/Library/Application Support/Cursor
-      CURSOR_STORAGE_DIR="$HOME/Library/Application Support/Cursor"
-      if [ -d "$CURSOR_STORAGE_DIR" ]; then
-        # Clean from workspaceStorage
-        find "$CURSOR_STORAGE_DIR/workspaceStorage" -type d -name "*" 2>/dev/null | while read -r workspace_dir; do
-          if [ -f "$workspace_dir/workspace.json" ]; then
-            # Check if workspace.json contains our worktree path
-            if grep -q "$ABSOLUTE_WORKTREE_PATH" "$workspace_dir/workspace.json" 2>/dev/null; then
-              echo "▶ cleaning Cursor workspace history for $ABSOLUTE_WORKTREE_PATH"
-              rm -rf "$workspace_dir" 2>/dev/null || true
-            fi
-          fi
-        done
-        
-        # Clean from User/settings.json recent folders if it exists
-        SETTINGS_FILE="$CURSOR_STORAGE_DIR/User/settings.json"
-        if [ -f "$SETTINGS_FILE" ]; then
-          # Create a temporary file to store the cleaned settings
-          TEMP_SETTINGS=$(mktemp)
-          # Remove entries that contain our worktree path using sed
-          sed "s|\"$ABSOLUTE_WORKTREE_PATH\"|REMOVE_THIS_ENTRY|g" "$SETTINGS_FILE" | \
-          sed '/REMOVE_THIS_ENTRY/d' > "$TEMP_SETTINGS" && \
-          mv "$TEMP_SETTINGS" "$SETTINGS_FILE" 2>/dev/null || rm -f "$TEMP_SETTINGS"
-        fi
-      fi
-      ;;
-    Linux)
-      # Linux: Clean from ~/.config/Cursor
-      CURSOR_CONFIG_DIR="$HOME/.config/Cursor"
-      if [ -d "$CURSOR_CONFIG_DIR" ]; then
-        # Clean from workspaceStorage
-        find "$CURSOR_CONFIG_DIR/workspaceStorage" -type d -name "*" 2>/dev/null | while read -r workspace_dir; do
-          if [ -f "$workspace_dir/workspace.json" ]; then
-            if grep -q "$ABSOLUTE_WORKTREE_PATH" "$workspace_dir/workspace.json" 2>/dev/null; then
-              echo "▶ cleaning Cursor workspace history for $ABSOLUTE_WORKTREE_PATH"
-              rm -rf "$workspace_dir" 2>/dev/null || true
-            fi
-          fi
-        done
-        
-        # Clean from User/settings.json recent folders if it exists
-        SETTINGS_FILE="$CURSOR_CONFIG_DIR/User/settings.json"
-        if [ -f "$SETTINGS_FILE" ]; then
-          TEMP_SETTINGS=$(mktemp)
-          sed "s|\"$ABSOLUTE_WORKTREE_PATH\"|REMOVE_THIS_ENTRY|g" "$SETTINGS_FILE" | \
-          sed '/REMOVE_THIS_ENTRY/d' > "$TEMP_SETTINGS" && \
-          mv "$TEMP_SETTINGS" "$SETTINGS_FILE" 2>/dev/null || rm -f "$TEMP_SETTINGS"
-        fi
-      fi
-      ;;
-    CYGWIN*|MINGW*|MSYS*)
-      # Windows: Clean from %APPDATA%/Cursor
-      CURSOR_APPDATA_DIR="$USERPROFILE/AppData/Roaming/Cursor"
-      if [ -d "$CURSOR_APPDATA_DIR" ]; then
-        # Convert path to Windows format for matching
-        WINDOWS_WORKTREE_PATH=$(echo "$ABSOLUTE_WORKTREE_PATH" | sed 's|/|\\|g')
-        
-        # Clean from workspaceStorage
-        find "$CURSOR_APPDATA_DIR/workspaceStorage" -type d -name "*" 2>/dev/null | while read -r workspace_dir; do
-          if [ -f "$workspace_dir/workspace.json" ]; then
-            if grep -q "$WINDOWS_WORKTREE_PATH\|$ABSOLUTE_WORKTREE_PATH" "$workspace_dir/workspace.json" 2>/dev/null; then
-              echo "▶ cleaning Cursor workspace history for $ABSOLUTE_WORKTREE_PATH"
-              rm -rf "$workspace_dir" 2>/dev/null || true
-            fi
-          fi
-        done
-        
-        # Clean from User/settings.json recent folders if it exists
-        SETTINGS_FILE="$CURSOR_APPDATA_DIR/User/settings.json"
-        if [ -f "$SETTINGS_FILE" ]; then
-          TEMP_SETTINGS=$(mktemp)
-          sed "s|\"$WINDOWS_WORKTREE_PATH\"|REMOVE_THIS_ENTRY|g" "$SETTINGS_FILE" | \
-          sed "s|\"$ABSOLUTE_WORKTREE_PATH\"|REMOVE_THIS_ENTRY|g" | \
-          sed '/REMOVE_THIS_ENTRY/d' > "$TEMP_SETTINGS" && \
-          mv "$TEMP_SETTINGS" "$SETTINGS_FILE" 2>/dev/null || rm -f "$TEMP_SETTINGS"
-        fi
-      fi
       ;;
   esac
 }
@@ -433,7 +330,6 @@ continue_merge() {
   fi
 
   echo "▶ cleaning up session $SESSION_ID"
-  clean_cursor_history "$WORKTREE_DIR"
   git -C "$REPO_ROOT" worktree remove "$WORKTREE_DIR"
   git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
   rm -f "$STATE_DIR/$SESSION_ID.state"
@@ -460,9 +356,6 @@ clean_all_sessions() {
     IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
     
     echo "  → cleaning session $session_id"
-    
-    # Clean Cursor workspace history
-    clean_cursor_history "$WORKTREE_DIR"
     
     # Remove worktree (force to handle any state)
     if [ -d "$WORKTREE_DIR" ]; then
@@ -561,7 +454,6 @@ else
       fi
 
       echo "▶ cleaning up session $SESSION_ID"
-      clean_cursor_history "$WORKTREE_DIR"
       git -C "$REPO_ROOT" worktree remove "$WORKTREE_DIR"
       git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
       rm -f "$STATE_DIR/$SESSION_ID.state"
@@ -596,7 +488,6 @@ else
 
       get_session_info "$SESSION_ID"
       echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
-      clean_cursor_history "$WORKTREE_DIR"
       git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
       git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH" 2>/dev/null || true
       rm -f "$STATE_DIR/$SESSION_ID.state"
