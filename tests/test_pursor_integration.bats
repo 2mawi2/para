@@ -4,12 +4,24 @@
 # Tests complete workflows in isolated temporary directories
 
 setup() {
+    # Save current directory and environment for restoration
+    export ORIGINAL_DIR="$PWD"
+    export ORIGINAL_REPO_ROOT="$REPO_ROOT"
+    
     # Create fresh temporary directory for each test
     export TEST_REPO=$(mktemp -d)
     cd "$TEST_REPO"
     
     # Mock Cursor IDE - don't actually open it
     export CURSOR_CMD="true"
+    
+    # Clear any pursor-related environment variables to ensure isolation
+    unset REPO_ROOT
+    unset STATE_DIR
+    unset SUBTREES_DIR
+    unset BASE_BRANCH
+    unset SUBTREES_DIR_NAME
+    unset STATE_DIR_NAME
     
     # Set up minimal git config
     git init
@@ -34,6 +46,10 @@ teardown() {
         cd /
         rm -rf "$TEST_REPO"
     fi
+    
+    # Restore original directory and environment
+    cd "$ORIGINAL_DIR" 2>/dev/null || true
+    export REPO_ROOT="$ORIGINAL_REPO_ROOT"
 }
 
 # Helper function to run pursor
