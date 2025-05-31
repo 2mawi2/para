@@ -33,18 +33,21 @@ set -eu
 usage() {
   cat >&2 <<EOF
 Usage:
-  pursor                    # create new session & open Cursor
-  pursor merge "message"    # merge current session with commit message
-  pursor list               # list all active sessions (alias: ls)
-  pursor continue           # continue merge after resolving conflicts
-  pursor cancel             # cancel current session (alias: abort)
-  pursor clean              # clean up all sessions
+  pursor [session-name]           # create new session & open Cursor
+  pursor merge "message"          # merge current session with commit message
+  pursor list                     # list all active sessions (alias: ls)
+  pursor continue                 # continue merge after resolving conflicts
+  pursor cancel                   # cancel current session (alias: abort)
+  pursor clean                    # clean up all sessions
+  pursor resume [session-name]    # resume/reconnect to existing session
 
 Examples:
-  pursor                    # start new parallel session
+  pursor                          # start new parallel session
+  pursor feature-auth             # start named session "feature-auth"
   pursor merge "Add new feature"  # merge with commit message
-  pursor continue           # resume after fixing conflicts
-  pursor cancel             # discard current session
+  pursor continue                 # resume after fixing conflicts
+  pursor resume feature-auth      # reconnect to named session
+  pursor cancel                   # discard current session
 EOF
   exit 1
 }
@@ -143,7 +146,18 @@ list_sessions() {
     SESSIONS_FOUND=1
     session_id=$(basename "$state_file" .state)
     IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
-    echo "Session: $session_id"
+    
+    # Make session display more user-friendly
+    if echo "$session_id" | grep -q "^pc-[0-9]\{8\}-[0-9]\{6\}$"; then
+      # Timestamp-based session
+      timestamp=$(echo "$session_id" | sed 's/pc-//')
+      display_name="$session_id (${timestamp})"
+    else
+      # Named session
+      display_name="$session_id"
+    fi
+    
+    echo "Session: $display_name"
     echo "  Branch: $TEMP_BRANCH"
     echo "  Worktree: $WORKTREE_DIR"
     echo "  Base: $BASE_BRANCH"
@@ -152,19 +166,28 @@ list_sessions() {
       if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
         echo "  Status: ⚠️  Has merge conflicts"
       elif git diff --quiet --exit-code --cached --ignore-submodules --; then
-        echo "  Status: Clean"
+        if git diff --quiet --exit-code --ignore-submodules --; then
+          echo "  Status: ✅ Clean"
+        else
+          echo "  Status: 📝 Has uncommitted changes"
+        fi
       else
-        echo "  Status: Has uncommitted changes"
+        echo "  Status: 📦 Has staged changes"
       fi
       cd "$REPO_ROOT"
     else
-      echo "  Status: ⚠️  Worktree missing"
+      echo "  Status: ❌ Worktree missing"
     fi
+    
+    # Show resume command for easy copy-paste
+    echo "  Resume: pursor resume $session_id"
     echo ""
   done
   
   if [ "$SESSIONS_FOUND" -eq 0 ]; then
     echo "No active parallel sessions."
+  else
+    echo "💡 Tip: Use 'pursor resume <session-name>' to reconnect to an existing session"
   fi
 }
 
@@ -326,31 +349,57 @@ STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
 SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
 
 # no args  → INIT ---------------------------------------------------------
-if [ "$#" -eq 0 ]; then
+if [ "$#" -eq 0 ] || [ "$#" -eq 1 ] && [ "$1" != "list" ] && [ "$1" != "ls" ] && [ "$1" != "clean" ]; then
+  # Handle optional session name
+  if [ "$#" -eq 1 ]; then
+    SESSION_NAME="$1"
+    # Validate session name (alphanumeric, dash, underscore only)
+    case "$SESSION_NAME" in
+      *[!a-zA-Z0-9_-]*) die "session name can only contain letters, numbers, dashes, and underscores" ;;
+    esac
+  else
+    SESSION_NAME=""
+  fi
+
   # determine base branch (current branch) unless overridden
   if [ -z "$BASE_BRANCH" ]; then
     BASE_BRANCH=$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD) || die "detached HEAD; set BASE_BRANCH env"
   fi
 
-  # ensure working tree is clean before creating new session
+  # Check for uncommitted changes and warn, but don't block
+  HAS_UNCOMMITTED=0
   if ! git -C "$REPO_ROOT" diff --quiet --exit-code; then
-    echo "❌ You have uncommitted changes in the working tree:" >&2
+    echo "⚠️  Warning: You have uncommitted changes in the working tree:" >&2
     git -C "$REPO_ROOT" status --porcelain >&2
-    echo "Please commit or stash your changes before creating a new session." >&2
-    exit 1
+    HAS_UNCOMMITTED=1
   fi
   
   if ! git -C "$REPO_ROOT" diff --quiet --exit-code --cached; then
-    echo "❌ You have staged changes in the working tree:" >&2
+    echo "⚠️  Warning: You have staged changes in the working tree:" >&2
     git -C "$REPO_ROOT" status --porcelain >&2
-    echo "Please commit your staged changes before creating a new session." >&2
-    exit 1
+    HAS_UNCOMMITTED=1
+  fi
+
+  if [ "$HAS_UNCOMMITTED" -eq 1 ]; then
+    echo "💡 Tip: Your new session will start from the last committed state." >&2
+    echo "   Any uncommitted changes will not be included in the session." >&2
+    echo "" >&2
   fi
 
   TS=$(date +%Y%m%d-%H%M%S)
-  SESSION_ID="pc-$TS"
-  TEMP_BRANCH="pc/$TS"
+  if [ -n "$SESSION_NAME" ]; then
+    SESSION_ID="$SESSION_NAME"
+    TEMP_BRANCH="pc/$SESSION_NAME-$TS"
+  else
+    SESSION_ID="pc-$TS"
+    TEMP_BRANCH="pc/$TS"
+  fi
   WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
+
+  # Check if session already exists
+  if [ -f "$STATE_DIR/$SESSION_ID.state" ]; then
+    die "session '$SESSION_ID' already exists. Use 'pursor resume $SESSION_ID' or choose a different name."
+  fi
 
   echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $BASE_BRANCH)"
   mkdir -p "$SUBTREES_DIR"
@@ -367,7 +416,9 @@ if [ "$#" -eq 0 ]; then
     echo "▶ launching Cursor for session $SESSION_ID..."
     "$CURSOR_CMD" "$WORKTREE_DIR" &
   else
-    echo "Cursor CLI not found; open $WORKTREE_DIR manually." >&2
+    echo "⚠️  Cursor CLI not found. Please install Cursor CLI or set CURSOR_CMD environment variable." >&2
+    echo "   Alternatively, manually open: $WORKTREE_DIR" >&2
+    echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
   fi
   echo "initialized session $SESSION_ID. Use 'pursor merge \"msg\"' to merge or 'pursor cancel' to cancel."
   exit 0
@@ -467,6 +518,29 @@ case "$1" in
 
   list|ls)
     list_sessions
+    ;;
+
+  resume)
+    if [ "$#" -eq 1 ]; then
+      die "resume requires a session name"
+    elif [ "$#" -eq 2 ]; then
+      SESSION_ID="$2"
+    else
+      die "resume takes a session name"
+    fi
+
+    get_session_info "$SESSION_ID"
+    [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
+
+    echo "▶ resuming session $SESSION_ID"
+    if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
+      echo "▶ launching Cursor for session $SESSION_ID..."
+      "$CURSOR_CMD" "$WORKTREE_DIR" &
+      echo "✅ Cursor opened for session $SESSION_ID"
+    else
+      echo "⚠️  Cursor CLI not found. Please manually open: $WORKTREE_DIR" >&2
+      echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
+    fi
     ;;
 
   *)
