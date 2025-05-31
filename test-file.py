@@ -14,3 +14,4 @@ print("Testing new interface!")
 print("Test if subtree ignored")
 # Test change for merge strategy
 # First change for squash test
+# Second change for squash test
