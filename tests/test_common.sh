@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# Common test environment setup functions for pursor tests
+# Common test environment setup functions for para tests
 # This file should be sourced by test files to reuse environment setup
 
 # Setup a temporary git repository for testing
 # Sets up the following environment variables:
 # - TEST_REPO: Path to temporary repository
-# - PURSOR_SCRIPT: Path to pursor script
+# - PARA_SCRIPT: Path to para script
 # - ORIGINAL_DIR: Original working directory (for teardown)
 # - ORIGINAL_REPO_ROOT: Original REPO_ROOT (for teardown)
 setup_temp_git_repo() {
@@ -38,25 +38,25 @@ setup_temp_git_repo() {
     )
     
     if [ -n "${BATS_TEST_DIRNAME:-}" ]; then
-        export PURSOR_SCRIPT="$(dirname "${BATS_TEST_DIRNAME}")/pursor.sh"
+        export PARA_SCRIPT="$(dirname "${BATS_TEST_DIRNAME}")/para.sh"
     else
         local script_dir="$(cd "$(dirname "$0")" && pwd)"
         
-        if [ -f "$script_dir/pursor.sh" ]; then
-            export PURSOR_SCRIPT="$script_dir/pursor.sh"
+        if [ -f "$script_dir/para.sh" ]; then
+            export PARA_SCRIPT="$script_dir/para.sh"
         else
             local current_dir="$script_dir"
             while [ "$current_dir" != "/" ]; do
-                if [ -f "$current_dir/pursor.sh" ]; then
-                    export PURSOR_SCRIPT="$current_dir/pursor.sh"
+                if [ -f "$current_dir/para.sh" ]; then
+                    export PARA_SCRIPT="$current_dir/para.sh"
                     break
                 fi
                 current_dir="$(dirname "$current_dir")"
             done
         fi
         
-        if [ -z "${PURSOR_SCRIPT:-}" ]; then
-            echo "Error: Could not find pursor.sh from $script_dir" >&2
+        if [ -z "${PARA_SCRIPT:-}" ]; then
+            echo "Error: Could not find para.sh from $script_dir" >&2
             return 1
         fi
     fi
@@ -73,9 +73,9 @@ teardown_temp_git_repo() {
     export REPO_ROOT="$ORIGINAL_REPO_ROOT"
 }
 
-# Helper function to run pursor in the test directory
-run_pursor() {
-    cd "$TEST_REPO" && "$PURSOR_SCRIPT" "$@"
+# Helper function to run para in the test directory
+run_para() {
+    cd "$TEST_REPO" && "$PARA_SCRIPT" "$@"
 }
 
 # Helper function to run commands in test directory
@@ -123,7 +123,7 @@ count_sessions() {
 # Count state files in test repo
 count_state_files() {
     cd "$TEST_REPO"
-    find .pursor_state -name '*.state' 2>/dev/null | wc -l || echo 0
+    find .para_state -name '*.state' 2>/dev/null | wc -l || echo 0
 }
 
 # Create a conflicting change in main branch

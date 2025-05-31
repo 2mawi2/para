@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Git operations for pursor
+# Git operations for para
 
 # Find repository root and set up Git environment
 need_git_repo() {
@@ -29,7 +29,7 @@ need_git_repo() {
   esac
 }
 
-# Setup gitignore files to ensure pursor directories are ignored
+# Setup gitignore files to ensure para directories are ignored
 setup_gitignore() {
   GIT_EXCLUDE_FILE="$REPO_ROOT/.git/info/exclude"
   SUBTREES_GITIGNORE="$SUBTREES_DIR/.gitignore"
@@ -40,10 +40,10 @@ setup_gitignore() {
   
   # Setup git exclude file (local to repository, not tracked)
   if [ ! -f "$GIT_EXCLUDE_FILE" ]; then
-    echo "▶ creating git exclude file for pursor directories" >&2
+    echo "▶ creating git exclude file for para directories" >&2
     mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
     cat > "$GIT_EXCLUDE_FILE" <<EOF
-# pursor - parallel cursor sessions (local excludes)
+# para - parallel cursor sessions (local excludes)
 $SUBTREES_ENTRY
 $STATE_ENTRY
 EOF
@@ -58,10 +58,10 @@ EOF
     fi
     
     if [ "$NEEDS_UPDATE" -eq 1 ]; then
-      echo "▶ updating git exclude file with pursor entries" >&2
+      echo "▶ updating git exclude file with para entries" >&2
       {
         echo ""
-        echo "# pursor - parallel cursor sessions (local excludes)"
+        echo "# para - parallel cursor sessions (local excludes)"
         grep -q "^$SUBTREES_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$SUBTREES_ENTRY"
         grep -q "^$STATE_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$STATE_ENTRY"
       } >> "$GIT_EXCLUDE_FILE"
@@ -72,7 +72,7 @@ EOF
   if [ ! -f "$SUBTREES_GITIGNORE" ]; then
     echo "▶ creating .gitignore in subtrees directory" >&2
     cat > "$SUBTREES_GITIGNORE" <<EOF
-# Ignore all pursor worktree contents
+# Ignore all para worktree contents
 *
 !.gitignore
 EOF
@@ -155,7 +155,7 @@ merge_session() {
   if ! git rebase "$base_branch"; then
     echo "❌ rebase conflicts" >&2
     echo "   → resolve conflicts in $worktree_dir" >&2
-    echo "   → then run: pursor continue" >&2
+    echo "   → then run: para continue" >&2
     cd "$ORIGINAL_DIR" || true
     return 1
   fi
@@ -243,7 +243,7 @@ continue_merge() {
       echo "Files with conflict markers:" >&2
       echo "$CONFLICT_FILES" | sed 's/^/  /' >&2
       echo "" >&2
-      echo "Please resolve all conflicts manually and run 'pursor continue' again." >&2
+      echo "Please resolve all conflicts manually and run 'para continue' again." >&2
       cd "$ORIGINAL_DIR" || true
       return 1
     fi

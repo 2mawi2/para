@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Unit tests for pure functions in pursor
+# Unit tests for pure functions in para
 # Tests functions that don't require Git or filesystem operations
 
 setup() {
@@ -9,8 +9,8 @@ setup() {
     export LIB_DIR="$TEST_DIR/lib"
     
     # Source the library files
-    . "$LIB_DIR/pursor-utils.sh"
-    . "$LIB_DIR/pursor-config.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
 }
 
 # Tests for validate_session_name function
@@ -143,7 +143,7 @@ setup() {
     
     # Should use default "subtrees"
     [ "$SUBTREES_DIR" = "/test/repo/subtrees" ]
-    [ "$STATE_DIR" = "/test/repo/.pursor_state" ]
+    [ "$STATE_DIR" = "/test/repo/.para_state" ]
 }
 
 @test "init_paths respects SUBTREES_DIR_NAME override" {
@@ -159,7 +159,7 @@ setup() {
     
     # Should use overridden value "wt"
     [ "$SUBTREES_DIR" = "/test/repo/wt" ]
-    [ "$STATE_DIR" = "/test/repo/.pursor_state" ]
+    [ "$STATE_DIR" = "/test/repo/.para_state" ]
 }
 
 @test "init_paths respects STATE_DIR_NAME override" {

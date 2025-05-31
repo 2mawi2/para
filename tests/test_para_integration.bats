@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Integration test suite for pursor
+# Integration test suite for para
 # Tests complete workflows in isolated temporary directories
 
 # Source common test functions
@@ -16,7 +16,7 @@ teardown() {
 
 @test "IT-1: Happy path - create session, edit file, rebase successfully" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     # Verify session was created (all checks in test directory)
@@ -28,7 +28,7 @@ teardown() {
     assert_session_exists "$session_dir"
     
     # Verify state tracking
-    [ -d ".pursor_state" ]
+    [ -d ".para_state" ]
     session_count=$(count_sessions)
     [ "$session_count" -eq 1 ]
     
@@ -37,7 +37,7 @@ teardown() {
     echo "Modified in session" >> test-file.py
     
     # 3. Rebase with message
-    run "$PURSOR_SCRIPT" rebase "Integration test commit"
+    run "$PARA_SCRIPT" rebase "Integration test commit"
     [ "$status" -eq 0 ]
     
     # Go back to test repo
@@ -55,7 +55,7 @@ teardown() {
 
 @test "IT-2: Cancel session" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -67,7 +67,7 @@ teardown() {
     branch_name=$(git branch --show-current)
     
     # 2. Cancel from within worktree
-    run "$PURSOR_SCRIPT" cancel
+    run "$PARA_SCRIPT" cancel
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -83,7 +83,7 @@ teardown() {
 
 @test "IT-3: Conflict resolution with continue" {
     # 1. Create session A and edit file
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -107,7 +107,7 @@ teardown() {
     sleep 1
     
     # 2. Create session B and edit same line
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     # Store session B path immediately - find the one that's NOT session A
@@ -127,7 +127,7 @@ teardown() {
     
     # 3. Rebase A (should succeed)
     cd "$TEST_REPO/$session_a"
-    run "$PURSOR_SCRIPT" rebase "Session A changes"
+    run "$PARA_SCRIPT" rebase "Session A changes"
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -137,7 +137,7 @@ teardown() {
     assert_session_exists "$session_b"
     
     cd "$TEST_REPO/$session_b"
-    run "$PURSOR_SCRIPT" rebase "Session B changes"
+    run "$PARA_SCRIPT" rebase "Session B changes"
     # The rebase command should now fail due to rebase conflicts (this is the fix)
     [ "$status" -eq 1 ]
     # Should output conflict information
@@ -157,7 +157,7 @@ EOF
     
     # Continue the rebase
     cd "$TEST_REPO/$session_b"
-    run "$PURSOR_SCRIPT" continue
+    run "$PARA_SCRIPT" continue
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -173,21 +173,21 @@ EOF
 
 @test "IT-4: Clean all sessions" {
     # 1. Create two sessions
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
     # Verify first session was created
     [ -d "subtrees" ]
-    [ -d ".pursor_state" ]
+    [ -d ".para_state" ]
     first_session_count=$(count_sessions)
     [ "$first_session_count" -eq 1 ]
     
     # Small delay to ensure different timestamps
     sleep 1
     
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     # Verify two sessions exist
@@ -195,12 +195,12 @@ EOF
     [ "$session_count" -eq 2 ]
     
     # Verify state files exist
-    [ -d ".pursor_state" ]
+    [ -d ".para_state" ]
     state_count=$(count_state_files)
     [ "$state_count" -eq 2 ]
     
     # 2. Clean all sessions
-    run run_pursor clean
+    run run_para clean
     [ "$status" -eq 0 ]
     
     # Verify all worktrees removed
@@ -214,7 +214,7 @@ EOF
 
 @test "IT-5: Auto-detect session from worktree directory" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -226,7 +226,7 @@ EOF
     echo "Auto-detect test change" >> test-file.py
     
     # 3. Test rebase from within worktree (should auto-detect session)
-    run "$PURSOR_SCRIPT" rebase "Auto-detect test commit"
+    run "$PARA_SCRIPT" rebase "Auto-detect test commit"
     [ "$status" -eq 0 ]
     
     # Go back to main repo to verify
@@ -244,7 +244,7 @@ EOF
 
 @test "IT-6: Auto-detect session for cancel from worktree directory" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -256,7 +256,7 @@ EOF
     branch_name=$(git branch --show-current)
     
     # 2. Test cancel from within worktree (should auto-detect session)
-    run "$PURSOR_SCRIPT" cancel
+    run "$PARA_SCRIPT" cancel
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -272,7 +272,7 @@ EOF
 
 @test "IT-7: Rebase uncommitted changes should auto-stage and commit" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -297,7 +297,7 @@ EOF
     [ -n "$output" ]  # Should have output indicating changes
     
     # 3. Try to rebase with uncommitted changes - this should work automatically
-    run "$PURSOR_SCRIPT" rebase "Test commit with uncommitted changes"
+    run "$PARA_SCRIPT" rebase "Test commit with uncommitted changes"
     [ "$status" -eq 0 ]
     # Should NOT see error about uncommitted changes
     [[ "$output" == *"staging all changes"* ]]
@@ -319,7 +319,7 @@ EOF
 
 @test "IT-8: Rebase conflict should not complete with unresolved markers" {
     # 1. Create session and edit the justfile (to cause conflicts)
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -341,7 +341,7 @@ EOF
     # Now modify the same file differently in the session
     cd "$TEST_REPO/$session_a"
     cat > justfile << 'EOF'
-# pursor development workflow automation
+# para development workflow automation
 # Test file used for development
 
 @bats test_a.bats
@@ -350,7 +350,7 @@ EOF
     
     # 4. Try to rebase session A (should fail due to conflict)
     cd "$TEST_REPO/$session_a"
-    run "$PURSOR_SCRIPT" rebase "Modify justfile in session A"
+    run "$PARA_SCRIPT" rebase "Modify justfile in session A"
     [ "$status" -eq 1 ]
     [[ "$output" == *"rebase conflicts"* ]]
     
@@ -364,7 +364,7 @@ EOF
     [ "$status" -eq 0 ]  # Should find conflict markers
     
     # 6. Try to continue WITHOUT resolving conflicts (should fail)
-    run "$PURSOR_SCRIPT" continue
+    run "$PARA_SCRIPT" continue
     [ "$status" -eq 1 ]
     [[ "$output" == *"unresolved conflicts"* ]]
     
@@ -375,7 +375,7 @@ EOF
 
 @test "IT-9: Squash rebase mode - multiple commits become one (default behavior)" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -405,7 +405,7 @@ EOF
     [ "$commit_count" -eq 3 ]
     
     # 3. Rebase using default squash mode
-    run "$PURSOR_SCRIPT" rebase "Feature complete with squashed changes"
+    run "$PARA_SCRIPT" rebase "Feature complete with squashed changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: squash"* ]]
     [[ "$output" == *"squashed 3 commits"* ]]
@@ -436,7 +436,7 @@ EOF
 
 @test "IT-10: Rebase preserve mode - preserve individual commits" {
     # 1. Create session
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -466,7 +466,7 @@ EOF
     
     # 3. Rebase using preserve mode
     cd "$TEST_REPO/$session_dir"
-    run "$PURSOR_SCRIPT" rebase --preserve "Final uncommitted changes"
+    run "$PARA_SCRIPT" rebase --preserve "Final uncommitted changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: rebase"* ]]
     
@@ -490,7 +490,7 @@ EOF
 
 @test "IT-11: Rebase conflict resolution with preserve mode" {
     # 1. Create session A
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
@@ -498,7 +498,7 @@ EOF
     
     # 2. Create session B (after small delay)
     sleep 1
-    run run_pursor
+    run run_para
     [ "$status" -eq 0 ]
     
     session_b=""
@@ -531,14 +531,14 @@ EOF
     
     # 3. Rebase session A with preserve mode (should succeed)
     cd "$TEST_REPO/$session_a"
-    run "$PURSOR_SCRIPT" rebase --preserve "Session A complete"
+    run "$PARA_SCRIPT" rebase --preserve "Session A complete"
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
     
     # 4. Try to rebase session B with preserve mode (should conflict)
     cd "$TEST_REPO/$session_b"
-    run "$PURSOR_SCRIPT" rebase --preserve "Session B final"
+    run "$PARA_SCRIPT" rebase --preserve "Session B final"
     [ "$status" -eq 1 ]
     [[ "$output" == *"rebase conflicts"* ]]
     

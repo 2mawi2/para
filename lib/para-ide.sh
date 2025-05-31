@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# IDE integration for pursor - designed for extensibility
+# IDE integration for para - designed for extensibility
 
 # Abstract IDE interface - to be implemented by specific IDE modules
 
@@ -31,22 +31,22 @@ launch_cursor() {
 
   if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
     if [ -n "${CURSOR_USER_DATA_DIR:-}" ]; then
-      # Use a single global pursor user data directory
-      global_user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/pursor/cursor-userdata"
+      # Use a single global para user data directory
+      global_user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/para/cursor-userdata"
       
       # Setup template on first use
       if ! template_exists; then
-        setup_pursor_template
+        setup_para_template
       fi
       
-      # Create global pursor user data directory if it doesn't exist
+      # Create global para user data directory if it doesn't exist
       if [ ! -d "$global_user_data_dir" ]; then
-        echo "🔧 Setting up global pursor user data directory..."
+        echo "🔧 Setting up global para user data directory..."
         mkdir -p "$global_user_data_dir"
         
         # Copy from template if it exists
         if template_exists; then
-          echo "📋 Copying settings from pursor template to global user data..."
+          echo "📋 Copying settings from para template to global user data..."
           if command -v rsync >/dev/null 2>&1; then
             rsync -a --exclude='*.sock' --exclude='*.lock' \
                   --exclude='Local Storage/' --exclude='Session Storage/' \
@@ -60,11 +60,11 @@ launch_cursor() {
                    "$global_user_data_dir/blob_storage" "$global_user_data_dir/Shared Dictionary" \
                    2>/dev/null || true
           fi
-          echo "✅ Global pursor user data directory ready"
+          echo "✅ Global para user data directory ready"
         fi
       fi
       
-      echo "▶ launching Cursor with global pursor user data directory..."
+      echo "▶ launching Cursor with global para user data directory..."
       "$CURSOR_CMD" "$worktree_dir" --user-data-dir "$global_user_data_dir" &
     else
       echo "▶ launching Cursor..."

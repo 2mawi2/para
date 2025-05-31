@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# Configuration and environment setup for pursor
+# Configuration and environment setup for para
 
 # Default configuration values
 DEFAULT_BASE_BRANCH=""
 DEFAULT_SUBTREES_DIR_NAME="subtrees"
-DEFAULT_STATE_DIR_NAME=".pursor_state"
+DEFAULT_STATE_DIR_NAME=".para_state"
 DEFAULT_CURSOR_CMD="cursor"
 DEFAULT_CURSOR_USER_DATA_DIR=".cursor-userdata"
 
@@ -22,5 +22,5 @@ init_paths() {
   STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
   SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
   # Use user-global location for cursor template (XDG-compliant)
-  TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pursor/cursor-template"
+  TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/para/cursor-template"
 } 

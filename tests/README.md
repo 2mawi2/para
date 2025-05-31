@@ -1,6 +1,6 @@
-# Pursor Tests
+# Para Tests
 
-This directory contains the test suite for pursor using [bats-core](https://github.com/bats-core/bats-core).
+This directory contains the test suite for para using [bats-core](https://github.com/bats-core/bats-core).
 
 ## Running Tests
 
@@ -16,12 +16,12 @@ bats tests/
 
 ### Single Test File
 ```bash
-bats tests/test_pursor.bats
+bats tests/test_para.bats
 ```
 
 ## Test Structure
 
-- `test_pursor.bats` - Main test suite covering basic functionality
+- `test_para.bats` - Main test suite covering basic functionality
   - Script existence and permissions
   - Library module availability
   - Command-line interface validation
@@ -45,7 +45,7 @@ Tests are written using bats syntax:
 Each test runs in a clean environment with:
 - Git repository initialized (if needed)
 - Test user configuration
-- Isolated from actual pursor sessions
+- Isolated from actual para sessions
 
 ## Adding New Tests
 
@@ -59,6 +59,6 @@ Each test runs in a clean environment with:
 Tests require:
 - bats-core
 - git
-- The pursor scripts and libraries
+- The para scripts and libraries
 
 Install with: `just install-dev` 

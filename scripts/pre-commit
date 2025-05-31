@@ -9,7 +9,7 @@ if git rev-parse --git-common-dir | grep -q "\.git/worktrees/"; then
     if command -v just &> /dev/null; then
         just test-unit
     elif command -v bats &> /dev/null && [ -d "tests" ]; then
-        bats tests/test_pursor.bats tests/test_pursor_units.bats
+        bats tests/test_para.bats tests/test_para_units.bats
     else
         echo "Warning: Cannot run tests - just or bats not available"
     fi

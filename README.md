@@ -1,4 +1,4 @@
-# Pursor - Parallel Cursor Workflow Helper
+# Para - Parallel Cursor Workflow Helper
 
 A modular POSIX shell script for creating multiple ephemeral Cursor IDE sessions on temporary Git worktrees, enabling parallel development with easy rebase/discard workflow.
 
@@ -8,12 +8,12 @@ Perfect for prototyping multiple features simultaneously while keeping your main
 
 ```bash
 # Create a new parallel session
-pursor
+para
 
 # Work in the new Cursor window that opens...
 
 # Rebase your changes back
-pursor rebase "Add new feature"
+para rebase "Add new feature"
 ```
 
 ## 🛠️ Development
@@ -32,8 +32,8 @@ just dev-setup
 ### Available Commands
 
 ```bash
-just install        # Install pursor globally
-just run [ARGS]     # Run local pursor.sh with arguments
+just install        # Install para globally
+just run [ARGS]     # Run local para.sh with arguments
 just test           # Run bats test suite (auto-installs dependencies)
 just lint           # Run shellcheck + shfmt linting
 just fmt            # Auto-fix shell script formatting
@@ -48,7 +48,7 @@ just clean          # Clean up development artifacts
 
 ### Testing
 - Uses [bats-core](https://github.com/bats-core/bats-core) for shell script testing
-- Tests in `tests/test_pursor.bats`
+- Tests in `tests/test_para.bats`
 - Run with `just test` or `bats tests/`
 
 ### Linting
@@ -58,19 +58,19 @@ just clean          # Clean up development artifacts
 
 ## 🏗️ Architecture
 
-Pursor is built with a modular architecture for maintainability and extensibility:
+Para is built with a modular architecture for maintainability and extensibility:
 
 ```
-pursor/
-├── pursor.sh              # Main entry point and command dispatch
+para/
+├── para.sh              # Main entry point and command dispatch
 ├── justfile               # Development workflow automation
 ├── scripts/               # Git hook templates
 └── lib/                   # Modular library components
-    ├── pursor-config.sh   # Configuration management
-    ├── pursor-utils.sh    # Utility functions and validation
-    ├── pursor-git.sh      # Git operations and worktree management
-    ├── pursor-session.sh  # Session lifecycle and state management
-    └── pursor-ide.sh      # IDE integration (extensible for future IDEs)
+    ├── para-config.sh   # Configuration management
+    ├── para-utils.sh    # Utility functions and validation
+    ├── para-git.sh      # Git operations and worktree management
+    ├── para-session.sh  # Session lifecycle and state management
+    └── para-ide.sh      # IDE integration (extensible for future IDEs)
 ```
 
 This design enables:
@@ -87,78 +87,78 @@ The universal installer works with **any shell** (bash, zsh, fish, sh, etc.) and
 
 ```bash
 # Download and run the universal installer
-./install-pursor.sh
+./install-para.sh
 ```
 
 This will:
 - Auto-detect your shell (bash/zsh/fish/other)
-- Install the complete modular structure to `~/.local/lib/pursor/`
-- Create a wrapper command at `~/.local/bin/pursor`
+- Install the complete modular structure to `~/.local/lib/para/`
+- Create a wrapper command at `~/.local/bin/para`
 - Add `~/.local/bin` to your PATH in the appropriate config file
 - Work immediately after installation
 
 ### Manual Installation
 
 1. Copy the entire directory structure (including `lib/`) to your desired location
-2. Make the main script executable: `chmod +x pursor.sh`
-3. Optionally, copy to `~/.local/lib/pursor/` and create a wrapper for global access
+2. Make the main script executable: `chmod +x para.sh`
+3. Optionally, copy to `~/.local/lib/para/` and create a wrapper for global access
 
-**Shell Compatibility**: Pursor is written in POSIX shell and works with all major shells including bash, zsh, fish, dash, and ash.
+**Shell Compatibility**: Para is written in POSIX shell and works with all major shells including bash, zsh, fish, dash, and ash.
 
 ## 🎯 Usage
 
 ### Basic Commands
 
 ```bash
-pursor                    # Create new session → opens Cursor
-pursor list               # List all active sessions (alias: ls)
-pursor rebase "message"    # Rebase session back to main
-pursor continue           # Continue rebase after resolving conflicts
-pursor cancel             # Cancel/delete session (alias: abort)
-pursor clean              # Cancel ALL sessions (clean everything)
-pursor resume <session>   # Resume/reconnect to existing session
+para                    # Create new session → opens Cursor
+para list               # List all active sessions (alias: ls)
+para rebase "message"    # Rebase session back to main
+para continue           # Continue rebase after resolving conflicts
+para cancel             # Cancel/delete session (alias: abort)
+para clean              # Cancel ALL sessions (clean everything)
+para resume <session>   # Resume/reconnect to existing session
 ```
 
 ### Named Sessions
 
 ```bash
 # Create named sessions for better organization
-pursor feature-auth       # Creates session "feature-auth"
-pursor bugfix-login       # Creates session "bugfix-login"
+para feature-auth       # Creates session "feature-auth"
+para bugfix-login       # Creates session "bugfix-login"
 
 # List shows friendly names
-pursor list
+para list
 # Session: feature-auth
 #   Branch: pc/feature-auth-20250531-143022
 #   Status: Has uncommitted changes
-#   Resume: pursor resume feature-auth
+#   Resume: para resume feature-auth
 
 # Resume specific sessions
-pursor resume feature-auth
+para resume feature-auth
 ```
 
 ### Multi-Session Workflow
 
 ```bash
 # Create multiple sessions
-pursor                    # Session 1 (opens Cursor)
-pursor feature-auth       # Named session (opens Cursor) 
+para                    # Session 1 (opens Cursor)
+para feature-auth       # Named session (opens Cursor) 
 
 # List active sessions
-pursor list
+para list
 
 # Rebase sessions (auto-detects from current directory!)
 cd subtrees/pc/20250531-143022
-pursor rebase "Feature A complete"
+para rebase "Feature A complete"
 
 cd ../feature-auth-20250531-143025
-pursor rebase "Authentication complete"
+para rebase "Authentication complete"
 
 # Or cancel individual sessions
-pursor cancel feature-auth
+para cancel feature-auth
 
 # Or cancel ALL sessions at once
-pursor clean
+para clean
 ```
 
 ### Quick Reset
@@ -166,8 +166,8 @@ pursor clean
 When you want to start fresh and clean up all parallel sessions:
 
 ```bash
-pursor clean              # Cleans up everything
-pursor list               # Verify: "No active parallel sessions."
+para clean              # Cleans up everything
+para list               # Verify: "No active parallel sessions."
 ```
 
 ## 🔧 Handling Conflicts
@@ -176,10 +176,10 @@ When rebasing sessions that modify the same files, you might get conflicts:
 
 ```bash
 # Try to rebase
-pursor rebase "Add feature"
+para rebase "Add feature"
 # ❌ rebase conflicts
 #    → resolve conflicts in /path/to/worktree
-#    → then run: pursor continue
+#    → then run: para continue
 
 # Fix conflicts manually in the worktree directory
 cd subtrees/pc/20250531-143022
@@ -187,34 +187,34 @@ cd subtrees/pc/20250531-143022
 # (NO need to run git add!)
 
 # Continue the rebase with auto-staging
-pursor continue
+para continue
 # ✅ rebase complete!
 ```
 
 ## 📂 How It Works
 
 - **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
-- **State Tracking**: Uses `.pursor_state/` directory to track sessions
+- **State Tracking**: Uses `.para_state/` directory to track sessions
 - **Context-Aware**: Auto-detects current session from working directory
 - **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
 - **Clean Workflow**: No manual `git add` required anywhere
 
 ## 🔧 Configuration
 
-Pursor can be configured via environment variables:
+Para can be configured via environment variables:
 
 ```bash
 # Override default settings
 export BASE_BRANCH="develop"                 # Use different base branch
 export SUBTREES_DIR_NAME="worktrees"         # Change worktree directory name
-export STATE_DIR_NAME=".pursor"              # Change state directory name
+export STATE_DIR_NAME=".para"              # Change state directory name
 export CURSOR_CMD="code"                     # Use different editor command
 export CURSOR_USER_DATA_DIR=".cursor-userdata"  # Isolated user data directory for each session
 ```
 
 ### Cursor Isolation Feature
 
-By default, Pursor launches each session with an isolated user data directory (`.cursor-userdata` within each worktree). This provides complete separation from your main Cursor workspace.
+By default, Para launches each session with an isolated user data directory (`.cursor-userdata` within each worktree). This provides complete separation from your main Cursor workspace.
 
 **Benefits:**
 - **Complete isolation**: Parallel sessions have their own recent files, settings, and extensions
@@ -224,19 +224,19 @@ By default, Pursor launches each session with an isolated user data directory (`
 
 **Default behavior:**
 ```bash
-pursor                    # Uses isolated user data directory automatically
+para                    # Uses isolated user data directory automatically
 ```
 
 **Custom user data directory name:**
 ```bash
 export CURSOR_USER_DATA_DIR=".my-cursor-data"
-pursor                    # Uses custom directory name
+para                    # Uses custom directory name
 ```
 
 **Disable isolation (use main Cursor instance):**
 ```bash
 unset CURSOR_USER_DATA_DIR
-pursor                    # Uses your main Cursor instance
+para                    # Uses your main Cursor instance
 ```
 
 **How it works:**
@@ -247,11 +247,11 @@ pursor                    # Uses your main Cursor instance
 
 ## 🚀 Extensibility
 
-The modular architecture makes it easy to extend pursor:
+The modular architecture makes it easy to extend para:
 
 ### Adding IDE Support
 
-To add support for a new IDE, extend `lib/pursor-ide.sh`:
+To add support for a new IDE, extend `lib/para-ide.sh`:
 
 ```bash
 # Add new IDE implementation
@@ -281,7 +281,7 @@ launch_ide() {
 
 ### Adding New Commands
 
-Add new commands by extending the `handle_command` function in `pursor.sh` and implementing the logic in appropriate modules.
+Add new commands by extending the `handle_command` function in `para.sh` and implementing the logic in appropriate modules.
 
 ## 🧪 Development
 
@@ -289,32 +289,32 @@ Add new commands by extending the `handle_command` function in `pursor.sh` and i
 
 **Basic Test:**
 ```bash
-./pursor.sh                          # Create session
+./para.sh                          # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./pursor.sh rebase "test commit"      # Auto-stage & rebase
+./para.sh rebase "test commit"      # Auto-stage & rebase
 ```
 
 **Conflict Test:**
 ```bash
-./pursor.sh && ./pursor.sh           # Create 2 sessions
+./para.sh && ./para.sh           # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../pursor.sh rebase "A"
+echo 'change A' >> test-file.py && ../../../para.sh rebase "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../pursor.sh rebase "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
 # Edit file to resolve conflicts, then:
-./pursor.sh continue                 # Auto-stages & completes
+./para.sh continue                 # Auto-stages & completes
 ```
 
 ### Module Structure
 
 Each module in `lib/` has a specific responsibility:
 
-- **pursor-config.sh**: Environment setup and configuration loading
-- **pursor-utils.sh**: Common utilities, validation, and helper functions
-- **pursor-git.sh**: All Git operations including worktree and rebase management
-- **pursor-session.sh**: Session lifecycle, state management, and detection
-- **pursor-ide.sh**: IDE integration with extensible interface
+- **para-config.sh**: Environment setup and configuration loading
+- **para-utils.sh**: Common utilities, validation, and helper functions
+- **para-git.sh**: All Git operations including worktree and rebase management
+- **para-session.sh**: Session lifecycle, state management, and detection
+- **para-ide.sh**: IDE integration with extensible interface
 
 ## 🤝 Contributing
 
@@ -322,8 +322,8 @@ The modular architecture makes contributions easier:
 
 1. **Bug fixes**: Usually isolated to a single module
 2. **New features**: Can often be added by extending existing modules
-3. **IDE support**: Add new implementations to `pursor-ide.sh`
-4. **Git workflows**: Extend `pursor-git.sh` for new rebase strategies
+3. **IDE support**: Add new implementations to `para-ide.sh`
+4. **Git workflows**: Extend `para-git.sh` for new rebase strategies
 
 ## 📋 Requirements
 
@@ -336,13 +336,13 @@ The modular architecture makes contributions easier:
 ### Common Issues
 
 **"not in a Git repository"**
-- Run pursor from within a Git repository
+- Run para from within a Git repository
 
 **"Cursor CLI not found"**
 - Install Cursor CLI or set `CURSOR_CMD` environment variable
 
 **"session not found"**
-- Use `pursor list` to see active sessions
+- Use `para list` to see active sessions
 - Ensure you're in the correct directory for auto-detection
 
 ### Debug Mode
@@ -350,6 +350,6 @@ The modular architecture makes contributions easier:
 For debugging, you can trace execution:
 ```bash
 set -x  # Enable shell tracing
-./pursor.sh your-command
+./para.sh your-command
 set +x  # Disable tracing
 ```
