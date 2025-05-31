@@ -1,12 +1,12 @@
 #!/usr/bin/env sh
 # Session management for pursor
 
-# Get session information from state file
+# Load session information from state file
 get_session_info() {
   SESSION_ID="$1"
   STATE_FILE="$STATE_DIR/$SESSION_ID.state"
   [ -f "$STATE_FILE" ] || die "session '$SESSION_ID' not found"
-  IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$STATE_FILE"
+  IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$STATE_FILE"
 }
 
 # Save session state to file
@@ -34,7 +34,7 @@ remove_session_state() {
 # Auto-detect current session from working directory
 auto_detect_session() {
   CURRENT_DIR="$PWD"
-  
+
   # Pattern 1: Check for regular timestamp-based sessions (pc/YYYYMMDD-HHMMSS)
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/[0-9]\{8\}-[0-9]\{6\}"; then
     TIMESTAMP=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
@@ -46,18 +46,19 @@ auto_detect_session() {
       fi
     fi
   fi
-  
+
   # Pattern 2: Check for custom named sessions
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/"; then
     PC_DIR_NAME=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([^/]*\).*|\1|p")
     if [ -n "$PC_DIR_NAME" ]; then
       if [ -d "$STATE_DIR" ]; then
+        # Try to find matching session by branch name
         for state_file in "$STATE_DIR"/*.state; do
           [ -f "$state_file" ] || continue
           SESSION_ID=$(basename "$state_file" .state)
-          
-          IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
-          
+
+          IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
+
           if [ "pc/$PC_DIR_NAME" = "$TEMP_BRANCH" ]; then
             echo "$SESSION_ID"
             return 0
@@ -67,11 +68,10 @@ auto_detect_session() {
     fi
   fi
 
-  # Fallback: single session detection
   if [ ! -d "$STATE_DIR" ]; then
     die "no active sessions found"
   fi
-  
+
   SESSIONS_COUNT=0
   FOUND_SESSION=""
   for state_file in "$STATE_DIR"/*.state; do
@@ -79,15 +79,15 @@ auto_detect_session() {
     SESSIONS_COUNT=$((SESSIONS_COUNT + 1))
     FOUND_SESSION=$(basename "$state_file" .state)
   done
-  
+
   if [ "$SESSIONS_COUNT" -eq 0 ]; then
     die "no active sessions found"
   elif [ "$SESSIONS_COUNT" -gt 1 ]; then
-    echo "Multiple sessions active. Please specify session ID:" >&2
+    die "multiple sessions found; specify which one to use:"
     list_sessions >&2
     exit 1
   fi
-  
+
   echo "$FOUND_SESSION"
 }
 
@@ -118,7 +118,7 @@ list_sessions() {
     echo "  Worktree: $WORKTREE_DIR"
     echo "  Base: $BASE_BRANCH"
     if [ -d "$WORKTREE_DIR" ]; then
-      cd "$WORKTREE_DIR"
+      cd "$WORKTREE_DIR" || die "failed to change to worktree directory"
       if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
         echo "  Status: ⚠️  Has merge conflicts"
       elif git diff --quiet --exit-code --cached --ignore-submodules --; then
@@ -130,7 +130,7 @@ list_sessions() {
       else
         echo "  Status: 📦 Has staged changes"
       fi
-      cd "$REPO_ROOT"
+      cd "$REPO_ROOT" || die "failed to change to repository root"
     else
       echo "  Status: ❌ Worktree missing"
     fi

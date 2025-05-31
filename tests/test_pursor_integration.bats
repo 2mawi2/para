@@ -248,4 +248,68 @@ EOF
     # Verify original repo is untouched
     [ -f "test-file.py" ]
     git log --oneline | grep "Initial commit"
+}
+
+@test "IT-5: Auto-detect session from worktree directory" {
+    # 1. Create session
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
+    
+    # 2. Navigate to worktree and edit file
+    cd "$session_dir"
+    echo "Auto-detect test change" >> test-file.py
+    
+    # 3. Test merge from within worktree (should auto-detect session)
+    run run_pursor merge "Auto-detect test commit"
+    [ "$status" -eq 0 ]
+    
+    # Go back to main repo to verify
+    cd "$TEST_REPO"
+    
+    # Verify commit exists on main
+    git log --oneline | grep "Auto-detect test commit"
+    
+    # Verify changes are in main
+    grep "Auto-detect test change" test-file.py
+    
+    # Verify cleanup - session should be cleaned up after successful merge
+    [ ! -d "$session_dir" ]
+    if [ -d ".pursor_state" ]; then
+        [ "$(find .pursor_state -name '*.state' | wc -l)" -eq 0 ]
+    fi
+}
+
+@test "IT-6: Auto-detect session for cancel from worktree directory" {
+    # 1. Create session
+    run run_pursor
+    [ "$status" -eq 0 ]
+    
+    session_dir=$(find subtrees/pc -maxdepth 1 -type d -name "20*" | head -1)
+    [ -d "$session_dir" ]
+    
+    # Get the branch name before navigating
+    cd "$session_dir"
+    branch_name=$(git branch --show-current)
+    
+    # 2. Test cancel from within worktree (should auto-detect session)
+    run run_pursor cancel
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    
+    # Verify branch is deleted
+    run git branch --list "$branch_name"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    
+    # Verify worktree directory is gone
+    [ ! -d "$session_dir" ]
+    
+    # Verify state file removed
+    if [ -d ".pursor_state" ]; then
+        [ "$(find .pursor_state -name '*.state' | wc -l)" -eq 0 ]
+    fi
 } 

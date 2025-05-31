@@ -134,8 +134,11 @@ merge_session() {
   base_branch="$3"
   commit_msg="$4"
   
+  # Save current directory for restoration
+  ORIGINAL_DIR="$PWD"
+  
   # Auto-stage and commit all changes if any exist
-  cd "$worktree_dir"
+  cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
   if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
     echo "▶ staging all changes"
     git add -A || die "failed to stage changes"
@@ -144,26 +147,43 @@ merge_session() {
   else
     echo "ℹ️  no changes to commit"
   fi
-  cd "$REPO_ROOT"
 
   echo "▶ rebasing $temp_branch onto $base_branch"
-  if ! git -C "$worktree_dir" rebase "$base_branch"; then
+  if ! git rebase "$base_branch"; then
     echo "❌ rebase conflicts" >&2
     echo "   → resolve conflicts in $worktree_dir" >&2
     echo "   → then run: pursor continue" >&2
+    cd "$ORIGINAL_DIR" || true
     return 1
   fi
 
+  # Change to main repository root for merge operations
+  cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+  
+  # Verify we're in the correct repository state
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    die "not in a valid git repository at $REPO_ROOT"
+  fi
+  
+  # Ensure repository is not bare (safety check)
+  if git config --get core.bare | grep -q "true"; then
+    echo "⚠️  Warning: Repository is configured as bare, fixing..." >&2
+    git config core.bare false || die "failed to fix bare repository setting"
+  fi
+
   echo "▶ merging into $base_branch"
-  git -C "$REPO_ROOT" checkout "$base_branch"
-  if ! git -C "$REPO_ROOT" merge --ff-only "$temp_branch" 2>/dev/null; then
+  git checkout "$base_branch" || die "failed to checkout $base_branch"
+  if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
     echo "▶ using non-fast-forward merge"
-    if ! git -C "$REPO_ROOT" merge --no-ff -m "$commit_msg" "$temp_branch"; then
+    if ! git merge --no-ff -m "$commit_msg" "$temp_branch"; then
       echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
+      cd "$ORIGINAL_DIR" || true
       return 1
     fi
   fi
   
+  # Restore original directory
+  cd "$ORIGINAL_DIR" || true
   return 0
 }
 
@@ -173,7 +193,10 @@ continue_merge() {
   temp_branch="$2"
   base_branch="$3"
   
-  cd "$worktree_dir"
+  # Save current directory for restoration
+  ORIGINAL_DIR="$PWD"
+  
+  cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
   
   # Check if we're in the middle of a rebase
   GIT_DIR=$(git rev-parse --git-dir)
@@ -187,12 +210,14 @@ continue_merge() {
       echo "❌ There are still unresolved conflicts:" >&2
       echo "Files with conflict markers:" >&2
       git diff --check 2>&1 || true
+      cd "$ORIGINAL_DIR" || true
       return 1
     fi
     
     echo "▶ continuing rebase"
     if ! GIT_EDITOR=true git rebase --continue; then
       echo "❌ rebase continue failed – check for remaining conflicts" >&2
+      cd "$ORIGINAL_DIR" || true
       return 1
     fi
     echo "✅ rebase completed"
@@ -200,19 +225,34 @@ continue_merge() {
     echo "ℹ️  No rebase in progress"
   fi
   
-  cd "$REPO_ROOT"
+  # Change to main repository root for merge operations
+  cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+  
+  # Verify we're in the correct repository state
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    die "not in a valid git repository at $REPO_ROOT"
+  fi
+  
+  # Ensure repository is not bare (safety check)
+  if git config --get core.bare | grep -q "true"; then
+    echo "⚠️  Warning: Repository is configured as bare, fixing..." >&2
+    git config core.bare false || die "failed to fix bare repository setting"
+  fi
   
   # Continue with the merge process
   echo "▶ merging into $base_branch"
-  git -C "$REPO_ROOT" checkout "$base_branch"
-  if ! git -C "$REPO_ROOT" merge --ff-only "$temp_branch" 2>/dev/null; then
+  git checkout "$base_branch" || die "failed to checkout $base_branch"
+  if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
     echo "▶ using non-fast-forward merge"
     COMMIT_MSG="Merge session after resolving conflicts"
-    if ! git -C "$REPO_ROOT" merge --no-ff -m "$COMMIT_MSG" "$temp_branch"; then
+    if ! git merge --no-ff -m "$COMMIT_MSG" "$temp_branch"; then
       echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
+      cd "$ORIGINAL_DIR" || true
       return 1
     fi
   fi
   
+  # Restore original directory
+  cd "$ORIGINAL_DIR" || true
   return 0
 } 
