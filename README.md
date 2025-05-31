@@ -1,6 +1,6 @@
 # Para - Parallel IDE Workflow Helper
 
-A modular POSIX shell script for creating multiple ephemeral IDE sessions on temporary Git worktrees, enabling parallel development with easy rebase/discard workflow.
+A modular POSIX shell script for creating multiple ephemeral Cursor IDE sessions on temporary Git worktrees, enabling parallel development with easy finish/discard workflow.
 
 Perfect for prototyping multiple features simultaneously while keeping your main branch clean.
 
@@ -10,12 +10,12 @@ Perfect for prototyping multiple features simultaneously while keeping your main
 
 ```bash
 # Create a new parallel session (gets friendly name like "swift_phoenix_20250531-143022")
-para
+para start
 
 # Work in the new IDE window that opens...
 
-# Rebase your changes back
-para rebase "Add new feature"
+# Finish your changes back to main branch
+para finish "Add new feature"
 ```
 
 ## ⚙️ IDE Configuration
@@ -149,8 +149,8 @@ This will:
 Para uses **friendly names** for auto-generated sessions, making them much easier to remember and type:
 
 ```bash
-para                    # Creates session with friendly name like "swift_phoenix_20250531-143022"
-para feature-auth       # Creates custom named session "feature-auth"
+para start                  # Creates session with friendly name like "swift_phoenix_20250531-143022"
+para start feature-auth     # Creates custom named session "feature-auth"
 
 # Friendly names are:
 # - Easy to remember: "swift_phoenix" vs "20250531-143022"
@@ -162,21 +162,21 @@ para feature-auth       # Creates custom named session "feature-auth"
 ### Basic Commands
 
 ```bash
-para                    # Create new session → opens your configured IDE
-para list               # List all active sessions (alias: ls)
-para rebase "message"    # Rebase session back to main
-para continue           # Continue rebase after resolving conflicts
-para cancel             # Cancel/delete session (alias: abort)
-para clean              # Cancel ALL sessions (clean everything)
-para resume <session>   # Resume/reconnect to existing session
+para start                  # Create new session → opens Cursor
+para list                   # List all active sessions (alias: ls)
+para finish "message"       # Finish session back to main
+para continue               # Continue finish after resolving conflicts
+para cancel                 # Cancel/delete session (alias: abort)
+para clean                  # Cancel ALL sessions (clean everything)
+para resume <session>       # Resume/reconnect to existing session
 ```
 
 ### Named Sessions
 
 ```bash
 # Create named sessions for better organization
-para feature-auth       # Creates session "feature-auth"
-para bugfix-login       # Creates session "bugfix-login"
+para start feature-auth     # Creates session "feature-auth"
+para start bugfix-login     # Creates session "bugfix-login"
 
 # List shows friendly names
 para list
@@ -193,18 +193,18 @@ para resume feature-auth
 
 ```bash
 # Create multiple sessions
-para                    # Session 1 (opens your IDE)
-para feature-auth       # Named session (opens your IDE) 
+para start                  # Session 1 (opens Cursor)
+para start feature-auth     # Named session (opens Cursor)
 
 # List active sessions
 para list
 
-# Rebase sessions (auto-detects from current directory!)
+# Finish sessions (auto-detects from current directory!)
 cd subtrees/pc/20250531-143022
-para rebase "Feature A complete"
+para finish "Feature A complete"
 
 cd ../feature-auth-20250531-143025
-para rebase "Authentication complete"
+para finish "Authentication complete"
 
 # Or cancel individual sessions
 para cancel feature-auth
@@ -224,12 +224,12 @@ para list               # Verify: "No active parallel sessions."
 
 ## 🔧 Handling Conflicts
 
-When rebasing sessions that modify the same files, you might get conflicts:
+When finishing sessions that modify the same files, you might get conflicts:
 
 ```bash
-# Try to rebase
-para rebase "Add feature"
-# ❌ rebase conflicts
+# Try to finish
+para finish "Add feature"
+# ❌ finish conflicts
 #    → resolve conflicts in /path/to/worktree
 #    → then run: para continue
 
@@ -238,9 +238,9 @@ cd subtrees/pc/20250531-143022
 # Edit conflicted files to resolve conflicts
 # (NO need to run git add!)
 
-# Continue the rebase with auto-staging
+# Continue the finish with auto-staging
 para continue
-# ✅ rebase complete!
+# ✅ finish complete!
 ```
 
 ## 📂 How It Works
@@ -248,7 +248,7 @@ para continue
 - **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
 - **State Tracking**: Uses `.para_state/` directory to track sessions
 - **Context-Aware**: Auto-detects current session from working directory
-- **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
+- **Auto-Staging**: Automatically stages all changes during finish and conflict resolution
 - **Clean Workflow**: No manual `git add` required anywhere
 
 ## 🔧 Configuration
@@ -283,19 +283,19 @@ By default, Para launches each session with an isolated user data directory (e.g
 
 **Default behavior:**
 ```bash
-para                    # Uses isolated user data directory automatically
+para start                  # Uses isolated user data directory automatically
 ```
 
 **Custom user data directory name:**
 ```bash
-export IDE_USER_DATA_DIR=".my-ide-data"
-para                    # Uses custom directory name
+export CURSOR_USER_DATA_DIR=".my-cursor-data"
+para start                  # Uses custom directory name
 ```
 
 **Disable isolation (use main IDE instance):**
 ```bash
-unset IDE_USER_DATA_DIR
-para                    # Uses your main IDE instance
+unset CURSOR_USER_DATA_DIR
+para start                  # Uses your main Cursor instance
 ```
 
 **How it works:**
@@ -329,7 +329,7 @@ launch_neovim() {
 launch_ide() {
   ide_name="$1"
   worktree_dir="$2"
-  
+
   case "$ide_name" in
     cursor) launch_cursor "$worktree_dir" ;;
     claude) launch_claude "$worktree_dir" ;;
@@ -350,19 +350,19 @@ Add new commands by extending the `handle_command` function in `para.sh` and imp
 
 **Basic Test:**
 ```bash
-./para.sh                          # Create session
+./para.sh start                     # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./para.sh rebase "test commit"      # Auto-stage & rebase
+./para.sh finish "test commit"      # Auto-stage & finish
 ```
 
 **Conflict Test:**
 ```bash
-./para.sh && ./para.sh           # Create 2 sessions
+./para.sh start && ./para.sh start  # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../para.sh rebase "A"
+echo 'change A' >> test-file.py && ../../../para.sh finish "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!
 # Edit file to resolve conflicts, then:
 ./para.sh continue                 # Auto-stages & completes
 ```
@@ -373,7 +373,7 @@ Each module in `lib/` has a specific responsibility:
 
 - **para-config.sh**: Environment setup and configuration loading
 - **para-utils.sh**: Common utilities, validation, and helper functions
-- **para-git.sh**: All Git operations including worktree and rebase management
+- **para-git.sh**: All Git operations including worktree and finish management
 - **para-session.sh**: Session lifecycle, state management, and detection
 - **para-ide.sh**: IDE integration with extensible interface
 
@@ -384,7 +384,7 @@ The modular architecture makes contributions easier:
 1. **Bug fixes**: Usually isolated to a single module
 2. **New features**: Can often be added by extending existing modules
 3. **IDE support**: Add new implementations to `para-ide.sh`
-4. **Git workflows**: Extend `para-git.sh` for new rebase strategies
+4. **Git workflows**: Extend `para-git.sh` for new finish strategies
 
 ## 📋 Requirements
 

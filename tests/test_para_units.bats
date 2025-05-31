@@ -53,7 +53,10 @@ setup() {
 # Tests for is_known_command function
 @test "is_known_command returns true for known commands" {
     # Known commands from the case statement
-    run is_known_command "rebase"
+    run is_known_command "start"
+    [ "$status" -eq 0 ]
+    
+    run is_known_command "finish"
     [ "$status" -eq 0 ]
     
     run is_known_command "clean"
