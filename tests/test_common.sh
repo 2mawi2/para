@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+
+# Common test environment setup functions for pursor tests
+# This file should be sourced by test files to reuse environment setup
+
+# Setup a temporary git repository for testing
+# Sets up the following environment variables:
+# - TEST_REPO: Path to temporary repository
+# - PURSOR_SCRIPT: Path to pursor script
+# - ORIGINAL_DIR: Original working directory (for teardown)
+# - ORIGINAL_REPO_ROOT: Original REPO_ROOT (for teardown)
+setup_temp_git_repo() {
+    export ORIGINAL_DIR="$PWD"
+    export ORIGINAL_REPO_ROOT="$REPO_ROOT"
+    
+    export TEST_REPO=$(mktemp -d)
+    
+    export CURSOR_CMD="true"
+    
+    unset REPO_ROOT
+    unset STATE_DIR
+    unset SUBTREES_DIR
+    unset BASE_BRANCH
+    unset SUBTREES_DIR_NAME
+    unset STATE_DIR_NAME
+    
+    (
+        cd "$TEST_REPO"
+        git init
+        git config user.email "test@example.com"
+        git config user.name "Test User"
+        
+        git config core.hooksPath /dev/null
+        
+        echo "Initial content" > test-file.py
+        git add test-file.py
+        git commit -m "Initial commit"
+    )
+    
+    if [ -n "${BATS_TEST_DIRNAME:-}" ]; then
+        export PURSOR_SCRIPT="$(dirname "${BATS_TEST_DIRNAME}")/pursor.sh"
+    else
+        local script_dir="$(cd "$(dirname "$0")" && pwd)"
+        
+        if [ -f "$script_dir/pursor.sh" ]; then
+            export PURSOR_SCRIPT="$script_dir/pursor.sh"
+        else
+            local current_dir="$script_dir"
+            while [ "$current_dir" != "/" ]; do
+                if [ -f "$current_dir/pursor.sh" ]; then
+                    export PURSOR_SCRIPT="$current_dir/pursor.sh"
+                    break
+                fi
+                current_dir="$(dirname "$current_dir")"
+            done
+        fi
+        
+        if [ -z "${PURSOR_SCRIPT:-}" ]; then
+            echo "Error: Could not find pursor.sh from $script_dir" >&2
+            return 1
+        fi
+    fi
+}
+
+# Teardown temporary environment
+# Cleans up TEST_REPO and restores original environment
+teardown_temp_git_repo() {
+    if [ -n "$TEST_REPO" ] && [ -d "$TEST_REPO" ]; then
+        rm -rf "$TEST_REPO"
+    fi
+    
+    cd "$ORIGINAL_DIR" 2>/dev/null || true
+    export REPO_ROOT="$ORIGINAL_REPO_ROOT"
+}
+
+# Helper function to run pursor in the test directory
+run_pursor() {
+    cd "$TEST_REPO" && "$PURSOR_SCRIPT" "$@"
+}
+
+# Helper function to run commands in test directory
+run_in_test_repo() {
+    cd "$TEST_REPO" && "$@"
+}
+
+# Setup a git repository with multiple initial files
+# Useful for conflict testing
+setup_temp_git_repo_with_files() {
+    setup_temp_git_repo
+    
+    (
+        cd "$TEST_REPO"
+        
+        cat > justfile << 'EOF'
+# Original justfile content
+test:
+    @echo "Running original tests..."
+    @bats test.bats
+EOF
+        git add justfile
+        git commit -m "Add original justfile"
+        
+        echo "# README" > README.md
+        echo "node_modules/" > .gitignore
+        git add README.md .gitignore
+        git commit -m "Add README and gitignore"
+    )
+}
+
+# Find the first session directory in a test repo
+# Returns the path relative to TEST_REPO
+find_session_dir() {
+    cd "$TEST_REPO"
+    find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | head -1
+}
+
+# Count active sessions in test repo
+count_sessions() {
+    cd "$TEST_REPO"
+    find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | wc -l
+}
+
+# Count state files in test repo
+count_state_files() {
+    cd "$TEST_REPO"
+    find .pursor_state -name '*.state' 2>/dev/null | wc -l || echo 0
+}
+
+# Create a conflicting change in main branch
+# Usage: create_main_conflict <filename> <content>
+create_main_conflict() {
+    local filename="$1"
+    local content="$2"
+    
+    cd "$TEST_REPO"
+    echo "$content" > "$filename"
+    git add "$filename"
+    git commit -m "Create conflict in main: $filename"
+}
+
+# Assert that a session directory exists
+assert_session_exists() {
+    local session_dir="$1"
+    if [ ! -d "$TEST_REPO/$session_dir" ]; then
+        echo "Expected session directory $session_dir to exist but it doesn't"
+        return 1
+    fi
+}
+
+# Assert that a session directory does not exist
+assert_session_not_exists() {
+    local session_dir="$1"
+    if [ -d "$TEST_REPO/$session_dir" ]; then
+        echo "Expected session directory $session_dir to not exist but it does"
+        return 1
+    fi
+}
+
+# Assert that a commit with message exists in git log
+assert_commit_exists() {
+    local commit_message="$1"
+    cd "$TEST_REPO"
+    if ! git log --oneline | grep -q "$commit_message"; then
+        echo "Expected commit with message '$commit_message' to exist in git log"
+        return 1
+    fi
+}
+
+# Assert that a file contains specific content
+assert_file_contains() {
+    local filename="$1"
+    local content="$2"
+    cd "$TEST_REPO"
+    if ! grep -q "$content" "$filename"; then
+        echo "Expected file $filename to contain '$content'"
+        return 1
+    fi
+} 
