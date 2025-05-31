@@ -98,8 +98,26 @@ launch_claude() {
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
     echo "▶ launching Claude Code in new terminal..."
     # Launch Claude Code in a new terminal window on macOS
-    if command -v open >/dev/null 2>&1; then
-      open -n -a Terminal.app --args sh -c "cd '$worktree_dir' && '$IDE_CMD'"
+    if command -v osascript >/dev/null 2>&1; then
+      # Use AppleScript to create a new terminal window and run Claude Code
+      osascript <<EOF
+tell application "Terminal"
+    do script "cd '$worktree_dir' && '$IDE_CMD'"
+    activate
+end tell
+EOF
+    elif command -v open >/dev/null 2>&1; then
+      # Fallback: Create a temporary script to ensure proper execution
+      temp_script=$(mktemp)
+      cat > "$temp_script" << 'SCRIPT_EOF'
+#!/bin/sh
+cd "$worktree_dir"
+exec "$IDE_CMD"
+SCRIPT_EOF
+      chmod +x "$temp_script"
+      open -n -a Terminal.app "$temp_script"
+      # Clean up the temp script after a delay
+      (sleep 2 && rm -f "$temp_script") &
     else
       # Fallback for non-macOS systems - try common terminal emulators
       if command -v gnome-terminal >/dev/null 2>&1; then
