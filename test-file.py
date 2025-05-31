@@ -13,3 +13,4 @@ print("Different change from session 2")
 print("Testing new interface!")
 print("Test if subtree ignored")
 # Test change for merge strategy
+# First change for squash test
