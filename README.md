@@ -7,7 +7,7 @@ Perfect for prototyping multiple features simultaneously while keeping your main
 ## 🚀 Quick Start
 
 ```bash
-# Create a new parallel session
+# Create a new parallel session (gets friendly name like "swift_phoenix_20250531-143022")
 para
 
 # Work in the new Cursor window that opens...
@@ -106,6 +106,21 @@ This will:
 **Shell Compatibility**: Para is written in POSIX shell and works with all major shells including bash, zsh, fish, dash, and ash.
 
 ## 🎯 Usage
+
+### Session Naming
+
+Para uses **friendly names** for auto-generated sessions, making them much easier to remember and type:
+
+```bash
+para                    # Creates session with friendly name like "swift_phoenix_20250531-143022"
+para feature-auth       # Creates custom named session "feature-auth"
+
+# Friendly names are:
+# - Easy to remember: "swift_phoenix" vs "20250531-143022"
+# - Easy to type: No long number sequences
+# - Still unique: Timestamp suffix ensures uniqueness
+# - Consistent: Same adjective/noun pattern as Docker Compose
+```
 
 ### Basic Commands
 
