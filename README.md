@@ -16,6 +16,46 @@ pursor
 pursor merge "Add new feature"
 ```
 
+## 🛠️ Development
+
+### Setup Development Environment
+
+```bash
+# Install Just command runner (if not already installed)
+brew install just  # macOS
+# or curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
+
+# Complete development setup
+just dev-setup
+```
+
+### Available Commands
+
+```bash
+just install        # Install pursor globally
+just run [ARGS]     # Run local pursor.sh with arguments
+just test           # Run bats test suite (auto-installs dependencies)
+just lint           # Run shellcheck + shfmt linting
+just fmt            # Auto-fix shell script formatting
+just setup-hooks    # Configure git pre-commit/pre-push hooks
+just status         # Show project status and dependencies
+just clean          # Clean up development artifacts
+```
+
+### Git Hooks (Auto-configured)
+- **Pre-commit**: Runs tests before commits
+- **Pre-push**: Runs linting before pushes
+
+### Testing
+- Uses [bats-core](https://github.com/bats-core/bats-core) for shell script testing
+- Tests in `tests/test_pursor.bats`
+- Run with `just test` or `bats tests/`
+
+### Linting
+- **shellcheck** for static analysis
+- **shfmt** for consistent formatting
+- Run with `just lint` or individually
+
 ## 🏗️ Architecture
 
 Pursor is built with a modular architecture for maintainability and extensibility:
@@ -23,6 +63,8 @@ Pursor is built with a modular architecture for maintainability and extensibilit
 ```
 pursor/
 ├── pursor.sh              # Main entry point and command dispatch
+├── justfile               # Development workflow automation
+├── scripts/               # Git hook templates
 └── lib/                   # Modular library components
     ├── pursor-config.sh   # Configuration management
     ├── pursor-utils.sh    # Utility functions and validation

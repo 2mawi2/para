@@ -10,8 +10,36 @@ This project provides a POSIX shell script for creating multiple ephemeral Curso
 
 ## Key Files
 - **[pursor.sh](mdc:pursor.sh)** - Main script with clean subcommand interface for parallel session management
+- **[justfile](mdc:justfile)** - Development workflow automation with testing, linting, and git hooks
 - **[README.md](mdc:README.md)** - Comprehensive documentation with examples and configuration options
+- **[install-pursor.sh](mdc:install-pursor.sh)** - Universal installer script for global installation
 - **[test-file.py](mdc:test-file.py)** - Test file used for development and testing workflows
+
+## Modular Architecture
+```
+lib/
+├── pursor-config.sh   # Configuration management
+├── pursor-utils.sh    # Utility functions and validation  
+├── pursor-git.sh      # Git operations and worktree management
+├── pursor-session.sh  # Session lifecycle and state management
+└── pursor-ide.sh      # IDE integration (extensible)
+
+tests/
+├── test_pursor.bats   # Main test suite using bats-core
+└── README.md          # Testing documentation
+
+scripts/
+├── pre-commit         # Git hook for running tests
+└── pre-push           # Git hook for running linting
+```
+
+## Development Workflow
+- **Setup**: `just dev-setup` - Complete environment setup
+- **Testing**: `just test` - Run bats test suite (auto-installs dependencies)
+- **Linting**: `just lint` - Run shellcheck + shfmt
+- **Formatting**: `just fmt` - Auto-fix shell script formatting
+- **Hooks**: `just setup-hooks` - Configure pre-commit/pre-push git hooks
+- **Status**: `just status` - Check dependencies and project health
 
 ## Core Commands
 - `pursor` - Create new parallel session (opens Cursor)
@@ -54,3 +82,6 @@ echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
 - Context-aware session detection from directory path
 - Automatic conflict resolution with staging
 - Subcommand interface following CLI best practices
+- Automated testing with bats-core framework
+- Linting with shellcheck + shfmt for code quality
+- Git hooks prevent commits/pushes with issues

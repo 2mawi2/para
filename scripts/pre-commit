@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run tests
+set -e
+echo "Running pre-commit tests..."
+if command -v just &> /dev/null; then
+    just test
+elif command -v bats &> /dev/null && [ -d "tests" ]; then
+    bats tests/
+else
+    echo "Warning: Cannot run tests - just or bats not available"
+fi 
