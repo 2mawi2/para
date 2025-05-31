@@ -179,6 +179,8 @@ test FILE="": install-dev
         echo "Running all tests..."; \
         echo "Running unit tests..."; \
         bats tests/test_para_units.bats || true; \
+        echo "Running friendly names tests..."; \
+        bats tests/test_friendly_names.bats || true; \
         echo "Running integration tests..."; \
         bats tests/test_para_integration.bats || true; \
     fi
@@ -192,6 +194,11 @@ test-integration: install-dev
 test-unit: install-dev
     @echo "🧪 Running unit tests..."
     @bats tests/test_para_units.bats
+
+# Run only friendly names tests
+test-friendly: install-dev
+    @echo "🧪 Running friendly names tests..."
+    @bats tests/test_friendly_names.bats
 
 # Run linting with shellcheck and shfmt
 lint: install-dev

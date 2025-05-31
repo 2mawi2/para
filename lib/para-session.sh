@@ -58,7 +58,17 @@ remove_session_state() {
 auto_detect_session() {
   CURRENT_DIR="$PWD"
 
-  # Pattern 1: Check for regular timestamp-based sessions (pc/YYYYMMDD-HHMMSS)
+  if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/[a-z_]*[0-9]\{8\}-[0-9]\{6\}"; then
+    FRIENDLY_SESSION=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([a-z_]*[0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
+    if [ -n "$FRIENDLY_SESSION" ]; then
+      CONTEXT_SESSION_ID="$FRIENDLY_SESSION"
+      if [ -f "$STATE_DIR/$CONTEXT_SESSION_ID.state" ]; then
+        echo "$CONTEXT_SESSION_ID"
+        return 0
+      fi
+    fi
+  fi
+
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/[0-9]\{8\}-[0-9]\{6\}"; then
     TIMESTAMP=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
     if [ -n "$TIMESTAMP" ]; then
@@ -70,7 +80,6 @@ auto_detect_session() {
     fi
   fi
 
-  # Pattern 2: Check for custom named sessions
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/"; then
     PC_DIR_NAME=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([^/]*\).*|\1|p")
     if [ -n "$PC_DIR_NAME" ]; then
@@ -142,9 +151,11 @@ list_sessions() {
     # Make session display more user-friendly
     if echo "$session_id" | grep -q "^pc-[0-9]\{8\}-[0-9]\{6\}$"; then
       timestamp=$(echo "$session_id" | sed 's/pc-//')
-      display_name="$session_id (${timestamp})"
-    else
+      display_name="$session_id (legacy: ${timestamp})"
+    elif echo "$session_id" | grep -q "^[a-z_]*[0-9]\{8\}-[0-9]\{6\}$"; then
       display_name="$session_id"
+    else
+      display_name="$session_id (custom)"
     fi
     
     echo "Session: $display_name"
@@ -192,14 +203,13 @@ create_session() {
   session_name="$1"
   base_branch="$2"
   
-  # Generate session ID and branch name
-  TS=$(generate_timestamp)
   if [ -n "$session_name" ]; then
     SESSION_ID="$session_name"
+    TS=$(generate_timestamp)
     TEMP_BRANCH="pc/$session_name-$TS"
   else
-    SESSION_ID="pc-$TS"
-    TEMP_BRANCH="pc/$TS"
+    SESSION_ID=$(generate_session_id)
+    TEMP_BRANCH="pc/$SESSION_ID"
   fi
   WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
 

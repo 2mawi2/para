@@ -176,4 +176,119 @@ setup() {
     # Should use overridden state dir name
     [ "$STATE_DIR" = "/test/repo/.custom_state" ]
     [ "$SUBTREES_DIR" = "/test/repo/subtrees" ]
+}
+
+# Tests for friendly name generation
+@test "generate_friendly_name returns valid format" {
+    # Test that the function returns adjective_noun format
+    result=$(generate_friendly_name)
+    [[ "$result" =~ ^[a-z]+_[a-z]+$ ]]
+}
+
+@test "generate_friendly_name is deterministic for same timestamp" {
+    # Mock date to return same timestamp
+    date() {
+        case "$1" in
+            "+%s")
+                echo "1640995200"  # Fixed epoch time
+                ;;
+            *)
+                command date "$@"
+                ;;
+        esac
+    }
+    export -f date
+    
+    result1=$(generate_friendly_name)
+    result2=$(generate_friendly_name)
+    [ "$result1" = "$result2" ]
+    [[ "$result1" =~ ^[a-z]+_[a-z]+$ ]]
+}
+
+@test "generate_session_id returns friendly name with timestamp" {
+    # Mock both date commands
+    date() {
+        case "$1" in
+            "+%s")
+                echo "1640995200"  # Fixed epoch time for friendly name
+                ;;
+            "+%Y%m%d-%H%M%S")
+                echo "20240531-184623"  # Fixed timestamp
+                ;;
+            *)
+                command date "$@"
+                ;;
+        esac
+    }
+    export -f date
+    
+    result=$(generate_session_id)
+    [[ "$result" =~ ^[a-z]+_[a-z]+_[0-9]{8}-[0-9]{6}$ ]]
+    [[ "$result" =~ _20240531-184623$ ]]
+}
+
+# Tests for friendly name edge cases and consistency
+@test "generate_friendly_name uses only safe characters" {
+    result=$(generate_friendly_name)
+    # Should only contain lowercase letters and underscore
+    [[ "$result" =~ ^[a-z_]+$ ]]
+    # Should not contain consecutive underscores
+    [[ ! "$result" =~ __ ]]
+    # Should start and end with letters, not underscore
+    [[ "$result" =~ ^[a-z] ]]
+    [[ "$result" =~ [a-z]$ ]]
+}
+
+@test "generate_friendly_name produces different names for different timestamps" {
+    # Mock date for first call
+    date() {
+        case "$1" in
+            "+%s")
+                echo "1640995200"
+                ;;
+            *)
+                command date "$@"
+                ;;
+        esac
+    }
+    export -f date
+    
+    result1=$(generate_friendly_name)
+    
+    # Mock date for second call with different timestamp
+    date() {
+        case "$1" in
+            "+%s")
+                echo "1640995300"  # Different timestamp
+                ;;
+            *)
+                command date "$@"
+                ;;
+        esac
+    }
+    export -f date
+    
+    result2=$(generate_friendly_name)
+    
+    # Should produce different names
+    [ "$result1" != "$result2" ]
+    
+    # Both should be valid format
+    [[ "$result1" =~ ^[a-z]+_[a-z]+$ ]]
+    [[ "$result2" =~ ^[a-z]+_[a-z]+$ ]]
+}
+
+@test "generate_friendly_name has reasonable length" {
+    result=$(generate_friendly_name)
+    length=${#result}
+    
+    # Should be between 6 and 20 characters (reasonable for typing)
+    [ "$length" -ge 6 ]
+    [ "$length" -le 20 ]
+}
+
+@test "friendly names contain exactly one underscore separator" {
+    result=$(generate_friendly_name)
+    underscore_count=$(echo "$result" | tr -cd '_' | wc -c)
+    [ "$underscore_count" -eq 1 ]
 } 

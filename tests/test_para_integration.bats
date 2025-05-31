@@ -112,7 +112,7 @@ teardown() {
     
     # Store session B path immediately - find the one that's NOT session A
     session_b=""
-    for dir in $(find subtrees/pc -maxdepth 1 -type d -name "20*"); do
+    for dir in $(find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \)); do
         if [ "$dir" != "$session_a" ]; then
             session_b="$dir"
             break
@@ -502,7 +502,7 @@ EOF
     [ "$status" -eq 0 ]
     
     session_b=""
-    for dir in $(find subtrees/pc -maxdepth 1 -type d -name "20*"); do
+    for dir in $(find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \)); do
         if [ "$dir" != "$session_a" ]; then
             session_b="$dir"
             break

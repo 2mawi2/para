@@ -7,8 +7,8 @@ usage() {
 para - Parallel Cursor IDE workflow helper
 
 USAGE:
-  para                        # create new session (opens Cursor)
-  para <name>                 # create named session
+  para                        # create new session with friendly name (e.g., swift_phoenix_20250531-233056)
+  para <name>                 # create custom named session
   para rebase "message"          # squash all changes into one commit (default)
   para rebase --preserve "message" # rebase individual commits (preserve history)
   para list                   # list all active sessions
@@ -18,14 +18,20 @@ USAGE:
   para resume <session>       # resume session in Cursor
 
 EXAMPLES:
-  para                        # auto-named session (timestamp)
-  para feature-auth           # named session  
+  para                        # auto-named session (e.g., swift_phoenix_20250531-233056)
+  para feature-auth           # custom named session  
   para list                   # show all sessions
   para rebase "Add new feature"  # squash all changes into one commit
   para rebase --preserve "Feature" # preserve individual commit history
   para continue               # after resolving conflicts
   para cancel                 # cancel current session
+  para resume swift_phoenix_20250531-233056  # resume by friendly name
   para clean                  # clean up everything
+
+SESSION NAMES:
+  - Auto-generated sessions now use friendly names like "swift_phoenix_20250531-233056"
+  - Much easier to remember and type than pure timestamps
+  - You can still provide custom names for specific features
 
 For more information, see the README.md
 EOF
@@ -63,6 +69,51 @@ validate_session_name() {
 # Generate timestamp for session IDs
 generate_timestamp() {
   date +%Y%m%d-%H%M%S
+}
+
+# Generate friendly name like Docker Compose (adjective_noun)
+generate_friendly_name() {
+  adjectives="
+    agile bold calm deep eager fast keen neat 
+    quick smart swift wise zesty bright clever 
+    active brave clean crisp fresh happy 
+    light rapid ready sharp sunny
+  "
+  
+  nouns="
+    alpha beta gamma delta omega
+    aurora cosmos nebula quasar pulsar
+    phoenix dragon falcon eagle hawk
+    maple cedar birch pine oak
+    ruby amber coral jade pearl
+    atlas mercury venus mars jupiter
+    river ocean stream creek lake
+    spark flame ember blaze torch
+    prism crystal silver golden bronze
+  "
+  
+  adj_list=$(echo $adjectives | tr ' ' '\n' | grep -v '^$')
+  noun_list=$(echo $nouns | tr ' ' '\n' | grep -v '^$')
+  
+  timestamp=$(date +%s)
+  
+  adj_count=$(echo "$adj_list" | wc -l)
+  noun_count=$(echo "$noun_list" | wc -l)
+  
+  adj_index=$((timestamp % adj_count + 1))
+  noun_index=$(((timestamp / adj_count) % noun_count + 1))
+  
+  adjective=$(echo "$adj_list" | sed -n "${adj_index}p")
+  noun=$(echo "$noun_list" | sed -n "${noun_index}p")
+  
+  echo "${adjective}_${noun}"
+}
+
+# Generate unique session identifier (friendly name with timestamp suffix)
+generate_session_id() {
+  friendly=$(generate_friendly_name)
+  timestamp=$(generate_timestamp)
+  echo "${friendly}_${timestamp}"
 }
 
 # Get the main Cursor user data directory path

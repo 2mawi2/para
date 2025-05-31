@@ -111,13 +111,13 @@ EOF
 # Returns the path relative to TEST_REPO
 find_session_dir() {
     cd "$TEST_REPO"
-    find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | head -1
+    find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \) 2>/dev/null | head -1
 }
 
 # Count active sessions in test repo
 count_sessions() {
     cd "$TEST_REPO"
-    find subtrees/pc -maxdepth 1 -type d -name "20*" 2>/dev/null | wc -l
+    find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \) 2>/dev/null | wc -l
 }
 
 # Count state files in test repo
