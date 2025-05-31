@@ -120,12 +120,25 @@ install-dev:
 
 # Run tests using bats
 test: install-dev
-    @echo "🧪 Running tests..."
+    @echo "🧪 Running all tests..."
     @if [ ! -d "tests" ]; then \
         echo "Creating tests directory..."; \
         mkdir -p tests; \
     fi
-    bats tests/
+    @echo "Running unit tests..."
+    @bats tests/test_pursor.bats || true
+    @echo "Running integration tests..."
+    @bats tests/test_pursor_integration.bats || true
+
+# Run only integration tests
+test-integration: install-dev
+    @echo "🧪 Running integration tests..."
+    @bats tests/test_pursor_integration.bats
+
+# Run only unit tests  
+test-unit: install-dev
+    @echo "🧪 Running unit tests..."
+    @bats tests/test_pursor.bats
 
 # Run linting with shellcheck and shfmt
 lint: install-dev

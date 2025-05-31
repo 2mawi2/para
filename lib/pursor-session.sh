@@ -24,6 +24,11 @@ save_session_state() {
 remove_session_state() {
   session_id="$1"
   rm -f "$STATE_DIR/$session_id.state"
+  
+  # Clean up state directory if empty
+  if [ -d "$STATE_DIR" ]; then
+    rmdir "$STATE_DIR" 2>/dev/null || true
+  fi
 }
 
 # Auto-detect current session from working directory

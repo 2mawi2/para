@@ -40,7 +40,7 @@ setup_gitignore() {
   
   # Setup git exclude file (local to repository, not tracked)
   if [ ! -f "$GIT_EXCLUDE_FILE" ]; then
-    echo "▶ creating git exclude file for pursor directories"
+    echo "▶ creating git exclude file for pursor directories" >&2
     mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
     cat > "$GIT_EXCLUDE_FILE" <<EOF
 # pursor - parallel cursor sessions (local excludes)
@@ -58,7 +58,7 @@ EOF
     fi
     
     if [ "$NEEDS_UPDATE" -eq 1 ]; then
-      echo "▶ updating git exclude file with pursor entries"
+      echo "▶ updating git exclude file with pursor entries" >&2
       {
         echo ""
         echo "# pursor - parallel cursor sessions (local excludes)"
@@ -70,7 +70,7 @@ EOF
   
   # Setup subtrees directory .gitignore to ignore all contents
   if [ ! -f "$SUBTREES_GITIGNORE" ]; then
-    echo "▶ creating .gitignore in subtrees directory"
+    echo "▶ creating .gitignore in subtrees directory" >&2
     cat > "$SUBTREES_GITIGNORE" <<EOF
 # Ignore all pursor worktree contents
 *
