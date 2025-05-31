@@ -1,29 +1,34 @@
 #!/usr/bin/env sh
 # Utility functions for pursor
 
-# Display usage information
+# Usage message
 usage() {
-  cat >&2 <<EOF
-Usage:
-  pursor [session-name]           # create new session & open Cursor
-  pursor merge "message"          # squash all changes into one commit (default)
-  pursor merge --rebase "message" # rebase individual commits (preserve history)
-  pursor list                     # list all active sessions (alias: ls)
-  pursor continue                 # continue merge after resolving conflicts
-  pursor cancel                   # cancel current session (alias: abort)
-  pursor clean                    # clean up all sessions
-  pursor resume [session-name]    # resume/reconnect to existing session
+  cat <<EOF
+pursor - Parallel Cursor IDE workflow helper
 
-Examples:
-  pursor                          # start new parallel session
-  pursor feature-auth             # start named session "feature-auth"
-  pursor merge "Add new feature"  # squash all changes into one commit
-  pursor merge --rebase "Feature" # preserve individual commit history
-  pursor continue                 # resume after fixing conflicts
-  pursor resume feature-auth      # reconnect to named session
-  pursor cancel                   # discard current session
+USAGE:
+  pursor                        # create new session (opens Cursor)
+  pursor <name>                 # create named session
+  pursor rebase "message"          # squash all changes into one commit (default)
+  pursor rebase --preserve "message" # rebase individual commits (preserve history)
+  pursor list                   # list all active sessions
+  pursor continue                 # continue rebase after resolving conflicts
+  pursor cancel [session]       # cancel/delete session
+  pursor clean                  # delete all sessions
+  pursor resume <session>       # resume session in Cursor
+
+EXAMPLES:
+  pursor                        # auto-named session (timestamp)
+  pursor feature-auth           # named session  
+  pursor list                   # show all sessions
+  pursor rebase "Add new feature"  # squash all changes into one commit
+  pursor rebase --preserve "Feature" # preserve individual commit history
+  pursor continue               # after resolving conflicts
+  pursor cancel                 # cancel current session
+  pursor clean                  # clean up everything
+
+For more information, see the README.md
 EOF
-  exit 1
 }
 
 # Print error message and exit
@@ -32,10 +37,11 @@ die() {
   exit 1
 }
 
-# Check if argument is a known command
+# Check if command is a known command
 is_known_command() {
-  case "$1" in
-    list|ls|clean|--help|-h|merge|continue|cancel|abort|resume|--rebase)
+  cmd="$1"
+  case "$cmd" in
+    list|ls|clean|--help|-h|rebase|continue|cancel|abort|resume|--preserve)
       return 0
       ;;
     *)

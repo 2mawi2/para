@@ -6,7 +6,7 @@ alwaysApply: true
 # Pursor - Parallel Cursor Workflow Helper
 
 ## Project Overview
-This project provides a POSIX shell script for creating multiple ephemeral Cursor IDE sessions on Git worktrees, enabling parallel development with easy merge/discard workflow.
+This project provides a POSIX shell script for creating multiple ephemeral Cursor IDE sessions on Git worktrees, enabling parallel development with easy rebase/discard workflow.
 
 ## Key Files
 - **[pursor.sh](mdc:pursor.sh)** - Main script with clean subcommand interface for parallel session management
@@ -43,9 +43,9 @@ scripts/
 
 ## Core Commands
 - `pursor` - Create new parallel session (opens Cursor)
-- `pursor merge "message"` - Auto-stage & merge session with commit message
+- `pursor rebase "message"` - Auto-stage & rebase session with commit message
 - `pursor list` - Show all active sessions
-- `pursor continue` - Resume after resolving merge conflicts (auto-stages)
+- `pursor continue` - Resume after resolving rebase conflicts (auto-stages)
 - `pursor cancel` - Discard current session
 - `pursor clean` - Remove all sessions
 
@@ -55,16 +55,16 @@ scripts/
 ./pursor.sh                          # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./pursor.sh merge "test commit"      # Auto-stage & merge
+./pursor.sh rebase "test commit"      # Auto-stage & rebase
 ```
 
 **Conflict Test:**
 ```bash
 ./pursor.sh && ./pursor.sh           # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../pursor.sh merge "A"
+echo 'change A' >> test-file.py && ../../../pursor.sh rebase "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../pursor.sh rebase "B"  # Conflict!
 # Edit file to resolve conflicts, then:
 ./pursor.sh continue                 # Auto-stages & completes
 ```
@@ -73,7 +73,7 @@ echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
 1. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
 2. **State Tracking**: Uses `.pursor_state/` directory to track sessions
 3. **Context-Aware**: Auto-detects current session from working directory
-4. **Auto-Staging**: Automatically stages all changes during merge and conflict resolution
+4. **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
 5. **Clean Workflow**: No manual `git add` required anywhere
 
 ## Development Notes

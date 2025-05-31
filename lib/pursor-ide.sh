@@ -22,6 +22,13 @@ launch_ide() {
 launch_cursor() {
   worktree_dir="$1"
   
+  # Skip actual IDE launch and template setup in test mode
+  if [ "${CURSOR_CMD:-}" = "true" ]; then
+    echo "▶ skipping Cursor launch (test stub)"
+    echo "✅ Cursor (test stub) opened"
+    return 0
+  fi
+
   if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
     if [ -n "${CURSOR_USER_DATA_DIR:-}" ]; then
       # Use a single global pursor user data directory

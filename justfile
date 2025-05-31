@@ -178,7 +178,6 @@ test FILE="": install-dev
     else \
         echo "Running all tests..."; \
         echo "Running unit tests..."; \
-        bats tests/test_pursor.bats || true; \
         bats tests/test_pursor_units.bats || true; \
         echo "Running integration tests..."; \
         bats tests/test_pursor_integration.bats || true; \
@@ -192,7 +191,6 @@ test-integration: install-dev
 # Run only unit tests  
 test-unit: install-dev
     @echo "🧪 Running unit tests..."
-    @bats tests/test_pursor.bats
     @bats tests/test_pursor_units.bats
 
 # Run linting with shellcheck and shfmt

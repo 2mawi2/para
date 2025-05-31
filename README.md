@@ -1,6 +1,6 @@
 # Pursor - Parallel Cursor Workflow Helper
 
-A modular POSIX shell script for creating multiple ephemeral Cursor IDE sessions on temporary Git worktrees, enabling parallel development with easy merge/discard workflow.
+A modular POSIX shell script for creating multiple ephemeral Cursor IDE sessions on temporary Git worktrees, enabling parallel development with easy rebase/discard workflow.
 
 Perfect for prototyping multiple features simultaneously while keeping your main branch clean.
 
@@ -12,8 +12,8 @@ pursor
 
 # Work in the new Cursor window that opens...
 
-# Merge your changes back
-pursor merge "Add new feature"
+# Rebase your changes back
+pursor rebase "Add new feature"
 ```
 
 ## 🛠️ Development
@@ -112,8 +112,8 @@ This will:
 ```bash
 pursor                    # Create new session → opens Cursor
 pursor list               # List all active sessions (alias: ls)
-pursor merge "message"    # Merge session back to main
-pursor continue           # Continue merge after resolving conflicts
+pursor rebase "message"    # Rebase session back to main
+pursor continue           # Continue rebase after resolving conflicts
 pursor cancel             # Cancel/delete session (alias: abort)
 pursor clean              # Cancel ALL sessions (clean everything)
 pursor resume <session>   # Resume/reconnect to existing session
@@ -147,12 +147,12 @@ pursor feature-auth       # Named session (opens Cursor)
 # List active sessions
 pursor list
 
-# Merge sessions (auto-detects from current directory!)
+# Rebase sessions (auto-detects from current directory!)
 cd subtrees/pc/20250531-143022
-pursor merge "Feature A complete"
+pursor rebase "Feature A complete"
 
 cd ../feature-auth-20250531-143025
-pursor merge "Authentication complete"
+pursor rebase "Authentication complete"
 
 # Or cancel individual sessions
 pursor cancel feature-auth
@@ -172,11 +172,11 @@ pursor list               # Verify: "No active parallel sessions."
 
 ## 🔧 Handling Conflicts
 
-When merging sessions that modify the same files, you might get conflicts:
+When rebasing sessions that modify the same files, you might get conflicts:
 
 ```bash
-# Try to merge
-pursor merge "Add feature"
+# Try to rebase
+pursor rebase "Add feature"
 # ❌ rebase conflicts
 #    → resolve conflicts in /path/to/worktree
 #    → then run: pursor continue
@@ -186,9 +186,9 @@ cd subtrees/pc/20250531-143022
 # Edit conflicted files to resolve conflicts
 # (NO need to run git add!)
 
-# Continue the merge with auto-staging
+# Continue the rebase with auto-staging
 pursor continue
-# ✅ merge complete!
+# ✅ rebase complete!
 ```
 
 ## 📂 How It Works
@@ -196,7 +196,7 @@ pursor continue
 - **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
 - **State Tracking**: Uses `.pursor_state/` directory to track sessions
 - **Context-Aware**: Auto-detects current session from working directory
-- **Auto-Staging**: Automatically stages all changes during merge and conflict resolution
+- **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
 - **Clean Workflow**: No manual `git add` required anywhere
 
 ## 🔧 Configuration
@@ -292,16 +292,16 @@ Add new commands by extending the `handle_command` function in `pursor.sh` and i
 ./pursor.sh                          # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./pursor.sh merge "test commit"      # Auto-stage & merge
+./pursor.sh rebase "test commit"      # Auto-stage & rebase
 ```
 
 **Conflict Test:**
 ```bash
 ./pursor.sh && ./pursor.sh           # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../pursor.sh merge "A"
+echo 'change A' >> test-file.py && ../../../pursor.sh rebase "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../pursor.sh merge "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../pursor.sh rebase "B"  # Conflict!
 # Edit file to resolve conflicts, then:
 ./pursor.sh continue                 # Auto-stages & completes
 ```
@@ -312,7 +312,7 @@ Each module in `lib/` has a specific responsibility:
 
 - **pursor-config.sh**: Environment setup and configuration loading
 - **pursor-utils.sh**: Common utilities, validation, and helper functions
-- **pursor-git.sh**: All Git operations including worktree and merge management
+- **pursor-git.sh**: All Git operations including worktree and rebase management
 - **pursor-session.sh**: Session lifecycle, state management, and detection
 - **pursor-ide.sh**: IDE integration with extensible interface
 
@@ -323,7 +323,7 @@ The modular architecture makes contributions easier:
 1. **Bug fixes**: Usually isolated to a single module
 2. **New features**: Can often be added by extending existing modules
 3. **IDE support**: Add new implementations to `pursor-ide.sh`
-4. **Git workflows**: Extend `pursor-git.sh` for new merge strategies
+4. **Git workflows**: Extend `pursor-git.sh` for new rebase strategies
 
 ## 📋 Requirements
 
