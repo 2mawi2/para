@@ -18,9 +18,37 @@ pursor merge "Add new feature"
 
 ## 📦 Installation
 
+### Universal Installer (Recommended)
+
+The universal installer works with **any shell** (bash, zsh, fish, sh, etc.):
+
+```bash
+# Download and run the universal installer
+./install-pursor.sh
+```
+
+This will:
+- Auto-detect your shell (bash/zsh/fish/other)
+- Install `pursor` to `~/.local/bin/pursor`
+- Add `~/.local/bin` to your PATH in the appropriate config file
+- Work immediately after installation
+
+### Alternative: Shell-Specific Installer
+
+If you prefer a shell-specific approach, the fish installer is available as an example:
+
+```bash
+# For fish users (example of shell-specific installer)
+./install-pursor.fish
+```
+
+### Manual Installation
+
 1. Copy `pursor.sh` to your Git repository
 2. Make it executable: `chmod +x pursor.sh`
-3. That's it! No external dependencies needed.
+3. Optionally, copy to `~/.local/bin/pursor` for global access
+
+**Shell Compatibility**: Pursor is written in POSIX shell and works with all major shells including bash, zsh, fish, dash, and ash.
 
 ## 🎯 Usage
 
@@ -185,4 +213,4 @@ pursor list                         # "No active parallel sessions."
 
 ---
 
-**No external dependencies • Pure POSIX shell • Works locally • Context-aware** 
+**No external dependencies • Pure POSIX shell • Works locally • Context-aware**
