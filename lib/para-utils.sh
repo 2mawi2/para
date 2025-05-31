@@ -37,7 +37,7 @@ SESSION NAMES:
 CONFIGURATION:
   export IDE_NAME="claude"        # Use Claude Code (default: cursor)
   export IDE_CMD="claude"         # IDE command to run (default: cursor)
-  export IDE_USER_DATA_DIR=".claude-userdata"  # User data directory (for Cursor/VS Code only)
+  export IDE_USER_DATA_DIR=".cursor-userdata"  # User data directory (for Cursor/VS Code only)
 
   Note: Claude Code doesn't support --user-data-dir isolation.
         Only Cursor and VS Code support user data directory isolation.
