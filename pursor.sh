@@ -349,7 +349,7 @@ STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
 SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
 
 # no args  → INIT ---------------------------------------------------------
-if [ "$#" -eq 0 ] || [ "$#" -eq 1 ] && [ "$1" != "list" ] && [ "$1" != "ls" ] && [ "$1" != "clean" ]; then
+if [ "$#" -eq 0 ] || [ "$#" -eq 1 ] && [ "$1" != "list" ] && [ "$1" != "ls" ] && [ "$1" != "clean" ] && [ "$1" != "--help" ] && [ "$1" != "-h" ] && [ "$1" != "merge" ] && [ "$1" != "continue" ] && [ "$1" != "cancel" ] && [ "$1" != "abort" ] && [ "$1" != "resume" ]; then
   # Handle optional session name
   if [ "$#" -eq 1 ]; then
     SESSION_NAME="$1"
@@ -426,6 +426,10 @@ fi
 
 # arg parsing ------------------------------------------------------------
 case "$1" in
+  --help|-h)
+    usage
+    ;;
+
   merge)
     if [ "$#" -eq 1 ]; then
       die "merge requires a commit message"
