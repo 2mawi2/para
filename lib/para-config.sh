@@ -92,13 +92,19 @@ get_default_user_data_dir() {
 
 # Load configuration from environment or use defaults
 load_config() {
-  # Store any existing environment variables before loading config file (safe from unset variables)
-  ENV_IDE_NAME="${IDE_NAME:-}"
-  ENV_IDE_CMD="${IDE_CMD:-}"
-  ENV_IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-}"
-  ENV_BASE_BRANCH="${BASE_BRANCH:-}"
-  ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
-  ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
+  # Store any existing EXTERNAL environment variables before loading config file
+  # Only capture variables that were set externally, not by para itself
+  if [ -z "${_PARA_CONFIG_LOADED:-}" ]; then
+    # First time loading - capture any external environment variables
+    ENV_IDE_NAME="${IDE_NAME:-}"
+    ENV_IDE_CMD="${IDE_CMD:-}"
+    ENV_IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-}"
+    ENV_BASE_BRANCH="${BASE_BRANCH:-}"
+    ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
+    ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
+    _PARA_CONFIG_LOADED=1
+  fi
+  # On subsequent loads, don't re-capture ENV_* variables
   
   # First load from home directory config
   load_home_config
