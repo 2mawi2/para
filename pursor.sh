@@ -316,6 +316,8 @@ auto_detect_session() {
   # First, try to detect session from current working directory
   # Check if we're in a worktree that matches our pattern
   CURRENT_DIR="$PWD"
+  
+  # Pattern 1: Check for regular timestamp-based sessions (pc/YYYYMMDD-HHMMSS)
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/[0-9]\{8\}-[0-9]\{6\}"; then
     # Extract the timestamp from the path
     TIMESTAMP=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
@@ -325,6 +327,33 @@ auto_detect_session() {
       if [ -f "$STATE_DIR/$CONTEXT_SESSION_ID.state" ]; then
         echo "$CONTEXT_SESSION_ID"
         return 0
+      fi
+    fi
+  fi
+  
+  # Pattern 2: Check for custom named sessions (pc/name-YYYYMMDD-HHMMSS)
+  # First check if we're in any pc/ subdirectory
+  if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/pc/"; then
+    # Extract the full directory name after pc/
+    PC_DIR_NAME=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/pc/\([^/]*\).*|\1|p")
+    if [ -n "$PC_DIR_NAME" ]; then
+      # For custom sessions, we need to find the matching session ID by checking state files
+      # The PC_DIR_NAME would be something like "test-history-and-message-20250531-141927"
+      # and we need to find the session ID that created this directory
+      if [ -d "$STATE_DIR" ]; then
+        for state_file in "$STATE_DIR"/*.state; do
+          [ -f "$state_file" ] || continue
+          SESSION_ID=$(basename "$state_file" .state)
+          
+          # Read the state file to get the temp branch name
+          IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH < "$state_file"
+          
+          # Check if this session's temp branch matches our current directory
+          if [ "pc/$PC_DIR_NAME" = "$TEMP_BRANCH" ]; then
+            echo "$SESSION_ID"
+            return 0
+          fi
+        done
       fi
     fi
   fi
