@@ -119,17 +119,23 @@ install-dev:
     echo "✅ Development dependencies installed"
 
 # Run tests using bats
-test: install-dev
+test FILE="": install-dev
     @echo "🧪 Running all tests..."
     @if [ ! -d "tests" ]; then \
         echo "Creating tests directory..."; \
         mkdir -p tests; \
     fi
-    @echo "Running unit tests..."
-    @bats tests/test_pursor.bats || true
-    @bats tests/test_pursor_units.bats || true
-    @echo "Running integration tests..."
-    @bats tests/test_pursor_integration.bats || true
+    @if [ "{{FILE}}" != "" ]; then \
+        echo "Running specific test file: {{FILE}}"; \
+        bats "{{FILE}}"; \
+    else \
+        echo "Running all tests..."; \
+        echo "Running unit tests..."; \
+        bats tests/test_pursor.bats || true; \
+        bats tests/test_pursor_units.bats || true; \
+        echo "Running integration tests..."; \
+        bats tests/test_pursor_integration.bats || true; \
+    fi
 
 # Run only integration tests
 test-integration: install-dev
