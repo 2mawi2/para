@@ -57,6 +57,17 @@ die() {
   exit 1
 }
 
+is_known_command() {
+  case "$1" in
+    list|ls|clean|--help|-h|merge|continue|cancel|abort|resume)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 need_git_repo() {
   # First check if we're in a git repository at all
   git rev-parse --git-dir >/dev/null 2>&1 || die "not in a Git repository"
@@ -348,206 +359,206 @@ need_git_repo
 STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
 SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
 
-# no args  → INIT ---------------------------------------------------------
-if [ "$#" -eq 0 ] || [ "$#" -eq 1 ] && [ "$1" != "list" ] && [ "$1" != "ls" ] && [ "$1" != "clean" ] && [ "$1" != "--help" ] && [ "$1" != "-h" ] && [ "$1" != "merge" ] && [ "$1" != "continue" ] && [ "$1" != "cancel" ] && [ "$1" != "abort" ] && [ "$1" != "resume" ]; then
-  # Handle optional session name
-  if [ "$#" -eq 1 ]; then
-    SESSION_NAME="$1"
-    # Validate session name (alphanumeric, dash, underscore only)
-    case "$SESSION_NAME" in
-      *[!a-zA-Z0-9_-]*) die "session name can only contain letters, numbers, dashes, and underscores" ;;
-    esac
-  else
-    SESSION_NAME=""
-  fi
+# Determine if we should create a new session or handle a command
+if [ "$#" -eq 0 ]; then
+  # No arguments - create new session with auto-generated name
+  SESSION_NAME=""
+elif [ "$#" -eq 1 ] && ! is_known_command "$1"; then
+  # Single argument that's not a known command - treat as session name
+  SESSION_NAME="$1"
+  # Validate session name (alphanumeric, dash, underscore only)
+  case "$SESSION_NAME" in
+    *[!a-zA-Z0-9_-]*) die "session name can only contain letters, numbers, dashes, and underscores" ;;
+  esac
+else
+  # Handle known commands
+  case "$1" in
+    --help|-h)
+      usage
+      ;;
 
-  # determine base branch (current branch) unless overridden
-  if [ -z "$BASE_BRANCH" ]; then
-    BASE_BRANCH=$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD) || die "detached HEAD; set BASE_BRANCH env"
-  fi
+    merge)
+      if [ "$#" -eq 1 ]; then
+        die "merge requires a commit message"
+      elif [ "$#" -eq 2 ]; then
+        COMMIT_MSG="$2"
+        SESSION_ID=$(auto_detect_session)
+      else
+        die "merge requires a commit message and optionally a session ID"
+      fi
 
-  # Check for uncommitted changes and warn, but don't block
-  HAS_UNCOMMITTED=0
-  if ! git -C "$REPO_ROOT" diff --quiet --exit-code; then
-    echo "⚠️  Warning: You have uncommitted changes in the working tree:" >&2
-    git -C "$REPO_ROOT" status --porcelain >&2
-    HAS_UNCOMMITTED=1
-  fi
-  
-  if ! git -C "$REPO_ROOT" diff --quiet --exit-code --cached; then
-    echo "⚠️  Warning: You have staged changes in the working tree:" >&2
-    git -C "$REPO_ROOT" status --porcelain >&2
-    HAS_UNCOMMITTED=1
-  fi
+      get_session_info "$SESSION_ID"
+      [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  if [ "$HAS_UNCOMMITTED" -eq 1 ]; then
-    echo "💡 Tip: Your new session will start from the last committed state." >&2
-    echo "   Any uncommitted changes will not be included in the session." >&2
-    echo "" >&2
-  fi
+      # Auto-stage and commit all changes if any exist
+      cd "$WORKTREE_DIR"
+      if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+        echo "▶ staging all changes in session $SESSION_ID"
+        git add -A || die "failed to stage changes"
+        echo "▶ committing changes in session $SESSION_ID"
+        git commit -m "$COMMIT_MSG" || die "failed to commit changes"
+      else
+        echo "ℹ️  no changes to commit in session $SESSION_ID"
+      fi
+      cd "$REPO_ROOT"
 
-  TS=$(date +%Y%m%d-%H%M%S)
-  if [ -n "$SESSION_NAME" ]; then
-    SESSION_ID="$SESSION_NAME"
-    TEMP_BRANCH="pc/$SESSION_NAME-$TS"
-  else
-    SESSION_ID="pc-$TS"
-    TEMP_BRANCH="pc/$TS"
-  fi
-  WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
+      echo "▶ rebasing $TEMP_BRANCH onto $BASE_BRANCH"
+      if ! git -C "$WORKTREE_DIR" rebase "$BASE_BRANCH"; then
+        echo "❌ rebase conflicts in session $SESSION_ID" >&2
+        echo "   → resolve conflicts in $WORKTREE_DIR" >&2
+        echo "   → then run: pursor continue" >&2
+        exit 1
+      fi
 
-  # Check if session already exists
-  if [ -f "$STATE_DIR/$SESSION_ID.state" ]; then
-    die "session '$SESSION_ID' already exists. Use 'pursor resume $SESSION_ID' or choose a different name."
-  fi
+      echo "▶ merging session $SESSION_ID into $BASE_BRANCH"
+      git -C "$REPO_ROOT" checkout "$BASE_BRANCH"
+      if ! git -C "$REPO_ROOT" merge --ff-only "$TEMP_BRANCH" 2>/dev/null; then
+        echo "▶ using non-fast-forward merge"
+        if ! git -C "$REPO_ROOT" merge --no-ff -m "$COMMIT_MSG" "$TEMP_BRANCH"; then
+          echo "❌ merge conflicts – resolve them and complete the merge manually, then run cleanup:" >&2
+          echo "   git worktree remove '$WORKTREE_DIR'" >&2
+          echo "   git branch -D '$TEMP_BRANCH'" >&2
+          echo "   rm -f '$STATE_DIR/$SESSION_ID.state'" >&2
+          exit 1
+        fi
+      fi
 
-  echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $BASE_BRANCH)"
-  mkdir -p "$SUBTREES_DIR"
-  mkdir -p "$STATE_DIR"
-  
-  # Setup gitignore files to ensure pursor directories are ignored
-  setup_gitignore
-  
-  git -C "$REPO_ROOT" worktree add -b "$TEMP_BRANCH" "$WORKTREE_DIR" HEAD || die "git worktree add failed"
+      echo "▶ cleaning up session $SESSION_ID"
+      git -C "$REPO_ROOT" worktree remove "$WORKTREE_DIR"
+      git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
+      rm -f "$STATE_DIR/$SESSION_ID.state"
+      echo "merge complete for session $SESSION_ID ✅"
+      ;;
 
-  echo "$TEMP_BRANCH|$WORKTREE_DIR|$BASE_BRANCH" > "$STATE_DIR/$SESSION_ID.state"
+    continue)
+      if [ "$#" -eq 1 ]; then
+        # Auto-detect session
+        SESSION_ID=$(auto_detect_session)
+      elif [ "$#" -eq 2 ]; then
+        # Session ID provided
+        SESSION_ID="$2"
+      else
+        die "continue takes optionally a session ID"
+      fi
 
-  if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
-    echo "▶ launching Cursor for session $SESSION_ID..."
-    "$CURSOR_CMD" "$WORKTREE_DIR" &
-  else
-    echo "⚠️  Cursor CLI not found. Please install Cursor CLI or set CURSOR_CMD environment variable." >&2
-    echo "   Alternatively, manually open: $WORKTREE_DIR" >&2
-    echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
-  fi
-  echo "initialized session $SESSION_ID. Use 'pursor merge \"msg\"' to merge or 'pursor cancel' to cancel."
+      continue_merge "$SESSION_ID"
+      ;;
+
+    cancel|abort)
+      if [ "$#" -eq 1 ]; then
+        # Auto-detect session
+        SESSION_ID=$(auto_detect_session)
+      elif [ "$#" -eq 2 ]; then
+        # Session ID provided
+        SESSION_ID="$2"
+      else
+        die "cancel takes optionally a session ID"
+      fi
+
+      get_session_info "$SESSION_ID"
+      echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
+      git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
+      git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH" 2>/dev/null || true
+      rm -f "$STATE_DIR/$SESSION_ID.state"
+      echo "cancelled session $SESSION_ID"
+      ;;
+
+    clean)
+      clean_all_sessions
+      ;;
+
+    list|ls)
+      list_sessions
+      ;;
+
+    resume)
+      if [ "$#" -eq 1 ]; then
+        die "resume requires a session name"
+      elif [ "$#" -eq 2 ]; then
+        SESSION_ID="$2"
+      else
+        die "resume takes a session name"
+      fi
+
+      get_session_info "$SESSION_ID"
+      [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
+
+      echo "▶ resuming session $SESSION_ID"
+      if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
+        echo "▶ launching Cursor for session $SESSION_ID..."
+        "$CURSOR_CMD" "$WORKTREE_DIR" &
+        echo "✅ Cursor opened for session $SESSION_ID"
+      else
+        echo "⚠️  Cursor CLI not found. Please manually open: $WORKTREE_DIR" >&2
+        echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
+      fi
+      ;;
+
+    *)
+      usage
+      ;;
+  esac
   exit 0
 fi
 
-# arg parsing ------------------------------------------------------------
-case "$1" in
-  --help|-h)
-    usage
-    ;;
+# Session creation logic (for no args or named session)
+# determine base branch (current branch) unless overridden
+if [ -z "$BASE_BRANCH" ]; then
+  BASE_BRANCH=$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD) || die "detached HEAD; set BASE_BRANCH env"
+fi
 
-  merge)
-    if [ "$#" -eq 1 ]; then
-      die "merge requires a commit message"
-    elif [ "$#" -eq 2 ]; then
-      COMMIT_MSG="$2"
-      SESSION_ID=$(auto_detect_session)
-    else
-      die "merge requires a commit message and optionally a session ID"
-    fi
+# Check for uncommitted changes and warn, but don't block
+HAS_UNCOMMITTED=0
+if ! git -C "$REPO_ROOT" diff --quiet --exit-code; then
+  echo "⚠️  Warning: You have uncommitted changes in the working tree:" >&2
+  git -C "$REPO_ROOT" status --porcelain >&2
+  HAS_UNCOMMITTED=1
+fi
 
-    get_session_info "$SESSION_ID"
-    [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
+if ! git -C "$REPO_ROOT" diff --quiet --exit-code --cached; then
+  echo "⚠️  Warning: You have staged changes in the working tree:" >&2
+  git -C "$REPO_ROOT" status --porcelain >&2
+  HAS_UNCOMMITTED=1
+fi
 
-    # Auto-stage and commit all changes if any exist
-    cd "$WORKTREE_DIR"
-    if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-      echo "▶ staging all changes in session $SESSION_ID"
-      git add -A || die "failed to stage changes"
-      echo "▶ committing changes in session $SESSION_ID"
-      git commit -m "$COMMIT_MSG" || die "failed to commit changes"
-    else
-      echo "ℹ️  no changes to commit in session $SESSION_ID"
-    fi
-    cd "$REPO_ROOT"
+if [ "$HAS_UNCOMMITTED" -eq 1 ]; then
+  echo "💡 Tip: Your new session will start from the last committed state." >&2
+  echo "   Any uncommitted changes will not be included in the session." >&2
+  echo "" >&2
+fi
 
-    echo "▶ rebasing $TEMP_BRANCH onto $BASE_BRANCH"
-    if ! git -C "$WORKTREE_DIR" rebase "$BASE_BRANCH"; then
-      echo "❌ rebase conflicts in session $SESSION_ID" >&2
-      echo "   → resolve conflicts in $WORKTREE_DIR" >&2
-      echo "   → then run: pursor continue" >&2
-      exit 1
-    fi
+TS=$(date +%Y%m%d-%H%M%S)
+if [ -n "$SESSION_NAME" ]; then
+  SESSION_ID="$SESSION_NAME"
+  TEMP_BRANCH="pc/$SESSION_NAME-$TS"
+else
+  SESSION_ID="pc-$TS"
+  TEMP_BRANCH="pc/$TS"
+fi
+WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
 
-    echo "▶ merging session $SESSION_ID into $BASE_BRANCH"
-    git -C "$REPO_ROOT" checkout "$BASE_BRANCH"
-    if ! git -C "$REPO_ROOT" merge --ff-only "$TEMP_BRANCH" 2>/dev/null; then
-      echo "▶ using non-fast-forward merge"
-      if ! git -C "$REPO_ROOT" merge --no-ff -m "$COMMIT_MSG" "$TEMP_BRANCH"; then
-        echo "❌ merge conflicts – resolve them and complete the merge manually, then run cleanup:" >&2
-        echo "   git worktree remove '$WORKTREE_DIR'" >&2
-        echo "   git branch -D '$TEMP_BRANCH'" >&2
-        echo "   rm -f '$STATE_DIR/$SESSION_ID.state'" >&2
-        exit 1
-      fi
-    fi
+# Check if session already exists
+if [ -f "$STATE_DIR/$SESSION_ID.state" ]; then
+  die "session '$SESSION_ID' already exists. Use 'pursor resume $SESSION_ID' or choose a different name."
+fi
 
-    echo "▶ cleaning up session $SESSION_ID"
-    git -C "$REPO_ROOT" worktree remove "$WORKTREE_DIR"
-    git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH"
-    rm -f "$STATE_DIR/$SESSION_ID.state"
-    echo "merge complete for session $SESSION_ID ✅"
-    ;;
+echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $BASE_BRANCH)"
+mkdir -p "$SUBTREES_DIR"
+mkdir -p "$STATE_DIR"
 
-  continue)
-    if [ "$#" -eq 1 ]; then
-      # Auto-detect session
-      SESSION_ID=$(auto_detect_session)
-    elif [ "$#" -eq 2 ]; then
-      # Session ID provided
-      SESSION_ID="$2"
-    else
-      die "continue takes optionally a session ID"
-    fi
+# Setup gitignore files to ensure pursor directories are ignored
+setup_gitignore
 
-    continue_merge "$SESSION_ID"
-    ;;
+git -C "$REPO_ROOT" worktree add -b "$TEMP_BRANCH" "$WORKTREE_DIR" HEAD || die "git worktree add failed"
 
-  cancel|abort)
-    if [ "$#" -eq 1 ]; then
-      # Auto-detect session
-      SESSION_ID=$(auto_detect_session)
-    elif [ "$#" -eq 2 ]; then
-      # Session ID provided
-      SESSION_ID="$2"
-    else
-      die "cancel takes optionally a session ID"
-    fi
+echo "$TEMP_BRANCH|$WORKTREE_DIR|$BASE_BRANCH" > "$STATE_DIR/$SESSION_ID.state"
 
-    get_session_info "$SESSION_ID"
-    echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
-    git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
-    git -C "$REPO_ROOT" branch -D "$TEMP_BRANCH" 2>/dev/null || true
-    rm -f "$STATE_DIR/$SESSION_ID.state"
-    echo "cancelled session $SESSION_ID"
-    ;;
-
-  clean)
-    clean_all_sessions
-    ;;
-
-  list|ls)
-    list_sessions
-    ;;
-
-  resume)
-    if [ "$#" -eq 1 ]; then
-      die "resume requires a session name"
-    elif [ "$#" -eq 2 ]; then
-      SESSION_ID="$2"
-    else
-      die "resume takes a session name"
-    fi
-
-    get_session_info "$SESSION_ID"
-    [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
-
-    echo "▶ resuming session $SESSION_ID"
-    if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
-      echo "▶ launching Cursor for session $SESSION_ID..."
-      "$CURSOR_CMD" "$WORKTREE_DIR" &
-      echo "✅ Cursor opened for session $SESSION_ID"
-    else
-      echo "⚠️  Cursor CLI not found. Please manually open: $WORKTREE_DIR" >&2
-      echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
-    fi
-    ;;
-
-  *)
-    usage
-    ;;
-esac 
+if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
+  echo "▶ launching Cursor for session $SESSION_ID..."
+  "$CURSOR_CMD" "$WORKTREE_DIR" &
+else
+  echo "⚠️  Cursor CLI not found. Please install Cursor CLI or set CURSOR_CMD environment variable." >&2
+  echo "   Alternatively, manually open: $WORKTREE_DIR" >&2
+  echo "   💡 Install Cursor CLI: https://cursor.sh/cli" >&2
+fi
+echo "initialized session $SESSION_ID. Use 'pursor merge \"msg\"' to merge or 'pursor cancel' to cancel." 
