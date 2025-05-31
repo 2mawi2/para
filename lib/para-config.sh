@@ -9,35 +9,158 @@ DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
 DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
 
+# Configuration file paths
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/para"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+# Load configuration from home directory config file
+load_home_config() {
+  if [ -f "$CONFIG_FILE" ]; then
+    # Source the config file
+    . "$CONFIG_FILE"
+  fi
+}
+
+# Create default configuration file
+create_default_config() {
+  mkdir -p "$CONFIG_DIR"
+  cat > "$CONFIG_FILE" << 'EOF'
+# Para Configuration File
+# Simple settings for your para IDE workflow
+
+# IDE settings
+IDE_NAME="cursor"
+IDE_CMD="cursor"
+IDE_USER_DATA_DIR=".cursor-userdata"
+
+# Directory settings (usually don't need to change these)
+SUBTREES_DIR_NAME="subtrees"
+STATE_DIR_NAME=".para_state"
+BASE_BRANCH=""
+EOF
+}
+
+# Check if this is the first run (no config exists)
+is_first_run() {
+  [ ! -f "$CONFIG_FILE" ]
+}
+
+# Validate IDE name
+validate_ide_name() {
+  local ide_name="$1"
+  case "$ide_name" in
+    cursor|claude|code) return 0 ;;
+    *) 
+      if [ -n "$ide_name" ]; then
+        return 0  # Allow custom IDE names
+      else
+        return 1  # Empty IDE name is invalid
+      fi
+      ;;
+  esac
+}
+
+# Validate configuration values (simplified)
+validate_config() {
+  # Only check the essential things
+  if [ -z "$IDE_NAME" ] || [ -z "$IDE_CMD" ]; then
+    echo "Error: IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix." >&2
+    return 1
+  fi
+  
+  # Basic safety checks for directory names
+  case "$SUBTREES_DIR_NAME$STATE_DIR_NAME" in
+    */*|*\\*) 
+      echo "Error: Directory names cannot contain path separators. Run 'para config' to fix." >&2
+      return 1
+      ;;
+  esac
+  
+  return 0
+}
+
+# Get IDE-specific default user data directory
+get_default_user_data_dir() {
+  local ide_name="$1"
+  case "$ide_name" in
+    cursor) echo ".cursor-userdata" ;;
+    code) echo ".vscode-userdata" ;;
+    claude) echo "" ;;  # Claude doesn't support user data dir
+    *) echo ".${ide_name}-userdata" ;;
+  esac
+}
+
 # Load configuration from environment or use defaults
 load_config() {
-  BASE_BRANCH="${BASE_BRANCH:-$DEFAULT_BASE_BRANCH}"
-  SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-$DEFAULT_SUBTREES_DIR_NAME}"
-  STATE_DIR_NAME="${STATE_DIR_NAME:-$DEFAULT_STATE_DIR_NAME}"
+  # Store any existing environment variables before loading config file (safe from unset variables)
+  ENV_IDE_NAME="${IDE_NAME:-}"
+  ENV_IDE_CMD="${IDE_CMD:-}"
+  ENV_IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-}"
+  ENV_BASE_BRANCH="${BASE_BRANCH:-}"
+  ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
+  ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
+  
+  # First load from home directory config
+  load_home_config
+  
+  # Validate what was loaded from file before applying defaults
+  if [ -f "$CONFIG_FILE" ]; then
+    if [ -z "${IDE_NAME:-}" ] || [ -z "${IDE_CMD:-}" ]; then
+      echo "Error: IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix." >&2
+      return 1
+    fi
+  fi
+  
+  # Then apply environment overrides or defaults
+  BASE_BRANCH="${ENV_BASE_BRANCH:-${BASE_BRANCH:-$DEFAULT_BASE_BRANCH}}"
+  SUBTREES_DIR_NAME="${ENV_SUBTREES_DIR_NAME:-${SUBTREES_DIR_NAME:-$DEFAULT_SUBTREES_DIR_NAME}}"
+  STATE_DIR_NAME="${ENV_STATE_DIR_NAME:-${STATE_DIR_NAME:-$DEFAULT_STATE_DIR_NAME}}"
 
-  # IDE configuration - backwards compatible with CURSOR_* variables
-  IDE_NAME="${IDE_NAME:-${CURSOR_IDE:-$DEFAULT_IDE_NAME}}"
-  IDE_CMD="${IDE_CMD:-${CURSOR_CMD:-$DEFAULT_IDE_CMD}}"
+  # IDE configuration - environment takes priority, then backwards compatibility, then config, then defaults
+  IDE_NAME="${ENV_IDE_NAME:-${CURSOR_IDE:-${IDE_NAME:-$DEFAULT_IDE_NAME}}}"
+  IDE_CMD="${ENV_IDE_CMD:-${CURSOR_CMD:-${IDE_CMD:-$DEFAULT_IDE_CMD}}}"
 
   # User data directory is IDE-specific - some IDEs don't support it
   case "$IDE_NAME" in
   cursor | code)
     # Cursor and VS Code support user data directory isolation
-    IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-${CURSOR_USER_DATA_DIR:-$DEFAULT_IDE_USER_DATA_DIR}}"
+    IDE_USER_DATA_DIR="${ENV_IDE_USER_DATA_DIR:-${CURSOR_USER_DATA_DIR:-${IDE_USER_DATA_DIR:-$(get_default_user_data_dir "$IDE_NAME")}}}"
     ;;
   claude)
     # Claude Code doesn't support --user-data-dir, so don't set it by default
-    IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-}"
+    IDE_USER_DATA_DIR="${ENV_IDE_USER_DATA_DIR:-${IDE_USER_DATA_DIR:-}}"
     ;;
   *)
-    # For unknown IDEs, let user explicitly set it if needed
-    IDE_USER_DATA_DIR="${IDE_USER_DATA_DIR:-${CURSOR_USER_DATA_DIR:-}}"
+    # For unknown IDEs, use a sensible default or let user set it
+    IDE_USER_DATA_DIR="${ENV_IDE_USER_DATA_DIR:-${CURSOR_USER_DATA_DIR:-${IDE_USER_DATA_DIR:-$(get_default_user_data_dir "$IDE_NAME")}}}"
     ;;
   esac
 
   # Set CURSOR_* variables for backwards compatibility in functions that still use them
   CURSOR_CMD="$IDE_CMD"
   CURSOR_USER_DATA_DIR="$IDE_USER_DATA_DIR"
+  
+  # Final validation after everything is loaded
+  validate_config
+}
+
+# Save configuration to file (simplified)
+save_config() {
+  mkdir -p "$CONFIG_DIR"
+  cat > "$CONFIG_FILE" << EOF
+# Para Configuration File
+# Simple settings for your para IDE workflow
+
+# IDE settings
+IDE_NAME="$IDE_NAME"
+IDE_CMD="$IDE_CMD"
+IDE_USER_DATA_DIR="$IDE_USER_DATA_DIR"
+
+# Directory settings (usually don't need to change these)
+SUBTREES_DIR_NAME="$SUBTREES_DIR_NAME"
+STATE_DIR_NAME="$STATE_DIR_NAME"
+BASE_BRANCH="$BASE_BRANCH"
+EOF
 }
 
 # Initialize directory paths based on repository root
@@ -57,4 +180,24 @@ get_ide_display_name() {
   code) echo "VS Code" ;;
   *) echo "$IDE_NAME" ;;
   esac
+}
+
+# Show current configuration (simplified)
+show_config() {
+  echo "Para Configuration"
+  echo "=================="
+  echo ""
+  echo "IDE: $(get_ide_display_name)"
+  echo "Command: $IDE_CMD"
+  if [ -n "$IDE_USER_DATA_DIR" ]; then
+    echo "User data: $IDE_USER_DATA_DIR"
+  fi
+  echo ""
+  echo "Subtrees directory name: $SUBTREES_DIR_NAME"
+  echo "State directory name: $STATE_DIR_NAME"
+  echo "Base branch: $BASE_BRANCH"
+  echo ""
+  echo "Config file: $CONFIG_FILE"
+  echo ""
+  echo "Run 'para config' to change these settings."
 }

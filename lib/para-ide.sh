@@ -35,6 +35,14 @@ launch_cursor() {
     return 0
   fi
 
+  # If CURSOR_CMD is a stub starting with 'echo ', run it instead of launching
+  case "$CURSOR_CMD" in
+    echo\ *)
+      eval "$CURSOR_CMD" "\"$worktree_dir\""
+      return 0
+      ;;
+  esac
+
   if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
     if [ -n "${CURSOR_USER_DATA_DIR:-}" ]; then
       # Use a single global para user data directory
@@ -95,6 +103,14 @@ launch_claude() {
     return 0
   fi
 
+  # If IDE_CMD is a stub echo command, run it instead of opening a new terminal
+  case "$IDE_CMD" in
+    echo\ *)
+      eval "$IDE_CMD" "\"$worktree_dir\""
+      return 0
+      ;;
+  esac
+
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
     echo "▶ launching Claude Code in new terminal..."
     # Launch Claude Code in a new terminal window on macOS
@@ -148,6 +164,14 @@ launch_vscode() {
     echo "✅ VS Code (test stub) opened"
     return 0
   fi
+
+  # If IDE_CMD is a stub echo command, run it instead of launching
+  case "$IDE_CMD" in
+    echo\ *)
+      eval "$IDE_CMD" "\"$worktree_dir\""
+      return 0
+      ;;
+  esac
 
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
     echo "▶ launching VS Code..."
