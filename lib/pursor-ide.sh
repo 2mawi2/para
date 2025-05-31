@@ -24,38 +24,41 @@ launch_cursor() {
   
   if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
     if [ -n "${CURSOR_USER_DATA_DIR:-}" ]; then
-      # Create isolated user data directory in the worktree
-      user_data_path="$worktree_dir/$CURSOR_USER_DATA_DIR"
+      # Use a single global pursor user data directory
+      global_user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/pursor/cursor-userdata"
       
       # Setup template on first use
       if ! template_exists; then
         setup_pursor_template
       fi
       
-      # Create session user data directory
-      mkdir -p "$user_data_path"
-      
-      # Copy from template if it exists
-      if template_exists; then
-        echo "📋 Copying settings from pursor template..."
-        if command -v rsync >/dev/null 2>&1; then
-          rsync -a --exclude='*.sock' --exclude='*.lock' \
-                --exclude='Local Storage/' --exclude='Session Storage/' \
-                --exclude='blob_storage/' --exclude='Shared Dictionary/' \
-                "$TEMPLATE_DIR/" "$user_data_path/"
-        else
-          cp -r "$TEMPLATE_DIR"/* "$user_data_path/" 2>/dev/null || true
-          # Remove problematic files
-          rm -rf "$user_data_path"/*.sock "$user_data_path"/*.lock \
-                 "$user_data_path/Local Storage" "$user_data_path/Session Storage" \
-                 "$user_data_path/blob_storage" "$user_data_path/Shared Dictionary" \
-                 2>/dev/null || true
+      # Create global pursor user data directory if it doesn't exist
+      if [ ! -d "$global_user_data_dir" ]; then
+        echo "🔧 Setting up global pursor user data directory..."
+        mkdir -p "$global_user_data_dir"
+        
+        # Copy from template if it exists
+        if template_exists; then
+          echo "📋 Copying settings from pursor template to global user data..."
+          if command -v rsync >/dev/null 2>&1; then
+            rsync -a --exclude='*.sock' --exclude='*.lock' \
+                  --exclude='Local Storage/' --exclude='Session Storage/' \
+                  --exclude='blob_storage/' --exclude='Shared Dictionary/' \
+                  "$TEMPLATE_DIR/" "$global_user_data_dir/"
+          else
+            cp -r "$TEMPLATE_DIR"/* "$global_user_data_dir/" 2>/dev/null || true
+            # Remove problematic files
+            rm -rf "$global_user_data_dir"/*.sock "$global_user_data_dir"/*.lock \
+                   "$global_user_data_dir/Local Storage" "$global_user_data_dir/Session Storage" \
+                   "$global_user_data_dir/blob_storage" "$global_user_data_dir/Shared Dictionary" \
+                   2>/dev/null || true
+          fi
+          echo "✅ Global pursor user data directory ready"
         fi
-        echo "✅ Settings copied to session"
       fi
       
-      echo "▶ launching Cursor with isolated user data directory..."
-      "$CURSOR_CMD" "$worktree_dir" --user-data-dir "$user_data_path" &
+      echo "▶ launching Cursor with global pursor user data directory..."
+      "$CURSOR_CMD" "$worktree_dir" --user-data-dir "$global_user_data_dir" &
     else
       echo "▶ launching Cursor..."
       "$CURSOR_CMD" "$worktree_dir" &

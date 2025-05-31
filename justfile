@@ -45,12 +45,13 @@ uninstall:
         echo "ℹ️  Pursor installation directory not found at $INSTALL_BASE_DIR"
     fi
     
-    # Remove the template directory
+    # Remove the template and user data directories
     if [ -d "$TEMPLATE_DIR" ]; then
-        echo "🗑️  Removing pursor template directory: $TEMPLATE_DIR"
+        echo "🗑️  Removing pursor data directory: $TEMPLATE_DIR"
+        echo "   (includes template and global user data)"
         rm -rf "$TEMPLATE_DIR"
     else
-        echo "ℹ️  Pursor template directory not found at $TEMPLATE_DIR"
+        echo "ℹ️  Pursor data directory not found at $TEMPLATE_DIR"
     fi
     
     # Check for PATH entries in shell configs (informational only)
