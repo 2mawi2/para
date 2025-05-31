@@ -15,16 +15,50 @@ setup_temp_git_repo() {
     
     export TEST_REPO=$(mktemp -d)
     
-    # Set IDE to test mode to avoid launching actual IDE
-    export IDE_CMD="true"
-    export CURSOR_CMD="true"  # Backwards compatibility
+    # Set up comprehensive IDE mocking to prevent opening actual IDEs
+    export IDE_CMD="echo 'mock-ide-launched'"
+    export CURSOR_CMD="echo 'mock-cursor-launched'"  # Backwards compatibility
     
+    # Mock all possible IDE commands
+    export MOCK_BIN_DIR="$TEST_REPO/.mock_bin"
+    mkdir -p "$MOCK_BIN_DIR"
+    
+    # Create mock IDE executables
+    cat > "$MOCK_BIN_DIR/cursor" << 'EOF'
+#!/bin/sh
+echo "mock-cursor-launched: $*" >&2
+exit 0
+EOF
+    
+    cat > "$MOCK_BIN_DIR/claude" << 'EOF'
+#!/bin/sh
+echo "mock-claude-launched: $*" >&2
+exit 0
+EOF
+    
+    cat > "$MOCK_BIN_DIR/code" << 'EOF'
+#!/bin/sh
+echo "mock-code-launched: $*" >&2
+exit 0
+EOF
+    
+    # Make them executable
+    chmod +x "$MOCK_BIN_DIR/cursor"
+    chmod +x "$MOCK_BIN_DIR/claude"
+    chmod +x "$MOCK_BIN_DIR/code"
+    
+    # Add mock bin to PATH at the beginning so it takes precedence
+    export PATH="$MOCK_BIN_DIR:$PATH"
+    
+    # Clear any existing para configuration to ensure clean test state
     unset REPO_ROOT
     unset STATE_DIR
     unset SUBTREES_DIR
     unset BASE_BRANCH
     unset SUBTREES_DIR_NAME
     unset STATE_DIR_NAME
+    unset IDE_NAME
+    unset IDE_USER_DATA_DIR
     
     (
         cd "$TEST_REPO"
@@ -67,12 +101,22 @@ setup_temp_git_repo() {
 # Teardown temporary environment
 # Cleans up TEST_REPO and restores original environment
 teardown_temp_git_repo() {
+    # Restore original PATH by removing the mock bin directory
+    if [ -n "$MOCK_BIN_DIR" ]; then
+        export PATH="${PATH#$MOCK_BIN_DIR:}"
+    fi
+    
     if [ -n "$TEST_REPO" ] && [ -d "$TEST_REPO" ]; then
         rm -rf "$TEST_REPO"
     fi
     
     cd "$ORIGINAL_DIR" 2>/dev/null || true
     export REPO_ROOT="$ORIGINAL_REPO_ROOT"
+    
+    # Clean up test-specific environment variables
+    unset MOCK_BIN_DIR
+    unset IDE_CMD
+    unset CURSOR_CMD
 }
 
 # Helper function to run para in the test directory

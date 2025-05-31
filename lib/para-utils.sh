@@ -8,39 +8,29 @@ usage() {
 para - Parallel IDE workflow helper
 
 USAGE:
-  para start                  # create new session with friendly name (e.g., swift_phoenix_20250531-233056)
+  para start                  # create new session with friendly name
   para start <name>           # create custom named session
-  para finish "message"       # squash all changes into one commit (default)
+  para finish "message"       # squash all changes into one commit
   para finish --preserve "message" # rebase individual commits (preserve history)
   para list                   # list all active sessions
   para continue               # continue finish after resolving conflicts
   para cancel [session]       # cancel/delete session
   para clean                  # delete all sessions
   para resume <session>       # resume session in $ide_display_name
+  para config                 # configure para settings
 
 EXAMPLES:
-  para start                  # auto-named session (e.g., swift_phoenix_20250531-233056)
+  para start                  # create session (e.g., swift_phoenix_20250531-233056)
   para start feature-auth     # custom named session  
-  para list                   # show all sessions
-  para finish "Add new feature"  # squash all changes into one commit
-  para finish --preserve "Feature" # preserve individual commit history
-  para continue               # after resolving conflicts
-  para cancel                 # cancel current session
-  para resume swift_phoenix_20250531-233056  # resume by friendly name
-  para clean                  # clean up everything
-
-SESSION NAMES:
-  - Auto-generated sessions now use friendly names like "swift_phoenix_20250531-233056"
-  - Much easier to remember and type than pure timestamps
-  - You can still provide custom names for specific features
+  para finish "Add feature"   # squash all changes into one commit
+  para config                 # set up your IDE preference
+  para config show            # show current settings
 
 CONFIGURATION:
-  export IDE_NAME="claude"        # Use Claude Code (default: cursor)
-  export IDE_CMD="claude"         # IDE command to run (default: cursor)
-  export IDE_USER_DATA_DIR=".cursor-userdata"  # User data directory (for Cursor/VS Code only)
-
-  Note: Claude Code doesn't support --user-data-dir isolation.
-        Only Cursor and VS Code support user data directory isolation.
+  Current IDE: $ide_display_name
+  Config file: ${CONFIG_FILE:-~/.config/para/config}
+  
+  Run 'para config' to change your IDE or other settings.
 
 For more information, see the README.md
 EOF
@@ -56,7 +46,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | finish | continue | cancel | abort | resume | --preserve)
+  list | ls | clean | --help | -h | start | finish | continue | cancel | abort | resume | config | --preserve)
     return 0
     ;;
   *)
