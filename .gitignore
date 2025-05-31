@@ -1,0 +1,3 @@
+# pursor - parallel cursor sessions
+subtrees/
+.pursor_state/
