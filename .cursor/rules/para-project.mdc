@@ -3,29 +3,29 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Pursor - Parallel Cursor Workflow Helper
+# Para - Parallel Cursor Workflow Helper
 
 ## Project Overview
 This project provides a POSIX shell script for creating multiple ephemeral Cursor IDE sessions on Git worktrees, enabling parallel development with easy rebase/discard workflow.
 
 ## Key Files
-- **[pursor.sh](mdc:pursor.sh)** - Main script with clean subcommand interface for parallel session management
+- **[para.sh](mdc:para.sh)** - Main script with clean subcommand interface for parallel session management
 - **[justfile](mdc:justfile)** - Development workflow automation with testing, linting, and git hooks
 - **[README.md](mdc:README.md)** - Comprehensive documentation with examples and configuration options
-- **[install-pursor.sh](mdc:install-pursor.sh)** - Universal installer script for global installation
+- **[install-para.sh](mdc:install-para.sh)** - Universal installer script for global installation
 - **[test-file.py](mdc:test-file.py)** - Test file used for development and testing workflows
 
 ## Modular Architecture
 ```
 lib/
-├── pursor-config.sh   # Configuration management
-├── pursor-utils.sh    # Utility functions and validation  
-├── pursor-git.sh      # Git operations and worktree management
-├── pursor-session.sh  # Session lifecycle and state management
-└── pursor-ide.sh      # IDE integration (extensible)
+├── para-config.sh   # Configuration management
+├── para-utils.sh    # Utility functions and validation  
+├── para-git.sh      # Git operations and worktree management
+├── para-session.sh  # Session lifecycle and state management
+└── para-ide.sh      # IDE integration (extensible)
 
 tests/
-├── test_pursor.bats   # Main test suite using bats-core
+├── test_para.bats   # Main test suite using bats-core
 └── README.md          # Testing documentation
 
 scripts/
@@ -42,36 +42,36 @@ scripts/
 - **Status**: `just status` - Check dependencies and project health
 
 ## Core Commands
-- `pursor` - Create new parallel session (opens Cursor)
-- `pursor rebase "message"` - Auto-stage & rebase session with commit message
-- `pursor list` - Show all active sessions
-- `pursor continue` - Resume after resolving rebase conflicts (auto-stages)
-- `pursor cancel` - Discard current session
-- `pursor clean` - Remove all sessions
+- `para` - Create new parallel session (opens Cursor)
+- `para rebase "message"` - Auto-stage & rebase session with commit message
+- `para list` - Show all active sessions
+- `para continue` - Resume after resolving rebase conflicts (auto-stages)
+- `para cancel` - Discard current session
+- `para clean` - Remove all sessions
 
 ## Testing Workflows
 **Basic Test:**
 ```bash
-./pursor.sh                          # Create session
+./para.sh                          # Create session
 cd subtrees/pc/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
-./pursor.sh rebase "test commit"      # Auto-stage & rebase
+./para.sh rebase "test commit"      # Auto-stage & rebase
 ```
 
 **Conflict Test:**
 ```bash
-./pursor.sh && ./pursor.sh           # Create 2 sessions
+./para.sh && ./para.sh           # Create 2 sessions
 cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../pursor.sh rebase "A"
+echo 'change A' >> test-file.py && ../../../para.sh rebase "A"
 cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../pursor.sh rebase "B"  # Conflict!
+echo 'change B' >> test-file.py && ../../../para.sh rebase "B"  # Conflict!
 # Edit file to resolve conflicts, then:
-./pursor.sh continue                 # Auto-stages & completes
+./para.sh continue                 # Auto-stages & completes
 ```
 
 ## How It Works
 1. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
-2. **State Tracking**: Uses `.pursor_state/` directory to track sessions
+2. **State Tracking**: Uses `.para_state/` directory to track sessions
 3. **Context-Aware**: Auto-detects current session from working directory
 4. **Auto-Staging**: Automatically stages all changes during rebase and conflict resolution
 5. **Clean Workflow**: No manual `git add` required anywhere

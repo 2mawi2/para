@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# pursor.sh - Parallel Cursor Workflow Helper
+# para.sh - Parallel Cursor Workflow Helper
 # Main entry point that orchestrates the modular components
 
 set -eu
@@ -13,11 +13,11 @@ esac
 
 # Source library modules
 LIB_DIR="$SCRIPT_DIR/lib"
-. "$LIB_DIR/pursor-config.sh"
-. "$LIB_DIR/pursor-utils.sh"
-. "$LIB_DIR/pursor-git.sh"
-. "$LIB_DIR/pursor-session.sh"
-. "$LIB_DIR/pursor-ide.sh"
+. "$LIB_DIR/para-config.sh"
+. "$LIB_DIR/para-utils.sh"
+. "$LIB_DIR/para-git.sh"
+. "$LIB_DIR/para-session.sh"
+. "$LIB_DIR/para-ide.sh"
 
 # Initialize environment
 need_git_repo
@@ -198,7 +198,7 @@ create_new_session() {
   # Launch IDE
   launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
   
-  echo "initialized session $SESSION_ID. Use 'pursor rebase \"msg\"' to rebase or 'pursor cancel' to cancel."
+  echo "initialized session $SESSION_ID. Use 'para rebase \"msg\"' to rebase or 'para cancel' to cancel."
 }
 
 # Execute main function

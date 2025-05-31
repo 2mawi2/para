@@ -1,31 +1,31 @@
 #!/usr/bin/env sh
-# Utility functions for pursor
+# Utility functions for para
 
 # Usage message
 usage() {
   cat <<EOF
-pursor - Parallel Cursor IDE workflow helper
+para - Parallel Cursor IDE workflow helper
 
 USAGE:
-  pursor                        # create new session (opens Cursor)
-  pursor <name>                 # create named session
-  pursor rebase "message"          # squash all changes into one commit (default)
-  pursor rebase --preserve "message" # rebase individual commits (preserve history)
-  pursor list                   # list all active sessions
-  pursor continue                 # continue rebase after resolving conflicts
-  pursor cancel [session]       # cancel/delete session
-  pursor clean                  # delete all sessions
-  pursor resume <session>       # resume session in Cursor
+  para                        # create new session (opens Cursor)
+  para <name>                 # create named session
+  para rebase "message"          # squash all changes into one commit (default)
+  para rebase --preserve "message" # rebase individual commits (preserve history)
+  para list                   # list all active sessions
+  para continue                 # continue rebase after resolving conflicts
+  para cancel [session]       # cancel/delete session
+  para clean                  # delete all sessions
+  para resume <session>       # resume session in Cursor
 
 EXAMPLES:
-  pursor                        # auto-named session (timestamp)
-  pursor feature-auth           # named session  
-  pursor list                   # show all sessions
-  pursor rebase "Add new feature"  # squash all changes into one commit
-  pursor rebase --preserve "Feature" # preserve individual commit history
-  pursor continue               # after resolving conflicts
-  pursor cancel                 # cancel current session
-  pursor clean                  # clean up everything
+  para                        # auto-named session (timestamp)
+  para feature-auth           # named session  
+  para list                   # show all sessions
+  para rebase "Add new feature"  # squash all changes into one commit
+  para rebase --preserve "Feature" # preserve individual commit history
+  para continue               # after resolving conflicts
+  para cancel                 # cancel current session
+  para clean                  # clean up everything
 
 For more information, see the README.md
 EOF
@@ -33,7 +33,7 @@ EOF
 
 # Print error message and exit
 die() {
-  echo "pursor: $*" >&2
+  echo "para: $*" >&2
   exit 1
 }
 
@@ -80,22 +80,22 @@ get_main_cursor_user_data_dir() {
   esac
 }
 
-# Check if pursor template exists
+# Check if para template exists
 template_exists() {
   [ -d "$TEMPLATE_DIR" ]
 }
 
-# Setup pursor template by copying main Cursor user data
-setup_pursor_template() {
+# Setup para template by copying main Cursor user data
+setup_para_template() {
   main_cursor_dir=$(get_main_cursor_user_data_dir)
   
   if [ ! -d "$main_cursor_dir" ]; then
     echo "⚠️  Main Cursor user data directory not found at: $main_cursor_dir"
-    echo "   Starting with fresh Cursor environment for pursor sessions."
+    echo "   Starting with fresh Cursor environment for para sessions."
     return 1
   fi
   
-  echo "🔧 Setting up pursor template from your main Cursor configuration..."
+  echo "🔧 Setting up para template from your main Cursor configuration..."
   echo "   Copying from: $main_cursor_dir"
   echo "   To template: $TEMPLATE_DIR"
   
@@ -122,6 +122,6 @@ setup_pursor_template() {
            "$TEMPLATE_DIR"/*.lock "$TEMPLATE_DIR"/*.sock 2>/dev/null || true
   fi
   
-  echo "✅ Pursor template created successfully!"
-  echo "   Your extensions and settings will now be available in all pursor sessions."
+  echo "✅ Para template created successfully!"
+  echo "   Your extensions and settings will now be available in all para sessions."
 } 

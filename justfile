@@ -1,4 +1,4 @@
-# Justfile for pursor project
+# Justfile for para project
 # https://github.com/casey/just
 
 # Set shell to use for command execution
@@ -14,60 +14,60 @@ SHELLCHECK_DISABLE := "SC1091,SC2086"
 
 # Install the project globally
 install:
-    @echo "🚀 Installing pursor globally..."
-    ./install-pursor.sh
+    @echo "🚀 Installing para globally..."
+    ./install-para.sh
 
-# Uninstall pursor globally  
+# Uninstall para globally  
 uninstall:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "🗑️  Uninstalling pursor..."
+    echo "🗑️  Uninstalling para..."
     
     # Define paths
     INSTALL_BIN_DIR="$HOME/.local/bin"
-    INSTALL_BASE_DIR="$HOME/.local/lib/pursor"
-    TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pursor"
-    PURSOR_BIN="$INSTALL_BIN_DIR/pursor"
+    INSTALL_BASE_DIR="$HOME/.local/lib/para"
+    TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/para"
+    PARA_BIN="$INSTALL_BIN_DIR/para"
     
     # Remove the binary
-    if [ -f "$PURSOR_BIN" ]; then
-        echo "🗑️  Removing pursor binary: $PURSOR_BIN"
-        rm -f "$PURSOR_BIN"
+    if [ -f "$PARA_BIN" ]; then
+        echo "🗑️  Removing para binary: $PARA_BIN"
+        rm -f "$PARA_BIN"
     else
-        echo "ℹ️  Pursor binary not found at $PURSOR_BIN"
+        echo "ℹ️  Para binary not found at $PARA_BIN"
     fi
     
     # Remove the installation directory
     if [ -d "$INSTALL_BASE_DIR" ]; then
-        echo "🗑️  Removing pursor installation: $INSTALL_BASE_DIR"
+        echo "🗑️  Removing para installation: $INSTALL_BASE_DIR"
         rm -rf "$INSTALL_BASE_DIR"
     else
-        echo "ℹ️  Pursor installation directory not found at $INSTALL_BASE_DIR"
+        echo "ℹ️  Para installation directory not found at $INSTALL_BASE_DIR"
     fi
     
     # Remove the template and user data directories
     if [ -d "$TEMPLATE_DIR" ]; then
-        echo "🗑️  Removing pursor data directory: $TEMPLATE_DIR"
+        echo "🗑️  Removing para data directory: $TEMPLATE_DIR"
         echo "   (includes template and global user data)"
         rm -rf "$TEMPLATE_DIR"
     else
-        echo "ℹ️  Pursor data directory not found at $TEMPLATE_DIR"
+        echo "ℹ️  Para data directory not found at $TEMPLATE_DIR"
     fi
     
     # Check for PATH entries in shell configs (informational only)
-    echo "⚠️  Note: You may want to manually remove pursor PATH entries from your shell config:"
+    echo "⚠️  Note: You may want to manually remove para PATH entries from your shell config:"
     echo "   - ~/.bashrc (bash)"
     echo "   - ~/.zshrc (zsh)" 
     echo "   - ~/.config/fish/config.fish (fish)"
     echo "   - ~/.profile (generic)"
     echo "   Look for lines containing '$INSTALL_BIN_DIR'"
     
-    echo "✅ Pursor uninstalled successfully!"
+    echo "✅ Para uninstalled successfully!"
 
-# Run the current local pursor.sh
+# Run the current local para.sh
 run *ARGS:
-    @echo "🏃 Running local pursor.sh..."
-    ./pursor.sh {{ARGS}}
+    @echo "🏃 Running local para.sh..."
+    ./para.sh {{ARGS}}
 
 # Install development dependencies
 install-dev:
@@ -178,33 +178,33 @@ test FILE="": install-dev
     else \
         echo "Running all tests..."; \
         echo "Running unit tests..."; \
-        bats tests/test_pursor_units.bats || true; \
+        bats tests/test_para_units.bats || true; \
         echo "Running integration tests..."; \
-        bats tests/test_pursor_integration.bats || true; \
+        bats tests/test_para_integration.bats || true; \
     fi
 
 # Run only integration tests
 test-integration: install-dev
     @echo "🧪 Running integration tests..."
-    @bats tests/test_pursor_integration.bats
+    @bats tests/test_para_integration.bats
 
 # Run only unit tests  
 test-unit: install-dev
     @echo "🧪 Running unit tests..."
-    @bats tests/test_pursor_units.bats
+    @bats tests/test_para_units.bats
 
 # Run linting with shellcheck and shfmt
 lint: install-dev
     @echo "🔍 Running linting checks..."
     @echo "Running shellcheck..."
-    shellcheck -e {{SHELLCHECK_DISABLE}} pursor.sh install-pursor.sh lib/*.sh || true
+    shellcheck -e {{SHELLCHECK_DISABLE}} para.sh install-para.sh lib/*.sh || true
     @echo "Running shfmt check..."
-    shfmt -d -i 2 pursor.sh install-pursor.sh lib/*.sh || true
+    shfmt -d -i 2 para.sh install-para.sh lib/*.sh || true
 
 # Fix formatting with shfmt
 fmt: install-dev
     @echo "🎨 Fixing shell script formatting..."
-    shfmt -w -i 2 pursor.sh install-pursor.sh lib/*.sh
+    shfmt -w -i 2 para.sh install-para.sh lib/*.sh
 
 # Setup git hooks
 setup-hooks:

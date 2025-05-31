@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Session management for pursor
+# Session management for para
 
 # Load session information from state file
 get_session_info() {
@@ -170,14 +170,14 @@ list_sessions() {
       echo "  Status: ❌ Worktree missing"
     fi
     
-    echo "  Resume: pursor resume $session_id"
+    echo "  Resume: para resume $session_id"
     echo ""
   done
   
   if [ "$SESSIONS_FOUND" -eq 0 ]; then
     echo "No active parallel sessions."
   else
-    echo "💡 Tip: Use 'pursor resume <session-name>' to reconnect to an existing session"
+    echo "💡 Tip: Use 'para resume <session-name>' to reconnect to an existing session"
   fi
 }
 
@@ -205,7 +205,7 @@ create_session() {
 
   # Check if session already exists
   if session_exists "$SESSION_ID"; then
-    die "session '$SESSION_ID' already exists. Use 'pursor resume $SESSION_ID' or choose a different name."
+    die "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
   fi
 
   echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $base_branch)" >&2
