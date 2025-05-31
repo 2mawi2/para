@@ -17,6 +17,52 @@ install:
     @echo "🚀 Installing pursor globally..."
     ./install-pursor.sh
 
+# Uninstall pursor globally  
+uninstall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🗑️  Uninstalling pursor..."
+    
+    # Define paths
+    INSTALL_BIN_DIR="$HOME/.local/bin"
+    INSTALL_BASE_DIR="$HOME/.local/lib/pursor"
+    TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pursor"
+    PURSOR_BIN="$INSTALL_BIN_DIR/pursor"
+    
+    # Remove the binary
+    if [ -f "$PURSOR_BIN" ]; then
+        echo "🗑️  Removing pursor binary: $PURSOR_BIN"
+        rm -f "$PURSOR_BIN"
+    else
+        echo "ℹ️  Pursor binary not found at $PURSOR_BIN"
+    fi
+    
+    # Remove the installation directory
+    if [ -d "$INSTALL_BASE_DIR" ]; then
+        echo "🗑️  Removing pursor installation: $INSTALL_BASE_DIR"
+        rm -rf "$INSTALL_BASE_DIR"
+    else
+        echo "ℹ️  Pursor installation directory not found at $INSTALL_BASE_DIR"
+    fi
+    
+    # Remove the template directory
+    if [ -d "$TEMPLATE_DIR" ]; then
+        echo "🗑️  Removing pursor template directory: $TEMPLATE_DIR"
+        rm -rf "$TEMPLATE_DIR"
+    else
+        echo "ℹ️  Pursor template directory not found at $TEMPLATE_DIR"
+    fi
+    
+    # Check for PATH entries in shell configs (informational only)
+    echo "⚠️  Note: You may want to manually remove pursor PATH entries from your shell config:"
+    echo "   - ~/.bashrc (bash)"
+    echo "   - ~/.zshrc (zsh)" 
+    echo "   - ~/.config/fish/config.fish (fish)"
+    echo "   - ~/.profile (generic)"
+    echo "   Look for lines containing '$INSTALL_BIN_DIR'"
+    
+    echo "✅ Pursor uninstalled successfully!"
+
 # Run the current local pursor.sh
 run *ARGS:
     @echo "🏃 Running local pursor.sh..."
