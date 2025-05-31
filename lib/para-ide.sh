@@ -96,9 +96,24 @@ launch_claude() {
   fi
 
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
-    echo "▶ launching Claude Code..."
-    "$IDE_CMD" "$worktree_dir" &
-    echo "✅ Claude Code opened"
+    echo "▶ launching Claude Code in new terminal..."
+    # Launch Claude Code in a new terminal window on macOS
+    if command -v open >/dev/null 2>&1; then
+      open -n -a Terminal.app --args sh -c "cd '$worktree_dir' && '$IDE_CMD'"
+    else
+      # Fallback for non-macOS systems - try common terminal emulators
+      if command -v gnome-terminal >/dev/null 2>&1; then
+        gnome-terminal --working-directory="$worktree_dir" -- "$IDE_CMD"
+      elif command -v xterm >/dev/null 2>&1; then
+        (cd "$worktree_dir" && xterm -e "$IDE_CMD") &
+      else
+        echo "⚠️  Could not detect terminal emulator. Running in current terminal..."
+        cd "$worktree_dir" && "$IDE_CMD"
+        echo "✅ Claude Code session ended"
+        return 0
+      fi
+    fi
+    echo "✅ Claude Code opened in new terminal"
   else
     echo "⚠️  Claude Code CLI not found. Please install Claude Code CLI or set IDE_CMD environment variable." >&2
     echo "   Alternatively, manually open: $worktree_dir" >&2
