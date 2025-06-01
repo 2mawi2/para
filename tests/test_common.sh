@@ -19,6 +19,9 @@ setup_temp_git_repo() {
     export IDE_CMD="echo 'mock-ide-launched'"
     export CURSOR_CMD="echo 'mock-cursor-launched'"  # Backwards compatibility
     
+    # Enable non-interactive mode for tests
+    export PARA_NON_INTERACTIVE="true"
+    
     # Mock all possible IDE commands
     export MOCK_BIN_DIR="$TEST_REPO/.mock_bin"
     mkdir -p "$MOCK_BIN_DIR"
