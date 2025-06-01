@@ -7,7 +7,7 @@ DEFAULT_SUBTREES_DIR_NAME="subtrees"
 DEFAULT_STATE_DIR_NAME=".para_state"
 DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
-DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
+export DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
 DEFAULT_CLAUDE_TERMINAL_CMD="auto"
 
 # Configuration file paths
@@ -17,7 +17,7 @@ CONFIG_FILE="$CONFIG_DIR/config"
 # Load configuration from home directory config file
 load_home_config() {
   if [ -f "$CONFIG_FILE" ]; then
-    # Source the config file
+    # shellcheck disable=SC1090
     . "$CONFIG_FILE"
   fi
 }
@@ -25,7 +25,7 @@ load_home_config() {
 # Create default configuration file
 create_default_config() {
   mkdir -p "$CONFIG_DIR"
-  cat > "$CONFIG_FILE" << 'EOF'
+  cat >"$CONFIG_FILE" <<'EOF'
 # Para Configuration File
 # Simple settings for your para IDE workflow
 
@@ -52,16 +52,16 @@ is_first_run() {
 
 # Validate IDE name
 validate_ide_name() {
-  local ide_name="$1"
+  ide_name="$1"
   case "$ide_name" in
-    cursor|claude|code) return 0 ;;
-    *) 
-      if [ -n "$ide_name" ]; then
-        return 0  # Allow custom IDE names
-      else
-        return 1  # Empty IDE name is invalid
-      fi
-      ;;
+  cursor | claude | code) return 0 ;;
+  *)
+    if [ -n "$ide_name" ]; then
+      return 0 # Allow custom IDE names
+    else
+      return 1 # Empty IDE name is invalid
+    fi
+    ;;
   esac
 }
 
@@ -72,26 +72,26 @@ validate_config() {
     echo "Error: IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix." >&2
     return 1
   fi
-  
+
   # Basic safety checks for directory names
   case "$SUBTREES_DIR_NAME$STATE_DIR_NAME" in
-    */*|*\\*) 
-      echo "Error: Directory names cannot contain path separators. Run 'para config' to fix." >&2
-      return 1
-      ;;
+  */* | *\\*)
+    echo "Error: Directory names cannot contain path separators. Run 'para config' to fix." >&2
+    return 1
+    ;;
   esac
-  
+
   return 0
 }
 
 # Get IDE-specific default user data directory
 get_default_user_data_dir() {
-  local ide_name="$1"
+  ide_name="$1"
   case "$ide_name" in
-    cursor) echo ".cursor-userdata" ;;
-    code) echo ".vscode-userdata" ;;
-    claude) echo "" ;;  # Claude doesn't support user data dir
-    *) echo ".${ide_name}-userdata" ;;
+  cursor) echo ".cursor-userdata" ;;
+  code) echo ".vscode-userdata" ;;
+  claude) echo "" ;; # Claude doesn't support user data dir
+  *) echo ".${ide_name}-userdata" ;;
   esac
 }
 
@@ -111,10 +111,10 @@ load_config() {
     _PARA_CONFIG_LOADED=1
   fi
   # On subsequent loads, don't re-capture ENV_* variables
-  
+
   # First load from home directory config
   load_home_config
-  
+
   # Validate what was loaded from file before applying defaults
   if [ -f "$CONFIG_FILE" ]; then
     if [ -z "${IDE_NAME:-}" ] || [ -z "${IDE_CMD:-}" ]; then
@@ -122,7 +122,7 @@ load_config() {
       return 1
     fi
   fi
-  
+
   # Then apply environment overrides or defaults
   BASE_BRANCH="${ENV_BASE_BRANCH:-${BASE_BRANCH:-$DEFAULT_BASE_BRANCH}}"
   SUBTREES_DIR_NAME="${ENV_SUBTREES_DIR_NAME:-${SUBTREES_DIR_NAME:-$DEFAULT_SUBTREES_DIR_NAME}}"
@@ -154,7 +154,7 @@ load_config() {
   # Set CURSOR_* variables for backwards compatibility in functions that still use them
   CURSOR_CMD="$IDE_CMD"
   CURSOR_USER_DATA_DIR="$IDE_USER_DATA_DIR"
-  
+
   # Final validation after everything is loaded
   validate_config
 }
@@ -162,7 +162,7 @@ load_config() {
 # Save configuration to file (simplified)
 save_config() {
   mkdir -p "$CONFIG_DIR"
-  cat > "$CONFIG_FILE" << EOF
+  cat >"$CONFIG_FILE" <<EOF
 # Para Configuration File
 # Simple settings for your para IDE workflow
 
@@ -184,11 +184,11 @@ EOF
 
 # Initialize directory paths based on repository root
 init_paths() {
-  STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
-  SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
+  export STATE_DIR="$REPO_ROOT/$STATE_DIR_NAME"
+  export SUBTREES_DIR="$REPO_ROOT/$SUBTREES_DIR_NAME"
   # Use IDE-specific template directory
   IDE_TEMPLATE_NAME=$(echo "$IDE_NAME" | tr '[:upper:]' '[:lower:]')
-  TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/para/${IDE_TEMPLATE_NAME}-template"
+  export TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/para/${IDE_TEMPLATE_NAME}-template"
 }
 
 # Get the display name for the current IDE

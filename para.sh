@@ -45,16 +45,16 @@ check_first_run() {
     printf "Quick setup your IDE? [Y/n]: "
     read -r setup_choice
     case "$setup_choice" in
-      n|N|no|No)
-        echo "Skipped setup. Run 'para config' anytime to configure."
-        create_default_config
-        load_config
-        ;;
-      *)
-        auto_setup
-        load_config
-        echo ""
-        ;;
+    n | N | no | No)
+      echo "Skipped setup. Run 'para config' anytime to configure."
+      create_default_config
+      load_config
+      ;;
+    *)
+      auto_setup
+      load_config
+      echo ""
+      ;;
     esac
   fi
 }
@@ -65,7 +65,7 @@ main() {
   if [ "$#" -gt 0 ] && [ "$1" != "config" ]; then
     check_first_run
   fi
-  
+
   # Handle commands or show usage
   if [ "$#" -eq 0 ]; then
     # No arguments - show usage
@@ -256,13 +256,13 @@ handle_config_command() {
       printf "Quick Setup your IDE? [Y/n]: "
       read -r setup_choice
       case "$setup_choice" in
-        n|N|no|No)
-          # Cancel quick setup
-          return 1
-          ;;
-        *)
-          auto_setup
-          ;;
+      n | N | no | No)
+        # Cancel quick setup
+        return 1
+        ;;
+      *)
+        auto_setup
+        ;;
       esac
       ;;
     wizard)
