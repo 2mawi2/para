@@ -17,18 +17,26 @@ USAGE:
   para cancel [session]       # cancel/delete session
   para clean                  # delete all sessions
   para resume <session>       # resume session in $ide_display_name
+  para recover <session>      # recover finished/cancelled session
+  para history                # show finished/cancelled sessions
+  para clean-history          # clean all session history
+  para clean-history --older-than <days> # clean session history older than N days
   para config                 # configure para settings
 
 EXAMPLES:
   para start                  # create session (e.g., swift_phoenix_20250531-233056)
   para start feature-auth     # custom named session  
   para finish "Add feature"   # squash all changes into one commit
+  para recover swift_phoenix_20250531-233056  # recover a finished session
+  para history                # see all finished/cancelled sessions
+  para clean-history --older-than 30  # clean sessions older than 30 days
   para config                 # set up your IDE preference
   para config show            # show current settings
 
 CONFIGURATION:
   Current IDE: $ide_display_name
   Config file: ${CONFIG_FILE:-~/.config/para/config}
+  Recovery retention: ${RECOVERY_RETENTION_DAYS:-30} days
   
   Run 'para config' to change your IDE or other settings.
 
@@ -46,7 +54,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | finish | continue | cancel | abort | resume | config | --preserve)
+  list | ls | clean | --help | -h | start | finish | continue | cancel | abort | resume | recover | history | clean-history | config | --preserve)
     return 0
     ;;
   *)
