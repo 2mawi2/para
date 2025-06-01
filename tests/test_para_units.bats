@@ -11,6 +11,7 @@ setup() {
     # Source the library files
     . "$LIB_DIR/para-utils.sh"
     . "$LIB_DIR/para-config.sh"
+    . "$LIB_DIR/para-ide.sh"
 }
 
 # Tests for validate_session_name function
@@ -527,4 +528,76 @@ setup() {
     # Should have exactly 3 parts separated by underscores
     part_count=$(echo "$result" | tr -cd '_' | wc -c)
     [ "$part_count" -eq 2 ]
+}
+
+# Tests for IDE wrapper functionality
+@test "write_vscode_autorun_task creates correct tasks.json" {
+    temp_dir=$(mktemp -d)
+    
+    write_vscode_autorun_task "$temp_dir"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the task file contains expected content
+    grep -q '"label": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task creates correct tasks.json" {
+    temp_dir=$(mktemp -d)
+    
+    write_cursor_autorun_task "$temp_dir"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the task file contains expected content
+    grep -q '"label": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "launch_ide_with_wrapper calls correct wrapper function" {
+    temp_dir=$(mktemp -d)
+    
+    # Mock the wrapper functions to verify they're called
+    launch_vscode_wrapper() {
+        echo "vscode_wrapper_called:$1"
+    }
+    launch_cursor_wrapper() {
+        echo "cursor_wrapper_called:$1"
+    }
+    export -f launch_vscode_wrapper launch_cursor_wrapper
+    
+    # Test VS Code wrapper
+    export IDE_WRAPPER_NAME="code"
+    result=$(launch_ide_with_wrapper "claude" "$temp_dir")
+    [[ "$result" =~ vscode_wrapper_called ]]
+    
+    # Test Cursor wrapper
+    export IDE_WRAPPER_NAME="cursor"
+    result=$(launch_ide_with_wrapper "claude" "$temp_dir")
+    [[ "$result" =~ cursor_wrapper_called ]]
+    
+    rm -rf "$temp_dir"
+}
+
+@test "launch_ide_with_wrapper falls back to regular claude for unsupported wrapper" {
+    temp_dir=$(mktemp -d)
+    
+    # Mock launch_claude to verify fallback
+    launch_claude() {
+        echo "fallback_called:$1"
+    }
+    export -f launch_claude
+    
+    export IDE_WRAPPER_NAME="unsupported"
+    result=$(launch_ide_with_wrapper "claude" "$temp_dir")
+    [[ "$result" =~ fallback_called ]]
+    
+    rm -rf "$temp_dir"
 } 

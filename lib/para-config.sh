@@ -9,6 +9,9 @@ DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
 export DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
 DEFAULT_CLAUDE_TERMINAL_CMD="auto"
+DEFAULT_IDE_WRAPPER_ENABLED="false"
+DEFAULT_IDE_WRAPPER_NAME="code"
+DEFAULT_IDE_WRAPPER_CMD="code"
 
 # Configuration file paths
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/para"
@@ -37,6 +40,14 @@ IDE_USER_DATA_DIR=".cursor-userdata"
 # Claude Code terminal settings (only used when IDE_NAME="claude")
 # Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
 CLAUDE_TERMINAL_CMD="auto"
+
+# IDE Wrapper settings - allows opening Claude Code inside another IDE
+# Set to "true" to enable launching Claude Code inside a wrapper IDE
+IDE_WRAPPER_ENABLED="false"
+# The wrapper IDE to use (e.g., "code", "cursor")
+IDE_WRAPPER_NAME="code"
+# Command to launch the wrapper IDE
+IDE_WRAPPER_CMD="code"
 
 # Directory settings (usually don't need to change these)
 SUBTREES_DIR_NAME="subtrees"
@@ -108,6 +119,9 @@ load_config() {
     ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
     ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
     ENV_CLAUDE_TERMINAL_CMD="${CLAUDE_TERMINAL_CMD:-}"
+    ENV_IDE_WRAPPER_ENABLED="${IDE_WRAPPER_ENABLED:-}"
+    ENV_IDE_WRAPPER_NAME="${IDE_WRAPPER_NAME:-}"
+    ENV_IDE_WRAPPER_CMD="${IDE_WRAPPER_CMD:-}"
     _PARA_CONFIG_LOADED=1
   fi
   # On subsequent loads, don't re-capture ENV_* variables
@@ -134,6 +148,11 @@ load_config() {
 
   # Claude terminal configuration
   CLAUDE_TERMINAL_CMD="${ENV_CLAUDE_TERMINAL_CMD:-${CLAUDE_TERMINAL_CMD:-$DEFAULT_CLAUDE_TERMINAL_CMD}}"
+
+  # IDE Wrapper configuration
+  IDE_WRAPPER_ENABLED="${ENV_IDE_WRAPPER_ENABLED:-${IDE_WRAPPER_ENABLED:-$DEFAULT_IDE_WRAPPER_ENABLED}}"
+  IDE_WRAPPER_NAME="${ENV_IDE_WRAPPER_NAME:-${IDE_WRAPPER_NAME:-$DEFAULT_IDE_WRAPPER_NAME}}"
+  IDE_WRAPPER_CMD="${ENV_IDE_WRAPPER_CMD:-${IDE_WRAPPER_CMD:-$DEFAULT_IDE_WRAPPER_CMD}}"
 
   # User data directory is IDE-specific - some IDEs don't support it
   case "$IDE_NAME" in
@@ -175,6 +194,14 @@ IDE_USER_DATA_DIR="$IDE_USER_DATA_DIR"
 # Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
 CLAUDE_TERMINAL_CMD="$CLAUDE_TERMINAL_CMD"
 
+# IDE Wrapper settings - allows opening Claude Code inside another IDE
+# Set to "true" to enable launching Claude Code inside a wrapper IDE
+IDE_WRAPPER_ENABLED="$IDE_WRAPPER_ENABLED"
+# The wrapper IDE to use (e.g., "code", "cursor")
+IDE_WRAPPER_NAME="$IDE_WRAPPER_NAME"
+# Command to launch the wrapper IDE
+IDE_WRAPPER_CMD="$IDE_WRAPPER_CMD"
+
 # Directory settings (usually don't need to change these)
 SUBTREES_DIR_NAME="$SUBTREES_DIR_NAME"
 STATE_DIR_NAME="$STATE_DIR_NAME"
@@ -213,6 +240,12 @@ show_config() {
   fi
   if [ "$IDE_NAME" = "claude" ]; then
     echo "Claude terminal: $CLAUDE_TERMINAL_CMD"
+  fi
+  if [ "$IDE_WRAPPER_ENABLED" = "true" ]; then
+    echo ""
+    echo "IDE Wrapper: Enabled"
+    echo "Wrapper IDE: $IDE_WRAPPER_NAME"
+    echo "Wrapper command: $IDE_WRAPPER_CMD"
   fi
   echo ""
   echo "Subtrees directory name: $SUBTREES_DIR_NAME"

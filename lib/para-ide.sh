@@ -8,6 +8,13 @@ launch_ide() {
   ide_name="$1"
   worktree_dir="$2"
 
+  # Check if IDE wrapper is enabled and we're launching Claude Code
+  if [ "$ide_name" = "claude" ] && [ "${IDE_WRAPPER_ENABLED:-false}" = "true" ]; then
+    echo "▶ launching Claude Code inside $IDE_WRAPPER_NAME wrapper..."
+    launch_ide_with_wrapper "$ide_name" "$worktree_dir"
+    return
+  fi
+
   case "$ide_name" in
   cursor)
     launch_cursor "$worktree_dir"
@@ -22,6 +29,88 @@ launch_ide() {
     die "unsupported IDE: $ide_name"
     ;;
   esac
+}
+
+# Launch IDE with wrapper functionality
+launch_ide_with_wrapper() {
+  ide_name="$1"
+  worktree_dir="$2"
+
+  case "$IDE_WRAPPER_NAME" in
+  code)
+    write_vscode_autorun_task "$worktree_dir"
+    launch_vscode_wrapper "$worktree_dir"
+    ;;
+  cursor)
+    write_cursor_autorun_task "$worktree_dir"
+    launch_cursor_wrapper "$worktree_dir"
+    ;;
+  *)
+    echo "⚠️  Unsupported wrapper IDE: $IDE_WRAPPER_NAME" >&2
+    echo "   Falling back to regular Claude Code launch..." >&2
+    launch_claude "$worktree_dir"
+    ;;
+  esac
+}
+
+# Launch VS Code as wrapper for Claude Code
+launch_vscode_wrapper() {
+  worktree_dir="$1"
+
+  # Skip actual IDE launch in test mode
+  if [ "${IDE_WRAPPER_CMD:-}" = "true" ]; then
+    echo "▶ skipping VS Code wrapper launch (test stub)"
+    echo "✅ VS Code wrapper (test stub) opened with Claude Code auto-start"
+    return 0
+  fi
+
+  # If IDE_WRAPPER_CMD is a stub echo command, run it instead of launching
+  case "$IDE_WRAPPER_CMD" in
+  echo\ *)
+    eval "$IDE_WRAPPER_CMD" "\"$worktree_dir\""
+    return 0
+    ;;
+  esac
+
+  if command -v "$IDE_WRAPPER_CMD" >/dev/null 2>&1; then
+    echo "▶ launching VS Code wrapper with Claude Code auto-start..."
+    "$IDE_WRAPPER_CMD" "$worktree_dir" &
+    echo "✅ VS Code opened - Claude Code will start automatically"
+  else
+    echo "⚠️  VS Code wrapper CLI not found. Please install VS Code CLI or set IDE_WRAPPER_CMD environment variable." >&2
+    echo "   Falling back to regular Claude Code launch..." >&2
+    launch_claude "$worktree_dir"
+  fi
+}
+
+# Launch Cursor as wrapper for Claude Code
+launch_cursor_wrapper() {
+  worktree_dir="$1"
+
+  # Skip actual IDE launch in test mode
+  if [ "${IDE_WRAPPER_CMD:-}" = "true" ]; then
+    echo "▶ skipping Cursor wrapper launch (test stub)"
+    echo "✅ Cursor wrapper (test stub) opened with Claude Code auto-start"
+    return 0
+  fi
+
+  # If IDE_WRAPPER_CMD is a stub echo command, run it instead of launching
+  case "$IDE_WRAPPER_CMD" in
+  echo\ *)
+    eval "$IDE_WRAPPER_CMD" "\"$worktree_dir\""
+    return 0
+    ;;
+  esac
+
+  if command -v "$IDE_WRAPPER_CMD" >/dev/null 2>&1; then
+    echo "▶ launching Cursor wrapper with Claude Code auto-start..."
+    "$IDE_WRAPPER_CMD" "$worktree_dir" &
+    echo "✅ Cursor opened - Claude Code will start automatically"
+  else
+    echo "⚠️  Cursor wrapper CLI not found. Please install Cursor CLI or set IDE_WRAPPER_CMD environment variable." >&2
+    echo "   Falling back to regular Claude Code launch..." >&2
+    launch_claude "$worktree_dir"
+  fi
 }
 
 # Cursor IDE implementation
@@ -295,6 +384,48 @@ launch_claude_fallback() {
   fi
 }
 
+# Write VS Code task configuration for auto-running Claude Code
+write_vscode_autorun_task() {
+  worktree_dir="$1"
+  mkdir -p "$worktree_dir/.vscode"
+  cat >"$worktree_dir/.vscode/tasks.json" <<'EOF'
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "claude",
+      "type": "shell",
+      "command": "claude",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "focus": true },
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
+EOF
+}
+
+# Write Cursor task configuration for auto-running Claude Code
+write_cursor_autorun_task() {
+  worktree_dir="$1"
+  mkdir -p "$worktree_dir/.vscode"
+  cat >"$worktree_dir/.vscode/tasks.json" <<'EOF'
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "claude",
+      "type": "shell",
+      "command": "claude",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "focus": true },
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
+EOF
+}
+
 # VS Code implementation (for completeness)
 launch_vscode() {
   worktree_dir="$1"
@@ -342,9 +473,4 @@ is_ide_available() {
     return 1
     ;;
   esac
-}
-
-get_ide_display_name() {
-  # shellcheck disable=SC2153
-  echo "$IDE_NAME"
 }
