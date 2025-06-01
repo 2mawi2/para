@@ -160,4 +160,26 @@ cd para
 - Git 2.5+ (for worktree support)
 - Your preferred IDE with CLI support
 
+## Environment Variables
+
+Para supports several environment variables for configuration:
+
+- **`IDE_NAME`** - IDE to use (`cursor`, `claude`, `code`, or custom)
+- **`IDE_CMD`** - Command to launch the IDE
+- **`IDE_USER_DATA_DIR`** - User data directory for IDE isolation
+- **`CLAUDE_TERMINAL_CMD`** - Terminal for Claude Code (`auto`, `terminal`, `warp`, `ghostty`)
+- **`BASE_BRANCH`** - Base branch for sessions (default: `main` or `master`)
+- **`PARA_NON_INTERACTIVE`** - Skip interactive prompts (useful for CI/scripts)
+
+### CI/Automation Usage
+
+For automated environments, set `PARA_NON_INTERACTIVE=true` to skip welcome prompts:
+
+```bash
+export PARA_NON_INTERACTIVE=true
+para start my-session
+```
+
+Para also auto-detects CI environments by checking for `CI` or `GITHUB_ACTIONS` environment variables.
+
 That's it! Run `para config` to get started.
