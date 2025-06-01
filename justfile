@@ -267,7 +267,7 @@ dev-setup: install-dev setup-hooks test lint
     @echo "🎉 Development environment ready!"
 
 # Create a release - triggers GitHub Actions to build and publish
-release VERSION="":
+release BUMP="patch":
     #!/usr/bin/env bash
     set -e
     
@@ -285,28 +285,47 @@ release VERSION="":
         exit 1
     fi
     
-    # Get version - either from argument or prompt user
-    if [ "{{VERSION}}" = "" ]; then
-        echo "Enter version (e.g., 1.0.0):"
-        read -r version
+    # Get the latest version tag
+    latest_tag=$(git tag -l "v*" | sort -V | tail -1)
+    
+    if [ -z "$latest_tag" ]; then
+        # No existing tags, start with v1.0.0
+        new_version="v1.0.0"
+        echo "No existing version tags found. Starting with $new_version"
     else
-        version="{{VERSION}}"
-    fi
-    
-    # Add 'v' prefix if not present
-    if [[ ! "$version" =~ ^v ]]; then
-        version="v$version"
-    fi
-    
-    # Check if tag already exists
-    if git tag -l | grep -q "^$version$"; then
-        echo "Error: Tag $version already exists"
-        exit 1
+        echo "Latest version: $latest_tag"
+        
+        # Remove 'v' prefix and split version into parts
+        current_version=${latest_tag#v}
+        IFS='.' read -r major minor patch <<< "$current_version"
+        
+        # Increment based on bump type
+        case "{{BUMP}}" in
+            major)
+                major=$((major + 1))
+                minor=0
+                patch=0
+                ;;
+            minor)
+                minor=$((minor + 1))
+                patch=0
+                ;;
+            patch)
+                patch=$((patch + 1))
+                ;;
+            *)
+                echo "Error: Invalid bump type '{{BUMP}}'. Use 'major', 'minor', or 'patch'"
+                exit 1
+                ;;
+        esac
+        
+        new_version="v$major.$minor.$patch"
+        echo "Bumping {{BUMP}} version: $latest_tag → $new_version"
     fi
     
     # Create and push tag to trigger release workflow
-    echo "Creating release tag: $version"
-    git tag "$version"
-    git push origin "$version"
+    echo "Creating release tag: $new_version"
+    git tag "$new_version"
+    git push origin "$new_version"
     
-    echo "✅ Release $version triggered! Monitor at: https://github.com/2mawi2/para/actions" 
+    echo "✅ Release $new_version triggered! Monitor at: https://github.com/2mawi2/para/actions" 
