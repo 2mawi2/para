@@ -28,11 +28,55 @@ run_config_setup() {
       IDE_NAME="claude"
       IDE_CMD="claude"
       IDE_USER_DATA_DIR=""
+      
+      # Configure terminal for Claude Code
+      echo ""
+      echo "Claude Code runs in a terminal. Choose your terminal:"
+      echo ""
+      echo "1) Auto-detect (recommended)"
+      echo "2) Terminal.app (macOS default)"
+      echo "3) Warp"
+      echo "4) Ghostty"
+      echo "5) iTerm2"
+      echo "6) Custom terminal command"
+      echo ""
+      printf "Choose terminal [1]: "
+      read -r terminal_choice
+      
+      case "$terminal_choice" in
+        2|terminal)
+          CLAUDE_TERMINAL_CMD="terminal"
+          ;;
+        3|warp)
+          CLAUDE_TERMINAL_CMD="warp"
+          ;;
+        4|ghostty)
+          CLAUDE_TERMINAL_CMD="ghostty"
+          ;;
+        5|iterm|iterm2)
+          CLAUDE_TERMINAL_CMD="iterm2"
+          ;;
+        6|custom)
+          printf "Enter custom terminal command (use %d for directory, %c for command): "
+          read -r custom_terminal
+          if [ -n "$custom_terminal" ]; then
+            CLAUDE_TERMINAL_CMD="$custom_terminal"
+          else
+            echo "Invalid input. Using auto-detect."
+            CLAUDE_TERMINAL_CMD="auto"
+          fi
+          ;;
+        *)
+          # Default to auto-detect
+          CLAUDE_TERMINAL_CMD="auto"
+          ;;
+      esac
       ;;
     3|code|vscode)
       IDE_NAME="code"
       IDE_CMD="code" 
       IDE_USER_DATA_DIR=".vscode-userdata"
+      CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
       ;;
     4|other)
       printf "Enter IDE command: "
@@ -47,12 +91,14 @@ run_config_setup() {
         IDE_CMD="cursor"
         IDE_USER_DATA_DIR=".cursor-userdata"
       fi
+      CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
       ;;
     *)
       # Default to Cursor
       IDE_NAME="cursor"
       IDE_CMD="cursor"
       IDE_USER_DATA_DIR=".cursor-userdata"
+      CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
       ;;
   esac
   
@@ -65,6 +111,9 @@ run_config_setup() {
   echo "✅ Configuration set:"
   echo "  IDE: $(get_ide_display_name)"
   echo "  Command: $IDE_CMD"
+  if [ "$IDE_NAME" = "claude" ]; then
+    echo "  Terminal: $CLAUDE_TERMINAL_CMD"
+  fi
   echo ""
   
   save_config
@@ -78,6 +127,9 @@ run_config_setup() {
 show_current_config_brief() {
   echo "  IDE: $(get_ide_display_name) ($IDE_NAME)"
   echo "  Command: $IDE_CMD"
+  if [ "$IDE_NAME" = "claude" ]; then
+    echo "  Terminal: $CLAUDE_TERMINAL_CMD"
+  fi
 }
 
 # Auto-detect IDE and create quick config
@@ -88,22 +140,26 @@ auto_setup() {
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     IDE_USER_DATA_DIR=".cursor-userdata"
+    CLAUDE_TERMINAL_CMD="auto"
     echo "✅ Found Cursor"
   elif command -v claude >/dev/null 2>&1; then
     IDE_NAME="claude"
     IDE_CMD="claude"
     IDE_USER_DATA_DIR=""
+    CLAUDE_TERMINAL_CMD="auto"
     echo "✅ Found Claude Code"
   elif command -v code >/dev/null 2>&1; then
     IDE_NAME="code"
     IDE_CMD="code"
     IDE_USER_DATA_DIR=".vscode-userdata"
+    CLAUDE_TERMINAL_CMD="auto"
     echo "✅ Found VS Code"
   else
     echo "⚠️  No IDE found. Using Cursor as default."
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     IDE_USER_DATA_DIR=".cursor-userdata"
+    CLAUDE_TERMINAL_CMD="auto"
   fi
   
   SUBTREES_DIR_NAME="subtrees"

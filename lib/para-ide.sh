@@ -113,44 +113,185 @@ launch_claude() {
 
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
     echo "▶ launching Claude Code in new terminal..."
-    # Launch Claude Code in a new terminal window on macOS
-    if command -v osascript >/dev/null 2>&1; then
-      # Use AppleScript to create a new terminal window and run Claude Code
-      osascript <<EOF
+    
+    # Determine which terminal to use based on CLAUDE_TERMINAL_CMD
+    case "$CLAUDE_TERMINAL_CMD" in
+      auto)
+        # Auto-detect available terminal
+        launch_claude_auto_terminal "$worktree_dir"
+        ;;
+      terminal)
+        # Force use of macOS Terminal.app
+        launch_claude_terminal_app "$worktree_dir"
+        ;;
+      warp)
+        # Use Warp terminal
+        launch_claude_warp "$worktree_dir"
+        ;;
+      ghostty)
+        # Use Ghostty terminal
+        launch_claude_ghostty "$worktree_dir"
+        ;;
+      iterm2)
+        # Use iTerm2
+        launch_claude_iterm2 "$worktree_dir"
+        ;;
+      *)
+        # Custom terminal command
+        launch_claude_custom_terminal "$worktree_dir" "$CLAUDE_TERMINAL_CMD"
+        ;;
+    esac
+  else
+    echo "⚠️  Claude Code CLI not found. Please install Claude Code CLI or set IDE_CMD environment variable." >&2
+    echo "   Alternatively, manually open: $worktree_dir" >&2
+  fi
+}
+
+# Auto-detect and use the best available terminal
+launch_claude_auto_terminal() {
+  worktree_dir="$1"
+  
+  if command -v warp-cli >/dev/null 2>&1; then
+    launch_claude_warp "$worktree_dir"
+  elif [ -d "/Applications/Ghostty.app" ] && command -v ghostty >/dev/null 2>&1; then
+    launch_claude_ghostty "$worktree_dir"
+  elif [ -d "/Applications/iTerm.app" ]; then
+    launch_claude_iterm2 "$worktree_dir"
+  elif command -v osascript >/dev/null 2>&1; then
+    launch_claude_terminal_app "$worktree_dir"
+  else
+    # Fallback for non-macOS systems
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Launch using macOS Terminal.app
+launch_claude_terminal_app() {
+  worktree_dir="$1"
+  
+  if command -v osascript >/dev/null 2>&1; then
+    # Use AppleScript to create a new terminal window and run Claude Code
+    osascript <<EOF
 tell application "Terminal"
     do script "cd '$worktree_dir' && '$IDE_CMD'"
     activate
 end tell
 EOF
-    elif command -v open >/dev/null 2>&1; then
-      # Fallback: Create a temporary script to ensure proper execution
-      temp_script=$(mktemp)
-      cat > "$temp_script" << 'SCRIPT_EOF'
-#!/bin/sh
-cd "$worktree_dir"
-exec "$IDE_CMD"
-SCRIPT_EOF
-      chmod +x "$temp_script"
-      open -n -a Terminal.app "$temp_script"
-      # Clean up the temp script after a delay
-      (sleep 2 && rm -f "$temp_script") &
-    else
-      # Fallback for non-macOS systems - try common terminal emulators
-      if command -v gnome-terminal >/dev/null 2>&1; then
-        gnome-terminal --working-directory="$worktree_dir" -- "$IDE_CMD"
-      elif command -v xterm >/dev/null 2>&1; then
-        (cd "$worktree_dir" && xterm -e "$IDE_CMD") &
-      else
-        echo "⚠️  Could not detect terminal emulator. Running in current terminal..."
-        cd "$worktree_dir" && "$IDE_CMD"
-        echo "✅ Claude Code session ended"
-        return 0
-      fi
-    fi
-    echo "✅ Claude Code opened in new terminal"
+    echo "✅ Claude Code opened in Terminal.app"
   else
-    echo "⚠️  Claude Code CLI not found. Please install Claude Code CLI or set IDE_CMD environment variable." >&2
-    echo "   Alternatively, manually open: $worktree_dir" >&2
+    echo "⚠️  AppleScript not available. Cannot launch Terminal.app" >&2
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Launch using Warp terminal
+launch_claude_warp() {
+  worktree_dir="$1"
+  
+  if command -v warp-cli >/dev/null 2>&1; then
+    # Use Warp CLI to create a new session
+    warp-cli open "$worktree_dir" --exec "$IDE_CMD"
+    echo "✅ Claude Code opened in Warp"
+  elif [ -d "/Applications/Warp.app" ]; then
+    # Fallback to AppleScript for Warp
+    if command -v osascript >/dev/null 2>&1; then
+      osascript <<EOF
+tell application "Warp"
+    activate
+    tell application "System Events"
+        keystroke "t" using {command down}
+        delay 0.5
+        keystroke "cd '$worktree_dir' && '$IDE_CMD'"
+        keystroke return
+    end tell
+end tell
+EOF
+      echo "✅ Claude Code opened in Warp"
+    else
+      echo "⚠️  Warp CLI not found and AppleScript not available" >&2
+      launch_claude_fallback "$worktree_dir"
+    fi
+  else
+    echo "⚠️  Warp terminal not found. Please install Warp or use a different terminal." >&2
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Launch using Ghostty terminal
+launch_claude_ghostty() {
+  worktree_dir="$1"
+  
+  if command -v ghostty >/dev/null 2>&1; then
+    # Use Ghostty CLI to create a new window
+    ghostty --working-directory="$worktree_dir" --command="$IDE_CMD" &
+    echo "✅ Claude Code opened in Ghostty"
+  elif [ -d "/Applications/Ghostty.app" ]; then
+    # Fallback to open command
+    open -n -a Ghostty.app --args --working-directory="$worktree_dir" --command="$IDE_CMD"
+    echo "✅ Claude Code opened in Ghostty"
+  else
+    echo "⚠️  Ghostty terminal not found. Please install Ghostty or use a different terminal." >&2
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Launch using iTerm2
+launch_claude_iterm2() {
+  worktree_dir="$1"
+  
+  if [ -d "/Applications/iTerm.app" ] && command -v osascript >/dev/null 2>&1; then
+    # Use AppleScript to create a new iTerm2 window
+    osascript <<EOF
+tell application "iTerm"
+    create window with default profile
+    tell current session of current window
+        write text "cd '$worktree_dir' && '$IDE_CMD'"
+    end tell
+    activate
+end tell
+EOF
+    echo "✅ Claude Code opened in iTerm2"
+  else
+    echo "⚠️  iTerm2 not found or AppleScript not available" >&2
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Launch using custom terminal command
+launch_claude_custom_terminal() {
+  worktree_dir="$1"
+  custom_cmd="$2"
+  
+  # Replace placeholders in the custom command
+  # %d = directory, %c = command
+  terminal_cmd=$(echo "$custom_cmd" | sed "s|%d|$worktree_dir|g" | sed "s|%c|$IDE_CMD|g")
+  
+  if eval "$terminal_cmd"; then
+    echo "✅ Claude Code opened in custom terminal"
+  else
+    echo "⚠️  Failed to launch with custom terminal command: $custom_cmd" >&2
+    launch_claude_fallback "$worktree_dir"
+  fi
+}
+
+# Fallback terminal launch for non-macOS systems or when other methods fail
+launch_claude_fallback() {
+  worktree_dir="$1"
+  
+  # Try common terminal emulators
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    gnome-terminal --working-directory="$worktree_dir" -- "$IDE_CMD"
+    echo "✅ Claude Code opened in gnome-terminal"
+  elif command -v xterm >/dev/null 2>&1; then
+    (cd "$worktree_dir" && xterm -e "$IDE_CMD") &
+    echo "✅ Claude Code opened in xterm"
+  elif command -v konsole >/dev/null 2>&1; then
+    konsole --workdir "$worktree_dir" -e "$IDE_CMD" &
+    echo "✅ Claude Code opened in konsole"
+  else
+    echo "⚠️  Could not detect terminal emulator. Running in current terminal..."
+    cd "$worktree_dir" && "$IDE_CMD"
+    echo "✅ Claude Code session ended"
   fi
 }
 

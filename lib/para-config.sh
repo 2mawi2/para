@@ -8,6 +8,7 @@ DEFAULT_STATE_DIR_NAME=".para_state"
 DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
 DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
+DEFAULT_CLAUDE_TERMINAL_CMD="auto"
 
 # Configuration file paths
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/para"
@@ -32,6 +33,10 @@ create_default_config() {
 IDE_NAME="cursor"
 IDE_CMD="cursor"
 IDE_USER_DATA_DIR=".cursor-userdata"
+
+# Claude Code terminal settings (only used when IDE_NAME="claude")
+# Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
+CLAUDE_TERMINAL_CMD="auto"
 
 # Directory settings (usually don't need to change these)
 SUBTREES_DIR_NAME="subtrees"
@@ -102,6 +107,7 @@ load_config() {
     ENV_BASE_BRANCH="${BASE_BRANCH:-}"
     ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
     ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
+    ENV_CLAUDE_TERMINAL_CMD="${CLAUDE_TERMINAL_CMD:-}"
     _PARA_CONFIG_LOADED=1
   fi
   # On subsequent loads, don't re-capture ENV_* variables
@@ -125,6 +131,9 @@ load_config() {
   # IDE configuration - environment takes priority, then backwards compatibility, then config, then defaults
   IDE_NAME="${ENV_IDE_NAME:-${CURSOR_IDE:-${IDE_NAME:-$DEFAULT_IDE_NAME}}}"
   IDE_CMD="${ENV_IDE_CMD:-${CURSOR_CMD:-${IDE_CMD:-$DEFAULT_IDE_CMD}}}"
+
+  # Claude terminal configuration
+  CLAUDE_TERMINAL_CMD="${ENV_CLAUDE_TERMINAL_CMD:-${CLAUDE_TERMINAL_CMD:-$DEFAULT_CLAUDE_TERMINAL_CMD}}"
 
   # User data directory is IDE-specific - some IDEs don't support it
   case "$IDE_NAME" in
@@ -162,6 +171,10 @@ IDE_NAME="$IDE_NAME"
 IDE_CMD="$IDE_CMD"
 IDE_USER_DATA_DIR="$IDE_USER_DATA_DIR"
 
+# Claude Code terminal settings (only used when IDE_NAME="claude")
+# Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
+CLAUDE_TERMINAL_CMD="$CLAUDE_TERMINAL_CMD"
+
 # Directory settings (usually don't need to change these)
 SUBTREES_DIR_NAME="$SUBTREES_DIR_NAME"
 STATE_DIR_NAME="$STATE_DIR_NAME"
@@ -197,6 +210,9 @@ show_config() {
   echo "Command: $IDE_CMD"
   if [ -n "$IDE_USER_DATA_DIR" ]; then
     echo "User data: $IDE_USER_DATA_DIR"
+  fi
+  if [ "$IDE_NAME" = "claude" ]; then
+    echo "Claude terminal: $CLAUDE_TERMINAL_CMD"
   fi
   echo ""
   echo "Subtrees directory name: $SUBTREES_DIR_NAME"
