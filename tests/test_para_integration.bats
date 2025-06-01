@@ -396,6 +396,9 @@ EOF
     session_dir=$(find_session_dir)
     assert_session_exists "$session_dir"
     
+    # Get the base branch name (could be main or master)
+    base_branch=$(git symbolic-ref --short HEAD)
+    
     # 2. Make multiple commits in the session
     cd "$TEST_REPO/$session_dir"
     
@@ -415,7 +418,7 @@ EOF
     git commit -m "Session: Third change"
     
     # Verify we have multiple commits beyond the base
-    commit_count=$(git rev-list --count HEAD ^master)
+    commit_count=$(git rev-list --count HEAD ^"$base_branch")
     [ "$commit_count" -eq 3 ]
     
     # 3. Finish using default squash mode
