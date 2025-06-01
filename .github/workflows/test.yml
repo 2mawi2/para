@@ -1,0 +1,50 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        brew install shellcheck bats-core shfmt
+    
+    - name: Run shellcheck
+      run: |
+        shellcheck -e SC1091,SC2086 para.sh install-para.sh lib/*.sh
+    
+    - name: Run shfmt check
+      run: |
+        shfmt -d -i 2 para.sh install-para.sh lib/*.sh
+    
+    - name: Run tests
+      run: |
+        echo "🧪 Running all para tests..."
+        echo "Running unit tests..."
+        bats tests/test_para_units.bats
+        echo "Running prompt feature tests..."
+        bats tests/test_para_prompt_features.bats
+        echo "Running argument parsing tests..."
+        bats tests/test_para_argument_parsing.bats
+        echo "Running friendly names tests..."
+        bats tests/test_friendly_names.bats
+        echo "Running integration tests..."
+        bats tests/test_para_integration.bats
+    
+    - name: Test installation
+      run: |
+        echo "🧪 Testing installation..."
+        ./install-para.sh
+        
+        # Test that para is available
+        export PATH="$HOME/.local/bin:$PATH"
+        which para
+        para --help 
