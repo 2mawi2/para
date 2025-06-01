@@ -43,6 +43,15 @@ check_first_run() {
   if is_first_run; then
     echo "👋 Welcome to para!"
     echo ""
+    
+    # Check if running in non-interactive mode (CI environment)
+    if [ "${PARA_NON_INTERACTIVE:-false}" = "true" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "Running in non-interactive mode, using default configuration."
+      create_default_config
+      load_config
+      return
+    fi
+    
     printf "Quick setup your IDE? [Y/n]: "
     read -r setup_choice
     case "$setup_choice" in
