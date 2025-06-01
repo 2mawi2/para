@@ -23,11 +23,32 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         
+      - name: Configure Git and Environment
+        run: |
+          # Configure git properly for CI environment
+          git config --global user.email "test@example.com"
+          git config --global user.name "GitHub Actions"
+          git config --global init.defaultBranch main
+          git config --global core.autocrlf false
+          git config --global core.filemode false
+          git config --global advice.detachedHead false
+          
+          # Set environment variables for para
+          echo "IDE_NAME=cursor" >> $GITHUB_ENV
+          echo "IDE_CMD=echo" >> $GITHUB_ENV
+          echo "CURSOR_CMD=echo" >> $GITHUB_ENV
+          echo "PARA_NON_INTERACTIVE=true" >> $GITHUB_ENV
+        
       - name: Install dependencies
         run: |
           brew install shellcheck bats-core shfmt
       
       - name: Run tests
+        env:
+          IDE_NAME: cursor
+          IDE_CMD: echo
+          CURSOR_CMD: echo
+          PARA_NON_INTERACTIVE: true
         run: |
           echo "🧪 Running all para tests before release..."
           shellcheck -e SC1091,SC2086 para.sh install-para.sh lib/*.sh
@@ -198,6 +219,8 @@ jobs:
     if: always() && needs.update-homebrew.result == 'success'
     steps:
       - name: Test Homebrew installation
+        env:
+          PARA_NON_INTERACTIVE: true
         run: |
           # Wait a moment for formula to propagate
           sleep 30
@@ -207,4 +230,4 @@ jobs:
           
           # Test that para is available
           which para
-          para --help 
+          PARA_NON_INTERACTIVE=true para --help 
