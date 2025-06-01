@@ -264,4 +264,49 @@ status:
 
 # Development workflow: install deps, setup hooks, run tests and lint
 dev-setup: install-dev setup-hooks test lint
-    @echo "🎉 Development environment ready!" 
+    @echo "🎉 Development environment ready!"
+
+# Create a release - triggers GitHub Actions to build and publish
+release VERSION="":
+    #!/usr/bin/env bash
+    set -e
+    
+    # Check if we're on master branch
+    current_branch=$(git branch --show-current)
+    if [ "$current_branch" != "master" ]; then
+        echo "Error: Must be on master branch to create a release"
+        exit 1
+    fi
+    
+    # Pull latest changes and check working directory is clean
+    git pull origin master
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Working directory is not clean. Commit or stash changes first."
+        exit 1
+    fi
+    
+    # Get version - either from argument or prompt user
+    if [ "{{VERSION}}" = "" ]; then
+        echo "Enter version (e.g., 1.0.0):"
+        read -r version
+    else
+        version="{{VERSION}}"
+    fi
+    
+    # Add 'v' prefix if not present
+    if [[ ! "$version" =~ ^v ]]; then
+        version="v$version"
+    fi
+    
+    # Check if tag already exists
+    if git tag -l | grep -q "^$version$"; then
+        echo "Error: Tag $version already exists"
+        exit 1
+    fi
+    
+    # Create and push tag to trigger release workflow
+    echo "Creating release tag: $version"
+    git tag "$version"
+    git push origin "$version"
+    
+    echo "✅ Release $version triggered! Monitor at: https://github.com/2mawi2/para/actions" 
