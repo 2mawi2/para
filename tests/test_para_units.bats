@@ -230,6 +230,109 @@ setup() {
     [[ "$result" =~ _20240531-184623$ ]]
 }
 
+# Tests for config validation edge cases
+@test "validate_ide_name accepts known IDEs" {
+    run validate_ide_name "cursor"
+    [ "$status" -eq 0 ]
+    
+    run validate_ide_name "claude"
+    [ "$status" -eq 0 ]
+    
+    run validate_ide_name "code"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_ide_name accepts custom IDE names" {
+    run validate_ide_name "custom-ide"
+    [ "$status" -eq 0 ]
+    
+    run validate_ide_name "MyIDE"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_ide_name rejects empty IDE name" {
+    run validate_ide_name ""
+    [ "$status" -ne 0 ]
+}
+
+@test "validate_config fails with empty IDE_NAME" {
+    export IDE_NAME=""
+    export IDE_CMD="cursor"
+    export SUBTREES_DIR_NAME="subtrees"
+    export STATE_DIR_NAME=".para_state"
+    
+    run validate_config
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "IDE configuration is incomplete" ]]
+}
+
+@test "validate_config fails with empty IDE_CMD" {
+    export IDE_NAME="cursor"
+    export IDE_CMD=""
+    export SUBTREES_DIR_NAME="subtrees"
+    export STATE_DIR_NAME=".para_state"
+    
+    run validate_config
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "IDE configuration is incomplete" ]]
+}
+
+@test "validate_config fails with path separators in directory names" {
+    export IDE_NAME="cursor"
+    export IDE_CMD="cursor"
+    export SUBTREES_DIR_NAME="sub/trees"
+    export STATE_DIR_NAME=".para_state"
+    
+    run validate_config
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Directory names cannot contain path separators" ]]
+}
+
+@test "validate_config passes with valid configuration" {
+    export IDE_NAME="cursor"
+    export IDE_CMD="cursor"
+    export SUBTREES_DIR_NAME="subtrees"
+    export STATE_DIR_NAME=".para_state"
+    
+    run validate_config
+    [ "$status" -eq 0 ]
+}
+
+@test "get_default_user_data_dir returns correct paths for known IDEs" {
+    result=$(get_default_user_data_dir "cursor")
+    [ "$result" = ".cursor-userdata" ]
+    
+    result=$(get_default_user_data_dir "code")
+    [ "$result" = ".vscode-userdata" ]
+    
+    result=$(get_default_user_data_dir "claude")
+    [ "$result" = "" ]
+}
+
+@test "get_default_user_data_dir returns generic path for unknown IDEs" {
+    result=$(get_default_user_data_dir "myide")
+    [ "$result" = ".myide-userdata" ]
+}
+
+@test "get_ide_display_name returns proper display names" {
+    # Mock IDE_NAME for testing
+    export IDE_NAME="cursor"
+    result=$(get_ide_display_name)
+    [ "$result" = "Cursor" ]
+    
+    export IDE_NAME="claude"
+    result=$(get_ide_display_name)
+    [ "$result" = "Claude Code" ]
+    
+    export IDE_NAME="code"
+    result=$(get_ide_display_name)
+    [ "$result" = "VS Code" ]
+    
+    export IDE_NAME="unknown"
+    result=$(get_ide_display_name)
+    [ "$result" = "unknown" ]
+}
+
 # Tests for friendly name edge cases and consistency
 @test "generate_friendly_name uses only safe characters" {
     result=$(generate_friendly_name)
@@ -294,4 +397,134 @@ setup() {
     result=$(generate_friendly_name)
     underscore_count=$(echo "$result" | tr -cd '_' | wc -c)
     [ "$underscore_count" -eq 1 ]
+}
+
+# Tests for validate_session_name edge cases
+@test "validate_session_name accepts single character names" {
+    run validate_session_name "a"
+    [ "$status" -eq 0 ]
+    
+    run validate_session_name "1"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_session_name accepts maximum length reasonable names" {
+    long_name="feature_authentication_system_with_oauth_2024"
+    run validate_session_name "$long_name"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_session_name rejects names with dots" {
+    run validate_session_name "feature.auth"
+    [ "$status" -ne 0 ]
+}
+
+@test "validate_session_name rejects names with slashes" {
+    run validate_session_name "feature/auth"
+    [ "$status" -ne 0 ]
+    
+    run validate_session_name "feature\\auth"
+    [ "$status" -ne 0 ]
+}
+
+# Tests for error handling
+@test "die function exits with error" {
+    # Test die function in a subshell to avoid exiting the test
+    run bash -c '. "$LIB_DIR/para-utils.sh"; die "test error message"'
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "para: test error message" ]]
+}
+
+# Tests for is_known_command comprehensive coverage
+@test "is_known_command recognizes all documented commands" {
+    # Test all commands that should be recognized
+    known_commands="start finish clean list ls continue cancel abort resume config"
+    for cmd in $known_commands; do
+        run is_known_command "$cmd"
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "is_known_command recognizes help flags" {
+    run is_known_command "--help"
+    [ "$status" -eq 0 ]
+    
+    run is_known_command "-h"
+    [ "$status" -eq 0 ]
+    
+    run is_known_command "--preserve"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_known_command case sensitivity" {
+    # Should be case sensitive
+    run is_known_command "START"
+    [ "$status" -ne 0 ]
+    
+    run is_known_command "List"
+    [ "$status" -ne 0 ]
+}
+
+# Tests for path initialization with various scenarios
+@test "init_paths creates correct relative paths" {
+    export REPO_ROOT="/test/repo"
+    export SUBTREES_DIR_NAME="worktrees"
+    export STATE_DIR_NAME=".para_data"
+    export IDE_NAME="cursor"
+    
+    init_paths
+    
+    [ "$SUBTREES_DIR" = "/test/repo/worktrees" ]
+    [ "$STATE_DIR" = "/test/repo/.para_data" ]
+    [[ "$TEMPLATE_DIR" =~ cursor-template$ ]]
+}
+
+@test "init_paths handles IDE name case conversion" {
+    export REPO_ROOT="/test/repo"
+    export IDE_NAME="CURSOR"
+    
+    init_paths
+    
+    [[ "$TEMPLATE_DIR" =~ cursor-template$ ]]
+}
+
+# Tests for edge cases in timestamp generation
+@test "generate_timestamp format consistency" {
+    # Call multiple times and verify format is consistent
+    ts1=$(generate_timestamp)
+    ts2=$(generate_timestamp)
+    
+    # Both should match the expected pattern
+    [[ "$ts1" =~ ^[0-9]{8}-[0-9]{6}$ ]]
+    [[ "$ts2" =~ ^[0-9]{8}-[0-9]{6}$ ]]
+}
+
+@test "generate_session_id combines components correctly" {
+    # Mock both date functions for predictable output
+    date() {
+        case "$1" in
+            "+%s")
+                echo "1609459200"  # 2021-01-01 00:00:00 UTC
+                ;;
+            "+%Y%m%d-%H%M%S")
+                echo "20210101-000000"
+                ;;
+            *)
+                command date "$@"
+                ;;
+        esac
+    }
+    export -f date
+    
+    result=$(generate_session_id)
+    
+    # Should end with the timestamp
+    [[ "$result" =~ _20210101-000000$ ]]
+    
+    # Should start with adjective_noun
+    [[ "$result" =~ ^[a-z]+_[a-z]+_ ]]
+    
+    # Should have exactly 3 parts separated by underscores
+    part_count=$(echo "$result" | tr -cd '_' | wc -c)
+    [ "$part_count" -eq 2 ]
 } 

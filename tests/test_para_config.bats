@@ -139,4 +139,74 @@ EOF
     run "$PARA_SCRIPT" config invalid
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage"* ]]
+}
+
+@test "config preserves custom directory settings" {
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" << 'EOF'
+IDE_NAME="cursor"
+IDE_CMD="cursor"
+IDE_USER_DATA_DIR=".cursor-userdata"
+SUBTREES_DIR_NAME="custom-subtrees"
+STATE_DIR_NAME=".custom-state"
+BASE_BRANCH="main"
+EOF
+    
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config show
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"custom-subtrees"* ]]
+    [[ "$output" == *".custom-state"* ]]
+}
+
+@test "config file creation with auto setup" {
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config auto
+    [ "$status" -eq 0 ]
+    
+    [ -f "$CONFIG_FILE" ]
+    # Should contain all required fields
+    grep -q "IDE_NAME=" "$CONFIG_FILE"
+    grep -q "IDE_CMD=" "$CONFIG_FILE"
+    grep -q "SUBTREES_DIR_NAME=" "$CONFIG_FILE"
+    grep -q "STATE_DIR_NAME=" "$CONFIG_FILE"
+    grep -q "BASE_BRANCH=" "$CONFIG_FILE"
+}
+
+@test "config rejects malformed config files" {
+    mkdir -p "$CONFIG_DIR"
+    # Create malformed config
+    cat > "$CONFIG_FILE" << 'EOF'
+IDE_NAME=
+IDE_CMD=
+INVALID_SYNTAX
+EOF
+    
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config show
+    [ "$status" -ne 0 ]
+}
+
+@test "config handles missing config directory gracefully" {
+    # Ensure config directory doesn't exist
+    rm -rf "$CONFIG_DIR"
+    
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config auto
+    [ "$status" -eq 0 ]
+    
+    # Should create directory and config file
+    [ -d "$CONFIG_DIR" ]
+    [ -f "$CONFIG_FILE" ]
+}
+
+@test "config edit fails gracefully when no editor available" {
+    mkdir -p "$CONFIG_DIR"
+    echo "test config" > "$CONFIG_FILE"
+    
+    export EDITOR="echo"  # Use echo as a mock editor
+    
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config edit
+    [ "$status" -eq 0 ]
 } 
