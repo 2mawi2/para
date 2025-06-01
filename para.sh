@@ -31,6 +31,7 @@ fi
 . "$LIB_DIR/para-git.sh"
 . "$LIB_DIR/para-session.sh"
 . "$LIB_DIR/para-ide.sh"
+. "$LIB_DIR/para-recovery.sh"
 
 # Initialize environment
 need_git_repo
@@ -113,6 +114,18 @@ handle_command() {
     handle_resume_command "$@"
     ;;
 
+  recover)
+    handle_recover_command "$@"
+    ;;
+
+  history)
+    handle_history_command "$@"
+    ;;
+
+  clean-history)
+    handle_clean_history_command "$@"
+    ;;
+
   config)
     handle_config_command "$@"
     ;;
@@ -135,6 +148,9 @@ handle_start_command() {
   else
     die "start takes optionally a custom session name"
   fi
+
+  # Auto-cleanup old history entries
+  auto_cleanup_history
 
   # Session creation logic
   create_new_session "$SESSION_NAME"
@@ -167,6 +183,8 @@ handle_finish_command() {
   echo "▶ finishing session $SESSION_ID (mode: $REBASE_MODE)"
   if merge_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
+    # Save to history before cleanup
+    save_session_to_history "$SESSION_ID" "finished" "$COMMIT_MSG" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$REBASE_MODE"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
     echo "finish complete for session $SESSION_ID ✅"
@@ -193,6 +211,8 @@ handle_continue_command() {
   echo "▶ continuing finish for session $SESSION_ID (mode: $MERGE_MODE)"
   if continue_merge "$WORKTREE_DIR" "$TEMP_BRANCH" "$BASE_BRANCH" "$MERGE_MODE"; then
     echo "▶ cleaning up session $SESSION_ID"
+    # Save to history before cleanup
+    save_session_to_history "$SESSION_ID" "finished" "" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$SESSION_ID"
     echo "finish complete for session $SESSION_ID ✅"
@@ -215,6 +235,8 @@ handle_cancel_command() {
 
   get_session_info "$SESSION_ID"
   echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
+  # Save to history before cleanup
+  save_session_to_history "$SESSION_ID" "cancelled" "" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
   remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
   remove_session_state "$SESSION_ID"
   echo "cancelled session $SESSION_ID"
@@ -236,6 +258,45 @@ handle_resume_command() {
 
   echo "▶ resuming session $SESSION_ID"
   launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
+}
+
+# Handle recover command
+handle_recover_command() {
+  if [ "$#" -eq 1 ]; then
+    die "recover requires a session name"
+  elif [ "$#" -eq 2 ]; then
+    SESSION_ID="$2"
+  else
+    die "recover takes a session name"
+  fi
+
+  recover_session "$SESSION_ID"
+}
+
+# Handle history command
+handle_history_command() {
+  if [ "$#" -gt 1 ]; then
+    die "history takes no arguments"
+  fi
+
+  list_session_history
+}
+
+# Handle clean history command
+handle_clean_history_command() {
+  if [ "$#" -eq 1 ]; then
+    # Clean all history
+    clean_session_history
+  elif [ "$#" -eq 3 ] && [ "$2" = "--older-than" ]; then
+    # Clean history older than specified days
+    older_than_days="$3"
+    if ! echo "$older_than_days" | grep -q '^[0-9]\+$'; then
+      die "clean-history --older-than requires a number of days"
+    fi
+    clean_session_history "$older_than_days"
+  else
+    die "clean-history usage: clean-history [--older-than DAYS]"
+  fi
 }
 
 # Handle config command
