@@ -3,7 +3,7 @@
 # Handles finished/cancelled session recovery and history management
 
 # Configuration
-DEFAULT_RECOVERY_RETENTION_DAYS=30
+DEFAULT_RECOVERY_RETENTION_DAYS=7
 
 # Get recovery retention days from config, with fallback to default
 get_recovery_retention_days() {
