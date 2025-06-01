@@ -10,6 +10,8 @@ para - Parallel IDE workflow helper
 USAGE:
   para start                  # create new session with friendly name
   para start <name>           # create custom named session
+  para dispatch "text"        # create session with initial Claude Code prompt
+  para dispatch <name> "text" # custom named session with initial prompt
   para finish "message"       # squash all changes into one commit
   para finish --preserve "message" # rebase individual commits (preserve history)
   para list                   # list all active sessions
@@ -26,6 +28,8 @@ USAGE:
 EXAMPLES:
   para start                  # create session (e.g., swift_phoenix_20250531-233056)
   para start feature-auth     # custom named session  
+  para dispatch "Create a user authentication system" # session with initial prompt
+  para dispatch auth "Add login/logout functionality" # named session with prompt
   para finish "Add feature"   # squash all changes into one commit
   para recover swift_phoenix_20250531-233056  # recover a finished session
   para history                # see all finished/cancelled sessions
@@ -38,6 +42,7 @@ CONFIGURATION:
   Config file: ${CONFIG_FILE:-~/.config/para/config}
   Recovery retention: ${RECOVERY_RETENTION_DAYS:-7} days
   
+  Note: 'dispatch' command requires Claude Code. Current IDE: $ide_display_name
   Run 'para config' to change your IDE or other settings.
 
 For more information, see the README.md
@@ -54,7 +59,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | finish | continue | cancel | abort | resume | recover | history | clean-history | config | --preserve)
+  list | ls | clean | --help | -h | start | dispatch | finish | continue | cancel | abort | resume | recover | history | clean-history | config | --preserve)
     return 0
     ;;
   *)

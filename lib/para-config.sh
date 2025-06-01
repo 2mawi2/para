@@ -38,7 +38,7 @@ IDE_CMD="cursor"
 IDE_USER_DATA_DIR=".cursor-userdata"
 
 # Claude Code terminal settings (only used when IDE_NAME="claude")
-# Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
+# Options: "auto", "terminal", "warp", "ghostty", or custom command
 CLAUDE_TERMINAL_CMD="auto"
 
 # IDE Wrapper settings - allows opening Claude Code inside another IDE
@@ -191,7 +191,7 @@ IDE_CMD="$IDE_CMD"
 IDE_USER_DATA_DIR="$IDE_USER_DATA_DIR"
 
 # Claude Code terminal settings (only used when IDE_NAME="claude")
-# Options: "auto", "terminal", "warp", "ghostty", "iterm2", or custom command
+# Options: "auto", "terminal", "warp", "ghostty", or custom command
 CLAUDE_TERMINAL_CMD="$CLAUDE_TERMINAL_CMD"
 
 # IDE Wrapper settings - allows opening Claude Code inside another IDE

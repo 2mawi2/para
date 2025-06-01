@@ -534,12 +534,15 @@ setup() {
 @test "write_vscode_autorun_task creates correct tasks.json" {
     temp_dir=$(mktemp -d)
     
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
     write_vscode_autorun_task "$temp_dir"
     
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the task file contains expected content
-    grep -q '"label": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"label": "Start Claude Code"' "$temp_dir/.vscode/tasks.json"
     grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
     grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
     
@@ -549,12 +552,15 @@ setup() {
 @test "write_cursor_autorun_task creates correct tasks.json" {
     temp_dir=$(mktemp -d)
     
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
     write_cursor_autorun_task "$temp_dir"
     
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the task file contains expected content
-    grep -q '"label": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"label": "Start Claude Code"' "$temp_dir/.vscode/tasks.json"
     grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
     grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
     

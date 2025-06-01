@@ -20,10 +20,10 @@ Claude Code runs in a terminal window. You can configure which terminal applicat
 export CLAUDE_TERMINAL_CMD="auto"
 
 # Force specific terminal applications
-export CLAUDE_TERMINAL_CMD="terminal"  # macOS Terminal.app
-export CLAUDE_TERMINAL_CMD="warp"      # Warp terminal
-export CLAUDE_TERMINAL_CMD="ghostty"   # Ghostty terminal
-export CLAUDE_TERMINAL_CMD="iterm2"    # iTerm2
+export CLAUDE_TERMINAL_CMD="terminal"    # Terminal.app
+export CLAUDE_TERMINAL_CMD="warp"        # Warp terminal
+export CLAUDE_TERMINAL_CMD="ghostty"     # Ghostty
+export CLAUDE_TERMINAL_CMD="custom command here"  # Custom terminal
 
 # Custom terminal command with placeholders
 export CLAUDE_TERMINAL_CMD="alacritty --working-directory %d --command %c"
@@ -32,10 +32,8 @@ export CLAUDE_TERMINAL_CMD="alacritty --working-directory %d --command %c"
 
 **Auto-detection priority** (when `CLAUDE_TERMINAL_CMD="auto"`):
 1. **Warp** (if `warp-cli` is available)
-2. **Ghostty** (if installed and CLI available)
-3. **iTerm2** (if installed)
-4. **Terminal.app** (macOS default)
-5. **System fallback** (gnome-terminal, xterm, konsole on Linux)
+2. **Ghostty** (if installed)
+3. **Terminal.app** (macOS default)
 
 #### IDE Wrapper for Claude Code (Recommended Workflow)
 

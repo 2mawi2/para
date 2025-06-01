@@ -176,9 +176,13 @@ test FILE="": install-dev
         echo "Running specific test file: {{FILE}}"; \
         bats "{{FILE}}"; \
     else \
-        echo "Running all tests..."; \
+        echo "Running all tests (99 total)..."; \
         echo "Running unit tests..."; \
         bats tests/test_para_units.bats || true; \
+        echo "Running prompt feature tests..."; \
+        bats tests/test_para_prompt_features.bats || true; \
+        echo "Running argument parsing tests..."; \
+        bats tests/test_para_argument_parsing.bats || true; \
         echo "Running friendly names tests..."; \
         bats tests/test_friendly_names.bats || true; \
         echo "Running integration tests..."; \
@@ -199,6 +203,16 @@ test-unit: install-dev
 test-friendly: install-dev
     @echo "🧪 Running friendly names tests..."
     @bats tests/test_friendly_names.bats
+
+# Run only prompt feature tests
+test-prompts: install-dev
+    @echo "🧪 Running prompt feature tests..."
+    @bats tests/test_para_prompt_features.bats
+
+# Run only argument parsing tests  
+test-args: install-dev
+    @echo "🧪 Running argument parsing tests..."
+    @bats tests/test_para_argument_parsing.bats
 
 # Run linting with shellcheck and shfmt
 lint: install-dev

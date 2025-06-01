@@ -7,11 +7,12 @@
 launch_ide() {
   ide_name="$1"
   worktree_dir="$2"
+  initial_prompt="${3:-}"
 
   # Check if IDE wrapper is enabled and we're launching Claude Code
   if [ "$ide_name" = "claude" ] && [ "${IDE_WRAPPER_ENABLED:-false}" = "true" ]; then
     echo "▶ launching Claude Code inside $IDE_WRAPPER_NAME wrapper..."
-    launch_ide_with_wrapper "$ide_name" "$worktree_dir"
+    launch_ide_with_wrapper "$ide_name" "$worktree_dir" "$initial_prompt"
     return
   fi
 
@@ -20,7 +21,7 @@ launch_ide() {
     launch_cursor "$worktree_dir"
     ;;
   claude)
-    launch_claude "$worktree_dir"
+    launch_claude "$worktree_dir" "$initial_prompt"
     ;;
   code)
     launch_vscode "$worktree_dir"
@@ -35,20 +36,21 @@ launch_ide() {
 launch_ide_with_wrapper() {
   ide_name="$1"
   worktree_dir="$2"
+  initial_prompt="${3:-}"
 
   case "$IDE_WRAPPER_NAME" in
   code)
-    write_vscode_autorun_task "$worktree_dir"
-    launch_vscode_wrapper "$worktree_dir"
+    write_vscode_autorun_task "$worktree_dir" "$initial_prompt"
+    launch_vscode_wrapper "$worktree_dir" "$initial_prompt"
     ;;
   cursor)
-    write_cursor_autorun_task "$worktree_dir"
-    launch_cursor_wrapper "$worktree_dir"
+    write_cursor_autorun_task "$worktree_dir" "$initial_prompt"
+    launch_cursor_wrapper "$worktree_dir" "$initial_prompt"
     ;;
   *)
     echo "⚠️  Unsupported wrapper IDE: $IDE_WRAPPER_NAME" >&2
     echo "   Falling back to regular Claude Code launch..." >&2
-    launch_claude "$worktree_dir"
+    launch_claude "$worktree_dir" "$initial_prompt"
     ;;
   esac
 }
@@ -56,6 +58,7 @@ launch_ide_with_wrapper() {
 # Launch VS Code as wrapper for Claude Code
 launch_vscode_wrapper() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
   # Skip actual IDE launch in test mode
   if [ "${IDE_WRAPPER_CMD:-}" = "true" ]; then
@@ -79,13 +82,14 @@ launch_vscode_wrapper() {
   else
     echo "⚠️  VS Code wrapper CLI not found. Please install VS Code CLI or set IDE_WRAPPER_CMD environment variable." >&2
     echo "   Falling back to regular Claude Code launch..." >&2
-    launch_claude "$worktree_dir"
+    launch_claude "$worktree_dir" "$initial_prompt"
   fi
 }
 
 # Launch Cursor as wrapper for Claude Code
 launch_cursor_wrapper() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
   # Skip actual IDE launch in test mode
   if [ "${IDE_WRAPPER_CMD:-}" = "true" ]; then
@@ -109,7 +113,7 @@ launch_cursor_wrapper() {
   else
     echo "⚠️  Cursor wrapper CLI not found. Please install Cursor CLI or set IDE_WRAPPER_CMD environment variable." >&2
     echo "   Falling back to regular Claude Code launch..." >&2
-    launch_claude "$worktree_dir"
+    launch_claude "$worktree_dir" "$initial_prompt"
   fi
 }
 
@@ -184,6 +188,7 @@ launch_cursor() {
 # Claude Code implementation
 launch_claude() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
   # Skip actual IDE launch in test mode
   if [ "${IDE_CMD:-}" = "true" ]; then
@@ -207,27 +212,23 @@ launch_claude() {
     case "$CLAUDE_TERMINAL_CMD" in
     auto)
       # Auto-detect available terminal
-      launch_claude_auto_terminal "$worktree_dir"
+      launch_claude_auto_terminal "$worktree_dir" "$initial_prompt"
       ;;
     terminal)
       # Force use of macOS Terminal.app
-      launch_claude_terminal_app "$worktree_dir"
+      launch_claude_terminal_app "$worktree_dir" "$initial_prompt"
       ;;
     warp)
       # Use Warp terminal
-      launch_claude_warp "$worktree_dir"
+      launch_claude_warp "$worktree_dir" "$initial_prompt"
       ;;
     ghostty)
       # Use Ghostty terminal
-      launch_claude_ghostty "$worktree_dir"
-      ;;
-    iterm2)
-      # Use iTerm2
-      launch_claude_iterm2 "$worktree_dir"
+      launch_claude_ghostty "$worktree_dir" "$initial_prompt"
       ;;
     *)
       # Custom terminal command
-      launch_claude_custom_terminal "$worktree_dir" "$CLAUDE_TERMINAL_CMD"
+      launch_claude_custom_terminal "$worktree_dir" "$CLAUDE_TERMINAL_CMD" "$initial_prompt"
       ;;
     esac
   else
@@ -239,110 +240,172 @@ launch_claude() {
 # Auto-detect and use the best available terminal
 launch_claude_auto_terminal() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
   if command -v warp-cli >/dev/null 2>&1; then
-    launch_claude_warp "$worktree_dir"
+    launch_claude_warp "$worktree_dir" "$initial_prompt"
   elif [ -d "/Applications/Ghostty.app" ] && command -v ghostty >/dev/null 2>&1; then
-    launch_claude_ghostty "$worktree_dir"
-  elif [ -d "/Applications/iTerm.app" ]; then
-    launch_claude_iterm2 "$worktree_dir"
+    launch_claude_ghostty "$worktree_dir" "$initial_prompt"
   elif command -v osascript >/dev/null 2>&1; then
-    launch_claude_terminal_app "$worktree_dir"
+    launch_claude_terminal_app "$worktree_dir" "$initial_prompt"
   else
     # Fallback for non-macOS systems
-    launch_claude_fallback "$worktree_dir"
+    launch_claude_fallback "$worktree_dir" "$initial_prompt"
+  fi
+}
+
+# Build Claude Code command for VS Code tasks (JSON format)
+build_claude_command() {
+  initial_prompt="$1"
+
+  if [ -n "$initial_prompt" ]; then
+    # Return the base command - arguments will be handled separately in JSON
+    echo "$IDE_CMD"
+  else
+    echo "$IDE_CMD"
+  fi
+}
+
+# Build Claude Code command for terminal with proper shell escaping
+build_claude_terminal_command() {
+  initial_prompt="$1"
+  session_id="${2:-}"
+
+  if [ -n "$initial_prompt" ]; then
+    # Escape the prompt for shell execution
+    prompt_escaped=$(printf '%s' "$initial_prompt" | sed "s/'/'\\\\''/g")
+
+    # Use session resumption if session_id is provided
+    if [ -n "$session_id" ]; then
+      # Resume existing session with new prompt (interactive mode)
+      echo "$IDE_CMD --resume '$session_id' '$prompt_escaped'"
+    else
+      # Start new session with initial prompt (interactive mode)
+      echo "$IDE_CMD '$prompt_escaped'"
+    fi
+  else
+    # Use session resumption without prompt if session_id is provided
+    if [ -n "$session_id" ]; then
+      # Resume existing session interactively
+      echo "$IDE_CMD --resume '$session_id'"
+    else
+      # Start new interactive session
+      echo "$IDE_CMD"
+    fi
   fi
 }
 
 # Launch using macOS Terminal.app
 launch_claude_terminal_app() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
   if command -v osascript >/dev/null 2>&1; then
+    # Build the proper command for terminal
+    claude_cmd=$(build_claude_terminal_command "$initial_prompt")
     # Use AppleScript to create a new terminal window and run Claude Code
     osascript <<EOF
 tell application "Terminal"
-    do script "cd '$worktree_dir' && '$IDE_CMD'"
+    do script "cd '$worktree_dir' && $claude_cmd"
     activate
 end tell
 EOF
     echo "✅ Claude Code opened in Terminal.app"
   else
     echo "⚠️  AppleScript not available. Cannot launch Terminal.app" >&2
-    launch_claude_fallback "$worktree_dir"
+    launch_claude_fallback "$worktree_dir" "$initial_prompt"
   fi
 }
 
 # Launch using Warp terminal
 launch_claude_warp() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
-  if command -v warp-cli >/dev/null 2>&1; then
-    # Use Warp CLI to create a new session
-    warp-cli open "$worktree_dir" --exec "$IDE_CMD"
-    echo "✅ Claude Code opened in Warp"
-  elif [ -d "/Applications/Warp.app" ]; then
-    # Fallback to AppleScript for Warp
-    if command -v osascript >/dev/null 2>&1; then
-      osascript <<EOF
+  if [ -d "/Applications/Warp.app" ] || command -v warp-terminal >/dev/null 2>&1; then
+    # Build the proper command for terminal
+    claude_cmd=$(build_claude_terminal_command "$initial_prompt")
+
+    # Use Warp URI scheme to open a new tab with the command
+    # First open the directory in Warp
+    if command -v open >/dev/null 2>&1; then
+      # Use macOS open command with URI scheme
+      open "warp://action/new_tab?path=$worktree_dir"
+
+      # Wait a moment for the tab to open, then use AppleScript to send the command
+      sleep 1
+
+      if command -v osascript >/dev/null 2>&1; then
+        osascript <<EOF
 tell application "Warp"
     activate
     tell application "System Events"
-        keystroke "t" using {command down}
-        delay 0.5
-        keystroke "cd '$worktree_dir' && '$IDE_CMD'"
-        keystroke return
+        tell process "Warp"
+            keystroke "$claude_cmd"
+            key code 36
+        end tell
     end tell
 end tell
 EOF
+      fi
       echo "✅ Claude Code opened in Warp"
     else
-      echo "⚠️  Warp CLI not found and AppleScript not available" >&2
-      launch_claude_fallback "$worktree_dir"
+      # Fallback to xdg-open for Linux
+      if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "warp://action/new_tab?path=$worktree_dir"
+
+        # For Linux, we can't easily send keystrokes, so just open the directory
+        # The user will need to manually type the claude command
+        echo "✅ Warp opened at $worktree_dir"
+        if [ -n "$initial_prompt" ]; then
+          echo "💡 Run this command in Warp: $claude_cmd"
+        fi
+      else
+        echo "⚠️  Could not open Warp with URI scheme" >&2
+        launch_claude_fallback "$worktree_dir" "$initial_prompt"
+      fi
     fi
   else
     echo "⚠️  Warp terminal not found. Please install Warp or use a different terminal." >&2
-    launch_claude_fallback "$worktree_dir"
+    launch_claude_fallback "$worktree_dir" "$initial_prompt"
   fi
 }
 
 # Launch using Ghostty terminal
 launch_claude_ghostty() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
 
-  if command -v ghostty >/dev/null 2>&1; then
-    # Use Ghostty CLI to create a new window
-    ghostty --working-directory="$worktree_dir" --command="$IDE_CMD" &
-    echo "✅ Claude Code opened in Ghostty"
-  elif [ -d "/Applications/Ghostty.app" ]; then
-    # Fallback to open command
-    open -n -a Ghostty.app --args --working-directory="$worktree_dir" --command="$IDE_CMD"
-    echo "✅ Claude Code opened in Ghostty"
-  else
-    echo "⚠️  Ghostty terminal not found. Please install Ghostty or use a different terminal." >&2
-    launch_claude_fallback "$worktree_dir"
-  fi
-}
-
-# Launch using iTerm2
-launch_claude_iterm2() {
-  worktree_dir="$1"
-
-  if [ -d "/Applications/iTerm.app" ] && command -v osascript >/dev/null 2>&1; then
-    # Use AppleScript to create a new iTerm2 window
+  # Use AppleScript to script Ghostty, fallback if not available
+  if [ -d "/Applications/Ghostty.app" ] && command -v osascript >/dev/null 2>&1; then
+    # Open Ghostty
+    open -a Ghostty.app
+    # Wait for the app to be ready
+    sleep 0.5
+    # Build the command to run
+    if [ -n "$initial_prompt" ]; then
+      claude_cmd="cd '$worktree_dir' && $IDE_CMD '$initial_prompt'"
+    else
+      claude_cmd="cd '$worktree_dir' && $IDE_CMD"
+    fi
+    # Use AppleScript to open a new tab and run the command
     osascript <<EOF
-tell application "iTerm"
-    create window with default profile
-    tell current session of current window
-        write text "cd '$worktree_dir' && '$IDE_CMD'"
-    end tell
-    activate
-end tell
+      tell application "Ghostty"
+        activate
+      end tell
+      tell application "System Events"
+        tell process "Ghostty"
+          keystroke "t" using {command down}
+          delay 0.2
+          keystroke "$claude_cmd"
+          key code 36
+        end tell
+      end tell
 EOF
-    echo "✅ Claude Code opened in iTerm2"
+    echo "✅ Claude Code opened in Ghostty"
   else
-    echo "⚠️  iTerm2 not found or AppleScript not available" >&2
-    launch_claude_fallback "$worktree_dir"
+    echo "⚠️  Ghostty scripting not available. Please install Ghostty.app or use a different terminal." >&2
+    launch_claude_fallback "$worktree_dir" "$initial_prompt"
   fi
 }
 
@@ -350,80 +413,296 @@ EOF
 launch_claude_custom_terminal() {
   worktree_dir="$1"
   custom_cmd="$2"
+  initial_prompt="${3:-}"
+
+  # Build the proper command for terminal
+  claude_cmd=$(build_claude_terminal_command "$initial_prompt")
 
   # Replace placeholders in the custom command
   # %d = directory, %c = command
-  terminal_cmd=$(echo "$custom_cmd" | sed "s|%d|$worktree_dir|g" | sed "s|%c|$IDE_CMD|g")
+  terminal_cmd=$(echo "$custom_cmd" | sed "s|%d|$worktree_dir|g" | sed "s|%c|$claude_cmd|g")
 
   if eval "$terminal_cmd"; then
     echo "✅ Claude Code opened in custom terminal"
   else
     echo "⚠️  Failed to launch with custom terminal command: $custom_cmd" >&2
-    launch_claude_fallback "$worktree_dir"
+    launch_claude_fallback "$worktree_dir" "$initial_prompt"
   fi
 }
 
-# Fallback terminal launch for non-macOS systems or when other methods fail
+# Fallback terminal launcher
 launch_claude_fallback() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
+
+  # Build the proper command for terminal
+  claude_cmd=$(build_claude_terminal_command "$initial_prompt")
 
   # Try common terminal emulators
   if command -v gnome-terminal >/dev/null 2>&1; then
-    gnome-terminal --working-directory="$worktree_dir" -- "$IDE_CMD"
+    gnome-terminal --working-directory="$worktree_dir" -- sh -c "$claude_cmd"
     echo "✅ Claude Code opened in gnome-terminal"
   elif command -v xterm >/dev/null 2>&1; then
-    (cd "$worktree_dir" && xterm -e "$IDE_CMD") &
+    (cd "$worktree_dir" && xterm -e sh -c "$claude_cmd") &
     echo "✅ Claude Code opened in xterm"
   elif command -v konsole >/dev/null 2>&1; then
-    konsole --workdir "$worktree_dir" -e "$IDE_CMD" &
+    konsole --workdir "$worktree_dir" -e sh -c "$claude_cmd" &
     echo "✅ Claude Code opened in konsole"
   else
     echo "⚠️  Could not detect terminal emulator. Running in current terminal..."
-    cd "$worktree_dir" && "$IDE_CMD"
+    cd "$worktree_dir" && eval "$claude_cmd"
     echo "✅ Claude Code session ended"
   fi
 }
 
-# Write VS Code task configuration for auto-running Claude Code
+# Write VS Code auto-run task for Claude Code
 write_vscode_autorun_task() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
+  session_id="${3:-}"
+
+  # Create .vscode directory if it doesn't exist
   mkdir -p "$worktree_dir/.vscode"
-  cat >"$worktree_dir/.vscode/tasks.json" <<'EOF'
+
+  # Build the task based on whether we have a prompt and/or session ID
+  if [ -n "$initial_prompt" ]; then
+    # Escape the prompt for JSON
+    prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+    if [ -n "$session_id" ]; then
+      # Resume session with new prompt (interactive mode)
+      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "claude",
-      "type": "shell",
-      "command": "claude",
-      "options": { "cwd": "${workspaceFolder}" },
-      "presentation": { "panel": "dedicated", "focus": true },
-      "runOptions": { "runOn": "folderOpen" }
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Resume Claude Code Session with Prompt",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["--resume", "$session_id", "$prompt_escaped"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
 }
 EOF
+    else
+      # Start new session with prompt (interactive mode)
+      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Claude Code with Prompt",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["$prompt_escaped"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+    fi
+  elif [ -n "$session_id" ]; then
+    # Resume session without new prompt (interactive mode)
+    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Resume Claude Code Session",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["--resume", "$session_id"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+  else
+    # Start new interactive session
+    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Claude Code",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+  fi
 }
 
-# Write Cursor task configuration for auto-running Claude Code
+# Write Cursor auto-run task for Claude Code
 write_cursor_autorun_task() {
   worktree_dir="$1"
+  initial_prompt="${2:-}"
+  session_id="${3:-}"
+
+  # Create .vscode directory if it doesn't exist (Cursor uses VS Code format)
   mkdir -p "$worktree_dir/.vscode"
-  cat >"$worktree_dir/.vscode/tasks.json" <<'EOF'
+
+  # Build the task based on whether we have a prompt and/or session ID
+  if [ -n "$initial_prompt" ]; then
+    # Escape the prompt for JSON
+    prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+    if [ -n "$session_id" ]; then
+      # Resume session with new prompt (interactive mode)
+      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "claude",
-      "type": "shell",
-      "command": "claude",
-      "options": { "cwd": "${workspaceFolder}" },
-      "presentation": { "panel": "dedicated", "focus": true },
-      "runOptions": { "runOn": "folderOpen" }
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Resume Claude Code Session with Prompt",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["--resume", "$session_id", "$prompt_escaped"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
 }
 EOF
+    else
+      # Start new session with prompt (interactive mode)
+      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Claude Code with Prompt",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["$prompt_escaped"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+    fi
+  elif [ -n "$session_id" ]; then
+    # Resume session without new prompt (interactive mode)
+    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Resume Claude Code Session",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "args": ["--resume", "$session_id"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+  else
+    # Start new interactive session
+    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Claude Code",
+            "type": "shell",
+            "command": "$IDE_CMD",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+  fi
 }
 
 # VS Code implementation (for completeness)

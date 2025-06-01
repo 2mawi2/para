@@ -90,6 +90,10 @@ handle_command() {
     handle_start_command "$@"
     ;;
 
+  dispatch)
+    handle_dispatch_command "$@"
+    ;;
+
   finish)
     handle_finish_command "$@"
     ;;
@@ -136,24 +140,58 @@ handle_command() {
   esac
 }
 
-# Handle start command
+# Handle start command (simplified - no more --prompt support)
 handle_start_command() {
+  SESSION_NAME=""
+
+  # Parse arguments - only session name now
   if [ "$#" -eq 1 ]; then
-    # No custom name provided
+    # No session name provided - generate one
     SESSION_NAME=""
   elif [ "$#" -eq 2 ]; then
-    # Custom name provided
+    # Session name provided
     SESSION_NAME="$2"
     validate_session_name "$SESSION_NAME"
   else
-    die "start takes optionally a custom session name"
+    die "start takes optionally one session name (for prompts, use 'para dispatch')"
   fi
 
   # Auto-cleanup old history entries
   auto_cleanup_history
 
-  # Session creation logic
-  create_new_session "$SESSION_NAME"
+  # Session creation logic - no initial prompt
+  create_new_session "$SESSION_NAME" ""
+}
+
+# Handle dispatch command - creates session with prompt
+handle_dispatch_command() {
+  # Validate that Claude Code is configured
+  if [ "$IDE_NAME" != "claude" ]; then
+    die "dispatch command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
+  fi
+
+  INITIAL_PROMPT=""
+  SESSION_NAME=""
+
+  if [ "$#" -eq 1 ]; then
+    die "dispatch requires a prompt text"
+  elif [ "$#" -eq 2 ]; then
+    # Just prompt provided
+    INITIAL_PROMPT="$2"
+  elif [ "$#" -eq 3 ]; then
+    # Session name and prompt provided
+    SESSION_NAME="$2"
+    INITIAL_PROMPT="$3"
+    validate_session_name "$SESSION_NAME"
+  else
+    die "dispatch usage: 'para dispatch \"prompt\"' or 'para dispatch session-name \"prompt\"'"
+  fi
+
+  # Auto-cleanup old history entries
+  auto_cleanup_history
+
+  # Session creation logic with initial prompt
+  create_new_session "$SESSION_NAME" "$INITIAL_PROMPT"
 }
 
 # Handle finish command
@@ -256,8 +294,11 @@ handle_resume_command() {
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
+  # Load initial prompt if it exists for this session
+  STORED_PROMPT=$(load_session_prompt "$SESSION_ID")
+
   echo "▶ resuming session $SESSION_ID"
-  launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
+  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$STORED_PROMPT"
 }
 
 # Handle recover command
@@ -358,6 +399,7 @@ handle_config_command() {
 # Create new session
 create_new_session() {
   session_name="$1"
+  initial_prompt="$2"
 
   # Determine base branch
   if [ -z "$BASE_BRANCH" ]; then
@@ -371,8 +413,13 @@ create_new_session() {
   SESSION_ID=$(create_session "$session_name" "$BASE_BRANCH")
   get_session_info "$SESSION_ID"
 
-  # Launch IDE
-  launch_ide "$(get_default_ide)" "$WORKTREE_DIR"
+  # Store initial prompt in session state if provided
+  if [ -n "$initial_prompt" ]; then
+    save_session_prompt "$SESSION_ID" "$initial_prompt"
+  fi
+
+  # Launch IDE with optional initial prompt
+  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt"
 
   echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
 }

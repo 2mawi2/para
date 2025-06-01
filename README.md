@@ -37,11 +37,31 @@ para finish "Add new feature"
 ```bash
 para config              # Set up your IDE (first-time setup)
 para start [name]        # Create new session
+para dispatch "prompt"   # Create session with AI prompt (Claude Code)
 para list               # Show active sessions  
 para finish "message"   # Merge session back to main
 para cancel             # Delete current session
 para clean              # Delete all sessions
 ```
+
+## AI Integration
+
+For Claude Code users, use `dispatch` to start sessions with initial prompts:
+
+```bash
+# Create session with AI prompt
+para dispatch "Create a user authentication system"
+
+# Named session with prompt  
+para dispatch feature-auth "Add OAuth login and user management"
+
+# Regular start (no prompt)
+para start feature-ui
+```
+
+The `dispatch` command creates a new session and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+
+**Note:** The `dispatch` command only works with Claude Code. Use `para config` to switch IDEs if needed.
 
 ## How It Works
 
