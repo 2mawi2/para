@@ -39,7 +39,14 @@ jobs:
           echo "CURSOR_CMD=echo" >> $GITHUB_ENV
           echo "PARA_NON_INTERACTIVE=true" >> $GITHUB_ENV
         
-      - name: Install dependencies
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck bats
+        
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
           brew install shellcheck bats-core shfmt
       
@@ -52,7 +59,10 @@ jobs:
         run: |
           echo "🧪 Running all para tests before release..."
           shellcheck -e SC1091,SC2086 para.sh install-para.sh lib/*.sh
-          shfmt -d -i 2 para.sh install-para.sh lib/*.sh
+          # Only run shfmt on macOS since it's not available in Ubuntu act environment
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            shfmt -d -i 2 para.sh install-para.sh lib/*.sh
+          fi
           bats tests/test_para_units.bats
           bats tests/test_para_prompt_features.bats
           bats tests/test_para_argument_parsing.bats
