@@ -32,7 +32,14 @@ jobs:
         echo "CURSOR_CMD=echo" >> $GITHUB_ENV
         echo "PARA_NON_INTERACTIVE=true" >> $GITHUB_ENV
     
-    - name: Install dependencies
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck bats
+    
+    - name: Install dependencies (macOS)  
+      if: runner.os == 'macOS'
       run: |
         brew install shellcheck bats-core shfmt
     
@@ -41,6 +48,7 @@ jobs:
         shellcheck -e SC1091,SC2086 para.sh install-para.sh lib/*.sh
     
     - name: Run shfmt check
+      if: runner.os == 'macOS'
       run: |
         shfmt -d -i 2 para.sh install-para.sh lib/*.sh
     
@@ -56,12 +64,9 @@ jobs:
         echo "PARA_NON_INTERACTIVE: ${PARA_NON_INTERACTIVE:-unset}"
         echo "Available disk space:"
         df -h .
-        echo "Temporary directory permissions:"
-        ls -la /tmp | head -5
     
-    - name: Run tests with better error handling
+    - name: Run tests
       env:
-        # Ensure tests have proper environment
         IDE_NAME: cursor
         IDE_CMD: echo
         CURSOR_CMD: echo
@@ -71,69 +76,25 @@ jobs:
         
         # Run each test suite separately with better error handling
         echo "Running unit tests..."
-        if ! bats tests/test_para_units.bats; then
-          echo "❌ Unit tests failed"
-          exit 1
-        fi
+        bats tests/test_para_units.bats
         
         echo "Running prompt feature tests..."
-        if ! bats tests/test_para_prompt_features.bats; then
-          echo "❌ Prompt feature tests failed"
-          exit 1
-        fi
+        bats tests/test_para_prompt_features.bats
         
         echo "Running argument parsing tests..."
-        if ! bats tests/test_para_argument_parsing.bats; then
-          echo "❌ Argument parsing tests failed"
-          exit 1
-        fi
+        bats tests/test_para_argument_parsing.bats
         
         echo "Running friendly names tests..."
-        if ! bats tests/test_friendly_names.bats; then
-          echo "❌ Friendly names tests failed"
-          echo "🔍 Attempting to debug the first failing test..."
-          
-          # Create a minimal debug test
-          TEST_REPO=$(mktemp -d)
-          echo "Debug test repo: $TEST_REPO"
-          cd "$TEST_REPO"
-          
-          # Setup git repo
-          git init
-          git config user.email "test@example.com" 
-          git config user.name "Test User"
-          echo "test content" > test-file.py
-          git add test-file.py
-          git commit -m "Initial commit"
-          
-          # Try to run para with debug output
-          echo "Attempting to run para start..."
-          if ! PARA_NON_INTERACTIVE=true IDE_CMD="echo" IDE_NAME="cursor" "$(pwd)/../para.sh" start 2>&1; then
-            echo "❌ Para start failed"
-            echo "Directory contents:"
-            ls -la
-            echo "Git status:"
-            git status
-            echo "Git log:"
-            git log --oneline
-          else
-            echo "✅ Para start succeeded in debug test"
-          fi
-          
-          cd ..
-          rm -rf "$TEST_REPO"
-          exit 1
-        fi
+        bats tests/test_friendly_names.bats
         
         echo "Running integration tests..."
-        if ! bats tests/test_para_integration.bats; then
-          echo "❌ Integration tests failed"
-          exit 1
-        fi
+        bats tests/test_para_integration.bats
         
         echo "✅ All tests passed!"
     
     - name: Test installation
+      env:
+        PARA_NON_INTERACTIVE: true
       run: |
         echo "🧪 Testing installation..."
         ./install-para.sh
