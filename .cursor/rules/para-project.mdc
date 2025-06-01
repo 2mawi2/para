@@ -15,34 +15,65 @@ This project provides a POSIX shell script for creating multiple ephemeral IDE s
 - **[justfile](mdc:justfile)** - Development workflow automation with testing, linting, and git hooks
 - **[README.md](mdc:README.md)** - Comprehensive documentation with examples and configuration options
 - **[install-para.sh](mdc:install-para.sh)** - Universal installer script for global installation
-- **[test-file.py](mdc:test-file.py)** - Test file used for development and testing workflows
+
+## Documentation Directory
+- **[docs/DETAILED_CONFIGURATION.md](mdc:docs/DETAILED_CONFIGURATION.md)** - Advanced IDE setup and environment variables
+- **[docs/DEVELOPMENT.md](mdc:docs/DEVELOPMENT.md)** - Contributing, architecture, testing
+- **[docs/TROUBLESHOOTING.md](mdc:docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Modular Architecture
 ```
 lib/
-├── para-config.sh   # Configuration management (IDE-agnostic)
-├── para-utils.sh    # Utility functions and validation  
-├── para-git.sh      # Git operations and worktree management
-├── para-session.sh  # Session lifecycle and state management
-└── para-ide.sh      # IDE integration (supports Cursor, Claude Code, VS Code)
+├── para-config.sh         # Configuration management (IDE-agnostic)
+├── para-config-wizard.sh  # Interactive configuration wizard
+├── para-utils.sh          # Utility functions and validation  
+├── para-git.sh            # Git operations and worktree management
+├── para-session.sh        # Session lifecycle and state management
+├── para-ide.sh            # IDE integration (supports Cursor, Claude Code, VS Code)
+└── para-recovery.sh       # Session recovery and history management
 
 tests/
-├── test_para.bats   # Main test suite using bats-core
-└── README.md          # Testing documentation
+├── test_para.bats               # Main test suite using bats-core
+├── test_para_config.bats        # Configuration system tests
+├── test_para_config_wizard.bats # Configuration wizard tests
+└── README.md                    # Testing documentation
 
 scripts/
 ├── pre-commit         # Git hook for running tests
 └── pre-push           # Git hook for running linting
+
+docs/
+├── DETAILED_CONFIGURATION.md   # Advanced IDE configuration
+├── DEVELOPMENT.md              # Development and contribution guide
+└── TROUBLESHOOTING.md          # Common issues and solutions
 ```
 
-## IDE Configuration
-The script is now IDE-agnostic and supports multiple editors:
+## Configuration System
 
-**Claude Code (Recommended for Claude AI users):**
+### First-Run Experience
+- **Auto-detection**: Para automatically detects and configures IDEs on first run
+- **Welcome Wizard**: Interactive setup for new users
+- **Quick Setup**: One-command IDE configuration with sensible defaults
+
+### Configuration Commands
+- `para config` - Interactive configuration wizard
+- `para config auto` - Auto-detect and configure IDE
+- `para config show` - Display current configuration
+- `para config edit` - Open config file in editor
+- `para config quick` - Quick setup with confirmation
+
+### IDE Support
+
+**Claude Code (Recommended for AI development):**
 ```bash
 export IDE_NAME="claude"
 export IDE_CMD="claude"
-# Note: Claude Code doesn't support --user-data-dir isolation
+# Multiple launch modes:
+# 1. IDE Wrapper mode (runs inside VS Code/Cursor)
+# 2. Terminal mode with auto-detection
+export IDE_WRAPPER_ENABLED="true"        # Enable wrapper mode
+export IDE_WRAPPER_NAME="code"           # Use VS Code as wrapper
+export CLAUDE_TERMINAL_CMD="auto"        # Auto-detect terminal for standalone mode
 ```
 
 **Cursor (Default):**
@@ -59,6 +90,37 @@ export IDE_CMD="code"
 export IDE_USER_DATA_DIR=".vscode-userdata"
 ```
 
+## Recovery and History System
+- **Session Recovery**: Restore finished or cancelled sessions with `para recover`
+- **Session History**: Track all session lifecycle events with `para history`
+- **Auto-cleanup**: Automatic history cleanup after configurable retention period
+- **State Snapshots**: Complete session state preservation for recovery
+
+## Core Commands
+
+### Session Management
+- `para start [name]` - Create new parallel session (opens configured IDE)
+- `para finish "message"` - Auto-stage & finish session with commit message
+- `para finish --preserve "message"` - Finish session preserving individual commits
+- `para list` - Show all active sessions
+- `para continue` - Resume after resolving finish conflicts (auto-stages)
+- `para cancel [session]` - Discard current or specified session
+- `para clean` - Remove all sessions
+- `para resume <session>` - Resume session in IDE
+
+### Recovery and History
+- `para recover <session>` - Recover a finished/cancelled session
+- `para history` - Show finished/cancelled sessions
+- `para clean-history` - Clean all session history
+- `para clean-history --older-than <days>` - Clean sessions older than N days
+
+### Configuration
+- `para config` - Interactive configuration wizard
+- `para config auto` - Auto-detect IDE and create config
+- `para config show` - Display current settings
+- `para config edit` - Edit configuration file
+- `para config quick` - Quick setup with confirmation
+
 ## Development Workflow
 - **Setup**: `just dev-setup` - Complete environment setup
 - **Testing**: `just test` - Run bats test suite (auto-installs dependencies)
@@ -67,41 +129,51 @@ export IDE_USER_DATA_DIR=".vscode-userdata"
 - **Hooks**: `just setup-hooks` - Configure pre-commit/pre-push git hooks
 - **Status**: `just status` - Check dependencies and project health
 
-## Core Commands
-- `para start` - Create new parallel session (opens configured IDE)
-- `para finish "message"` - Auto-stage & finish session with commit message
-- `para list` - Show all active sessions
-- `para continue` - Resume after resolving finish conflicts (auto-stages)
-- `para cancel` - Discard current session
-- `para clean` - Remove all sessions
-
 ## Testing Workflows
+
 **Basic Test:**
 ```bash
 ./para.sh start                     # Create session
-cd subtrees/pc/*/                    # Enter worktree
-echo 'test change' >> test-file.py   # Make changes
+cd subtrees/pc/*/                   # Enter worktree
+echo 'test change' >> README.md     # Make changes
 ./para.sh finish "test commit"      # Auto-stage & finish
+```
+
+**Configuration Test:**
+```bash
+./para.sh config                    # Interactive setup
+./para.sh config auto               # Auto-detect IDE
+./para.sh config show               # Show current settings
+```
+
+**Recovery Test:**
+```bash
+./para.sh start test-session        # Create session
+# ... make changes ...
+./para.sh finish "test changes"     # Finish session
+./para.sh recover test-session      # Recover the session
 ```
 
 **Conflict Test:**
 ```bash
 ./para.sh start && ./para.sh start  # Create 2 sessions
-cd subtrees/pc/20*/                  # Session 1: modify same file
-echo 'change A' >> test-file.py && ../../../para.sh finish "A"
-cd ../20*/                           # Session 2: conflicting change
-echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!
+cd subtrees/pc/20*/                 # Session 1: modify same file
+echo 'change A' >> README.md && ../../../para.sh finish "A"
+cd ../20*/                          # Session 2: conflicting change
+echo 'change B' >> README.md && ../../../para.sh finish "B"  # Conflict!
 # Edit file to resolve conflicts, then:
-./para.sh continue                 # Auto-stages & completes
+./para.sh continue                  # Auto-stages & completes
 ```
 
 ## How It Works
-1. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
-2. **State Tracking**: Uses `.para_state/` directory to track sessions
-3. **Context-Aware**: Auto-detects current session from working directory
-4. **Auto-Staging**: Automatically stages all changes during finish and conflict resolution
-5. **Clean Workflow**: No manual `git add` required anywhere
-6. **IDE Agnostic**: Works with any IDE that supports command-line launching
+1. **Configuration**: `para config` sets up IDE preferences and terminal options
+2. **Session Creation**: Creates timestamped branch `pc/YYYYMMDD-HHMMSS` and worktree in `subtrees/`
+3. **State Tracking**: Uses `.para_state/` directory to track sessions and history
+4. **Context-Aware**: Auto-detects current session from working directory
+5. **Auto-Staging**: Automatically stages all changes during finish and conflict resolution
+6. **Recovery System**: Preserves session snapshots for later recovery
+7. **Clean Workflow**: No manual `git add` required anywhere
+8. **IDE Agnostic**: Works with any IDE that supports command-line launching
 
 ## Development Notes
 - Pure POSIX shell for maximum compatibility
@@ -113,5 +185,19 @@ echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!
 - Linting with shellcheck + shfmt for code quality
 - Git hooks prevent commits/pushes with issues
 - IDE-agnostic design with configurable IDE support
-- Backwards compatible with existing Cursor-specific configurations
+- Session recovery and history management
+- First-run experience with auto-detection
+- Comprehensive documentation in docs/ directory
 - When writing integration tests always use 'mktemp -d' to ensure git commands do not interfere with the main repository, or choose an alternative strategy that is non-intrusive
+
+## Configuration File Location
+- Config directory: `${XDG_CONFIG_HOME:-$HOME/.config}/para`
+- Config file: `${XDG_CONFIG_HOME:-$HOME/.config}/para/config`
+- Environment variables take precedence over config file settings
+- Backwards compatibility maintained for legacy CURSOR_* variables
+
+## IDE Wrapper Mode (Claude Code)
+Claude Code can be launched inside other IDEs for enhanced workflow:
+- **VS Code Wrapper**: `IDE_WRAPPER_NAME="code"` - Claude runs in VS Code's integrated terminal
+- **Cursor Wrapper**: `IDE_WRAPPER_NAME="cursor"` - Claude runs in Cursor's integrated terminal
+- Best of both worlds: Full IDE features + Claude AI assistance
