@@ -51,82 +51,82 @@ run_config_setup() {
     case "$claude_mode_choice" in
     1 | vscode | code)
       # IDE Wrapper: VS Code
-      IDE_WRAPPER_ENABLED="true"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
+      export IDE_WRAPPER_ENABLED="true"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
       echo "  Mode: IDE Wrapper (VS Code)"
       ;;
     2 | cursor)
       # IDE Wrapper: Cursor
-      IDE_WRAPPER_ENABLED="true"
-      IDE_WRAPPER_NAME="cursor"
-      IDE_WRAPPER_CMD="cursor"
-      CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
+      export IDE_WRAPPER_ENABLED="true"
+      export IDE_WRAPPER_NAME="cursor"
+      export IDE_WRAPPER_CMD="cursor"
+      export CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
       echo "  Mode: IDE Wrapper (Cursor)"
       ;;
     3 | auto)
       # Terminal mode: Auto-detect
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="auto"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="auto"
       echo "  Mode: Terminal (auto-detect)"
       ;;
     4 | terminal)
       # Terminal mode: Terminal.app
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="terminal"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="terminal"
       echo "  Mode: Terminal (Terminal.app)"
       ;;
     5 | warp)
       # Terminal mode: Warp
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="warp"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="warp"
       echo "  Mode: Terminal (Warp)"
       ;;
     6 | ghostty)
       # Terminal mode: Ghostty
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="ghostty"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="ghostty"
       echo "  Mode: Terminal (Ghostty)"
       ;;
     7 | iterm | iterm2)
       # Terminal mode: iTerm2
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="iterm2"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="iterm2"
       echo "  Mode: Terminal (iTerm2)"
       ;;
     8 | custom)
       # Terminal mode: Custom
-      IDE_WRAPPER_ENABLED="false"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
+      export IDE_WRAPPER_ENABLED="false"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
       printf "Enter custom terminal command (use %%d for directory, %%c for command): "
       read -r custom_terminal
       if [ -n "$custom_terminal" ]; then
-        CLAUDE_TERMINAL_CMD="$custom_terminal"
+        export CLAUDE_TERMINAL_CMD="$custom_terminal"
         echo "  Mode: Terminal (custom)"
       else
         echo "Invalid input. Using auto-detect."
-        CLAUDE_TERMINAL_CMD="auto"
+        export CLAUDE_TERMINAL_CMD="auto"
         echo "  Mode: Terminal (auto-detect)"
       fi
       ;;
     *)
       # Default to VS Code wrapper
-      IDE_WRAPPER_ENABLED="true"
-      IDE_WRAPPER_NAME="code"
-      IDE_WRAPPER_CMD="code"
-      CLAUDE_TERMINAL_CMD="auto"
+      export IDE_WRAPPER_ENABLED="true"
+      export IDE_WRAPPER_NAME="code"
+      export IDE_WRAPPER_CMD="code"
+      export CLAUDE_TERMINAL_CMD="auto"
       echo "  Mode: IDE Wrapper (VS Code - default)"
       ;;
     esac
@@ -135,10 +135,10 @@ run_config_setup() {
     IDE_NAME="code"
     IDE_CMD="code"
     export IDE_USER_DATA_DIR=".vscode-userdata"
-    CLAUDE_TERMINAL_CMD="auto" # Set default for consistency
-    IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
+    export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     ;;
   4 | other)
     printf "Enter IDE command: "
@@ -153,20 +153,20 @@ run_config_setup() {
       IDE_CMD="cursor"
       export IDE_USER_DATA_DIR=".cursor-userdata"
     fi
-    CLAUDE_TERMINAL_CMD="auto" # Set default for consistency
-    IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
+    export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     ;;
   *)
     # Default to Cursor
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    CLAUDE_TERMINAL_CMD="auto" # Set default for consistency
-    IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
+    export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     ;;
   esac
 
@@ -216,39 +216,39 @@ auto_setup() {
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    CLAUDE_TERMINAL_CMD="auto"
-    IDE_WRAPPER_ENABLED="false"
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"
+    export IDE_WRAPPER_ENABLED="false"
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     echo "✅ Found Cursor"
   elif command -v claude >/dev/null 2>&1; then
     IDE_NAME="claude"
     IDE_CMD="claude"
     export IDE_USER_DATA_DIR=""
-    CLAUDE_TERMINAL_CMD="auto"
+    export CLAUDE_TERMINAL_CMD="auto"
     # Default to VS Code wrapper for Claude Code
-    IDE_WRAPPER_ENABLED="true"
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export IDE_WRAPPER_ENABLED="true"
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     echo "✅ Found Claude Code (configured with VS Code wrapper)"
   elif command -v code >/dev/null 2>&1; then
     IDE_NAME="code"
     IDE_CMD="code"
     export IDE_USER_DATA_DIR=".vscode-userdata"
-    CLAUDE_TERMINAL_CMD="auto"
-    IDE_WRAPPER_ENABLED="false"
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"
+    export IDE_WRAPPER_ENABLED="false"
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
     echo "✅ Found VS Code"
   else
     echo "⚠️  No IDE found. Using Cursor as default."
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    CLAUDE_TERMINAL_CMD="auto"
-    IDE_WRAPPER_ENABLED="false"
-    IDE_WRAPPER_NAME="code"
-    IDE_WRAPPER_CMD="code"
+    export CLAUDE_TERMINAL_CMD="auto"
+    export IDE_WRAPPER_ENABLED="false"
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="code"
   fi
 
   export SUBTREES_DIR_NAME="subtrees"
