@@ -2,24 +2,19 @@
 
 Work on multiple features simultaneously using Git worktrees and your favorite IDE.
 
-## Why Para?
+## Installation
 
-**Problem:** You want to work on multiple features, experiments, or bug fixes at the same time, but switching Git branches disrupts your workflow and mixes up uncommitted changes.
+```bash
+# Homebrew (recommended)
+brew install 2mawi2/tap/para
 
-**Solution:** Para creates isolated development environments (separate directories + Git branches) so you can:
-- Have multiple IDE windows open, each working on different features
-- Switch instantly between projects without losing context
-- Let AI agents work in parallel without interfering with each other
-- Keep your main branch always clean
-
-**Perfect for:** AI-assisted development, feature prototyping, parallel experiments, or any workflow where you need multiple isolated workspaces.
+# Or install directly
+curl -sSL https://raw.githubusercontent.com/2mawi2/para/main/install-para.sh | bash
+```
 
 ## Quick Start
 
 ```bash
-# Install
-./install-para.sh
-
 # Configure your IDE (one-time setup)
 para config
 
@@ -31,6 +26,18 @@ para start
 # Merge your changes back to main
 para finish "Add new feature"
 ```
+
+## Why Para?
+
+**Problem:** You want to work on multiple features, experiments, or bug fixes at the same time, but switching Git branches disrupts your workflow and mixes up uncommitted changes.
+
+**Solution:** Para creates isolated development environments (separate directories + Git branches) so you can:
+- Have multiple IDE windows open, each working on different features
+- Switch instantly between projects without losing context
+- Let AI agents work in parallel without interfering with each other
+- Keep your main branch always clean
+
+**Perfect for:** AI-assisted development, feature prototyping, parallel experiments, or any workflow where you need multiple isolated workspaces.
 
 ## Core Commands
 
@@ -136,18 +143,6 @@ Para is ideal when working with AI assistants:
 - **Parallel experiments**: Try different approaches simultaneously  
 - **Safe iteration**: Main branch stays clean while you experiment
 - **Easy comparison**: See results side-by-side in different IDE windows
-
-## Installation
-
-```bash
-# Download and run the installer
-curl -sSL https://raw.githubusercontent.com/your-repo/para/main/install-para.sh | bash
-
-# Or clone and install locally  
-git clone https://github.com/your-repo/para
-cd para
-./install-para.sh
-```
 
 ## Documentation
 
