@@ -113,9 +113,11 @@ if ! path_contains_install_dir; then
       else
         # Fallback to manual config modification
         mkdir -p "$(dirname "$fish_config")"
-        echo "" >>"$fish_config"
-        echo "# Added by para installer" >>"$fish_config"
-        echo "set -gx PATH \$PATH $install_bin_dir" >>"$fish_config"
+        {
+          echo ""
+          echo "# Added by para installer"
+          echo "set -gx PATH \$PATH $install_bin_dir"
+        } >>"$fish_config"
         echo "✅ Added $install_bin_dir to fish PATH in $fish_config"
       fi
     else

@@ -62,9 +62,15 @@ EOF
       {
         echo ""
         echo "# para - parallel cursor sessions (local excludes)"
-        grep -q "^$SUBTREES_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$SUBTREES_ENTRY"
-        grep -q "^$STATE_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null || echo "$STATE_ENTRY"
       } >>"$GIT_EXCLUDE_FILE"
+
+      # Check and add entries separately to avoid pipeline issues
+      if ! grep -q "^$SUBTREES_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null; then
+        echo "$SUBTREES_ENTRY" >>"$GIT_EXCLUDE_FILE"
+      fi
+      if ! grep -q "^$STATE_ENTRY\$" "$GIT_EXCLUDE_FILE" 2>/dev/null; then
+        echo "$STATE_ENTRY" >>"$GIT_EXCLUDE_FILE"
+      fi
     fi
   fi
 

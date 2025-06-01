@@ -37,10 +37,10 @@ launch_cursor() {
 
   # If CURSOR_CMD is a stub starting with 'echo ', run it instead of launching
   case "$CURSOR_CMD" in
-    echo\ *)
-      eval "$CURSOR_CMD" "\"$worktree_dir\""
-      return 0
-      ;;
+  echo\ *)
+    eval "$CURSOR_CMD" "\"$worktree_dir\""
+    return 0
+    ;;
   esac
 
   if command -v "$CURSOR_CMD" >/dev/null 2>&1; then
@@ -105,41 +105,41 @@ launch_claude() {
 
   # If IDE_CMD is a stub echo command, run it instead of opening a new terminal
   case "$IDE_CMD" in
-    echo\ *)
-      eval "$IDE_CMD" "\"$worktree_dir\""
-      return 0
-      ;;
+  echo\ *)
+    eval "$IDE_CMD" "\"$worktree_dir\""
+    return 0
+    ;;
   esac
 
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
     echo "▶ launching Claude Code in new terminal..."
-    
+
     # Determine which terminal to use based on CLAUDE_TERMINAL_CMD
     case "$CLAUDE_TERMINAL_CMD" in
-      auto)
-        # Auto-detect available terminal
-        launch_claude_auto_terminal "$worktree_dir"
-        ;;
-      terminal)
-        # Force use of macOS Terminal.app
-        launch_claude_terminal_app "$worktree_dir"
-        ;;
-      warp)
-        # Use Warp terminal
-        launch_claude_warp "$worktree_dir"
-        ;;
-      ghostty)
-        # Use Ghostty terminal
-        launch_claude_ghostty "$worktree_dir"
-        ;;
-      iterm2)
-        # Use iTerm2
-        launch_claude_iterm2 "$worktree_dir"
-        ;;
-      *)
-        # Custom terminal command
-        launch_claude_custom_terminal "$worktree_dir" "$CLAUDE_TERMINAL_CMD"
-        ;;
+    auto)
+      # Auto-detect available terminal
+      launch_claude_auto_terminal "$worktree_dir"
+      ;;
+    terminal)
+      # Force use of macOS Terminal.app
+      launch_claude_terminal_app "$worktree_dir"
+      ;;
+    warp)
+      # Use Warp terminal
+      launch_claude_warp "$worktree_dir"
+      ;;
+    ghostty)
+      # Use Ghostty terminal
+      launch_claude_ghostty "$worktree_dir"
+      ;;
+    iterm2)
+      # Use iTerm2
+      launch_claude_iterm2 "$worktree_dir"
+      ;;
+    *)
+      # Custom terminal command
+      launch_claude_custom_terminal "$worktree_dir" "$CLAUDE_TERMINAL_CMD"
+      ;;
     esac
   else
     echo "⚠️  Claude Code CLI not found. Please install Claude Code CLI or set IDE_CMD environment variable." >&2
@@ -150,7 +150,7 @@ launch_claude() {
 # Auto-detect and use the best available terminal
 launch_claude_auto_terminal() {
   worktree_dir="$1"
-  
+
   if command -v warp-cli >/dev/null 2>&1; then
     launch_claude_warp "$worktree_dir"
   elif [ -d "/Applications/Ghostty.app" ] && command -v ghostty >/dev/null 2>&1; then
@@ -168,7 +168,7 @@ launch_claude_auto_terminal() {
 # Launch using macOS Terminal.app
 launch_claude_terminal_app() {
   worktree_dir="$1"
-  
+
   if command -v osascript >/dev/null 2>&1; then
     # Use AppleScript to create a new terminal window and run Claude Code
     osascript <<EOF
@@ -187,7 +187,7 @@ EOF
 # Launch using Warp terminal
 launch_claude_warp() {
   worktree_dir="$1"
-  
+
   if command -v warp-cli >/dev/null 2>&1; then
     # Use Warp CLI to create a new session
     warp-cli open "$worktree_dir" --exec "$IDE_CMD"
@@ -220,7 +220,7 @@ EOF
 # Launch using Ghostty terminal
 launch_claude_ghostty() {
   worktree_dir="$1"
-  
+
   if command -v ghostty >/dev/null 2>&1; then
     # Use Ghostty CLI to create a new window
     ghostty --working-directory="$worktree_dir" --command="$IDE_CMD" &
@@ -238,7 +238,7 @@ launch_claude_ghostty() {
 # Launch using iTerm2
 launch_claude_iterm2() {
   worktree_dir="$1"
-  
+
   if [ -d "/Applications/iTerm.app" ] && command -v osascript >/dev/null 2>&1; then
     # Use AppleScript to create a new iTerm2 window
     osascript <<EOF
@@ -261,11 +261,11 @@ EOF
 launch_claude_custom_terminal() {
   worktree_dir="$1"
   custom_cmd="$2"
-  
+
   # Replace placeholders in the custom command
   # %d = directory, %c = command
   terminal_cmd=$(echo "$custom_cmd" | sed "s|%d|$worktree_dir|g" | sed "s|%c|$IDE_CMD|g")
-  
+
   if eval "$terminal_cmd"; then
     echo "✅ Claude Code opened in custom terminal"
   else
@@ -277,7 +277,7 @@ launch_claude_custom_terminal() {
 # Fallback terminal launch for non-macOS systems or when other methods fail
 launch_claude_fallback() {
   worktree_dir="$1"
-  
+
   # Try common terminal emulators
   if command -v gnome-terminal >/dev/null 2>&1; then
     gnome-terminal --working-directory="$worktree_dir" -- "$IDE_CMD"
@@ -308,10 +308,10 @@ launch_vscode() {
 
   # If IDE_CMD is a stub echo command, run it instead of launching
   case "$IDE_CMD" in
-    echo\ *)
-      eval "$IDE_CMD" "\"$worktree_dir\""
-      return 0
-      ;;
+  echo\ *)
+    eval "$IDE_CMD" "\"$worktree_dir\""
+    return 0
+    ;;
   esac
 
   if command -v "$IDE_CMD" >/dev/null 2>&1; then
@@ -326,6 +326,7 @@ launch_vscode() {
 
 # Get default IDE from configuration
 get_default_ide() {
+  # shellcheck disable=SC2153
   echo "$IDE_NAME"
 }
 
@@ -341,4 +342,9 @@ is_ide_available() {
     return 1
     ;;
   esac
+}
+
+get_ide_display_name() {
+  # shellcheck disable=SC2153
+  echo "$IDE_NAME"
 }
