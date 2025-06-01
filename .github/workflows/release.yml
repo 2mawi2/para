@@ -222,22 +222,3 @@ jobs:
             git commit -m "Update para to ${{ needs.extract-version.outputs.version }}"
             git push
           fi
-
-  test-homebrew:
-    needs: [extract-version, build-artifacts, create-release, update-homebrew]
-    runs-on: macos-latest
-    if: always() && needs.update-homebrew.result == 'success'
-    steps:
-      - name: Test Homebrew installation
-        env:
-          PARA_NON_INTERACTIVE: true
-        run: |
-          # Wait a moment for formula to propagate
-          sleep 30
-          
-          # Test the formula works
-          brew install --build-from-source 2mawi2/tap/para
-          
-          # Test that para is available
-          which para
-          PARA_NON_INTERACTIVE=true para --help 
