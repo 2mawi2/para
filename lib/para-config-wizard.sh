@@ -42,8 +42,8 @@ run_config_setup() {
     echo "4) Terminal.app (macOS default)"
     echo "5) Warp"
     echo "6) Ghostty"
-    echo "7) iTerm2"
-    echo "8) Custom terminal command"
+    echo "7) Custom terminal command"
+    echo "8) Back to main menu"
     echo ""
     printf "Choose option [1]: "
     read -r claude_mode_choice
@@ -97,15 +97,7 @@ run_config_setup() {
       export CLAUDE_TERMINAL_CMD="ghostty"
       echo "  Mode: Terminal (Ghostty)"
       ;;
-    7 | iterm | iterm2)
-      # Terminal mode: iTerm2
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="iterm2"
-      echo "  Mode: Terminal (iTerm2)"
-      ;;
-    8 | custom)
+    7 | custom)
       # Terminal mode: Custom
       export IDE_WRAPPER_ENABLED="false"
       export IDE_WRAPPER_NAME="code"
@@ -120,6 +112,10 @@ run_config_setup() {
         export CLAUDE_TERMINAL_CMD="auto"
         echo "  Mode: Terminal (auto-detect)"
       fi
+      ;;
+    8 | back)
+      # Go back to main menu
+      return
       ;;
     *)
       # Default to VS Code wrapper

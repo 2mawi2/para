@@ -47,6 +47,7 @@ update_session_merge_mode() {
 remove_session_state() {
   session_id="$1"
   rm -f "$STATE_DIR/$session_id.state"
+  remove_session_prompt "$session_id"
 
   # Clean up state directory if empty
   if [ -d "$STATE_DIR" ]; then
@@ -266,4 +267,31 @@ clean_all_sessions() {
   else
     echo "✅ cleaned up $CLEANED_COUNT session(s)"
   fi
+}
+
+# Save initial prompt for session
+save_session_prompt() {
+  session_id="$1"
+  prompt="$2"
+
+  mkdir -p "$STATE_DIR"
+  echo "$prompt" >"$STATE_DIR/$session_id.prompt"
+}
+
+# Load initial prompt for session
+load_session_prompt() {
+  session_id="$1"
+  prompt_file="$STATE_DIR/$session_id.prompt"
+
+  if [ -f "$prompt_file" ]; then
+    cat "$prompt_file"
+  else
+    echo ""
+  fi
+}
+
+# Remove session prompt file
+remove_session_prompt() {
+  session_id="$1"
+  rm -f "$STATE_DIR/$session_id.prompt"
 }
