@@ -56,6 +56,39 @@ export CLAUDE_TERMINAL_CMD="alacritty --working-directory %d --command %c"
 4. **Terminal.app** (macOS default)
 5. **System fallback** (gnome-terminal, xterm, konsole on Linux)
 
+#### IDE Wrapper for Claude Code (Recommended Workflow)
+
+For the best Claude Code experience, you can launch Claude Code **inside** VS Code or Cursor. This gives you both a full IDE interface and Claude Code running automatically in the integrated terminal:
+
+```bash
+# Configure Claude Code with VS Code wrapper
+export IDE_NAME="claude"
+export IDE_CMD="claude"
+export IDE_WRAPPER_ENABLED="true"
+export IDE_WRAPPER_NAME="code"      # Use VS Code as wrapper
+export IDE_WRAPPER_CMD="code"
+
+# Or use Cursor as wrapper
+export IDE_WRAPPER_NAME="cursor"    # Use Cursor as wrapper
+export IDE_WRAPPER_CMD="cursor"
+```
+
+**How it works:**
+1. `para start` opens your chosen IDE (VS Code/Cursor) with the worktree
+2. The IDE automatically runs `claude` in its integrated terminal
+3. You get the best of both worlds: full IDE features + Claude Code
+
+**First-time setup:**
+- VS Code will prompt *"Allow automatic tasks?"* the first time
+- Select **Allow** to enable the automatic Claude Code startup
+- This only needs to be done once per VS Code installation
+
+**Benefits:**
+- **Zero-click workflow** - Claude Code starts automatically
+- **Full IDE interface** - file explorer, git integration, extensions
+- **Integrated terminal** - Claude Code runs in the IDE's terminal
+- **Better UX** - no separate terminal windows to manage
+
 ### Cursor (Default)
 ```bash
 export IDE_NAME="cursor"  # Default

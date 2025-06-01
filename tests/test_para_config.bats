@@ -209,4 +209,56 @@ EOF
     cd "$TEST_REPO"
     run "$PARA_SCRIPT" config edit
     [ "$status" -eq 0 ]
+}
+
+@test "config supports IDE wrapper settings" {
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" << 'EOF'
+IDE_NAME="claude"
+IDE_CMD="claude"
+IDE_WRAPPER_ENABLED="true"
+IDE_WRAPPER_NAME="code"
+IDE_WRAPPER_CMD="code"
+EOF
+    
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config show
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"IDE Wrapper: Enabled"* ]]
+    [[ "$output" == *"Wrapper IDE: code"* ]]
+}
+
+@test "config creates wrapper settings with default values" {
+    cd "$TEST_REPO"
+    run "$PARA_SCRIPT" config auto
+    [ "$status" -eq 0 ]
+    
+    [ -f "$CONFIG_FILE" ]
+    grep -q "IDE_WRAPPER_ENABLED=" "$CONFIG_FILE"
+    grep -q "IDE_WRAPPER_NAME=" "$CONFIG_FILE"
+    grep -q "IDE_WRAPPER_CMD=" "$CONFIG_FILE"
+    
+    # Check default values
+    grep -q 'IDE_WRAPPER_ENABLED="false"' "$CONFIG_FILE"
+    grep -q 'IDE_WRAPPER_NAME="code"' "$CONFIG_FILE"
+    grep -q 'IDE_WRAPPER_CMD="code"' "$CONFIG_FILE"
+}
+
+@test "config environment variables override wrapper settings" {
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" << 'EOF'
+IDE_NAME="claude"
+IDE_CMD="claude"
+IDE_WRAPPER_ENABLED="false"
+IDE_WRAPPER_NAME="code"
+IDE_WRAPPER_CMD="code"
+EOF
+    
+    cd "$TEST_REPO"
+    
+    # Set environment variables and run in the same shell context
+    IDE_WRAPPER_ENABLED="true" IDE_WRAPPER_NAME="cursor" IDE_WRAPPER_CMD="cursor" run "$PARA_SCRIPT" config show
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"IDE Wrapper: Enabled"* ]]
+    [[ "$output" == *"Wrapper IDE: cursor"* ]]
 } 
