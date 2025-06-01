@@ -29,14 +29,14 @@ EXAMPLES:
   para finish "Add feature"   # squash all changes into one commit
   para recover swift_phoenix_20250531-233056  # recover a finished session
   para history                # see all finished/cancelled sessions
-  para clean-history --older-than 30  # clean sessions older than 30 days
+  para clean-history --older-than 7  # clean sessions older than 7 days
   para config                 # set up your IDE preference
   para config show            # show current settings
 
 CONFIGURATION:
   Current IDE: $ide_display_name
   Config file: ${CONFIG_FILE:-~/.config/para/config}
-  Recovery retention: ${RECOVERY_RETENTION_DAYS:-30} days
+  Recovery retention: ${RECOVERY_RETENTION_DAYS:-7} days
   
   Run 'para config' to change your IDE or other settings.
 
