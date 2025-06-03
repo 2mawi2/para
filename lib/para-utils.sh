@@ -12,40 +12,31 @@ USAGE:
   para start <name>           # create custom named session
   para dispatch "text"        # create session with initial Claude Code prompt
   para dispatch <name> "text" # custom named session with initial prompt
-  para dispatch [name] "prompt"   # create named session with initial prompt (Claude Code only)
   para finish "commit message"    # finish session (squash commits by default)
   para finish --preserve "msg"    # finish session preserving individual commits
+  para finish "msg" --branch <name>      # finish with custom branch name
+  para finish --preserve "msg" --branch <name>  # preserve commits + custom branch
   para list                   # list all active sessions
   para cancel [session]       # cancel/delete session
   para clean                  # delete all sessions
-  para resume <session>       # resume session in $ide_display_name
-  para recover <session>      # recover finished/cancelled session
-  para history                # show finished/cancelled sessions
-  para clean-history          # clean all session history
-  para clean-history --older-than <days> # clean session history older than N days
-  para config                 # configure para settings
+  para resume <session>       # resume session in ${ide_display_name}
+  para config                 # interactive setup wizard
 
 EXAMPLES:
-  para start                  # create session (e.g., swift_phoenix_20250531-233056)
-  para start feature-auth     # custom named session  
-  para dispatch "Create a user authentication system" # session with initial prompt
-  para dispatch auth "Add login/logout functionality" # named session with prompt
-  para finish "Add feature"   # squash all changes into one commit
-  para recover swift_phoenix_20250531-233056  # recover a finished session
-  para history                # see all finished/cancelled sessions
-  para clean-history --older-than 7  # clean sessions older than 7 days
-  para config                 # set up your IDE preference
-  para config show            # show current settings
+  para start feature-auth     # create 'feature-auth' session
+  para start                  # create auto-named session (e.g. 'swift-star')
+  para dispatch "create auth system"  # Claude Code session with prompt
+  para finish "add user login"       # squash and finish session
+  para finish --preserve "multi-step" # preserve individual commits
+  para finish "auth complete" --branch feature-authentication  # custom branch
+  para list                   # show: feature-auth, swift-star (active sessions)
+  para resume feature-auth    # resume work in 'feature-auth' session
+  para cancel swift-star      # delete 'swift-star' session
+  para clean                  # delete ALL sessions
 
-CONFIGURATION:
-  Current IDE: $ide_display_name
-  Config file: ${CONFIG_FILE:-~/.config/para/config}
-  Recovery retention: ${RECOVERY_RETENTION_DAYS:-7} days
+AI INTEGRATION:
+  Use 'para dispatch' for AI-assisted development with Claude Code.
   
-  Note: 'dispatch' command requires Claude Code. Current IDE: $ide_display_name
-  Run 'para config' to change your IDE or other settings.
-
-For more information, see the README.md
 EOF
 }
 
@@ -59,7 +50,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | recover | history | clean-history | config | --preserve)
+  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | config | --preserve)
     return 0
     ;;
   *)

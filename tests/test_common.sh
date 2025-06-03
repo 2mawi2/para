@@ -63,6 +63,9 @@ EOF
     unset IDE_NAME
     unset IDE_USER_DATA_DIR
     
+    # Set branch prefix to pc for backward compatibility in tests
+    export PARA_BRANCH_PREFIX="pc"
+    
     (
         cd "$TEST_REPO"
         git init

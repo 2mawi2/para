@@ -3,6 +3,9 @@
 # Unit tests for pure functions in para
 # Tests functions that don't require Git or filesystem operations
 
+# Source common test functions  
+. "$(dirname "${BATS_TEST_FILENAME}")/test_common.sh"
+
 setup() {
     # Set up test environment
     export TEST_DIR="$(pwd)"
@@ -606,4 +609,257 @@ setup() {
     [[ "$result" =~ fallback_called ]]
     
     rm -rf "$temp_dir"
+}
+
+# Tests for configurable branch prefix functionality
+@test "get_branch_prefix returns default para prefix" {
+    # Clear any existing environment variable
+    unset PARA_BRANCH_PREFIX
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(get_branch_prefix)
+    [ "$result" = "para" ]
+}
+
+@test "get_branch_prefix respects PARA_BRANCH_PREFIX environment variable" {
+    export PARA_BRANCH_PREFIX="feature"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(get_branch_prefix)
+    [ "$result" = "feature" ]
+}
+
+@test "get_branch_prefix handles empty environment variable" {
+    export PARA_BRANCH_PREFIX=""
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(get_branch_prefix)
+    [ "$result" = "para" ]
+}
+
+@test "validate_branch_prefix accepts valid prefixes" {
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    # Valid prefixes
+    run validate_branch_prefix "para"
+    [ "$status" -eq 0 ]
+    
+    run validate_branch_prefix "feature"
+    [ "$status" -eq 0 ]
+    
+    run validate_branch_prefix "ai"
+    [ "$status" -eq 0 ]
+    
+    run validate_branch_prefix "dev"
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_branch_prefix rejects invalid prefixes" {
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    # Invalid prefixes with special characters
+    run validate_branch_prefix "para/"
+    [ "$status" -ne 0 ]
+    
+    run validate_branch_prefix "feature*"
+    [ "$status" -ne 0 ]
+    
+    run validate_branch_prefix "ai?"
+    [ "$status" -ne 0 ]
+    
+    run validate_branch_prefix "dev:"
+    [ "$status" -ne 0 ]
+    
+    run validate_branch_prefix "test@"
+    [ "$status" -ne 0 ]
+}
+
+@test "generate_clean_branch_name creates valid branch names from session names" {
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    # Test basic conversion
+    result=$(generate_clean_branch_name "test session")
+    [ "$result" = "test-session" ]
+    
+    # Test special character handling
+    result=$(generate_clean_branch_name "user_auth")
+    [ "$result" = "user-auth" ]
+    
+    # Test uppercase conversion
+    result=$(generate_clean_branch_name "FeatureAuth")
+    [ "$result" = "featureauth" ]
+    
+    # Test multiple spaces
+    result=$(generate_clean_branch_name "test   multiple   spaces")
+    [ "$result" = "test-multiple-spaces" ]
+}
+
+@test "generate_target_branch_name combines prefix and clean name" {
+    export PARA_BRANCH_PREFIX="feature"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_target_branch_name "user auth")
+    [ "$result" = "feature/user-auth" ]
+}
+
+@test "generate_target_branch_name handles empty session name" {
+    export PARA_BRANCH_PREFIX="para"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_target_branch_name "")
+    [ "$result" = "para/unnamed" ]
+}
+
+# Integration tests for configurable prefix functionality
+@test "configurable prefix integration - feature prefix" {
+    export PARA_BRANCH_PREFIX="feature"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_target_branch_name "user auth")
+    [ "$result" = "feature/user-auth" ]
+}
+
+@test "configurable prefix integration - ai prefix" {
+    export PARA_BRANCH_PREFIX="ai"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_target_branch_name "implement JWT")
+    [ "$result" = "ai/implement-jwt" ]
+}
+
+@test "configurable prefix integration - single char prefix" {
+    export PARA_BRANCH_PREFIX="x"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_target_branch_name "test")
+    [ "$result" = "x/test" ]
+}
+
+@test "generate_clean_branch_name handles edge cases" {
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    
+    result=$(generate_clean_branch_name "Test_Name-123")
+    [ "$result" = "test-name-123" ]
+
+    result=$(generate_clean_branch_name "  invalid chars!@#$%  ")
+    [ "$result" = "invalid-chars" ]
+
+    result=$(generate_clean_branch_name "")
+    [ "$result" = "unnamed" ]
+}
+
+# Tests for new branch validation functions
+@test "validate_target_branch_name accepts valid branch names" {
+  # Source git functions to test
+  . "$LIB_DIR/para-git.sh"
+  
+  run validate_target_branch_name "feature-auth"
+  [ "$status" -eq 0 ]
+
+  run validate_target_branch_name "bugfix/login-issue"
+  [ "$status" -eq 0 ]
+
+  run validate_target_branch_name "feature/user-authentication"
+  [ "$status" -eq 0 ]
+
+  run validate_target_branch_name "hotfix-123"
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_target_branch_name rejects invalid branch names" {
+  # Source git functions to test
+  . "$LIB_DIR/para-git.sh"
+  
+  # Empty name
+  run validate_target_branch_name ""
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot be empty"* ]]
+
+  # Invalid characters
+  run validate_target_branch_name "feature with spaces"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid characters"* ]]
+
+  run validate_target_branch_name "feature~branch"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid characters"* ]]
+
+  run validate_target_branch_name "feature:branch"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid characters"* ]]
+
+  # Cannot start with dash or dot
+  run validate_target_branch_name "-feature"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot start with"* ]]
+
+  run validate_target_branch_name ".feature"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot start with"* ]]
+
+  # Cannot end with slash
+  run validate_target_branch_name "feature/"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot end with"* ]]
+
+  # Cannot contain /.
+  run validate_target_branch_name "feature/.config"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot contain '/.' sequence"* ]]
+}
+
+@test "generate_unique_branch_name returns original when no conflict" {
+  setup_temp_git_repo
+  cd "$TEST_REPO"
+  
+  # Source git functions to test
+  . "$LIB_DIR/para-git.sh"
+
+  result=$(generate_unique_branch_name "new-feature")
+  [ "$result" = "new-feature" ]
+}
+
+@test "generate_unique_branch_name adds suffix when branch exists" {
+  setup_temp_git_repo
+  cd "$TEST_REPO"
+  
+  # Source git functions to test
+  . "$LIB_DIR/para-git.sh"
+
+  # Get the actual default branch name (could be main or master)
+  default_branch=$(git rev-parse --abbrev-ref HEAD)
+
+  # Create a branch that will conflict
+  git checkout -b existing-feature
+  git checkout "$default_branch"
+
+  result=$(generate_unique_branch_name "existing-feature")
+  [ "$result" = "existing-feature-1" ]
+
+  # Create the -1 version too
+  git checkout -b existing-feature-1
+  git checkout "$default_branch"
+
+  result=$(generate_unique_branch_name "existing-feature")
+  [ "$result" = "existing-feature-2" ]
 } 
