@@ -31,7 +31,6 @@ fi
 . "$LIB_DIR/para-git.sh"
 . "$LIB_DIR/para-session.sh"
 . "$LIB_DIR/para-ide.sh"
-. "$LIB_DIR/para-recovery.sh"
 
 # Initialize environment
 need_git_repo
@@ -123,18 +122,6 @@ handle_command() {
     handle_resume_command "$@"
     ;;
 
-  recover)
-    handle_recover_command "$@"
-    ;;
-
-  history)
-    handle_history_command "$@"
-    ;;
-
-  clean-history)
-    handle_clean_history_command "$@"
-    ;;
-
   config)
     handle_config_command "$@"
     ;;
@@ -160,9 +147,6 @@ handle_start_command() {
   else
     die "start takes optionally one session name (for prompts, use 'para dispatch')"
   fi
-
-  # Auto-cleanup old history entries
-  auto_cleanup_history
 
   # Session creation logic - no initial prompt
   create_new_session "$SESSION_NAME" ""
@@ -192,9 +176,6 @@ handle_dispatch_command() {
     die "dispatch usage: 'para dispatch \"prompt\"' or 'para dispatch session-name \"prompt\"'"
   fi
 
-  # Auto-cleanup old history entries
-  auto_cleanup_history
-
   # Session creation logic with initial prompt
   create_new_session "$SESSION_NAME" "$INITIAL_PROMPT"
 }
@@ -203,32 +184,70 @@ handle_dispatch_command() {
 handle_finish_command() {
   REBASE_MODE="squash" # Default to squash mode
   COMMIT_MSG=""
+  TARGET_BRANCH_NAME=""
+  BRANCH_FLAG_PROVIDED=false
 
+  # Parse arguments supporting --preserve and --branch in different positions
   if [ "$#" -eq 1 ]; then
     die "finish requires a commit message"
-  elif [ "$#" -eq 2 ]; then
-    COMMIT_MSG="$2"
-    SESSION_ID=$(auto_detect_session)
-  elif [ "$#" -eq 3 ] && [ "$2" = "--preserve" ]; then
-    REBASE_MODE="rebase"
-    COMMIT_MSG="$3"
-    SESSION_ID=$(auto_detect_session)
   else
-    die "finish requires a commit message, optionally with --preserve flag"
+    # Parse all arguments to handle flags in any order
+    while [ "$#" -gt 1 ]; do
+      case "$2" in
+        --preserve)
+          REBASE_MODE="rebase"
+          shift
+          ;;
+        --branch=*)
+          TARGET_BRANCH_NAME="${2#--branch=}"
+          BRANCH_FLAG_PROVIDED=true
+          shift
+          ;;
+        --branch)
+          if [ "$#" -lt 3 ]; then
+            die "--branch requires a branch name"
+          fi
+          TARGET_BRANCH_NAME="$3"
+          BRANCH_FLAG_PROVIDED=true
+          shift 2
+          ;;
+        -*)
+          die "unknown option: $2"
+          ;;
+        *)
+          # This must be the commit message
+          if [ -n "$COMMIT_MSG" ]; then
+            die "multiple commit messages provided"
+          fi
+          COMMIT_MSG="$2"
+          shift
+          ;;
+      esac
+    done
+
+    # Validate that we have a commit message
+    if [ -z "$COMMIT_MSG" ]; then
+      die "finish requires a commit message"
+    fi
+
+    # Validate target branch name if --branch flag was explicitly provided
+    if [ "$BRANCH_FLAG_PROVIDED" = true ]; then
+      validate_target_branch_name "$TARGET_BRANCH_NAME"
+    fi
+
+    SESSION_ID=$(auto_detect_session)
   fi
 
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
   echo "▶ finishing session $SESSION_ID (mode: $REBASE_MODE)"
-  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
+  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE" "$TARGET_BRANCH_NAME"; then
     echo "▶ cleaning up worktree for session $SESSION_ID"
-    # Save to history before cleanup
-    save_session_to_history "$SESSION_ID" "finished" "$COMMIT_MSG" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$REBASE_MODE"
     # Remove worktree and session state, but keep the branch for manual merging
     git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
     remove_session_state "$SESSION_ID"
-    echo "✅ Session finished - branch $TEMP_BRANCH ready for manual merge"
+    echo "✅ Session finished - branch ready for manual merge"
     echo "💡 Worktree cleaned up, but branch preserved for merging"
     return 0
   else
@@ -248,8 +267,6 @@ handle_cancel_command() {
 
   get_session_info "$SESSION_ID"
   echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
-  # Save to history before cleanup
-  save_session_to_history "$SESSION_ID" "cancelled" "" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
   remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
   remove_session_state "$SESSION_ID"
   echo "cancelled session $SESSION_ID"
@@ -259,59 +276,13 @@ handle_cancel_command() {
 # Handle resume command
 handle_resume_command() {
   if [ "$#" -eq 1 ]; then
-    die "resume requires a session name"
+    # No session specified - use enhanced auto-discovery
+    enhanced_resume ""
   elif [ "$#" -eq 2 ]; then
     SESSION_ID="$2"
+    enhanced_resume "$SESSION_ID"
   else
-    die "resume takes a session name"
-  fi
-
-  get_session_info "$SESSION_ID"
-  [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
-
-  # Load initial prompt if it exists for this session
-  STORED_PROMPT=$(load_session_prompt "$SESSION_ID")
-
-  echo "▶ resuming session $SESSION_ID"
-  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$STORED_PROMPT"
-}
-
-# Handle recover command
-handle_recover_command() {
-  if [ "$#" -eq 1 ]; then
-    die "recover requires a session name"
-  elif [ "$#" -eq 2 ]; then
-    SESSION_ID="$2"
-  else
-    die "recover takes a session name"
-  fi
-
-  recover_session "$SESSION_ID"
-}
-
-# Handle history command
-handle_history_command() {
-  if [ "$#" -gt 1 ]; then
-    die "history takes no arguments"
-  fi
-
-  list_session_history
-}
-
-# Handle clean history command
-handle_clean_history_command() {
-  if [ "$#" -eq 1 ]; then
-    # Clean all history
-    clean_session_history
-  elif [ "$#" -eq 3 ] && [ "$2" = "--older-than" ]; then
-    # Clean history older than specified days
-    older_than_days="$3"
-    if ! echo "$older_than_days" | grep -q '^[0-9]\+$'; then
-      die "clean-history --older-than requires a number of days"
-    fi
-    clean_session_history "$older_than_days"
-  else
-    die "clean-history usage: clean-history [--older-than DAYS]"
+    die "resume takes optionally a session name"
   fi
 }
 

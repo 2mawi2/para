@@ -140,6 +140,7 @@ finish_session() {
   base_branch="$3"
   commit_msg="$4"
   merge_mode="${5:-squash}" # Default to squash mode if not provided
+  target_branch_name="$6"   # Optional custom target branch name
 
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
@@ -171,14 +172,29 @@ finish_session() {
     fi
   fi
 
+  # Handle custom branch name if provided
+  final_branch_name="$temp_branch"
+  if [ -n "$target_branch_name" ]; then
+    # Generate unique name in case of conflicts
+    unique_branch_name=$(generate_unique_branch_name "$target_branch_name")
+    
+    if [ "$unique_branch_name" != "$target_branch_name" ]; then
+      echo "⚠️  branch '$target_branch_name' already exists, using '$unique_branch_name' instead"
+    fi
+    
+    echo "▶ renaming branch from '$temp_branch' to '$unique_branch_name'"
+    git branch -m "$unique_branch_name" || die "failed to rename branch to '$unique_branch_name'"
+    final_branch_name="$unique_branch_name"
+  fi
+
   # Push branch to remote if configured
   echo "▶ preparing branch for manual merge"
   
   # Check if we have a remote configured
   if git remote | grep -q "origin"; then
     echo "▶ pushing branch to remote"
-    if git push origin "$temp_branch"; then
-      echo "✅ branch '$temp_branch' pushed to remote"
+    if git push origin "$final_branch_name"; then
+      echo "✅ branch '$final_branch_name' pushed to remote"
       BRANCH_LOCATION="remote and local"
     else
       echo "⚠️  failed to push to remote, branch available locally only"
@@ -200,21 +216,182 @@ finish_session() {
   echo "🎉 Session finished successfully!"
   echo ""
   echo "📋 Next steps:"
-  echo "   Your changes are ready on branch: $temp_branch"
+  echo "   Your changes are ready on branch: $final_branch_name"
   echo "   Branch location: $BRANCH_LOCATION"
   echo ""
   echo "   To merge your changes:"
   echo "   git checkout $base_branch"
-  echo "   git merge $temp_branch"
+  echo "   git merge $final_branch_name"
   echo ""
   echo "   Or create a pull/merge request if using a remote repository."
   echo ""
   echo "   After merging, clean up the branch:"
-  echo "   git branch -d $temp_branch"
+  echo "   git branch -d $final_branch_name"
   if [ "$BRANCH_LOCATION" = "remote and local" ]; then
-    echo "   git push origin --delete $temp_branch"
+    echo "   git push origin --delete $final_branch_name"
   fi
   echo ""
 
   return 0
+}
+
+# Get configurable branch prefix, defaulting to "para"
+get_branch_prefix() {
+  if [ -n "${PARA_BRANCH_PREFIX:-}" ]; then
+    echo "${PARA_BRANCH_PREFIX}"
+  else
+    echo "para"
+  fi
+}
+
+# Validate branch prefix for Git compatibility
+validate_branch_prefix() {
+  prefix="$1"
+  
+  # Check for empty prefix
+  if [ -z "$prefix" ]; then
+    return 1
+  fi
+  
+  # Check for invalid characters that Git doesn't allow in branch names
+  # Git branch names cannot contain: space, ~, ^, :, ?, *, [, \, @, .., @{, //, /end
+  case "$prefix" in
+    *\ * | *~* | *^* | *:* | *\?* | *\** | *\[* | *\\* | *@* )
+      return 1
+      ;;
+    *..* | *@\{* | *//* | */ | .* )
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+# Generate clean branch name from session name
+generate_clean_branch_name() {
+  session_name="$1"
+  
+  # Convert to lowercase and replace spaces/underscores with hyphens
+  clean_name=$(echo "$session_name" | tr '[:upper:]' '[:lower:]' | tr ' _' '--' | tr -s '-')
+  
+  # Remove any invalid characters for Git branch names
+  clean_name=$(echo "$clean_name" | sed 's/[^a-z0-9-]//g')
+  
+  # Ensure it doesn't start or end with a hyphen
+  clean_name=$(echo "$clean_name" | sed 's/^-*//;s/-*$//')
+  
+  # If empty after cleaning, use "unnamed"
+  if [ -z "$clean_name" ]; then
+    clean_name="unnamed"
+  fi
+  
+  echo "$clean_name"
+}
+
+# Generate target branch name with prefix
+generate_target_branch_name() {
+  session_name="$1"
+  prefix=$(get_branch_prefix)
+  
+  if [ -z "$session_name" ]; then
+    session_name="unnamed"
+  fi
+  
+  clean_name=$(generate_clean_branch_name "$session_name")
+  echo "${prefix}/${clean_name}"
+}
+
+# Validate target branch name for Git compatibility
+validate_target_branch_name() {
+  branch_name="$1"
+  
+  # Check for empty branch name
+  if [ -z "$branch_name" ]; then
+    die "branch name cannot be empty"
+  fi
+  
+  # Check for spaces
+  case "$branch_name" in
+    *\ *)
+      die "invalid branch name '$branch_name': contains spaces"
+      ;;
+  esac
+  
+  # Check for other invalid characters
+  case "$branch_name" in
+    *~* | *^* | *:* | *\?* | *\** | *\[* | *\\* )
+      die "invalid branch name '$branch_name': contains invalid characters"
+      ;;
+  esac
+  
+  # Check for @ character (but not @{ which is checked separately)
+  case "$branch_name" in
+    *@*)
+      # Check if it's the @{ pattern
+      case "$branch_name" in
+        *@\{*) ;;  # This will be caught later
+        *) die "invalid branch name '$branch_name': contains invalid characters" ;;
+      esac
+      ;;
+  esac
+  
+  # Check for invalid sequences
+  case "$branch_name" in
+    *..* | *@\{* | *//* )
+      die "invalid branch name '$branch_name': contains invalid sequences"
+      ;;
+  esac
+  
+  # Check for invalid start characters
+  case "$branch_name" in
+    -* | .*)
+      die "invalid branch name '$branch_name': cannot start with '-' or '.'"
+      ;;
+  esac
+  
+  # Check for invalid end characters
+  case "$branch_name" in
+    */)
+      die "invalid branch name '$branch_name': cannot end with '/'"
+      ;;
+  esac
+  
+  # Check for specific invalid patterns
+  case "$branch_name" in
+    . | /)
+      die "invalid branch name '$branch_name': invalid name"
+      ;;
+    */.*)
+      die "invalid branch name '$branch_name': cannot contain '/.' sequence"
+      ;;
+  esac
+  
+  return 0
+}
+
+# Generate unique branch name by adding suffix if conflicts exist
+generate_unique_branch_name() {
+  target_branch="$1"
+  
+  # Check if branch already exists
+  if ! git -C "$REPO_ROOT" rev-parse --verify "$target_branch" >/dev/null 2>&1; then
+    # Branch doesn't exist, use as-is
+    echo "$target_branch"
+    return 0
+  fi
+  
+  # Branch exists, need to find unique name with suffix
+  counter=1
+  while [ "$counter" -le 999 ]; do
+    candidate="${target_branch}-${counter}"
+    if ! git -C "$REPO_ROOT" rev-parse --verify "$candidate" >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+    counter=$((counter + 1))
+  done
+  
+  # If we get here, we couldn't find a unique name (highly unlikely)
+  die "unable to generate unique branch name after 999 attempts"
 }

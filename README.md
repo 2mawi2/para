@@ -41,30 +41,62 @@ para finish "Add new feature"
 
 ## Core Commands
 
-```bash
-para config              # Set up your IDE (first-time setup)
-para start [name]        # Create new session
-para dispatch "prompt"   # Create session with AI prompt (Claude Code)
-para list               # Show active sessions  
-para finish "message"   # Merge session back to main
-para cancel             # Delete current session
-para clean              # Delete all sessions
-```
+### Session Management
+- `para start [name]` - Create new parallel session (opens configured IDE)
+- `para finish "message"` - Auto-stage & finish session with commit message (squash mode)
+- `para finish --preserve "message"` - Finish session preserving individual commits  
+- `para finish "message" --branch custom-name` - Finish with custom branch name
+- `para finish --preserve "message" --branch custom-name` - Preserve commits + custom branch
+- `para list` - Show all active sessions
+- `para continue` - Resume after resolving finish conflicts (auto-stages)
+- `para cancel [session]` - Discard current or specified session
+- `para clean` - Remove all sessions
+- `para resume <session>` - Resume session in IDE
+- `para resume` - Auto-discover and resume sessions (works with orphaned worktrees)
+
+### Configuration
+- `para config` - Interactive configuration wizard
+- `para config auto` - Auto-detect IDE and create config
+- `para config show` - Display current settings
+- `para config edit` - Edit configuration file
+- `para config quick` - Quick setup with confirmation
 
 ## AI Integration
 
-For Claude Code users, use `dispatch` to start sessions with initial prompts:
+Claude Code support for AI-powered development:
+```bash
+para dispatch "prompt"             # Create session with AI prompt
+para dispatch name "prompt"        # Named session with AI prompt
+```
+
+## Custom Branch Names
+
+Para supports custom branch names when finishing sessions:
 
 ```bash
-# Create session with AI prompt
-para dispatch "Create a user authentication system"
+# Default behavior - uses session name with timestamp
+para finish "Implement user authentication"
+# Creates branch: para/session-name-20240531-184623
 
-# Named session with prompt  
-para dispatch feature-auth "Add OAuth login and user management"
+# Custom branch name
+para finish "Implement auth" --branch feature-authentication
+# Creates branch: feature-authentication
 
-# Regular start (no prompt)
-para start feature-ui
+# Custom branch with preserved commits
+para finish --preserve "Multi-step feature" --branch feature-user-system
+# Creates branch: feature-user-system (keeps individual commits)
+
+# Branch conflict resolution
+para finish "Fix bug" --branch existing-feature
+# If 'existing-feature' exists, creates: existing-feature-1
 ```
+
+### Branch Validation
+- Branch names must be valid Git branch names
+- Cannot contain spaces or special characters (~ ^ : ? * [ \ @)
+- Cannot start with `-` or `.`
+- Cannot end with `/`
+- Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
 The `dispatch` command creates a new session and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
 

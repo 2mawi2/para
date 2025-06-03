@@ -690,4 +690,289 @@ EOF
     # 8. Both sessions should be cleaned up
     assert_session_not_exists "$session_a"
     assert_session_not_exists "$session_b"
+}
+
+# Test configurable branch prefix in actual session creation
+@test "IT-13: Configurable branch prefix creates correct branch names" {
+    # Test custom prefix functionality
+    TEST_DIR=$(mktemp -d)
+    cd "$TEST_DIR"
+    
+    # Initialize git repo
+    git init
+    git config user.name "Test User"
+    git config user.email "test@example.com"
+    echo "test" > README.md
+    git add README.md
+    git commit -m "Initial commit"
+    
+    # Test with custom prefix
+    export PARA_BRANCH_PREFIX="feature"
+    
+    # 1. Create session with custom named session
+    run "$PARA_SCRIPT" start test-session
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"initialized session"* ]]
+    
+    # Find the session directory and check branch name
+    # With the new system, subtrees directory structure uses the branch prefix too
+    WORKTREE_DIR=$(find subtrees/feature -name "test-session*" -type d | head -1)
+    [ -d "$WORKTREE_DIR" ]
+    cd "$WORKTREE_DIR"
+    BRANCH_NAME=$(git branch --show-current)
+    # Should use feature prefix instead of default para
+    [[ "$BRANCH_NAME" == feature/test-session-* ]]
+    
+    # 2. Make a change and finish
+    echo "test change" > test-file.py
+    cd "$TEST_DIR"
+    
+    # Finish with default behavior (should use prefix)
+    cd $WORKTREE_DIR
+    run "$PARA_SCRIPT" finish "Test configurable prefix feature"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: $BRANCH_NAME"* ]]
+    
+    # 3. Verify branch exists and has correct name pattern
+    cd "$TEST_DIR"
+    git checkout "$BRANCH_NAME"
+    assert_file_contains "test-file.py" "test change"
+    [[ "$BRANCH_NAME" == feature/test-session-* ]]
+    
+    # Cleanup
+    cd /
+    rm -rf "$TEST_DIR"
+    unset PARA_BRANCH_PREFIX
+}
+
+# New tests for --branch functionality
+@test "IT-14: Custom branch name with --branch flag" {
+    # 1. Create session
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    # 2. Make changes and finish with custom branch name
+    cd "$TEST_REPO/$session_dir"
+    echo "Custom branch test change" > test-file.py
+    
+    # Finish with custom branch name
+    run "$PARA_SCRIPT" finish "Test custom branch" --branch feature-authentication
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: feature-authentication"* ]]
+    
+    # Go back to main repo to verify
+    cd "$TEST_REPO"
+    
+    # Verify the custom branch exists
+    run git branch --list "feature-authentication"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    # Verify changes are in the custom branch
+    git checkout feature-authentication
+    assert_file_contains "test-file.py" "Custom branch test change"
+    
+    # Verify session is cleaned up
+    assert_session_not_exists "$session_dir"
+}
+
+@test "IT-15: --branch with --preserve flag combination" {
+    # 1. Create session
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    # 2. Make multiple commits
+    cd "$TEST_REPO/$session_dir"
+    
+    # First commit
+    echo "First change" > test-file.py
+    git add test-file.py
+    git commit -m "First commit in session"
+    
+    # Second commit  
+    echo "Second change" >> test-file.py
+    git add test-file.py
+    git commit -m "Second commit in session"
+    
+    # 3. Finish with preserve and custom branch name
+    run "$PARA_SCRIPT" finish --preserve "Preserved commits on custom branch" --branch feature-preserved
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode: rebase"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: feature-preserved"* ]]
+    
+    # Go back to verify
+    cd "$TEST_REPO"
+    
+    # Verify the custom branch exists
+    run git branch --list "feature-preserved"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    # Verify we have the individual commits (not squashed)
+    # Get the actual default branch name (could be main or master) 
+    cd "$TEST_REPO"
+    default_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Verify changes are in the branch and both commits are preserved
+    git checkout feature-preserved
+    assert_file_contains "test-file.py" "First change"
+    assert_file_contains "test-file.py" "Second change"
+    
+    commit_count=$(git rev-list --count HEAD ^"$default_branch")
+    # Should have exactly 2 commits (preserved)
+    [ "$commit_count" -eq 2 ]
+}
+
+@test "IT-16: Branch name conflict resolution" {
+    # 1. Create a branch that will conflict  
+    cd "$TEST_REPO"
+    # Get the actual default branch name first
+    default_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    git checkout -b existing-feature
+    echo "existing content" > existing.txt
+    git add existing.txt
+    git commit -m "Existing feature content"
+    git checkout "$default_branch"
+    
+    # 2. Create session
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    # 3. Make changes and try to finish with existing branch name
+    cd "$TEST_REPO/$session_dir"
+    echo "New session content" > new-session-file.py
+    
+    # Finish with branch name that already exists
+    run "$PARA_SCRIPT" finish "Test conflict resolution" --branch existing-feature
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"branch 'existing-feature' already exists, using 'existing-feature-1' instead"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: existing-feature-1"* ]]
+    
+    # Go back to verify
+    cd "$TEST_REPO"
+    
+    # Verify both branches exist
+    run git branch --list "existing-feature"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    run git branch --list "existing-feature-1"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    # Verify the content is in the right branches
+    git checkout existing-feature
+    assert_file_contains "existing.txt" "existing content"
+    [ ! -f "new-session-file.py" ]
+    
+    git checkout existing-feature-1
+    assert_file_contains "new-session-file.py" "New session content"
+    # existing.txt might or might not exist depending on branching point, just check our new file
+}
+
+@test "IT-17a: Invalid branch name validation - spaces" {
+    # Test invalid characters (spaces)
+    run run_para  
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    cd "$TEST_REPO/$session_dir"
+    echo "test change" > test-file.py
+    
+    run "$PARA_SCRIPT" finish "Test invalid name" --branch "feature with spaces"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"invalid branch name"* ]]
+    [[ "$output" == *"contains spaces"* ]]
+    
+    # Session should still exist after failed finish attempt
+    cd "$TEST_REPO"
+    assert_session_exists "$session_dir"
+}
+
+@test "IT-17b: Invalid branch name validation - leading dash" {
+    # Test name starting with dash
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO" 
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    cd "$TEST_REPO/$session_dir"
+    echo "test change" > test-file.py
+    
+    run "$PARA_SCRIPT" finish "Test invalid name" --branch "-feature"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"invalid branch name"* ]]
+    [[ "$output" == *"cannot start with"* ]]
+    
+    # Session should still exist after failed finish attempt  
+    cd "$TEST_REPO"
+    assert_session_exists "$session_dir"
+}
+
+@test "IT-17c: Invalid branch name validation - empty name" {
+    # Test empty name
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    cd "$TEST_REPO/$session_dir"
+    echo "test change" > test-file.py
+    
+    run "$PARA_SCRIPT" finish "Test invalid name" --branch ""
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"branch name cannot be empty"* ]]
+    
+    # Session should still exist after failed finish attempt
+    cd "$TEST_REPO"
+    assert_session_exists "$session_dir"
+}
+
+@test "IT-18: Different argument order combinations for --branch" {
+    # 1. Create session
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+    
+    # 2. Test different argument orders
+    cd "$TEST_REPO/$session_dir"
+    echo "test change" > test-file.py
+    
+    # Test: --branch first, then message
+    run "$PARA_SCRIPT" finish --branch feature-order-test "Test argument order"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: feature-order-test"* ]]
+    
+    # Verify branch exists
+    cd "$TEST_REPO"
+    run git branch --list "feature-order-test"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
 } 
