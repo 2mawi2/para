@@ -194,34 +194,34 @@ handle_finish_command() {
     # Parse all arguments to handle flags in any order
     while [ "$#" -gt 1 ]; do
       case "$2" in
-        --preserve)
-          REBASE_MODE="rebase"
-          shift
-          ;;
-        --branch=*)
-          TARGET_BRANCH_NAME="${2#--branch=}"
-          BRANCH_FLAG_PROVIDED=true
-          shift
-          ;;
-        --branch)
-          if [ "$#" -lt 3 ]; then
-            die "--branch requires a branch name"
-          fi
-          TARGET_BRANCH_NAME="$3"
-          BRANCH_FLAG_PROVIDED=true
-          shift 2
-          ;;
-        -*)
-          die "unknown option: $2"
-          ;;
-        *)
-          # This must be the commit message
-          if [ -n "$COMMIT_MSG" ]; then
-            die "multiple commit messages provided"
-          fi
-          COMMIT_MSG="$2"
-          shift
-          ;;
+      --preserve)
+        REBASE_MODE="rebase"
+        shift
+        ;;
+      --branch=*)
+        TARGET_BRANCH_NAME="${2#--branch=}"
+        BRANCH_FLAG_PROVIDED=true
+        shift
+        ;;
+      --branch)
+        if [ "$#" -lt 3 ]; then
+          die "--branch requires a branch name"
+        fi
+        TARGET_BRANCH_NAME="$3"
+        BRANCH_FLAG_PROVIDED=true
+        shift 2
+        ;;
+      -*)
+        die "unknown option: $2"
+        ;;
+      *)
+        # This must be the commit message
+        if [ -n "$COMMIT_MSG" ]; then
+          die "multiple commit messages provided"
+        fi
+        COMMIT_MSG="$2"
+        shift
+        ;;
       esac
     done
 
