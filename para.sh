@@ -107,10 +107,6 @@ handle_command() {
     handle_finish_command "$@"
     ;;
 
-  continue)
-    handle_continue_command "$@"
-    ;;
-
   cancel | abort)
     handle_cancel_command "$@"
     ;;
@@ -224,46 +220,16 @@ handle_finish_command() {
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  # Store the rebase mode in session state for potential continue operations
-  update_session_merge_mode "$SESSION_ID" "$REBASE_MODE"
-
   echo "▶ finishing session $SESSION_ID (mode: $REBASE_MODE)"
-  if merge_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
-    echo "▶ cleaning up session $SESSION_ID"
+  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE"; then
+    echo "▶ cleaning up worktree for session $SESSION_ID"
     # Save to history before cleanup
     save_session_to_history "$SESSION_ID" "finished" "$COMMIT_MSG" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$REBASE_MODE"
-    remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
+    # Remove worktree and session state, but keep the branch for manual merging
+    git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
     remove_session_state "$SESSION_ID"
-    echo "finish complete for session $SESSION_ID ✅"
-    echo "🎉 You can safely close this $(get_ide_display_name) session now."
-    return 0
-  else
-    return 1
-  fi
-}
-
-# Handle continue command
-handle_continue_command() {
-  if [ "$#" -eq 1 ]; then
-    SESSION_ID=$(auto_detect_session)
-  elif [ "$#" -eq 2 ]; then
-    SESSION_ID="$2"
-  else
-    die "continue takes optionally a session ID"
-  fi
-
-  get_session_info "$SESSION_ID"
-  [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
-
-  echo "▶ continuing finish for session $SESSION_ID (mode: $MERGE_MODE)"
-  if continue_merge "$WORKTREE_DIR" "$TEMP_BRANCH" "$BASE_BRANCH" "$MERGE_MODE"; then
-    echo "▶ cleaning up session $SESSION_ID"
-    # Save to history before cleanup
-    save_session_to_history "$SESSION_ID" "finished" "" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
-    remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
-    remove_session_state "$SESSION_ID"
-    echo "finish complete for session $SESSION_ID ✅"
-    echo "🎉 You can safely close this $(get_ide_display_name) session now."
+    echo "✅ Session finished - branch $TEMP_BRANCH ready for manual merge"
+    echo "💡 Worktree cleaned up, but branch preserved for merging"
     return 0
   else
     return 1

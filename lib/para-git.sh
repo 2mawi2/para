@@ -133,8 +133,8 @@ check_uncommitted_changes() {
   fi
 }
 
-# Perform merge operations
-merge_session() {
+# Finish session - commit changes and prepare branch for manual merge
+finish_session() {
   temp_branch="$1"
   worktree_dir="$2"
   base_branch="$3"
@@ -146,7 +146,7 @@ merge_session() {
 
   cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
 
-  # Always commit any uncommitted changes first (both modes need this)
+  # Always commit any uncommitted changes first
   if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
     echo "▶ staging all changes"
     git add -A || die "failed to stage changes"
@@ -156,19 +156,9 @@ merge_session() {
     echo "ℹ️  no changes to commit"
   fi
 
-  # Always try rebase first to detect conflicts
-  echo "▶ rebasing $temp_branch onto $base_branch"
-  if ! git rebase "$base_branch"; then
-    echo "❌ rebase conflicts" >&2
-    echo "   → resolve conflicts in $worktree_dir" >&2
-    echo "   → then run: para continue" >&2
-    cd "$ORIGINAL_DIR" || true
-    return 1
-  fi
-
-  # If squash mode, squash all commits after successful rebase
+  # If squash mode, squash all commits into a single commit
   if [ "$merge_mode" = "squash" ]; then
-    echo "▶ squashing all commits into single commit"
+    echo "▶ squashing commits into single commit"
     # Count commits to squash (everything after base branch)
     COMMIT_COUNT=$(git rev-list --count HEAD ^"$base_branch")
     if [ "$COMMIT_COUNT" -gt 1 ]; then
@@ -181,136 +171,50 @@ merge_session() {
     fi
   fi
 
-  # Change to main repository root for merge operations
-  cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
-
-  # Verify we're in the correct repository state
-  if ! git rev-parse --git-dir >/dev/null 2>&1; then
-    die "not in a valid git repository at $REPO_ROOT"
-  fi
-
-  # Ensure repository is not bare (safety check)
-  if git config --get core.bare | grep -q "true"; then
-    echo "⚠️  Warning: Repository is configured as bare, fixing..." >&2
-    git config core.bare false || die "failed to fix bare repository setting"
-  fi
-
-  echo "▶ merging into $base_branch"
-  git checkout "$base_branch" || die "failed to checkout $base_branch"
-  if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
-    echo "▶ using non-fast-forward merge"
-    # For squash mode, we want a clean merge commit message
-    # For rebase mode, we want to preserve the individual commits
-    if [ "$merge_mode" = "squash" ]; then
-      merge_commit_msg="$commit_msg"
+  # Push branch to remote if configured
+  echo "▶ preparing branch for manual merge"
+  
+  # Check if we have a remote configured
+  if git remote | grep -q "origin"; then
+    echo "▶ pushing branch to remote"
+    if git push origin "$temp_branch"; then
+      echo "✅ branch '$temp_branch' pushed to remote"
+      BRANCH_LOCATION="remote and local"
     else
-      merge_commit_msg="Merge session $temp_branch"
+      echo "⚠️  failed to push to remote, branch available locally only"
+      BRANCH_LOCATION="local"
     fi
-
-    if ! git merge --no-ff -m "$merge_commit_msg" "$temp_branch"; then
-      echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
-      cd "$ORIGINAL_DIR" || true
-      return 1
-    fi
-  fi
-
-  # Restore original directory
-  cd "$ORIGINAL_DIR" || true
-  return 0
-}
-
-# Continue merge after conflict resolution
-continue_merge() {
-  worktree_dir="$1"
-  temp_branch="$2"
-  base_branch="$3"
-  merge_mode="${4:-squash}" # Default to squash if not provided
-
-  # Save current directory for restoration
-  ORIGINAL_DIR="$PWD"
-
-  cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
-
-  # Check if we're in the middle of a rebase
-  GIT_DIR=$(git rev-parse --git-dir)
-  if [ -d "$GIT_DIR/rebase-merge" ] || [ -d "$GIT_DIR/rebase-apply" ]; then
-    # Check for conflict markers in ALL files, not just git diff --check
-    echo "▶ checking for unresolved conflict markers"
-
-    # Search for conflict markers in all files
-    CONFLICT_FILES=""
-    if command -v grep >/dev/null 2>&1; then
-      # Use find + grep to search for conflict markers in all files
-      CONFLICT_FILES=$(find . -type f -not -path './.git/*' -exec grep -l "^<<<<<<< \|^=======$\|^>>>>>>> " {} \; 2>/dev/null || true)
-    fi
-
-    if [ -n "$CONFLICT_FILES" ]; then
-      echo "❌ There are still unresolved conflicts:" >&2
-      echo "Files with conflict markers:" >&2
-      echo "$CONFLICT_FILES" | sed 's/^/  /' >&2
-      echo "" >&2
-      echo "Please resolve all conflicts manually and run 'para continue' again." >&2
-      cd "$ORIGINAL_DIR" || true
-      return 1
-    fi
-
-    # Also check git diff --check for whitespace conflict markers
-    if ! git diff --check 2>/dev/null; then
-      echo "❌ git diff --check found conflict-related issues:" >&2
-      git diff --check 2>&1 | sed 's/^/  /' >&2
-      cd "$ORIGINAL_DIR" || true
-      return 1
-    fi
-
-    # Auto-stage all resolved files
-    echo "▶ auto-staging resolved conflicts"
-    git add -A || die "failed to stage resolved conflicts"
-
-    echo "▶ continuing rebase"
-    if ! GIT_EDITOR=true git rebase --continue; then
-      echo "❌ rebase continue failed – check for remaining conflicts" >&2
-      cd "$ORIGINAL_DIR" || true
-      return 1
-    fi
-    echo "✅ rebase completed"
   else
-    echo "ℹ️  No rebase in progress"
+    echo "ℹ️  no remote configured, branch available locally"
+    BRANCH_LOCATION="local"
   fi
 
-  # Change to main repository root for merge operations
+  # Change back to repository root
   cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
-
-  # Verify we're in the correct repository state
-  if ! git rev-parse --git-dir >/dev/null 2>&1; then
-    die "not in a valid git repository at $REPO_ROOT"
-  fi
-
-  # Ensure repository is not bare (safety check)
-  if git config --get core.bare | grep -q "true"; then
-    echo "⚠️  Warning: Repository is configured as bare, fixing..." >&2
-    git config core.bare false || die "failed to fix bare repository setting"
-  fi
-
-  # Continue with the merge process
-  echo "▶ merging into $base_branch"
-  git checkout "$base_branch" || die "failed to checkout $base_branch"
-  if ! git merge --ff-only "$temp_branch" 2>/dev/null; then
-    echo "▶ using non-fast-forward merge"
-    # Use appropriate merge commit message based on mode
-    if [ "$merge_mode" = "squash" ]; then
-      COMMIT_MSG="Merge session after resolving conflicts"
-    else
-      COMMIT_MSG="Merge session $temp_branch after resolving conflicts"
-    fi
-
-    if ! git merge --no-ff -m "$COMMIT_MSG" "$temp_branch"; then
-      echo "❌ merge conflicts – resolve them and complete the merge manually" >&2
-      cd "$ORIGINAL_DIR" || true
-      return 1
-    fi
-  fi
 
   # Restore original directory
   cd "$ORIGINAL_DIR" || true
+
+  # Success - return information about the branch
+  echo ""
+  echo "🎉 Session finished successfully!"
+  echo ""
+  echo "📋 Next steps:"
+  echo "   Your changes are ready on branch: $temp_branch"
+  echo "   Branch location: $BRANCH_LOCATION"
+  echo ""
+  echo "   To merge your changes:"
+  echo "   git checkout $base_branch"
+  echo "   git merge $temp_branch"
+  echo ""
+  echo "   Or create a pull/merge request if using a remote repository."
+  echo ""
+  echo "   After merging, clean up the branch:"
+  echo "   git branch -d $temp_branch"
+  if [ "$BRANCH_LOCATION" = "remote and local" ]; then
+    echo "   git push origin --delete $temp_branch"
+  fi
+  echo ""
+
   return 0
 }

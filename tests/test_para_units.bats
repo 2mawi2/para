@@ -60,6 +60,9 @@ setup() {
     run is_known_command "finish"
     [ "$status" -eq 0 ]
     
+    run is_known_command "cancel"
+    [ "$status" -eq 0 ]
+    
     run is_known_command "clean"
     [ "$status" -eq 0 ]
     
@@ -67,12 +70,6 @@ setup() {
     [ "$status" -eq 0 ]
     
     run is_known_command "ls"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "continue"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "cancel"
     [ "$status" -eq 0 ]
     
     run is_known_command "abort"
@@ -439,10 +436,13 @@ setup() {
 # Tests for is_known_command comprehensive coverage
 @test "is_known_command recognizes all documented commands" {
     # Test all commands that should be recognized
-    known_commands="start finish clean list ls continue cancel abort resume config"
+    known_commands="start finish clean list ls cancel abort resume config"
     for cmd in $known_commands; do
         run is_known_command "$cmd"
-        [ "$status" -eq 0 ]
+        [ "$status" -eq 0 ] || {
+            echo "Command '$cmd' should be recognized as known"
+            return 1
+        }
     done
 }
 

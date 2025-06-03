@@ -12,10 +12,10 @@ USAGE:
   para start <name>           # create custom named session
   para dispatch "text"        # create session with initial Claude Code prompt
   para dispatch <name> "text" # custom named session with initial prompt
-  para finish "message"       # squash all changes into one commit
-  para finish --preserve "message" # rebase individual commits (preserve history)
+  para dispatch [name] "prompt"   # create named session with initial prompt (Claude Code only)
+  para finish "commit message"    # finish session (squash commits by default)
+  para finish --preserve "msg"    # finish session preserving individual commits
   para list                   # list all active sessions
-  para continue               # continue finish after resolving conflicts
   para cancel [session]       # cancel/delete session
   para clean                  # delete all sessions
   para resume <session>       # resume session in $ide_display_name
@@ -59,7 +59,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | finish | continue | cancel | abort | resume | recover | history | clean-history | config | --preserve)
+  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | recover | history | clean-history | config | --preserve)
     return 0
     ;;
   *)
