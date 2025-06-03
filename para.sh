@@ -33,18 +33,15 @@ fi
 . "$LIB_DIR/para-ide.sh"
 . "$LIB_DIR/para-recovery.sh"
 
-# Initialize environment
 need_git_repo
 load_config
 init_paths
 
-# Check for first run and prompt configuration
 check_first_run() {
   if is_first_run; then
     echo "👋 Welcome to para!"
     echo ""
 
-    # Check if running in non-interactive mode (CI environment)
     if [ "${PARA_NON_INTERACTIVE:-false}" = "true" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
       echo "Running in non-interactive mode, using default configuration."
       create_default_config
