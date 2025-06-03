@@ -216,7 +216,7 @@ list_sessions() {
     echo "Checking for orphaned worktrees..."
     for worktree_dir in "$SUBTREES_DIR"/*; do
       [ -d "$worktree_dir" ] || continue
-      
+
       # Check if this worktree has a corresponding state file
       found_in_state=false
       if [ -d "$STATE_DIR" ]; then
@@ -230,7 +230,7 @@ list_sessions() {
           fi
         done
       fi
-      
+
       # If not found in state, it's orphaned
       if [ "$found_in_state" = false ]; then
         if [ "$ORPHANED_FOUND" -eq 0 ]; then
@@ -238,7 +238,7 @@ list_sessions() {
         fi
         ORPHANED_FOUND=1
         worktree_name=$(basename "$worktree_dir")
-        
+
         echo "Orphaned: $worktree_name"
         echo "  Path: $worktree_dir"
         if [ -d "$worktree_dir" ]; then
@@ -393,7 +393,7 @@ remove_session_prompt() {
 discover_all_sessions() {
   ACTIVE_SESSIONS=""
   ORPHANED_SESSIONS=""
-  
+
   # First, get sessions with state files
   if [ -d "$STATE_DIR" ]; then
     for state_file in "$STATE_DIR"/*.state; do
@@ -402,15 +402,15 @@ discover_all_sessions() {
       ACTIVE_SESSIONS="$ACTIVE_SESSIONS $session_id"
     done
   fi
-  
+
   # Then, scan for worktree directories that might be orphaned
   if [ -d "$SUBTREES_DIR" ]; then
     for worktree_dir in "$SUBTREES_DIR"/*; do
       [ -d "$worktree_dir" ] || continue
-      
+
       # Extract potential session info from path
       worktree_path=$(basename "$worktree_dir")
-      
+
       # Check if this worktree has a corresponding state file
       found_in_state=false
       if [ -d "$STATE_DIR" ]; then
@@ -424,14 +424,14 @@ discover_all_sessions() {
           fi
         done
       fi
-      
+
       # If not found in state, it's orphaned
       if [ "$found_in_state" = false ]; then
         ORPHANED_SESSIONS="$ORPHANED_SESSIONS $worktree_path"
       fi
     done
   fi
-  
+
   # Output results
   echo "active:$ACTIVE_SESSIONS"
   echo "orphaned:$ORPHANED_SESSIONS"
@@ -440,24 +440,24 @@ discover_all_sessions() {
 # Enhanced resume - can resume from session ID or auto-discover
 enhanced_resume() {
   target_session="$1"
-  
+
   if [ -n "$target_session" ]; then
     # Specific session requested
     if session_exists "$target_session"; then
       # Session has state file - use normal resume
       get_session_info "$target_session"
       [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $target_session"
-      
+
       # Load initial prompt if it exists for this session
       STORED_PROMPT=$(load_session_prompt "$target_session")
-      
+
       echo "▶ resuming session $target_session"
       launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$STORED_PROMPT"
     else
       # Check if it's an orphaned worktree
       prefix=$(get_branch_prefix)
       possible_paths="$SUBTREES_DIR/$prefix/$target_session $SUBTREES_DIR/pc/$target_session $SUBTREES_DIR/$target_session"
-      
+
       for possible_path in $possible_paths; do
         if [ -d "$possible_path" ]; then
           echo "▶ resuming orphaned session in $possible_path"
@@ -466,7 +466,7 @@ enhanced_resume() {
           return 0
         fi
       done
-      
+
       die "session '$target_session' not found in active sessions or worktrees"
     fi
   else
@@ -474,14 +474,14 @@ enhanced_resume() {
     discovery=$(discover_all_sessions)
     active_sessions=$(echo "$discovery" | grep "^active:" | sed 's/active://')
     orphaned_sessions=$(echo "$discovery" | grep "^orphaned:" | sed 's/orphaned://')
-    
+
     total_active=$(echo "$active_sessions" | wc -w)
     total_orphaned=$(echo "$orphaned_sessions" | wc -w)
-    
+
     if [ "$total_active" -eq 0 ] && [ "$total_orphaned" -eq 0 ]; then
       die "no sessions found to resume"
     fi
-    
+
     if [ "$total_active" -eq 1 ] && [ "$total_orphaned" -eq 0 ]; then
       # Single active session - auto-resume
       session_id=$(echo "$active_sessions" | tr -d ' ')
@@ -490,7 +490,7 @@ enhanced_resume() {
       # Multiple options - let user choose
       echo "Multiple sessions available for resume:"
       echo ""
-      
+
       if [ "$total_active" -gt 0 ]; then
         echo "Active sessions (with full para state):"
         for session_id in $active_sessions; do
@@ -499,7 +499,7 @@ enhanced_resume() {
         done
         echo ""
       fi
-      
+
       if [ "$total_orphaned" -gt 0 ]; then
         echo "Orphaned worktrees (limited functionality):"
         for worktree_path in $orphaned_sessions; do
@@ -507,7 +507,7 @@ enhanced_resume() {
         done
         echo ""
       fi
-      
+
       echo "Use: para resume <session-name>"
     fi
   fi
