@@ -15,78 +15,52 @@ teardown() {
 }
 
 @test "IT-1: Happy path - create session, edit file, finish successfully" {
-    # Create temporary test directory
-    TEST_DIR=$(mktemp -d)
-    cd "$TEST_DIR"
-    
-    # Initialize git repo
-    git init
-    git config user.name "Test User"
-    git config user.email "test@example.com"
-    echo "test" > README.md
-    git add README.md
-    git commit -m "Initial commit"
-    
     # 1. Create a new session
-    run "$PARA_SCRIPT" start
+    run run_para
     [ "$status" -eq 0 ]
     [[ "$output" == *"initialized session"* ]]
-    
-    # Extract session ID from output for cleanup
-    SESSION_ID=$(echo "$output" | grep "initialized session" | cut -d' ' -f3 | sed 's/\.//')
-    
-    # Verify session was created
-    run "$PARA_SCRIPT" list
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"$SESSION_ID"* ]]
-    
+
+    cd "$TEST_REPO"
+    session_dir=$(find_session_dir)
+    assert_session_exists "$session_dir"
+
     # 2. Edit a file in the worktree
-    WORKTREE_DIR="subtrees/pc/$SESSION_ID"
-    [ -d "$WORKTREE_DIR" ]
-    echo "test content" > "$WORKTREE_DIR/test-file.py"
-    
+    cd "$TEST_REPO/$session_dir"
+    echo "test content" > new-feature.py
+
     # Get the branch name before finishing
-    cd "$WORKTREE_DIR"
-    BRANCH_NAME=$(git branch --show-current)
-    cd "$TEST_DIR"
-    
+    branch_name=$(git branch --show-current)
+
     # 3. Finish with message
-    cd "$WORKTREE_DIR"
     run "$PARA_SCRIPT" finish "Integration test commit"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Session finished successfully!"* ]]
-    [[ "$output" == *"Your changes are ready on branch: $BRANCH_NAME"* ]]
-    
+    [[ "$output" == *"Your changes are ready on branch: $branch_name"* ]]
+
     # 4. Verify the worktree is cleaned up
-    cd "$TEST_DIR"
-    [ ! -d "$WORKTREE_DIR" ]
-    
+    cd "$TEST_REPO"
+    assert_session_not_exists "$session_dir"
+
     # 5. Verify branch exists with the commit (not on main)  
-    # Make sure we're in the git repository root
-    run git checkout "$BRANCH_NAME"
+    run git checkout "$branch_name"
     [ "$status" -eq 0 ]
-    
+
     # Check that the commit exists with the right message
     run git log --oneline --grep="Integration test commit"
     [ "$status" -eq 0 ]
     [ -n "$output" ]
-    
+
     # Verify the changes are in the branch
-    [ -f "test-file.py" ]
-    grep -q "test content" test-file.py
-    
+    [ -f "new-feature.py" ]
+    grep -q "test content" new-feature.py
+
     # 6. Verify main branch is unchanged
     run git checkout master 2>/dev/null || git checkout main 2>/dev/null
     [ "$status" -eq 0 ]
-    [ ! -f "test-file.py" ]  # File should not exist on main
-    
-    # Verify cleanup - session directory should not exist after successful finish
-    run "$PARA_SCRIPT" list  
-    [[ "$output" == *"No active parallel sessions"* ]]
-    
-    # Cleanup
-    cd /
-    rm -rf "$TEST_DIR"
+    [ ! -f "new-feature.py" ]  # File should not exist on main
+
+    # Verify cleanup - session should be cleaned up after successful finish
+    assert_session_not_exists "$session_dir"
 }
 
 @test "IT-2: Cancel session" {
