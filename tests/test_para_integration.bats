@@ -55,7 +55,14 @@ teardown() {
     grep -q "test content" new-feature.py
 
     # 6. Verify main branch is unchanged
-    run git checkout master 2>/dev/null || git checkout main 2>/dev/null
+    # Go back to main repo and switch to the original branch
+    cd "$TEST_REPO"
+    # Try both master and main as they're the common default branches
+    if git show-ref --verify --quiet refs/heads/master; then
+        run git checkout master
+    else
+        run git checkout main
+    fi
     [ "$status" -eq 0 ]
     [ ! -f "new-feature.py" ]  # File should not exist on main
 
