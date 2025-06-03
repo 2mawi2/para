@@ -45,18 +45,40 @@ teardown() {
     [ -d "$WORKTREE_DIR" ]
     echo "test content" > "$WORKTREE_DIR/test-file.py"
     
+    # Get the branch name before finishing
+    cd "$WORKTREE_DIR"
+    BRANCH_NAME=$(git branch --show-current)
+    cd "$TEST_DIR"
+    
     # 3. Finish with message
     cd "$WORKTREE_DIR"
     run "$PARA_SCRIPT" finish "Integration test commit"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"finish complete"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    [[ "$output" == *"Your changes are ready on branch: $BRANCH_NAME"* ]]
     
     # 4. Verify the worktree is cleaned up
     cd "$TEST_DIR"
     [ ! -d "$WORKTREE_DIR" ]
     
-    # 5. Verify commit was made on main branch
-    git log --oneline | head -1 | grep "Integration test commit"
+    # 5. Verify branch exists with the commit (not on main)  
+    # Make sure we're in the git repository root
+    run git checkout "$BRANCH_NAME"
+    [ "$status" -eq 0 ]
+    
+    # Check that the commit exists with the right message
+    run git log --oneline --grep="Integration test commit"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    # Verify the changes are in the branch
+    [ -f "test-file.py" ]
+    grep -q "test content" test-file.py
+    
+    # 6. Verify main branch is unchanged
+    run git checkout master 2>/dev/null || git checkout main 2>/dev/null
+    [ "$status" -eq 0 ]
+    [ ! -f "test-file.py" ]  # File should not exist on main
     
     # Verify cleanup - session directory should not exist after successful finish
     run "$PARA_SCRIPT" list  
@@ -95,7 +117,7 @@ teardown() {
     assert_session_not_exists "$session_dir"
 }
 
-@test "IT-3: Conflict resolution with continue" {
+@test "IT-3: Conflict resolution with finish creates branches for manual merge" {
     # 1. Create session A and edit file
     run run_para
     [ "$status" -eq 0 ]
@@ -115,6 +137,7 @@ teardown() {
     # Edit the existing file - replace the line with session A content
     cd "$TEST_REPO/$session_a"
     echo "Change from session A" > test-file.py
+    session_a_branch=$(git branch --show-current)
     cd "$TEST_REPO"
     
     # Small delay to ensure different timestamps
@@ -138,51 +161,44 @@ teardown() {
     # Edit the same file in a conflicting way - replace with different content
     cd "$TEST_REPO/$session_b"
     echo "Change from session B" > test-file.py
+    session_b_branch=$(git branch --show-current)
     
-    # 3. Finish A (should succeed)
+    # 3. Finish A (should succeed and create branch)
     cd "$TEST_REPO/$session_a"
     run "$PARA_SCRIPT" finish "Session A changes"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     cd "$TEST_REPO"
     
-    # 4. Try to finish B (should have conflict)
-    # Session B directory should still exist even after A is cleaned up
-    assert_session_exists "$session_b"
-    
+    # 4. Finish B (should also succeed and create branch)
     cd "$TEST_REPO/$session_b"
     run "$PARA_SCRIPT" finish "Session B changes"
-    # The finish command should now fail due to finish conflicts (this is the fix)
-    [ "$status" -eq 1 ]
-    # Should output conflict information
-    [[ "$output" == *"finish conflicts"* ]]
-    
-    cd "$TEST_REPO"
-    
-    # The session should still be active (not cleaned up due to conflict)
-    assert_session_exists "$session_b"
-    
-    # 5. Manually resolve conflict
-    # Remove conflict markers and combine both changes
-    cat > "$TEST_REPO/$session_b/test-file.py" << 'EOF'
-Change from session A
-Change from session B
-EOF
-    
-    # Continue the finish
-    cd "$TEST_REPO/$session_b"
-    run "$PARA_SCRIPT" continue
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     cd "$TEST_REPO"
     
-    # Verify both changes are in history
-    assert_commit_exists "Session A changes"
-    assert_commit_exists "Session B changes"
+    # 5. Verify both branches exist and have the expected changes
+    # Check branch A
+    run git branch --list "$session_a_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # Verify final content has both changes
+    git checkout "$session_a_branch"
     assert_file_contains "test-file.py" "Change from session A"
+    
+    # Check branch B  
+    run git branch --list "$session_b_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    git checkout "$session_b_branch"
     assert_file_contains "test-file.py" "Change from session B"
+    
+    # 6. Verify sessions are cleaned up but branches remain
+    assert_session_not_exists "$session_a"
+    assert_session_not_exists "$session_b"
 }
 
 @test "IT-4: Clean all sessions" {
@@ -239,17 +255,24 @@ EOF
     cd "$TEST_REPO/$session_dir"
     echo "Auto-detect test change" >> test-file.py
     
+    # Get the branch name before finishing
+    branch_name=$(git branch --show-current)
+    
     # 3. Test finish from within worktree (should auto-detect session)
     run "$PARA_SCRIPT" finish "Auto-detect test commit"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     # Go back to main repo to verify
     cd "$TEST_REPO"
     
-    # Verify commit exists on main
-    assert_commit_exists "Auto-detect test commit"
+    # Verify branch exists
+    run git branch --list "$branch_name"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # Verify changes are in main
+    # Verify changes are in the branch
+    git checkout "$branch_name"
     assert_file_contains "test-file.py" "Auto-detect test change"
     
     # Verify cleanup - session should be cleaned up after successful finish
@@ -310,20 +333,27 @@ EOF
     [ "$status" -eq 0 ]
     [ -n "$output" ]  # Should have output indicating changes
     
+    # Get the branch name before finishing
+    branch_name=$(git branch --show-current)
+    
     # 3. Try to finish with uncommitted changes - this should work automatically
     run "$PARA_SCRIPT" finish "Test commit with uncommitted changes"
     [ "$status" -eq 0 ]
     # Should NOT see error about uncommitted changes
     [[ "$output" == *"staging all changes"* ]]
     [[ "$output" == *"committing changes"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     # Go back to main
     cd "$TEST_REPO"
     
-    # Verify commit exists
-    assert_commit_exists "Test commit with uncommitted changes"
+    # Verify branch exists
+    run git branch --list "$branch_name"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # Verify changes are applied
+    # Verify changes are applied to the branch
+    git checkout "$branch_name"
     assert_file_contains "test-file.py" "Uncommitted modification"
     assert_file_contains "new-file.txt" "New file content"
     
@@ -331,8 +361,8 @@ EOF
     assert_session_not_exists "$session_dir"
 }
 
-@test "IT-8: Finish conflict should not complete with unresolved markers" {
-    # 1. Create session and edit the justfile (to cause conflicts)
+@test "IT-8: Finish with conflicting changes creates separate branches" {
+    # 1. Create session and edit the justfile (to test branch creation)
     run run_para
     [ "$status" -eq 0 ]
     
@@ -344,10 +374,7 @@ EOF
     session_a=$(find_session_dir)
     assert_session_exists "$session_a"
     
-    # Store the original justfile content
-    original_content=$(cat justfile)
-    
-    # Modify the justfile in the main branch first to set up a conflict
+    # Modify the justfile in the main branch first to set up potential conflicts
     echo "# Main branch change" >> justfile
     git add justfile
     git commit -m "Main branch: Modify justfile"
@@ -362,29 +389,24 @@ EOF
 @bats test_b.bats
 EOF
     
-    # 4. Try to finish session A (should fail due to conflict)
-    cd "$TEST_REPO/$session_a"
+    # 4. Finish session A (should succeed and create branch)
+    session_branch=$(git branch --show-current)
     run "$PARA_SCRIPT" finish "Modify justfile in session A"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"finish conflicts"* ]]
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
-    # Verify the session still exists (not cleaned up due to conflict)
+    # 5. Verify the session was cleaned up
     cd "$TEST_REPO"
-    assert_session_exists "$session_a"
+    assert_session_not_exists "$session_a"
     
-    # 5. Verify conflict markers exist
-    cd "$TEST_REPO/$session_a"
-    run grep -q "<<<<<<< HEAD" justfile
-    [ "$status" -eq 0 ]  # Should find conflict markers
+    # 6. Verify the branch exists and has the expected content
+    run git branch --list "$session_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # 6. Try to continue WITHOUT resolving conflicts (should fail)
-    run "$PARA_SCRIPT" continue
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"unresolved conflicts"* ]]
-    
-    # Session should still exist
-    cd "$TEST_REPO"
-    assert_session_exists "$session_a"
+    git checkout "$session_branch"
+    assert_file_contains "justfile" "para development workflow automation"
+    assert_file_contains "justfile" "@bats test_a.bats"
 }
 
 @test "IT-9: Squash finish mode - multiple commits become one (default behavior)" {
@@ -421,23 +443,32 @@ EOF
     commit_count=$(git rev-list --count HEAD ^"$base_branch")
     [ "$commit_count" -eq 3 ]
     
+    # Get branch name for verification
+    branch_name=$(git branch --show-current)
+    
     # 3. Finish using default squash mode
     run "$PARA_SCRIPT" finish "Feature complete with squashed changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: squash"* ]]
     [[ "$output" == *"squashed 3 commits"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     cd "$TEST_REPO"
     
-    # 4. Verify only ONE new commit was added to main
-    # Should have: original commit + 1 squashed commit = 2 total
-    total_commits=$(git rev-list --count HEAD)
-    [ "$total_commits" -eq 2 ]
+    # 4. Verify branch exists with squashed commit
+    run git checkout "$branch_name"
+    [ "$status" -eq 0 ]
+    
+    # Should have only ONE commit on the branch (squashed)
+    branch_commit_count=$(git rev-list --count HEAD ^"$base_branch")
+    [ "$branch_commit_count" -eq 1 ]
     
     # The final commit should have the specified message
-    assert_commit_exists "Feature complete with squashed changes"
+    run git log --oneline -1 --grep="Feature complete with squashed changes"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # Should NOT have the individual session commit messages
+    # Should NOT have the individual session commit messages on the branch
     run git log --oneline --grep="Session: First change"
     [ "$status" -eq 0 ]
     [ -z "$output" ]  # Should not find individual commit messages
@@ -446,6 +477,12 @@ EOF
     assert_file_contains "test-file.py" "change 1"
     assert_file_contains "test-file.py" "change 2"
     assert_file_contains "test-file.py" "change 3"
+    
+    # 5. Verify main branch is unchanged (still has only 1 commit)
+    run git checkout "$base_branch"
+    [ "$status" -eq 0 ]
+    main_commit_count=$(git rev-list --count HEAD)
+    [ "$main_commit_count" -eq 1 ]  # Should still be just the initial commit
     
     # Verify cleanup
     assert_session_not_exists "$session_dir"
@@ -476,7 +513,8 @@ EOF
     # Make uncommitted changes that should be auto-committed
     echo "Uncommitted changes" >> test-file.py
     
-    # Count commits before (should be 3: initial + 2 session commits, uncommitted changes will become 4th)
+    # Get branch name and base branch for commit counting
+    branch_name=$(git branch --show-current)
     cd "$TEST_REPO"
     initial_commit_count=$(git rev-list --count HEAD)
     [ "$initial_commit_count" -eq 1 ]
@@ -486,26 +524,24 @@ EOF
     run "$PARA_SCRIPT" finish --preserve "Final uncommitted changes"
     [ "$status" -eq 0 ]
     [[ "$output" == *"mode: rebase"* ]]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     # Go back to main
     cd "$TEST_REPO"
     
-    # Should have 4 commits total (initial + 3 from session)
-    final_commit_count=$(git rev-list --count HEAD)
-    [ "$final_commit_count" -eq 4 ]
+    # Verify branch exists
+    run git branch --list "$branch_name"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
     
-    # Verify individual commit messages are preserved
-    assert_commit_exists "Session: First feature"
-    assert_commit_exists "Session: Second feature"
-    assert_commit_exists "Final uncommitted changes"
-    
-    # Verify content is correct
+    # Verify content is correct on the branch
+    git checkout "$branch_name"
     assert_file_contains "test-file.py" "First feature change"
     assert_file_contains "test-file.py" "Second feature change"
     assert_file_contains "test-file.py" "Uncommitted changes"
 }
 
-@test "IT-11: Finish conflict resolution with preserve mode" {
+@test "IT-11: Preserve mode creates branches with individual commits" {
     # 1. Create session A
     run run_para
     [ "$status" -eq 0 ]
@@ -513,8 +549,10 @@ EOF
     cd "$TEST_REPO"
     session_a=$(find_session_dir)
     
-    # 2. Create session B (after small delay)
+    # Small delay to ensure session A cleanup is complete
     sleep 1
+    
+    # 4. Create session B 
     run run_para
     [ "$status" -eq 0 ]
     
@@ -546,20 +584,110 @@ EOF
     git add conflict-file.txt 
     git commit -m "Session B: Conflicting commit"
     
-    # 3. Finish session A with preserve mode (should succeed)
+    # 3. Finish session A with preserve mode (should succeed and create branch)
     cd "$TEST_REPO/$session_a"
+    session_a_branch=$(git branch --show-current)
     run "$PARA_SCRIPT" finish --preserve "Session A complete"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    
+    cd "$TEST_REPO"
+    
+    # 4. Finish session B with preserve mode (should also succeed and create branch)
+    cd "$TEST_REPO/$session_b"
+    session_b_branch=$(git branch --show-current)
+    run "$PARA_SCRIPT" finish --preserve "Session B final"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    
+    # 5. Verify both sessions are cleaned up
+    cd "$TEST_REPO"
+    assert_session_not_exists "$session_a"
+    assert_session_not_exists "$session_b"
+    
+    # 6. Verify both branches exist and have expected content
+    # Check session A branch
+    run git branch --list "$session_a_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    git checkout "$session_a_branch"
+    assert_file_contains "conflict-file.txt" "Session A conflict line"
+    
+    # Check session B branch
+    run git branch --list "$session_b_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    git checkout "$session_b_branch"
+    assert_file_contains "conflict-file.txt" "Session B conflict line"
+}
+
+@test "IT-12: Multiple sessions create separate branches successfully" {
+    # 1. Create session A
+    run run_para
     [ "$status" -eq 0 ]
     
     cd "$TEST_REPO"
+    session_a=$(find_session_dir)
+    assert_session_exists "$session_a"
     
-    # 4. Try to finish session B with preserve mode (should conflict)
-    cd "$TEST_REPO/$session_b"
-    run "$PARA_SCRIPT" finish --preserve "Session B final"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"finish conflicts"* ]]
+    # 2. Create many files in session A
+    cd "$TEST_REPO/$session_a"
+    for i in $(seq 1 50); do
+        echo "Session A content $i" > "file_$i.txt"
+    done
     
-    # Session should still exist
+    # 3. Get branch name and finish session A
+    session_a_branch=$(git branch --show-current)
+    run "$PARA_SCRIPT" finish "Session A with many files"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    
     cd "$TEST_REPO"
+    
+    # Small delay to ensure session A cleanup is complete
+    sleep 1
+    
+    # 4. Create session B 
+    run run_para
+    [ "$status" -eq 0 ]
+    
+    session_b=$(find_session_dir)
     assert_session_exists "$session_b"
+    
+    # 5. Create different files in session B
+    cd "$TEST_REPO/$session_b"
+    for i in $(seq 1 50); do
+        echo "Session B content $i" > "other_file_$i.txt"
+    done
+    
+    # 6. Finish session B
+    session_b_branch=$(git branch --show-current)
+    run "$PARA_SCRIPT" finish "Session B with different files"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
+    
+    cd "$TEST_REPO"
+    
+    # 7. Verify both branches exist and have different content
+    run git branch --list "$session_a_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    git checkout "$session_a_branch"
+    [ -f "file_1.txt" ]
+    [ ! -f "other_file_1.txt" ]
+    
+    run git branch --list "$session_b_branch"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    git checkout "$session_b_branch"
+    [ -f "other_file_1.txt" ]
+    [ ! -f "file_1.txt" ]
+    
+    # 8. Both sessions should be cleaned up
+    assert_session_not_exists "$session_a"
+    assert_session_not_exists "$session_b"
 } 

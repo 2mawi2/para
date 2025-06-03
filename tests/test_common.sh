@@ -224,7 +224,6 @@ assert_commit_exists() {
 assert_file_contains() {
     local filename="$1"
     local content="$2"
-    cd "$TEST_REPO"
     if ! grep -q "$content" "$filename"; then
         echo "Expected file $filename to contain '$content'"
         return 1

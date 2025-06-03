@@ -101,18 +101,27 @@ teardown() {
     # Navigate to worktree
     cd "$TEST_REPO/$session_dir"
     
+    # Get branch name before making changes
+    branch_name=$(git branch --show-current)
+    
     # Make some changes
     echo "auto-detect test with friendly name" >> test-file.py
     
     # Finish from within worktree (should auto-detect)
     run "$PARA_SCRIPT" finish "Friendly name auto-detect test"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session finished successfully!"* ]]
     
     # Go back to main repo
     cd "$TEST_REPO"
     
-    # Verify commit exists
-    assert_commit_exists "Friendly name auto-detect test"
+    # Verify branch exists
+    run git branch --list "$branch_name"
+    [ "$status" -eq 0 ]
+    [ -n "$output" ]
+    
+    # Verify branch contains our changes
+    git checkout "$branch_name"
     assert_file_contains "test-file.py" "auto-detect test with friendly name"
 }
 
