@@ -43,16 +43,13 @@ para finish "Add new feature"
 
 ### Session Management
 - `para start [name]` - Create new parallel session (opens configured IDE)
-- `para finish "message"` - Auto-stage & finish session with commit message (squash mode)
-- `para finish --preserve "message"` - Finish session preserving individual commits  
+- `para finish "message"` - Auto-stage & finish session with commit message
 - `para finish "message" --branch custom-name` - Finish with custom branch name
-- `para finish --preserve "message" --branch custom-name` - Preserve commits + custom branch
 - `para list` - Show all active sessions
 - `para continue` - Resume after resolving finish conflicts (auto-stages)
 - `para cancel [session]` - Discard current or specified session
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
-- `para resume` - Auto-discover and resume sessions (works with orphaned worktrees)
 
 ### Configuration
 - `para config` - Interactive configuration wizard
@@ -81,10 +78,6 @@ para finish "Implement user authentication"
 # Custom branch name
 para finish "Implement auth" --branch feature-authentication
 # Creates branch: feature-authentication
-
-# Custom branch with preserved commits
-para finish --preserve "Multi-step feature" --branch feature-user-system
-# Creates branch: feature-user-system (keeps individual commits)
 
 # Branch conflict resolution
 para finish "Fix bug" --branch existing-feature
