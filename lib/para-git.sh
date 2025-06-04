@@ -234,7 +234,9 @@ finish_session() {
 
 # Get configurable branch prefix, defaulting to "para"
 get_branch_prefix() {
-  if [ -n "${PARA_BRANCH_PREFIX:-}" ]; then
+  if [ -n "${BRANCH_PREFIX:-}" ]; then
+    echo "${BRANCH_PREFIX}"
+  elif [ -n "${PARA_BRANCH_PREFIX:-}" ]; then
     echo "${PARA_BRANCH_PREFIX}"
   else
     echo "para"
