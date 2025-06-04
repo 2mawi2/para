@@ -5,6 +5,7 @@
 DEFAULT_BASE_BRANCH=""
 DEFAULT_SUBTREES_DIR_NAME="subtrees"
 DEFAULT_STATE_DIR_NAME=".para_state"
+DEFAULT_BRANCH_PREFIX="para"
 DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
 export DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
@@ -53,6 +54,9 @@ IDE_WRAPPER_CMD="code"
 SUBTREES_DIR_NAME="subtrees"
 STATE_DIR_NAME=".para_state"
 BASE_BRANCH=""
+
+# Branch naming settings
+BRANCH_PREFIX="para"
 EOF
 }
 
@@ -118,6 +122,7 @@ load_config() {
     ENV_BASE_BRANCH="${BASE_BRANCH:-}"
     ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
     ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
+    ENV_BRANCH_PREFIX="${BRANCH_PREFIX:-}"
     ENV_CLAUDE_TERMINAL_CMD="${CLAUDE_TERMINAL_CMD:-}"
     ENV_IDE_WRAPPER_ENABLED="${IDE_WRAPPER_ENABLED:-}"
     ENV_IDE_WRAPPER_NAME="${IDE_WRAPPER_NAME:-}"
@@ -141,6 +146,7 @@ load_config() {
   BASE_BRANCH="${ENV_BASE_BRANCH:-${BASE_BRANCH:-$DEFAULT_BASE_BRANCH}}"
   SUBTREES_DIR_NAME="${ENV_SUBTREES_DIR_NAME:-${SUBTREES_DIR_NAME:-$DEFAULT_SUBTREES_DIR_NAME}}"
   STATE_DIR_NAME="${ENV_STATE_DIR_NAME:-${STATE_DIR_NAME:-$DEFAULT_STATE_DIR_NAME}}"
+  BRANCH_PREFIX="${ENV_BRANCH_PREFIX:-${PARA_BRANCH_PREFIX:-${BRANCH_PREFIX:-$DEFAULT_BRANCH_PREFIX}}}"
 
   # IDE configuration - environment takes priority, then backwards compatibility, then config, then defaults
   IDE_NAME="${ENV_IDE_NAME:-${CURSOR_IDE:-${IDE_NAME:-$DEFAULT_IDE_NAME}}}"
@@ -206,6 +212,9 @@ IDE_WRAPPER_CMD="$IDE_WRAPPER_CMD"
 SUBTREES_DIR_NAME="$SUBTREES_DIR_NAME"
 STATE_DIR_NAME="$STATE_DIR_NAME"
 BASE_BRANCH="$BASE_BRANCH"
+
+# Branch naming settings
+BRANCH_PREFIX="$BRANCH_PREFIX"
 EOF
 }
 
@@ -251,6 +260,7 @@ show_config() {
   echo "Subtrees directory name: $SUBTREES_DIR_NAME"
   echo "State directory name: $STATE_DIR_NAME"
   echo "Base branch: $BASE_BRANCH"
+  echo "Branch prefix: $BRANCH_PREFIX"
   echo ""
   echo "Config file: $CONFIG_FILE"
   echo ""

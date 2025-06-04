@@ -169,7 +169,7 @@ teardown() {
     
     # Get second session directory
     session2_dir=""
-    for dir in $(find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \)); do
+    for dir in $(find subtrees/para -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \)); do
         if [ "$dir" != "$session1_dir" ]; then
             session2_dir="$dir"
             break
@@ -252,8 +252,10 @@ teardown() {
     mkdir -p "$legacy_worktree"
     echo "$legacy_branch|$legacy_worktree|master|squash" > ".para_state/$legacy_session_id.state"
     
-    # Should have 2 sessions total
-    session_count=$(count_sessions)
+    # Should have 2 sessions total (count both new and legacy)
+    new_sessions=$(find subtrees/para -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \) 2>/dev/null | wc -l || echo 0)
+    legacy_sessions=$(find subtrees/pc -maxdepth 1 -type d \( -name "*_*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" -o -name "*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" \) 2>/dev/null | wc -l || echo 0)
+    session_count=$((new_sessions + legacy_sessions))
     [ "$session_count" -eq 2 ]
     
     # List should show both with appropriate annotations
