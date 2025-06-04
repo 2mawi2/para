@@ -182,22 +182,17 @@ handle_dispatch_command() {
 
 # Handle finish command
 handle_finish_command() {
-  REBASE_MODE="squash" # Default to squash mode
   COMMIT_MSG=""
   TARGET_BRANCH_NAME=""
   BRANCH_FLAG_PROVIDED=false
 
-  # Parse arguments supporting --preserve and --branch in different positions
+  # Parse arguments supporting --branch flag
   if [ "$#" -eq 1 ]; then
     die "finish requires a commit message"
   else
     # Parse all arguments to handle flags in any order
     while [ "$#" -gt 1 ]; do
       case "$2" in
-      --preserve)
-        REBASE_MODE="rebase"
-        shift
-        ;;
       --branch=*)
         TARGET_BRANCH_NAME="${2#--branch=}"
         BRANCH_FLAG_PROVIDED=true
@@ -241,8 +236,8 @@ handle_finish_command() {
   get_session_info "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
-  echo "▶ finishing session $SESSION_ID (mode: $REBASE_MODE)"
-  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$REBASE_MODE" "$TARGET_BRANCH_NAME"; then
+  echo "▶ finishing session $SESSION_ID"
+  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$TARGET_BRANCH_NAME"; then
     echo "▶ cleaning up worktree for session $SESSION_ID"
     # Remove worktree and session state, but keep the branch for manual merging
     git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true

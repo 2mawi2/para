@@ -139,8 +139,7 @@ finish_session() {
   worktree_dir="$2"
   base_branch="$3"
   commit_msg="$4"
-  merge_mode="${5:-squash}" # Default to squash mode if not provided
-  target_branch_name="$6"   # Optional custom target branch name
+  target_branch_name="$5"   # Optional custom target branch name
 
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
@@ -157,19 +156,17 @@ finish_session() {
     echo "ℹ️  no changes to commit"
   fi
 
-  # If squash mode, squash all commits into a single commit
-  if [ "$merge_mode" = "squash" ]; then
-    echo "▶ squashing commits into single commit"
-    # Count commits to squash (everything after base branch)
-    COMMIT_COUNT=$(git rev-list --count HEAD ^"$base_branch")
-    if [ "$COMMIT_COUNT" -gt 1 ]; then
-      # Reset to squash all commits, but keep the changes staged
-      git reset --soft "$base_branch" || die "failed to reset to base branch for squashing"
-      git commit -m "$commit_msg" || die "failed to create squash commit"
-      echo "✅ squashed $COMMIT_COUNT commits into single commit with message: $commit_msg"
-    else
-      echo "ℹ️  only one commit, no squashing needed"
-    fi
+  # Squash all commits into a single commit
+  echo "▶ squashing commits into single commit"
+  # Count commits to squash (everything after base branch)
+  COMMIT_COUNT=$(git rev-list --count HEAD ^"$base_branch")
+  if [ "$COMMIT_COUNT" -gt 1 ]; then
+    # Reset to squash all commits, but keep the changes staged
+    git reset --soft "$base_branch" || die "failed to reset to base branch for squashing"
+    git commit -m "$commit_msg" || die "failed to create squash commit"
+    echo "✅ squashed $COMMIT_COUNT commits into single commit with message: $commit_msg"
+  else
+    echo "ℹ️  only one commit, no squashing needed"
   fi
 
   # Handle custom branch name if provided

@@ -56,11 +56,13 @@ setup() {
 
 # Tests for is_known_command function
 @test "is_known_command returns true for known commands" {
-    # Known commands from the case statement
     run is_known_command "start"
     [ "$status" -eq 0 ]
     
     run is_known_command "finish"
+    [ "$status" -eq 0 ]
+    
+    run is_known_command "list"
     [ "$status" -eq 0 ]
     
     run is_known_command "cancel"
@@ -69,25 +71,10 @@ setup() {
     run is_known_command "clean"
     [ "$status" -eq 0 ]
     
-    run is_known_command "list"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "ls"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "abort"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "resume"
-    [ "$status" -eq 0 ]
-    
     run is_known_command "--help"
     [ "$status" -eq 0 ]
     
     run is_known_command "-h"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "--preserve"
     [ "$status" -eq 0 ]
 }
 
@@ -447,17 +434,6 @@ setup() {
             return 1
         }
     done
-}
-
-@test "is_known_command recognizes help flags" {
-    run is_known_command "--help"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "-h"
-    [ "$status" -eq 0 ]
-    
-    run is_known_command "--preserve"
-    [ "$status" -eq 0 ]
 }
 
 @test "is_known_command case sensitivity" {

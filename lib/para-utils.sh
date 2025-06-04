@@ -3,40 +3,33 @@
 
 # Usage message
 usage() {
-  ide_display_name=$(get_ide_display_name)
   cat <<EOF
-para - Parallel IDE workflow helper
+para - Parallel IDE Workflow Helper
 
-USAGE:
-  para start                  # create new session with friendly name
-  para start <name>           # create custom named session
-  para dispatch "text"        # create session with initial Claude Code prompt
-  para dispatch <name> "text" # custom named session with initial prompt
-  para finish "commit message"    # finish session (squash commits by default)
-  para finish --preserve "msg"    # finish session preserving individual commits
-  para finish "msg" --branch <name>      # finish with custom branch name
-  para finish --preserve "msg" --branch <name>  # preserve commits + custom branch
-  para list                   # list all active sessions
-  para cancel [session]       # cancel/delete session
-  para clean                  # delete all sessions
-  para resume <session>       # resume session in ${ide_display_name}
-  para config                 # interactive setup wizard
+Commands:
+para start [name] ["prompt"]         # create session with optional name/prompt
+para dispatch ["prompt"]             # start Claude Code session with prompt  
+para finish "message"                # squash all changes into single commit
+para finish "message" --branch <n>   # squash commits + custom branch name
+para list | ls                       # list active sessions
+para resume [session]                # resume session in IDE
+para cancel [session]                # cancel session
+para clean                           # remove all sessions
+para config                          # setup configuration
 
-EXAMPLES:
-  para start feature-auth     # create 'feature-auth' session
-  para start                  # create auto-named session (e.g. 'swift-star')
-  para dispatch "create auth system"  # Claude Code session with prompt
-  para finish "add user login"       # squash and finish session
-  para finish --preserve "multi-step" # preserve individual commits
-  para finish "auth complete" --branch feature-authentication  # custom branch
-  para list                   # show: feature-auth, swift-star (active sessions)
-  para resume feature-auth    # resume work in 'feature-auth' session
-  para cancel swift-star      # delete 'swift-star' session
-  para clean                  # delete ALL sessions
+Examples:
+para start                           # create session with auto-generated name
+para start feature-auth              # create named session
+para dispatch "Add user auth"        # Claude Code session with prompt
+para finish "implement user auth"    # squash session changes
+para finish "add feature" --branch feature-xyz  # custom branch name
+para list                            # see active sessions
+para cancel                          # cancel current session
+para clean                           # remove all sessions
+para resume session-name             # resume specific session
+para config                          # setup IDE preferences
 
-AI INTEGRATION:
-  Use 'para dispatch' for AI-assisted development with Claude Code.
-  
+For configuration help: para config
 EOF
 }
 
@@ -50,7 +43,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | config | --preserve)
+  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | config)
     return 0
     ;;
   *)

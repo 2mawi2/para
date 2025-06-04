@@ -101,7 +101,6 @@ export IDE_USER_DATA_DIR=".vscode-userdata"
 ### Session Management
 - `para start [name]` - Create new parallel session (opens configured IDE)
 - `para finish "message"` - Auto-stage & finish session with commit message
-- `para finish --preserve "message"` - Finish session preserving individual commits
 - `para list` - Show all active sessions
 - `para continue` - Resume after resolving finish conflicts (auto-stages)
 - `para cancel [session]` - Discard current or specified session
