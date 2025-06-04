@@ -139,7 +139,7 @@ finish_session() {
   worktree_dir="$2"
   base_branch="$3"
   commit_msg="$4"
-  target_branch_name="$5"   # Optional custom target branch name
+  target_branch_name="$5" # Optional custom target branch name
 
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
