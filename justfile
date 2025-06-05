@@ -214,6 +214,34 @@ test-args: install-dev
     @echo "🧪 Running argument parsing tests..."
     @bats tests/test_para_argument_parsing.bats
 
+# Run performance benchmarks
+benchmark:
+    #!/usr/bin/env bash
+    set -e
+    
+    echo "⚡ Running para performance benchmarks..."
+    
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "❌ Not in a Git repository. Performance benchmarks require a Git repository."
+        echo "💡 Navigate to a Git repository or run: git init"
+        exit 1
+    fi
+    
+    # Check if benchmark script exists and is executable
+    if [ ! -f "scripts/benchmark-performance.sh" ]; then
+        echo "❌ Benchmark script not found at scripts/benchmark-performance.sh"
+        exit 1
+    fi
+    
+    if [ ! -x "scripts/benchmark-performance.sh" ]; then
+        echo "🔧 Making benchmark script executable..."
+        chmod +x scripts/benchmark-performance.sh
+    fi
+    
+    # Run the benchmark
+    ./scripts/benchmark-performance.sh
+
 # Run linting with shellcheck and shfmt
 lint: install-dev
     @echo "🔍 Running linting checks..."
@@ -265,6 +293,13 @@ status:
 # Development workflow: install deps, setup hooks, run tests and lint
 dev-setup: install-dev setup-hooks test lint
     @echo "🎉 Development environment ready!"
+    @echo ""
+    @echo "💡 Available development commands:"
+    @echo "   just test           - Run all tests"
+    @echo "   just lint           - Run linting checks"
+    @echo "   just fmt            - Fix formatting"
+    @echo "   just benchmark      - Run performance benchmarks"
+    @echo "   just status         - Show project status"
 
 # Create a release - triggers GitHub Actions to build and publish
 release BUMP="patch":

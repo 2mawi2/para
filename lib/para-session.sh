@@ -46,10 +46,12 @@ update_session_merge_mode() {
 # Remove session state file
 remove_session_state() {
   session_id="$1"
-  rm -f "$STATE_DIR/$session_id.state"
-  remove_session_prompt "$session_id"
+  
+  # Optimize: Use single rm command with multiple files for efficiency
+  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" 2>/dev/null || true
 
-  # Clean up state directory if empty
+  # Optimize: Only try to remove directory if it exists and might be empty
+  # Use rmdir instead of more expensive directory checks
   if [ -d "$STATE_DIR" ]; then
     rmdir "$STATE_DIR" 2>/dev/null || true
   fi
