@@ -195,33 +195,36 @@ handle_dispatch_multi_command() {
   INITIAL_PROMPT=""
   SESSION_BASE_NAME=""
 
+  # Skip the command name (dispatch-multi)
+  shift
+
   # Parse arguments with --group flag support
-  while [ "$#" -gt 1 ]; do
-    case "$2" in
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
     --group=*)
-      SESSION_BASE_NAME="${2#--group=}"
+      SESSION_BASE_NAME="${1#--group=}"
       validate_session_name "$SESSION_BASE_NAME"
       shift
       ;;
     --group)
-      if [ "$#" -lt 3 ]; then
+      if [ "$#" -lt 2 ]; then
         die "--group requires a group name"
       fi
-      SESSION_BASE_NAME="$3"
+      SESSION_BASE_NAME="$2"
       validate_session_name "$SESSION_BASE_NAME"
       shift 2
       ;;
     -*)
-      die "unknown option: $2"
+      die "unknown option: $1"
       ;;
     *)
       # First positional argument should be instance count
       if [ -z "$INSTANCE_COUNT" ]; then
-        INSTANCE_COUNT="$2"
+        INSTANCE_COUNT="$1"
         shift
       # Second positional argument should be prompt
       elif [ -z "$INITIAL_PROMPT" ]; then
-        INITIAL_PROMPT="$2"
+        INITIAL_PROMPT="$1"
         shift
       else
         die "too many arguments"
