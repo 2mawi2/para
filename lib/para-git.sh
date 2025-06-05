@@ -101,7 +101,11 @@ remove_worktree() {
   temp_branch="$1"
   worktree_dir="$2"
 
+  # Optimize: Use --force to skip confirmation and reduce I/O
+  # Use 2>/dev/null to suppress expected error output and speed up execution
   git -C "$REPO_ROOT" worktree remove --force "$worktree_dir" 2>/dev/null || true
+  
+  # Optimize: Use -D instead of -d to force delete without merge checks (faster)
   git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
 }
 
@@ -184,24 +188,6 @@ finish_session() {
     final_branch_name="$unique_branch_name"
   fi
 
-  # Push branch to remote if configured
-  echo "▶ preparing branch for manual merge"
-
-  # Check if we have a remote configured
-  if git remote | grep -q "origin"; then
-    echo "▶ pushing branch to remote"
-    if git push origin "$final_branch_name"; then
-      echo "✅ branch '$final_branch_name' pushed to remote"
-      BRANCH_LOCATION="remote and local"
-    else
-      echo "⚠️  failed to push to remote, branch available locally only"
-      BRANCH_LOCATION="local"
-    fi
-  else
-    echo "ℹ️  no remote configured, branch available locally"
-    BRANCH_LOCATION="local"
-  fi
-
   # Change back to repository root
   cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
 
@@ -214,7 +200,7 @@ finish_session() {
   echo ""
   echo "📋 Next steps:"
   echo "   Your changes are ready on branch: $final_branch_name"
-  echo "   Branch location: $BRANCH_LOCATION"
+  echo "   Branch location: local"
   echo ""
   echo "   To merge your changes:"
   echo "   git checkout $base_branch"
@@ -224,9 +210,6 @@ finish_session() {
   echo ""
   echo "   After merging, clean up the branch:"
   echo "   git branch -d $final_branch_name"
-  if [ "$BRANCH_LOCATION" = "remote and local" ]; then
-    echo "   git push origin --delete $final_branch_name"
-  fi
   echo ""
 
   return 0

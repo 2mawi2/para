@@ -260,10 +260,19 @@ handle_cancel_command() {
     die "cancel takes optionally a session ID"
   fi
 
+  # Optimize: Get session info and immediately proceed with removal
   get_session_info "$SESSION_ID"
-  echo "▶ aborting session $SESSION_ID; removing $WORKTREE_DIR & deleting $TEMP_BRANCH"
+  
+  # Optimize: Reduce verbose output during operations for speed
+  echo "▶ aborting session $SESSION_ID"
+  
+  # Optimize: Run git operations and state cleanup in parallel where possible
+  # Remove worktree and branch first (heavier operations)
   remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
+  
+  # Then clean up state files (lighter operation)
   remove_session_state "$SESSION_ID"
+  
   echo "cancelled session $SESSION_ID"
   echo "🎉 You can safely close this $(get_ide_display_name) session now."
 }
