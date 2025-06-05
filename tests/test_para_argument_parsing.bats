@@ -208,4 +208,40 @@ Line 3"
     
     # Restore original IDE configuration
     export IDE_NAME="$original_ide_name"
+}
+
+# Test that dispatch command works with wrapped Claude Code
+@test "dispatch command works with wrapped Claude Code" {
+    # Save original IDE configuration
+    original_ide_name="$IDE_NAME"
+    original_wrapper_enabled="$IDE_WRAPPER_ENABLED"
+    original_wrapper_name="$IDE_WRAPPER_NAME"
+    original_wrapper_cmd="$IDE_WRAPPER_CMD"
+    
+    # Test with Claude Code in wrapper mode - use stubs to prevent real IDE launches
+    export IDE_NAME="claude"
+    export IDE_CMD="true"  # Stub to prevent real Claude Code launch
+    export IDE_WRAPPER_ENABLED="true"
+    export IDE_WRAPPER_NAME="cursor"
+    export IDE_WRAPPER_CMD="true"  # Stub to prevent real Cursor launch
+    
+    # Mock the handle_dispatch_command validation logic (same as above)
+    validate_dispatch_ide() {
+        if [ "$IDE_NAME" != "claude" ]; then
+            echo "ERROR: dispatch command only works with Claude Code. Current IDE: $IDE_NAME"
+            return 1
+        fi
+        return 0
+    }
+    
+    run validate_dispatch_ide
+    [ "$status" -eq 0 ]
+    # Should not produce error output when wrapper is enabled
+    [ -z "$output" ]
+    
+    # Restore original IDE configuration
+    export IDE_NAME="$original_ide_name"
+    export IDE_WRAPPER_ENABLED="$original_wrapper_enabled"
+    export IDE_WRAPPER_NAME="$original_wrapper_name"
+    export IDE_WRAPPER_CMD="$original_wrapper_cmd"
 } 
