@@ -158,7 +158,7 @@ handle_start_command() {
 
 # Handle dispatch command - creates session with prompt
 handle_dispatch_command() {
-  # Validate that Claude Code is configured
+  # Validate that Claude Code is configured (wrapper mode is also supported)
   if [ "$IDE_NAME" != "claude" ]; then
     die "dispatch command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
   fi
