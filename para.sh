@@ -102,6 +102,10 @@ handle_command() {
     handle_dispatch_command "$@"
     ;;
 
+  dispatch-multi)
+    handle_dispatch_multi_command "$@"
+    ;;
+
   finish)
     handle_finish_command "$@"
     ;;
@@ -180,6 +184,75 @@ handle_dispatch_command() {
   create_new_session "$SESSION_NAME" "$INITIAL_PROMPT"
 }
 
+# Handle dispatch-multi command - creates multiple sessions with same prompt
+handle_dispatch_multi_command() {
+  # Validate that Claude Code is configured
+  if [ "$IDE_NAME" != "claude" ]; then
+    die "dispatch-multi command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
+  fi
+
+  INSTANCE_COUNT=""
+  INITIAL_PROMPT=""
+  SESSION_BASE_NAME=""
+
+  # Parse arguments with --group flag support
+  while [ "$#" -gt 1 ]; do
+    case "$2" in
+    --group=*)
+      SESSION_BASE_NAME="${2#--group=}"
+      validate_session_name "$SESSION_BASE_NAME"
+      shift
+      ;;
+    --group)
+      if [ "$#" -lt 3 ]; then
+        die "--group requires a group name"
+      fi
+      SESSION_BASE_NAME="$3"
+      validate_session_name "$SESSION_BASE_NAME"
+      shift 2
+      ;;
+    -*)
+      die "unknown option: $2"
+      ;;
+    *)
+      # First positional argument should be instance count
+      if [ -z "$INSTANCE_COUNT" ]; then
+        INSTANCE_COUNT="$2"
+        shift
+      # Second positional argument should be prompt
+      elif [ -z "$INITIAL_PROMPT" ]; then
+        INITIAL_PROMPT="$2"
+        shift
+      else
+        die "too many arguments"
+      fi
+      ;;
+    esac
+  done
+
+  # Validate required arguments
+  if [ -z "$INSTANCE_COUNT" ]; then
+    die "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"'"
+  fi
+
+  if [ -z "$INITIAL_PROMPT" ]; then
+    die "dispatch-multi requires a prompt text"
+  fi
+
+  # Validate instance count
+  if ! echo "$INSTANCE_COUNT" | grep -q "^[1-9][0-9]*$"; then
+    die "instance count must be a positive integer"
+  fi
+
+  # Reasonable limit to prevent system overload
+  if [ "$INSTANCE_COUNT" -gt 10 ]; then
+    die "instance count limited to 10 to prevent system overload"
+  fi
+
+  # Multi-session creation logic with initial prompt
+  create_new_multi_session "$INSTANCE_COUNT" "$SESSION_BASE_NAME" "$INITIAL_PROMPT"
+}
+
 # Handle finish command
 handle_finish_command() {
   COMMIT_MSG=""
@@ -252,12 +325,73 @@ handle_finish_command() {
 
 # Handle cancel command
 handle_cancel_command() {
-  if [ "$#" -eq 1 ]; then
+  GROUP_NAME=""
+  SESSION_ID=""
+
+  # Parse arguments with --group flag support
+  while [ "$#" -gt 1 ]; do
+    case "$2" in
+    --group=*)
+      GROUP_NAME="${2#--group=}"
+      shift
+      ;;
+    --group)
+      if [ "$#" -lt 3 ]; then
+        die "--group requires a group name"
+      fi
+      GROUP_NAME="$3"
+      shift 2
+      ;;
+    -*)
+      die "unknown option: $2"
+      ;;
+    *)
+      # Positional argument should be session ID
+      if [ -z "$SESSION_ID" ]; then
+        SESSION_ID="$2"
+        shift
+      else
+        die "too many arguments"
+      fi
+      ;;
+    esac
+  done
+
+  # Handle group cancellation
+  if [ -n "$GROUP_NAME" ]; then
+    # Get all sessions in the group
+    GROUP_SESSIONS=$(get_multi_session_group "$GROUP_NAME")
+    
+    if [ -z "$GROUP_SESSIONS" ]; then
+      die "no multi-instance group found with name '$GROUP_NAME'"
+    fi
+
+    # Count sessions
+    SESSION_COUNT=0
+    for session_id in $GROUP_SESSIONS; do
+      SESSION_COUNT=$((SESSION_COUNT + 1))
+    done
+
+    echo "▶ aborting $SESSION_COUNT sessions in group '$GROUP_NAME'..."
+
+    # Cancel each session in the group
+    for session_id in $GROUP_SESSIONS; do
+      echo "  → cancelling session $session_id"
+      
+      # Get session info and remove
+      get_session_info "$session_id"
+      remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
+      remove_session_state "$session_id"
+    done
+
+    echo "✅ cancelled all $SESSION_COUNT sessions in group '$GROUP_NAME'"
+    echo "🎉 You can safely close all $(get_ide_display_name) sessions now."
+    return
+  fi
+
+  # Handle single session cancellation
+  if [ -z "$SESSION_ID" ]; then
     SESSION_ID=$(auto_detect_session)
-  elif [ "$#" -eq 2 ]; then
-    SESSION_ID="$2"
-  else
-    die "cancel takes optionally a session ID"
   fi
 
   # Optimize: Get session info and immediately proceed with removal
@@ -372,6 +506,51 @@ create_new_session() {
   launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt"
 
   echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
+}
+
+# Create new multi-instance session group
+create_new_multi_session() {
+  instance_count="$1"
+  session_base_name="$2"
+  initial_prompt="$3"
+
+  # Determine base branch
+  if [ -z "$BASE_BRANCH" ]; then
+    BASE_BRANCH=$(get_current_branch)
+  fi
+
+  # Check for uncommitted changes and warn, but don't block
+  check_uncommitted_changes
+
+  # Generate group name if not provided
+  if [ -z "$session_base_name" ]; then
+    session_base_name="multi-$(generate_timestamp)"
+  fi
+
+  # Create multiple sessions
+  echo "▶ creating $instance_count instances for group '$session_base_name'..."
+  SESSION_IDS=$(create_multi_session "$session_base_name" "$instance_count" "$BASE_BRANCH")
+
+  # Store initial prompt for each session if provided
+  if [ -n "$initial_prompt" ]; then
+    for session_id in $SESSION_IDS; do
+      save_session_prompt "$session_id" "$initial_prompt"
+    done
+  fi
+
+  # Launch IDEs for all instances
+  launch_multi_ide "$(get_default_ide)" "$SESSION_IDS" "$initial_prompt"
+
+  # Show summary
+  echo ""
+  echo "✅ Initialized group '$session_base_name' with $instance_count instances:"
+  for session_id in $SESSION_IDS; do
+    echo "  → $session_id"
+  done
+  echo ""
+  echo "💡 Use 'para list' to see all instances"
+  echo "💡 Use 'para finish \"msg\"' in any instance to finish that session"
+  echo "💡 Use 'para cancel --group $session_base_name' to cancel all instances"
 }
 
 # Execute main function if script is run directly
