@@ -8,12 +8,14 @@ para - Parallel IDE Workflow Helper
 
 Commands:
 para start [name] ["prompt"]         # create session with optional name/prompt
-para dispatch ["prompt"]             # start Claude Code session with prompt  
+para dispatch ["prompt"]             # start Claude Code session with prompt
+para dispatch-multi N ["prompt"]     # start N Claude Code instances with same prompt
 para finish "message"                # squash all changes into single commit
 para finish "message" --branch <n>   # squash commits + custom branch name
 para list | ls                       # list active sessions
 para resume [session]                # resume session in IDE
 para cancel [session]                # cancel session
+para cancel --group <name>           # cancel all sessions in multi-instance group
 para clean                           # remove all sessions
 para config                          # setup configuration
 
@@ -21,10 +23,13 @@ Examples:
 para start                           # create session with auto-generated name
 para start feature-auth              # create named session
 para dispatch "Add user auth"        # Claude Code session with prompt
+para dispatch-multi 3 "Compare approaches"      # 3 Claude instances with same prompt
+para dispatch-multi 5 --group task "Refactor"   # 5 instances with custom group name
 para finish "implement user auth"    # squash session changes
 para finish "add feature" --branch feature-xyz  # custom branch name
-para list                            # see active sessions
+para list                            # see active sessions (shows multi-instance groups)
 para cancel                          # cancel current session
+para cancel --group task             # cancel all sessions in 'task' group
 para clean                           # remove all sessions
 para resume session-name             # resume specific session
 para config                          # setup IDE preferences
@@ -43,7 +48,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | config)
+  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | config)
     return 0
     ;;
   *)

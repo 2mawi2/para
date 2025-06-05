@@ -48,7 +48,7 @@ remove_session_state() {
   session_id="$1"
   
   # Optimize: Use single rm command with multiple files for efficiency
-  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" 2>/dev/null || true
+  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" "$STATE_DIR/$session_id.multi" 2>/dev/null || true
 
   # Optimize: Only try to remove directory if it exists and might be empty
   # Use rmdir instead of more expensive directory checks
@@ -183,6 +183,11 @@ list_sessions() {
         display_name="$session_id"
       else
         display_name="$session_id (custom)"
+      fi
+
+      # Check if this is part of a multi-instance group
+      if load_multi_session_metadata "$session_id"; then
+        display_name="$display_name [Group: $GROUP_NAME, Instance: $INSTANCE_NUMBER/$TOTAL_INSTANCES]"
       fi
 
       echo "Session: $display_name"
@@ -321,6 +326,95 @@ create_session() {
   save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$base_branch"
 
   echo "$SESSION_ID"
+}
+
+# Create multiple sessions for multi-instance dispatch
+create_multi_session() {
+  session_base_name="$1"
+  instance_count="$2"
+  base_branch="$3"
+  
+  # Generate group ID if no base name provided
+  if [ -z "$session_base_name" ]; then
+    session_base_name="multi-$(generate_timestamp)"
+  fi
+  
+  # Create instances
+  instance_ids=""
+  i=1
+  while [ "$i" -le "$instance_count" ]; do
+    instance_name="${session_base_name}-${i}"
+    instance_id=$(create_session "$instance_name" "$base_branch")
+    
+    # Save group metadata for this instance
+    save_multi_session_metadata "$instance_id" "$session_base_name" "$i" "$instance_count"
+    
+    if [ "$i" -eq 1 ]; then
+      instance_ids="$instance_id"
+    else
+      instance_ids="$instance_ids $instance_id"
+    fi
+    i=$((i + 1))
+  done
+  
+  echo "$instance_ids"
+}
+
+# Save multi-session group metadata
+save_multi_session_metadata() {
+  session_id="$1"
+  group_name="$2"
+  instance_number="$3"
+  total_instances="$4"
+  
+  mkdir -p "$STATE_DIR"
+  echo "$group_name|$instance_number|$total_instances" >"$STATE_DIR/$session_id.multi"
+}
+
+# Load multi-session group metadata
+load_multi_session_metadata() {
+  session_id="$1"
+  multi_file="$STATE_DIR/$session_id.multi"
+  
+  if [ -f "$multi_file" ]; then
+    IFS='|' read -r GROUP_NAME INSTANCE_NUMBER TOTAL_INSTANCES <"$multi_file"
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Get all sessions in a multi-instance group
+get_multi_session_group() {
+  group_name="$1"
+  
+  if [ ! -d "$STATE_DIR" ]; then
+    return 1
+  fi
+  
+  group_sessions=""
+  for multi_file in "$STATE_DIR"/*.multi; do
+    [ -f "$multi_file" ] || continue
+    
+    session_id=$(basename "$multi_file" .multi)
+    if load_multi_session_metadata "$session_id"; then
+      if [ "$GROUP_NAME" = "$group_name" ]; then
+        if [ -z "$group_sessions" ]; then
+          group_sessions="$session_id"
+        else
+          group_sessions="$group_sessions $session_id"
+        fi
+      fi
+    fi
+  done
+  
+  echo "$group_sessions"
+}
+
+# Remove multi-session metadata
+remove_multi_session_metadata() {
+  session_id="$1"
+  rm -f "$STATE_DIR/$session_id.multi" 2>/dev/null || true
 }
 
 # Clean up all sessions

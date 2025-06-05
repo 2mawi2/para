@@ -32,6 +32,32 @@ launch_ide() {
   esac
 }
 
+# Launch multiple IDE instances for multi-session dispatch
+launch_multi_ide() {
+  ide_name="$1"
+  session_ids="$2"
+  initial_prompt="${3:-}"
+  
+  echo "▶ launching $ide_name for multiple instances..."
+  
+  # Launch each instance with a brief delay to avoid overwhelming the system
+  for session_id in $session_ids; do
+    # Get worktree directory for this session
+    get_session_info "$session_id"
+    
+    echo "  → launching instance for session $session_id"
+    launch_ide "$ide_name" "$WORKTREE_DIR" "$initial_prompt" &
+    
+    # Brief delay between launches
+    sleep 0.5
+  done
+  
+  # Wait for all background processes to complete
+  wait
+  
+  echo "✅ All instances launched successfully"
+}
+
 # Launch IDE with wrapper functionality
 launch_ide_with_wrapper() {
   ide_name="$1"
