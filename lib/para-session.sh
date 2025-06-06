@@ -100,12 +100,13 @@ auto_detect_session() {
     fi
   fi
 
-  # Generic detection - extract any directory under subtrees and match against state files
+  # Generic detection - extract directory under subtrees and match against worktree paths
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/[^/]*/"; then
-    BRANCH_PATH=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/\([^/]*\).*|\1|p")
-    if [ -n "$BRANCH_PATH" ]; then
+    # Extract the immediate subdirectory after subtrees/ and everything after it
+    WORKTREE_SUBPATH=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/\(.*\)|\1|p")
+    if [ -n "$WORKTREE_SUBPATH" ]; then
       if [ -d "$STATE_DIR" ]; then
-        # Try to find matching session by branch name
+        # Try to find matching session by comparing current directory to worktree directories
         for state_file in "$STATE_DIR"/*.state; do
           [ -f "$state_file" ] || continue
           SESSION_ID=$(basename "$state_file" .state)
@@ -121,9 +122,12 @@ auto_detect_session() {
             ;;
           esac
 
-          # Extract just the branch name from the full branch path
-          BRANCH_NAME=$(echo "$TEMP_BRANCH" | sed 's|.*/||')
-          if [ "$BRANCH_PATH" = "$BRANCH_NAME" ] || [ "$BRANCH_PATH" = "$TEMP_BRANCH" ]; then
+          # Check if current directory is within this session's worktree
+          # Normalize both paths to handle ./ prefixes
+          NORMALIZED_WORKTREE=$(echo "$WORKTREE_DIR" | sed 's|/\./|/|g')
+          NORMALIZED_CURRENT=$(echo "$CURRENT_DIR" | sed 's|/\./|/|g')
+          
+          if echo "$NORMALIZED_CURRENT" | grep -q "^$NORMALIZED_WORKTREE"; then
             echo "$SESSION_ID"
             return 0
           fi
