@@ -131,3 +131,4 @@ para recover feature-auth         # Restore if needed later
 - Test coverage includes units, integration, performance, and argument parsing
 - All tests must pass before commits (enforced by git hooks)
 - 99+ tests across 12 specialized test files ensure reliability
+- There is no such thing as a 'minor test issue' - if a test fails, it's a bug and should be fixed immediately
