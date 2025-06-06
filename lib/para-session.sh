@@ -612,3 +612,78 @@ enhanced_resume() {
     fi
   fi
 }
+
+# Create new session
+create_new_session() {
+  session_name="$1"
+  initial_prompt="$2"
+  skip_permissions="${3:-false}"
+
+  # Determine base branch
+  if [ -z "$BASE_BRANCH" ]; then
+    BASE_BRANCH=$(get_current_branch)
+  fi
+
+  # Check for uncommitted changes and warn, but don't block
+  check_uncommitted_changes
+
+  # Create session
+  SESSION_ID=$(create_session "$session_name" "$BASE_BRANCH")
+  get_session_info "$SESSION_ID"
+
+  # Store initial prompt in session state if provided
+  if [ -n "$initial_prompt" ]; then
+    save_session_prompt "$SESSION_ID" "$initial_prompt"
+  fi
+
+  # Launch IDE with optional initial prompt and skip permissions flag
+  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt" "$skip_permissions"
+
+  echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
+}
+
+# Create new multi-instance session group
+create_new_multi_session() {
+  instance_count="$1"
+  session_base_name="$2"
+  initial_prompt="$3"
+  skip_permissions="${4:-false}"
+
+  # Determine base branch
+  if [ -z "$BASE_BRANCH" ]; then
+    BASE_BRANCH=$(get_current_branch)
+  fi
+
+  # Check for uncommitted changes and warn, but don't block
+  check_uncommitted_changes
+
+  # Generate group name if not provided
+  if [ -z "$session_base_name" ]; then
+    session_base_name="multi-$(generate_timestamp)"
+  fi
+
+  # Create multiple sessions
+  echo "▶ creating $instance_count instances for group '$session_base_name'..."
+  SESSION_IDS=$(create_multi_session "$session_base_name" "$instance_count" "$BASE_BRANCH")
+
+  # Store initial prompt for each session if provided
+  if [ -n "$initial_prompt" ]; then
+    for session_id in $SESSION_IDS; do
+      save_session_prompt "$session_id" "$initial_prompt"
+    done
+  fi
+
+  # Launch IDEs for all instances
+  launch_multi_ide "$(get_default_ide)" "$SESSION_IDS" "$initial_prompt" "$skip_permissions"
+
+  # Show summary
+  echo ""
+  echo "✅ Initialized group '$session_base_name' with $instance_count instances:"
+  for session_id in $SESSION_IDS; do
+    echo "  → $session_id"
+  done
+  echo ""
+  echo "💡 Use 'para list' to see all instances"
+  echo "💡 Use 'para finish \"msg\"' in any instance to finish that session"
+  echo "💡 Use 'para cancel --group $session_base_name' to cancel all instances"
+}

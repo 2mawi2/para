@@ -99,6 +99,37 @@ validate_config() {
   return 0
 }
 
+# Check for first run and prompt configuration
+check_first_run() {
+  if is_first_run; then
+    echo "👋 Welcome to para!"
+    echo ""
+
+    # Check if running in non-interactive mode (CI environment)
+    if [ "${PARA_NON_INTERACTIVE:-false}" = "true" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "Running in non-interactive mode, using default configuration."
+      create_default_config
+      load_config
+      return
+    fi
+
+    printf "Quick setup your IDE? [Y/n]: "
+    read -r setup_choice
+    case "$setup_choice" in
+    n | N | no | No)
+      echo "Skipped setup. Run 'para config' anytime to configure."
+      create_default_config
+      load_config
+      ;;
+    *)
+      auto_setup
+      load_config
+      echo ""
+      ;;
+    esac
+  fi
+}
+
 # Get IDE-specific default user data directory
 get_default_user_data_dir() {
   ide_name="$1"
@@ -265,4 +296,60 @@ show_config() {
   echo "Config file: $CONFIG_FILE"
   echo ""
   echo "Run 'para config' to change these settings."
+}
+
+# Handle config command
+handle_config_command() {
+  if [ "$#" -eq 1 ]; then
+    # No subcommand - run simple setup
+    run_config_setup
+  else
+    case "$2" in
+    show)
+      show_config
+      ;;
+    auto)
+      auto_setup
+      ;;
+    quick)
+      # Quick setup with user confirmation
+      printf "Quick Setup your IDE? [Y/n]: "
+      read -r setup_choice
+      case "$setup_choice" in
+      n | N | no | No)
+        # Cancel quick setup
+        return 1
+        ;;
+      *)
+        auto_setup
+        ;;
+      esac
+      ;;
+    wizard)
+      # Alias for interactive setup wizard
+      run_config_setup
+      ;;
+    edit)
+      if [ -f "$CONFIG_FILE" ]; then
+        # Use robust eval for multi-word EDITOR commands
+        cmd="${EDITOR:-vi}"
+        eval "$cmd \"$CONFIG_FILE\""
+      else
+        echo "No config file found. Run 'para config' to create one."
+      fi
+      ;;
+    *)
+      # Handle unknown subcommands
+      echo "Unknown config command: $2"
+      echo "Usage: para config [show|auto|quick|wizard|edit]"
+      echo ""
+      echo "  para config         # Interactive setup"
+      echo "  para config show    # Show current settings"
+      echo "  para config auto    # Auto-detect IDE"
+      echo "  para config quick   # Quick auto-detect with confirmation"
+      echo "  para config wizard  # Interactive setup wizard"
+      echo "  para config edit    # Edit config file"
+      ;;
+    esac
+  fi
 }
