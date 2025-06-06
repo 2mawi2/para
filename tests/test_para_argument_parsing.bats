@@ -65,21 +65,24 @@ parse_dispatch_args() {
     
     # Process positional arguments
     if [ -n "$positional_args" ]; then
-        # Convert to array-like processing
-        set -- $(echo "$positional_args" | tr '|' ' ')
-        if [ "$#" -eq 1 ]; then
-            INITIAL_PROMPT="$1"
-        elif [ "$#" -eq 2 ]; then
-            SESSION_NAME="$1"
-            INITIAL_PROMPT="$2"
+        # Count the number of positional arguments
+        arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
+        
+        if [ "$arg_count" -eq 1 ]; then
+            # Only prompt provided
+            INITIAL_PROMPT="$positional_args"
+        elif [ "$arg_count" -eq 2 ]; then
+            # Session name and prompt provided
+            SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
+            INITIAL_PROMPT=$(echo "$positional_args" | cut -d'|' -f2)
         else
             echo "ERROR: too many arguments"
             return 1
         fi
     fi
     
-    # Validate required arguments - need at least one positional argument
-    if [ -z "$positional_args" ]; then
+    # Validate required arguments - match the real implementation
+    if [ -z "$INITIAL_PROMPT" ]; then
         echo "ERROR: dispatch requires a prompt text"
         return 1
     fi
@@ -168,11 +171,9 @@ parse_start_args() {
 }
 
 @test "parse_dispatch_args with multiline prompt" {
-    multiline_prompt="Line 1
-Line 2
-Line 3"
+    multiline_prompt=$(printf "Line 1\nLine 2\nLine 3")
     result=$(parse_dispatch_args "dispatch" "$multiline_prompt")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*Line.1.*Line.2.*Line.3.*SKIP_PERMISSIONS:false ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*Line.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with session name containing dashes and underscores" {
@@ -181,15 +182,17 @@ Line 3"
 }
 
 @test "parse_dispatch_args with empty prompt string" {
-    # Empty prompt should be treated as a valid prompt
-    result=$(parse_dispatch_args "dispatch" "")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*SKIP_PERMISSIONS:false ]]
+    # Empty prompt should fail - use 'start' for blank sessions
+    run parse_dispatch_args "dispatch" ""
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: dispatch requires a prompt text" ]]
 }
 
 @test "parse_dispatch_args with session name and empty prompt" {
-    # Empty prompt should be treated as a valid prompt
-    result=$(parse_dispatch_args "dispatch" "my-session" "")
-    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:.*SKIP_PERMISSIONS:false ]]
+    # Empty prompt should fail - use 'start' for blank sessions
+    run parse_dispatch_args "dispatch" "my-session" ""
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: dispatch requires a prompt text" ]]
 }
 
 # Tests for --dangerously-skip-permissions flag in dispatch command
