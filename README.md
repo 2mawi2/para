@@ -67,6 +67,10 @@ para dispatch "prompt"                    # Create session with AI prompt
 para dispatch name "prompt"               # Named session with AI prompt
 para dispatch-multi N "prompt"            # Create N parallel sessions with same prompt
 para dispatch-multi N --group name "prompt"  # Create N sessions with custom group name
+
+# Skip permission warnings in trusted environments (CI, scripts)
+para dispatch --dangerously-skip-permissions "prompt"
+para start --dangerously-skip-permissions name
 ```
 
 ## Custom Branch Names
@@ -243,5 +247,11 @@ para start my-session
 ```
 
 Para also auto-detects CI environments by checking for `CI` or `GITHUB_ACTIONS` environment variables.
+
+## Security Notes
+
+The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start`, `dispatch`, and `dispatch-multi` commands.
+
+**⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
 
 That's it! Run `para config` to get started.
