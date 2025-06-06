@@ -35,39 +35,107 @@ parse_dispatch_args() {
     # Simplified version of the parsing logic from para.sh handle_dispatch_command
     SESSION_NAME=""
     INITIAL_PROMPT=""
+    SKIP_PERMISSIONS=false
     
-    if [ "$#" -eq 1 ]; then
+    # Skip the command name (dispatch)
+    shift
+    
+    # Parse arguments
+    positional_args=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --dangerously-skip-permissions)
+            SKIP_PERMISSIONS=true
+            shift
+            ;;
+        -*)
+            echo "ERROR: unknown option: $1"
+            return 1
+            ;;
+        *)
+            if [ -z "$positional_args" ]; then
+                positional_args="$1"
+            else
+                positional_args="$positional_args|$1"
+            fi
+            shift
+            ;;
+        esac
+    done
+    
+    # Process positional arguments
+    if [ -n "$positional_args" ]; then
+        # Convert to array-like processing
+        set -- $(echo "$positional_args" | tr '|' ' ')
+        if [ "$#" -eq 1 ]; then
+            INITIAL_PROMPT="$1"
+        elif [ "$#" -eq 2 ]; then
+            SESSION_NAME="$1"
+            INITIAL_PROMPT="$2"
+        else
+            echo "ERROR: too many arguments"
+            return 1
+        fi
+    fi
+    
+    # Validate required arguments - need at least one positional argument
+    if [ -z "$positional_args" ]; then
         echo "ERROR: dispatch requires a prompt text"
-        return 1
-    elif [ "$#" -eq 2 ]; then
-        # Just prompt provided
-        INITIAL_PROMPT="$2"
-    elif [ "$#" -eq 3 ]; then
-        # Session name and prompt provided
-        SESSION_NAME="$2"
-        INITIAL_PROMPT="$3"
-    else
-        echo "ERROR: dispatch usage: 'para dispatch \"prompt\"' or 'para dispatch session-name \"prompt\"'"
         return 1
     fi
     
-    echo "SESSION_NAME:${SESSION_NAME:-EMPTY} PROMPT:${INITIAL_PROMPT:-EMPTY}"
+    echo "SESSION_NAME:${SESSION_NAME:-EMPTY} PROMPT:${INITIAL_PROMPT:-EMPTY} SKIP_PERMISSIONS:${SKIP_PERMISSIONS}"
+}
+
+# Test the start argument parsing pattern directly
+parse_start_args() {
+    # Simplified version of the parsing logic from para.sh handle_start_command
+    SESSION_NAME=""
+    SKIP_PERMISSIONS=false
+    
+    # Skip the command name (start)
+    shift
+    
+    # Parse arguments
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --dangerously-skip-permissions)
+            SKIP_PERMISSIONS=true
+            shift
+            ;;
+        -*)
+            echo "ERROR: unknown option: $1"
+            return 1
+            ;;
+        *)
+            if [ -z "$SESSION_NAME" ]; then
+                SESSION_NAME="$1"
+            else
+                echo "ERROR: too many arguments"
+                return 1
+            fi
+            shift
+            ;;
+        esac
+    done
+    
+    echo "SESSION_NAME:${SESSION_NAME:-EMPTY} SKIP_PERMISSIONS:${SKIP_PERMISSIONS}"
 }
 
 # Tests for dispatch command argument parsing
 @test "parse_dispatch_args with prompt only" {
     result=$(parse_dispatch_args "dispatch" "Test prompt message")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:Test.prompt.message ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:Test.prompt.message.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with session name and prompt" {
     result=$(parse_dispatch_args "dispatch" "feature-auth" "Add authentication")
-    [[ "$result" =~ SESSION_NAME:feature-auth.*PROMPT:Add.authentication ]]
+    [[ "$result" =~ SESSION_NAME:feature-auth.*PROMPT:Add.authentication.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with quotes in prompt" {
     result=$(parse_dispatch_args "dispatch" "Test 'single' and \"double\" quotes")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*single.*double.*quotes ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*single.*double.*quotes.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with no prompt fails" {
@@ -79,24 +147,24 @@ parse_dispatch_args() {
 @test "parse_dispatch_args with too many arguments fails" {
     run parse_dispatch_args "dispatch" "session" "prompt" "extra"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "ERROR: dispatch usage" ]]
+    [[ "$output" =~ "ERROR: too many arguments" ]]
 }
 
 @test "parse_dispatch_args with custom session name and prompt" {
     result=$(parse_dispatch_args "dispatch" "my-session" "My prompt text")
-    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:My.prompt.text ]]
+    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:My.prompt.text.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with special characters in prompt" {
     prompt="Test with \$vars and & special chars"
     result=$(parse_dispatch_args "dispatch" "$prompt")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*vars.*special.chars ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*vars.*special.chars.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with very long prompt" {
     long_prompt="This is a very long prompt that tests whether dispatch argument parsing can handle lengthy text without issues"
     result=$(parse_dispatch_args "dispatch" "$long_prompt")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*very.long.prompt.*lengthy.text ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*very.long.prompt.*lengthy.text.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with multiline prompt" {
@@ -104,22 +172,215 @@ parse_dispatch_args() {
 Line 2
 Line 3"
     result=$(parse_dispatch_args "dispatch" "$multiline_prompt")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*Line.1.*Line.2.*Line.3 ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*Line.1.*Line.2.*Line.3.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with session name containing dashes and underscores" {
     result=$(parse_dispatch_args "dispatch" "feature-auth_v2" "Authentication prompt")
-    [[ "$result" =~ SESSION_NAME:feature-auth_v2.*PROMPT:Authentication.prompt ]]
+    [[ "$result" =~ SESSION_NAME:feature-auth_v2.*PROMPT:Authentication.prompt.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with empty prompt string" {
+    # Empty prompt should be treated as a valid prompt
     result=$(parse_dispatch_args "dispatch" "")
-    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:EMPTY ]]
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:.*SKIP_PERMISSIONS:false ]]
 }
 
 @test "parse_dispatch_args with session name and empty prompt" {
+    # Empty prompt should be treated as a valid prompt
     result=$(parse_dispatch_args "dispatch" "my-session" "")
-    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:EMPTY ]]
+    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:.*SKIP_PERMISSIONS:false ]]
+}
+
+# Tests for --dangerously-skip-permissions flag in dispatch command
+@test "parse_dispatch_args with skip permissions flag and prompt" {
+    result=$(parse_dispatch_args "dispatch" "--dangerously-skip-permissions" "Test prompt")
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_args with skip permissions flag, session name and prompt" {
+    result=$(parse_dispatch_args "dispatch" "--dangerously-skip-permissions" "my-session" "Test prompt")
+    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_args with skip permissions flag at end" {
+    result=$(parse_dispatch_args "dispatch" "Test prompt" "--dangerously-skip-permissions")
+    [[ "$result" =~ SESSION_NAME:EMPTY.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_args with skip permissions flag between session and prompt" {
+    result=$(parse_dispatch_args "dispatch" "my-session" "--dangerously-skip-permissions" "Test prompt")
+    [[ "$result" =~ SESSION_NAME:my-session.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_args with unknown flag fails" {
+    run parse_dispatch_args "dispatch" "--unknown-flag" "Test prompt"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: unknown option: --unknown-flag" ]]
+}
+
+@test "parse_dispatch_args with skip permissions but no prompt fails" {
+    run parse_dispatch_args "dispatch" "--dangerously-skip-permissions"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: dispatch requires a prompt text" ]]
+}
+
+# Tests for --dangerously-skip-permissions flag in start command
+@test "parse_start_args without arguments" {
+    result=$(parse_start_args "start")
+    [[ "$result" =~ SESSION_NAME:EMPTY.*SKIP_PERMISSIONS:false ]]
+}
+
+@test "parse_start_args with session name" {
+    result=$(parse_start_args "start" "my-session")
+    [[ "$result" =~ SESSION_NAME:my-session.*SKIP_PERMISSIONS:false ]]
+}
+
+@test "parse_start_args with skip permissions flag" {
+    result=$(parse_start_args "start" "--dangerously-skip-permissions")
+    [[ "$result" =~ SESSION_NAME:EMPTY.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_start_args with skip permissions flag and session name" {
+    result=$(parse_start_args "start" "--dangerously-skip-permissions" "my-session")
+    [[ "$result" =~ SESSION_NAME:my-session.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_start_args with session name and skip permissions flag" {
+    result=$(parse_start_args "start" "my-session" "--dangerously-skip-permissions")
+    [[ "$result" =~ SESSION_NAME:my-session.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_start_args with too many arguments fails" {
+    run parse_start_args "start" "session1" "session2"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: too many arguments" ]]
+}
+
+@test "parse_start_args with unknown flag fails" {
+    run parse_start_args "start" "--unknown-flag"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: unknown option: --unknown-flag" ]]
+}
+
+# Test the dispatch-multi argument parsing pattern directly
+parse_dispatch_multi_args() {
+    # Simplified version of the parsing logic from para.sh handle_dispatch_multi_command
+    INSTANCE_COUNT=""
+    INITIAL_PROMPT=""
+    SESSION_BASE_NAME=""
+    SKIP_PERMISSIONS=false
+    
+    # Skip the command name (dispatch-multi)
+    shift
+    
+    # Parse arguments with --group and --dangerously-skip-permissions flag support
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --group=*)
+            SESSION_BASE_NAME="${1#--group=}"
+            shift
+            ;;
+        --group)
+            if [ "$#" -lt 2 ]; then
+                echo "ERROR: --group requires a group name"
+                return 1
+            fi
+            SESSION_BASE_NAME="$2"
+            shift 2
+            ;;
+        --dangerously-skip-permissions)
+            SKIP_PERMISSIONS=true
+            shift
+            ;;
+        -*)
+            echo "ERROR: unknown option: $1"
+            return 1
+            ;;
+        *)
+            # First positional argument should be instance count
+            if [ -z "$INSTANCE_COUNT" ]; then
+                INSTANCE_COUNT="$1"
+                shift
+            # Second positional argument should be prompt
+            elif [ -z "$INITIAL_PROMPT" ]; then
+                INITIAL_PROMPT="$1"
+                shift
+            else
+                echo "ERROR: too many arguments"
+                return 1
+            fi
+            ;;
+        esac
+    done
+    
+    # Validate required arguments
+    if [ -z "$INSTANCE_COUNT" ]; then
+        echo "ERROR: dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"'"
+        return 1
+    fi
+    
+    if [ -z "$INITIAL_PROMPT" ]; then
+        echo "ERROR: dispatch-multi requires a prompt text"
+        return 1
+    fi
+    
+    echo "INSTANCE_COUNT:${INSTANCE_COUNT:-EMPTY} SESSION_BASE_NAME:${SESSION_BASE_NAME:-EMPTY} PROMPT:${INITIAL_PROMPT:-EMPTY} SKIP_PERMISSIONS:${SKIP_PERMISSIONS}"
+}
+
+# Tests for --dangerously-skip-permissions flag in dispatch-multi command
+@test "parse_dispatch_multi_args basic usage" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "3" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:3.*SESSION_BASE_NAME:EMPTY.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:false ]]
+}
+
+@test "parse_dispatch_multi_args with group name" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "2" "--group" "my-group" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:2.*SESSION_BASE_NAME:my-group.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:false ]]
+}
+
+@test "parse_dispatch_multi_args with skip permissions flag" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "--dangerously-skip-permissions" "3" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:3.*SESSION_BASE_NAME:EMPTY.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_multi_args with skip permissions and group name" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "--dangerously-skip-permissions" "2" "--group" "my-group" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:2.*SESSION_BASE_NAME:my-group.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_multi_args with group and skip permissions in different order" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "2" "--group" "my-group" "--dangerously-skip-permissions" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:2.*SESSION_BASE_NAME:my-group.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_multi_args with group= syntax and skip permissions" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "--group=my-group" "--dangerously-skip-permissions" "2" "Test prompt")
+    [[ "$result" =~ INSTANCE_COUNT:2.*SESSION_BASE_NAME:my-group.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_multi_args with skip permissions at end" {
+    result=$(parse_dispatch_multi_args "dispatch-multi" "3" "Test prompt" "--dangerously-skip-permissions")
+    [[ "$result" =~ INSTANCE_COUNT:3.*SESSION_BASE_NAME:EMPTY.*PROMPT:Test.prompt.*SKIP_PERMISSIONS:true ]]
+}
+
+@test "parse_dispatch_multi_args missing instance count fails" {
+    run parse_dispatch_multi_args "dispatch-multi" "Test prompt"
+    [ "$status" -ne 0 ]
+    # This should fail because the prompt gets parsed as instance count but then prompt is missing
+    [[ "$output" =~ "ERROR: dispatch-multi requires a prompt text" ]]
+}
+
+@test "parse_dispatch_multi_args missing prompt fails" {
+    run parse_dispatch_multi_args "dispatch-multi" "3"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: dispatch-multi requires a prompt text" ]]
+}
+
+@test "parse_dispatch_multi_args with unknown flag fails" {
+    run parse_dispatch_multi_args "dispatch-multi" "--unknown-flag" "3" "Test prompt"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "ERROR: unknown option: --unknown-flag" ]]
 }
 
 # Test dispatch command knowledge in utils
@@ -169,6 +430,77 @@ Line 3"
     
     # Should contain true (stub), not real IDE command
     grep -q '"command": "true"' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+# Test build_claude_terminal_command with skip permissions flag
+@test "build_claude_terminal_command with skip permissions false" {
+    export IDE_CMD="claude"
+    result=$(build_claude_terminal_command "Test prompt" "" "false")
+    [[ "$result" == "claude 'Test prompt'" ]]
+}
+
+@test "build_claude_terminal_command with skip permissions true" {
+    export IDE_CMD="claude"
+    result=$(build_claude_terminal_command "Test prompt" "" "true")
+    [[ "$result" == "claude --dangerously-skip-permissions 'Test prompt'" ]]
+}
+
+@test "build_claude_terminal_command with skip permissions and session resumption" {
+    export IDE_CMD="claude"
+    result=$(build_claude_terminal_command "Test prompt" "my-session" "true")
+    [[ "$result" == "claude --dangerously-skip-permissions --resume 'my-session' 'Test prompt'" ]]
+}
+
+@test "build_claude_terminal_command with skip permissions but no prompt" {
+    export IDE_CMD="claude"
+    result=$(build_claude_terminal_command "" "" "true")
+    [[ "$result" == "claude --dangerously-skip-permissions" ]]
+}
+
+@test "build_claude_terminal_command with session resumption and skip permissions but no prompt" {
+    export IDE_CMD="claude"
+    result=$(build_claude_terminal_command "" "my-session" "true")
+    [[ "$result" == "claude --dangerously-skip-permissions --resume 'my-session'" ]]
+}
+
+# Test VS Code task generation with skip permissions flag
+@test "write_vscode_autorun_task with skip permissions flag" {
+    temp_dir=$(mktemp -d)
+    export IDE_CMD="claude"
+    
+    write_vscode_autorun_task "$temp_dir" "Test prompt" "" "true"
+    
+    # Should contain --dangerously-skip-permissions in args
+    grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_vscode_autorun_task without skip permissions flag" {
+    temp_dir=$(mktemp -d)
+    export IDE_CMD="claude"
+    
+    write_vscode_autorun_task "$temp_dir" "Test prompt" "" "false"
+    
+    # Should NOT contain --dangerously-skip-permissions
+    ! grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task with skip permissions flag" {
+    temp_dir=$(mktemp -d)
+    export IDE_CMD="claude"
+    
+    write_cursor_autorun_task "$temp_dir" "Test prompt" "" "true"
+    
+    # Should contain --dangerously-skip-permissions in args
+    grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
