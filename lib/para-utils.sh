@@ -7,9 +7,9 @@ usage() {
 para - Parallel IDE Workflow Helper
 
 Commands:
-para start [name] ["prompt"]         # create session with optional name/prompt
-para dispatch ["prompt"]             # start Claude Code session with prompt
-para dispatch-multi N ["prompt"]     # start N Claude Code instances with same prompt
+para start [name]                    # create session with optional name
+para dispatch "prompt"               # start Claude Code session with prompt
+para dispatch-multi N "prompt"       # start N Claude Code instances with same prompt
 para finish "message"                # squash all changes into single commit
 para finish "message" --branch <n>   # squash commits + custom branch name
 para list | ls                       # list active sessions
@@ -25,6 +25,7 @@ para start feature-auth              # create named session
 para dispatch "Add user auth"        # Claude Code session with prompt
 para dispatch-multi 3 "Compare approaches"      # 3 Claude instances with same prompt
 para dispatch-multi 5 --group task "Refactor"   # 5 instances with custom group name
+para start --dangerously-skip-permissions name  # skip IDE permission warnings
 para finish "implement user auth"    # squash session changes
 para finish "add feature" --branch feature-xyz  # custom branch name
 para list                            # see active sessions (shows multi-instance groups)
