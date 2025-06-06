@@ -48,6 +48,7 @@ para finish "Add new feature"
 - `para list` - Show all active sessions
 - `para continue` - Resume after resolving finish conflicts (auto-stages)
 - `para cancel [session]` - Discard current or specified session
+- `para cancel --group <name>` - Cancel all sessions in a multi-instance group
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
 
@@ -62,8 +63,10 @@ para finish "Add new feature"
 
 Claude Code support for AI-powered development:
 ```bash
-para dispatch "prompt"             # Create session with AI prompt
-para dispatch name "prompt"        # Named session with AI prompt
+para dispatch "prompt"                    # Create session with AI prompt
+para dispatch name "prompt"               # Named session with AI prompt
+para dispatch-multi N "prompt"            # Create N parallel sessions with same prompt
+para dispatch-multi N --group name "prompt"  # Create N sessions with custom group name
 ```
 
 ## Custom Branch Names
@@ -91,9 +94,28 @@ para finish "Fix bug" --branch existing-feature
 - Cannot end with `/`
 - Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
-The `dispatch` command creates a new session and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+### Multi-Instance AI Development
 
-**Note:** The `dispatch` command only works with Claude Code. Use `para config` to switch IDEs if needed.
+The `dispatch-multi` command creates multiple parallel sessions with the same prompt, perfect for comparing different AI approaches:
+
+```bash
+# Create 3 sessions to explore different approaches
+para dispatch-multi 3 "Implement user authentication system"
+
+# Create 5 sessions with a custom group name for organization
+para dispatch-multi 5 --group auth-experiments "Compare OAuth vs JWT implementation"
+
+# List all sessions (shows group information)
+para list
+
+# Cancel individual sessions or entire groups
+para cancel session-name              # Cancel one session
+para cancel --group auth-experiments  # Cancel all sessions in group
+```
+
+The `dispatch` and `dispatch-multi` commands create new sessions and immediately open Claude Code with your prompt, perfect for AI-assisted development.
+
+**Note:** Dispatch commands only work with Claude Code. Use `para config` to switch IDEs if needed.
 
 ## How It Works
 
@@ -130,8 +152,9 @@ para config show         # Show current settings
 para config edit         # Edit config file
 ```
 
-## Example Workflow
+## Example Workflows
 
+### Regular Parallel Development
 ```bash
 # Start multiple parallel sessions
 para start feature-auth     # Session 1: authentication
@@ -147,6 +170,24 @@ para finish "Update dashboard UI"  # Finishes current session
 para finish "Fix login redirect"   # Finishes current session
 
 # All features now merged to main branch
+```
+
+### AI-Powered Multi-Instance Development
+```bash
+# Create multiple AI sessions to explore different approaches
+para dispatch-multi 3 "Implement user authentication with best security practices"
+
+# Each Claude Code instance works on the same prompt independently
+# Compare results across 3 different approaches
+
+# Pick the best implementation
+para finish "Implement OAuth authentication"  # Keep this approach
+para cancel --group multi-instance-group     # Discard other experiments
+
+# Or finish multiple sessions with different messages
+para finish "OAuth implementation - approach 1"
+para finish "JWT implementation - approach 2"  
+para finish "Session-based auth - approach 3"
 ```
 
 ## When Things Conflict
@@ -165,9 +206,10 @@ para continue
 Para is ideal when working with AI assistants:
 
 - **Multiple agents**: Each agent works in its own session without conflicts
-- **Parallel experiments**: Try different approaches simultaneously  
+- **Parallel experiments**: Use `dispatch-multi` to try different approaches simultaneously  
 - **Safe iteration**: Main branch stays clean while you experiment
 - **Easy comparison**: See results side-by-side in different IDE windows
+- **A/B testing**: Compare multiple AI-generated solutions with identical prompts
 
 ## Documentation
 
