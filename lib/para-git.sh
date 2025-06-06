@@ -104,7 +104,7 @@ remove_worktree() {
   # Optimize: Use --force to skip confirmation and reduce I/O
   # Use 2>/dev/null to suppress expected error output and speed up execution
   git -C "$REPO_ROOT" worktree remove --force "$worktree_dir" 2>/dev/null || true
-  
+
   # Optimize: Use -D instead of -d to force delete without merge checks (faster)
   git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
 }

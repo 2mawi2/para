@@ -39,24 +39,25 @@ launch_multi_ide() {
   session_ids="$2"
   initial_prompt="${3:-}"
   skip_permissions="${4:-false}"
-  
+
   echo "▶ launching $ide_name for multiple instances..."
-  
+
   # Launch each instance with a brief delay to avoid overwhelming the system
   for session_id in $session_ids; do
     # Get worktree directory for this session
     get_session_info "$session_id"
-    
+
     echo "  → launching instance for session $session_id"
+    # shellcheck disable=SC2153
     launch_ide "$ide_name" "$WORKTREE_DIR" "$initial_prompt" "$skip_permissions" &
-    
+
     # Brief delay between launches
     sleep 0.5
   done
-  
+
   # Wait for all background processes to complete
   wait
-  
+
   echo "✅ All instances launched successfully"
 }
 
@@ -507,11 +508,11 @@ write_vscode_autorun_task() {
 
   # Build args array with optional skip permissions flag
   build_args() {
-    local args=""
+    args=""
     if [ "$skip_permissions" = "true" ]; then
       args="\"--dangerously-skip-permissions\""
     fi
-    
+
     # Add remaining arguments
     for arg in "$@"; do
       if [ -n "$args" ]; then
@@ -656,11 +657,11 @@ write_cursor_autorun_task() {
 
   # Build args array with optional skip permissions flag
   build_args() {
-    local args=""
+    args=""
     if [ "$skip_permissions" = "true" ]; then
       args="\"--dangerously-skip-permissions\""
     fi
-    
+
     # Add remaining arguments
     for arg in "$@"; do
       if [ -n "$args" ]; then
