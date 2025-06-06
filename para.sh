@@ -139,21 +139,49 @@ handle_command() {
 # Handle start command (simplified - no more --prompt support)
 handle_start_command() {
   SESSION_NAME=""
+  SKIP_PERMISSIONS=false
 
-  # Parse arguments - only session name now
-  if [ "$#" -eq 1 ]; then
-    # No session name provided - generate one
-    SESSION_NAME=""
-  elif [ "$#" -eq 2 ]; then
-    # Session name provided
-    SESSION_NAME="$2"
-    validate_session_name "$SESSION_NAME"
-  else
-    die "start takes optionally one session name (for prompts, use 'para dispatch')"
+  # Parse arguments
+  shift # Remove 'start'
+  
+  # Collect positional arguments separately from flags
+  positional_args=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --dangerously-skip-permissions)
+      SKIP_PERMISSIONS=true
+      shift
+      ;;
+    -*)
+      die "unknown option: $1"
+      ;;
+    *)
+      if [ -z "$positional_args" ]; then
+        positional_args="$1"
+      else
+        positional_args="$positional_args|$1"
+      fi
+      shift
+      ;;
+    esac
+  done
+  
+  # Process positional arguments
+  if [ -n "$positional_args" ]; then
+    # Count the number of positional arguments
+    arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
+    
+    if [ "$arg_count" -eq 1 ]; then
+      # Only session name provided
+      SESSION_NAME="$positional_args"
+      validate_session_name "$SESSION_NAME"
+    else
+      die "too many arguments"
+    fi
   fi
 
   # Session creation logic - no initial prompt
-  create_new_session "$SESSION_NAME" ""
+  create_new_session "$SESSION_NAME" "" "$SKIP_PERMISSIONS"
 }
 
 # Handle dispatch command - creates session with prompt
@@ -165,23 +193,58 @@ handle_dispatch_command() {
 
   INITIAL_PROMPT=""
   SESSION_NAME=""
+  SKIP_PERMISSIONS=false
 
-  if [ "$#" -eq 1 ]; then
+  # Parse arguments
+  shift # Remove 'dispatch'
+  
+  # Collect positional arguments separately from flags
+  positional_args=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --dangerously-skip-permissions)
+      SKIP_PERMISSIONS=true
+      shift
+      ;;
+    -*)
+      die "unknown option: $1"
+      ;;
+    *)
+      if [ -z "$positional_args" ]; then
+        positional_args="$1"
+      else
+        positional_args="$positional_args|$1"
+      fi
+      shift
+      ;;
+    esac
+  done
+  
+  # Process positional arguments
+  if [ -n "$positional_args" ]; then
+    # Count the number of positional arguments
+    arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
+    
+    if [ "$arg_count" -eq 1 ]; then
+      # Only prompt provided
+      INITIAL_PROMPT="$positional_args"
+    elif [ "$arg_count" -eq 2 ]; then
+      # Session name and prompt provided
+      SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
+      INITIAL_PROMPT=$(echo "$positional_args" | cut -d'|' -f2)
+      validate_session_name "$SESSION_NAME"
+    else
+      die "too many arguments"
+    fi
+  fi
+
+  # Validate required arguments
+  if [ -z "$INITIAL_PROMPT" ]; then
     die "dispatch requires a prompt text"
-  elif [ "$#" -eq 2 ]; then
-    # Just prompt provided
-    INITIAL_PROMPT="$2"
-  elif [ "$#" -eq 3 ]; then
-    # Session name and prompt provided
-    SESSION_NAME="$2"
-    INITIAL_PROMPT="$3"
-    validate_session_name "$SESSION_NAME"
-  else
-    die "dispatch usage: 'para dispatch \"prompt\"' or 'para dispatch session-name \"prompt\"'"
   fi
 
   # Session creation logic with initial prompt
-  create_new_session "$SESSION_NAME" "$INITIAL_PROMPT"
+  create_new_session "$SESSION_NAME" "$INITIAL_PROMPT" "$SKIP_PERMISSIONS"
 }
 
 # Handle dispatch-multi command - creates multiple sessions with same prompt
@@ -194,11 +257,12 @@ handle_dispatch_multi_command() {
   INSTANCE_COUNT=""
   INITIAL_PROMPT=""
   SESSION_BASE_NAME=""
+  SKIP_PERMISSIONS=false
 
   # Skip the command name (dispatch-multi)
   shift
 
-  # Parse arguments with --group flag support
+  # Parse arguments with --group and --dangerously-skip-permissions flag support
   while [ "$#" -gt 0 ]; do
     case "$1" in
     --group=*)
@@ -213,6 +277,10 @@ handle_dispatch_multi_command() {
       SESSION_BASE_NAME="$2"
       validate_session_name "$SESSION_BASE_NAME"
       shift 2
+      ;;
+    --dangerously-skip-permissions)
+      SKIP_PERMISSIONS=true
+      shift
       ;;
     -*)
       die "unknown option: $1"
@@ -253,7 +321,7 @@ handle_dispatch_multi_command() {
   fi
 
   # Multi-session creation logic with initial prompt
-  create_new_multi_session "$INSTANCE_COUNT" "$SESSION_BASE_NAME" "$INITIAL_PROMPT"
+  create_new_multi_session "$INSTANCE_COUNT" "$SESSION_BASE_NAME" "$INITIAL_PROMPT" "$SKIP_PERMISSIONS"
 }
 
 # Handle finish command
@@ -487,6 +555,7 @@ handle_config_command() {
 create_new_session() {
   session_name="$1"
   initial_prompt="$2"
+  skip_permissions="${3:-false}"
 
   # Determine base branch
   if [ -z "$BASE_BRANCH" ]; then
@@ -505,8 +574,8 @@ create_new_session() {
     save_session_prompt "$SESSION_ID" "$initial_prompt"
   fi
 
-  # Launch IDE with optional initial prompt
-  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt"
+  # Launch IDE with optional initial prompt and skip permissions flag
+  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt" "$skip_permissions"
 
   echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
 }
@@ -516,6 +585,7 @@ create_new_multi_session() {
   instance_count="$1"
   session_base_name="$2"
   initial_prompt="$3"
+  skip_permissions="${4:-false}"
 
   # Determine base branch
   if [ -z "$BASE_BRANCH" ]; then
@@ -542,7 +612,7 @@ create_new_multi_session() {
   fi
 
   # Launch IDEs for all instances
-  launch_multi_ide "$(get_default_ide)" "$SESSION_IDS" "$initial_prompt"
+  launch_multi_ide "$(get_default_ide)" "$SESSION_IDS" "$initial_prompt" "$skip_permissions"
 
   # Show summary
   echo ""
