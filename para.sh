@@ -38,7 +38,6 @@ need_git_repo
 load_config
 init_paths
 
-
 # Command dispatch logic
 main() {
   # Check for first run before handling commands (but skip for config commands)
@@ -106,15 +105,6 @@ handle_command() {
     ;;
   esac
 }
-
-
-
-
-
-
-
-
-
 
 # Execute main function if script is run directly
 if [ "$0" != "${0#*/}" ] || [ "$0" = "./para.sh" ] || [ "$0" = "para.sh" ]; then

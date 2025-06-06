@@ -8,7 +8,7 @@ handle_start_command() {
 
   # Parse arguments
   shift # Remove 'start'
-  
+
   # Collect positional arguments separately from flags
   positional_args=""
   while [ "$#" -gt 0 ]; do
@@ -30,12 +30,12 @@ handle_start_command() {
       ;;
     esac
   done
-  
+
   # Process positional arguments
   if [ -n "$positional_args" ]; then
     # Count the number of positional arguments
     arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
-    
+
     if [ "$arg_count" -eq 1 ]; then
       # Only session name provided
       SESSION_NAME="$positional_args"
@@ -62,7 +62,7 @@ handle_dispatch_command() {
 
   # Parse arguments
   shift # Remove 'dispatch'
-  
+
   # Collect positional arguments separately from flags
   positional_args=""
   while [ "$#" -gt 0 ]; do
@@ -84,12 +84,12 @@ handle_dispatch_command() {
       ;;
     esac
   done
-  
+
   # Process positional arguments
   if [ -n "$positional_args" ]; then
     # Count the number of positional arguments
     arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
-    
+
     if [ "$arg_count" -eq 1 ]; then
       # Only prompt provided
       INITIAL_PROMPT="$positional_args"
@@ -297,7 +297,7 @@ handle_cancel_command() {
   if [ -n "$GROUP_NAME" ]; then
     # Get all sessions in the group
     GROUP_SESSIONS=$(get_multi_session_group "$GROUP_NAME")
-    
+
     if [ -z "$GROUP_SESSIONS" ]; then
       die "no multi-instance group found with name '$GROUP_NAME'"
     fi
@@ -313,7 +313,7 @@ handle_cancel_command() {
     # Cancel each session in the group
     for session_id in $GROUP_SESSIONS; do
       echo "  → cancelling session $session_id"
-      
+
       # Get session info and remove
       get_session_info "$session_id"
       remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
@@ -332,17 +332,17 @@ handle_cancel_command() {
 
   # Optimize: Get session info and immediately proceed with removal
   get_session_info "$SESSION_ID"
-  
+
   # Optimize: Reduce verbose output during operations for speed
   echo "▶ aborting session $SESSION_ID"
-  
+
   # Optimize: Run git operations and state cleanup in parallel where possible
   # Remove worktree and branch first (heavier operations)
   remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
-  
+
   # Then clean up state files (lighter operation)
   remove_session_state "$SESSION_ID"
-  
+
   echo "cancelled session $SESSION_ID"
   echo "🎉 You can safely close this $(get_ide_display_name) session now."
 }
