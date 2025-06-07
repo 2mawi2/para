@@ -54,6 +54,7 @@ para finish "Add new feature"
 - `para cancel --group <name>` - Cancel all sessions in a multi-instance group
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
+- `para recover [session]` - Recover cancelled session from backup
 
 ### Configuration
 - `para config` - Interactive configuration wizard
@@ -213,6 +214,29 @@ para finish "My changes"
 para continue
 # ✅ Finished!
 ```
+
+## Session Recovery
+
+Para automatically backs up the last 3 cancelled sessions for recovery:
+
+```bash
+# Cancel a session (automatically backed up)
+para cancel my-session
+# 💡 Session backed up for recovery. Use 'para recover my-session' to restore.
+
+# View available backups
+para recover
+# Shows list of recoverable sessions
+
+# Recover a cancelled session
+para recover my-session
+# ✅ recovered cancelled session my-session
+# ↳ branch: para/my-session-20240531-184623
+# ↳ worktree: subtrees/para/my-session-20240531-184623
+# ↳ resume: para resume my-session
+```
+
+**Note:** Only the last 3 cancelled sessions are kept as backups. The oldest backup is automatically removed when a new session is cancelled.
 
 ## Perfect For AI Development
 
