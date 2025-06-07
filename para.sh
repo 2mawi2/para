@@ -113,6 +113,10 @@ handle_command() {
     handle_config_command "$@"
     ;;
 
+  completion | _completion_sessions | _completion_groups | _completion_branches)
+    handle_completion_command "$@"
+    ;;
+
   *)
     usage
     ;;

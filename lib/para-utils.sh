@@ -20,6 +20,7 @@ para cancel [session]                # cancel session
 para cancel --group <name>           # cancel all sessions in multi-instance group
 para clean                           # remove all sessions
 para config                          # setup configuration
+para completion generate [shell]     # generate shell completion script
 
 Examples:
 para start                           # create session with auto-generated name
@@ -39,6 +40,7 @@ para cancel --group task             # cancel all sessions in 'task' group
 para clean                           # remove all sessions
 para resume session-name             # resume specific session
 para config                          # setup IDE preferences
+para completion generate bash        # generate bash completion script
 
 For configuration help: para config
 EOF
@@ -54,7 +56,7 @@ die() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | config)
+  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | config | completion)
     return 0
     ;;
   *)
@@ -258,4 +260,223 @@ json_escape_string() {
   # Use printf to properly handle the string, then escape JSON special characters
   # This approach handles newlines, quotes, and other special characters properly
   printf '%s' "$input" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/; s/\t/\\t/g' | tr -d '\n' | sed 's/\\n$//'
+}
+
+# Get list of active session names for completion
+get_session_names() {
+  if [ ! -d "$STATE_DIR" ]; then
+    return 0
+  fi
+
+  for state_file in "$STATE_DIR"/*.state; do
+    [ -f "$state_file" ] || continue
+    basename "$state_file" .state
+  done
+}
+
+# Get list of multi-instance group names for completion
+get_group_names() {
+  if [ ! -d "$STATE_DIR" ]; then
+    return 0
+  fi
+
+  for state_file in "$STATE_DIR"/*.state; do
+    [ -f "$state_file" ] || continue
+    session_id=$(basename "$state_file" .state)
+
+    # Check for multi-session metadata
+    meta_file="$STATE_DIR/$session_id.meta"
+    if [ -f "$meta_file" ]; then
+      # Extract group name from metadata
+      while IFS='=' read -r key value; do
+        case "$key" in
+        GROUP_NAME) echo "$value" ;;
+        esac
+      done <"$meta_file"
+    fi
+  done | sort -u
+}
+
+# Get list of local branches for completion
+get_branch_names() {
+  git branch --format='%(refname:short)' 2>/dev/null | grep -v '^pc/' || true
+}
+
+# Generate shell completion script
+generate_completion_script() {
+  shell="$1"
+
+  case "$shell" in
+  bash)
+    cat <<'EOF'
+_para_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Complete first argument (commands)
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        opts="start dispatch dispatch-multi finish cancel abort clean list ls resume config --help -h --version -v"
+        COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        return 0
+    fi
+    
+    # Complete based on command
+    case "${COMP_WORDS[1]}" in
+        cancel|abort)
+            case "$prev" in
+                --group)
+                    # Complete group names
+                    local groups=$(para _completion_groups 2>/dev/null)
+                    COMPREPLY=($(compgen -W "${groups}" -- ${cur}))
+                    ;;
+                cancel|abort)
+                    # Complete session names for direct cancel
+                    local sessions=$(para _completion_sessions 2>/dev/null)
+                    COMPREPLY=($(compgen -W "${sessions}" -- ${cur}))
+                    ;;
+            esac
+            ;;
+        resume)
+            # Complete session names
+            if [[ ${COMP_CWORD} == 2 ]]; then
+                local sessions=$(para _completion_sessions 2>/dev/null)
+                COMPREPLY=($(compgen -W "${sessions}" -- ${cur}))
+            fi
+            ;;
+        finish)
+            case "$prev" in
+                --branch)
+                    # Complete branch names
+                    local branches=$(para _completion_branches 2>/dev/null)
+                    COMPREPLY=($(compgen -W "${branches}" -- ${cur}))
+                    ;;
+            esac
+            ;;
+        dispatch|dispatch-multi)
+            case "$prev" in
+                --file|-f)
+                    # Complete file paths
+                    COMPREPLY=($(compgen -f -- ${cur}))
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _para_completion para
+EOF
+    ;;
+  zsh)
+    cat <<'EOF'
+#compdef para
+
+_para() {
+    local context state line
+    
+    _arguments -C \
+        '1: :_para_commands' \
+        '*: :_para_args'
+}
+
+_para_commands() {
+    local commands
+    commands=(
+        'start:create session with optional name'
+        'dispatch:start Claude Code session with prompt'
+        'dispatch-multi:start multiple Claude Code instances'
+        'finish:squash all changes into single commit'
+        'cancel:cancel session'
+        'abort:cancel session'
+        'clean:remove all sessions'
+        'list:list active sessions'
+        'ls:list active sessions'
+        'resume:resume session in IDE'
+        'config:setup configuration'
+        '--help:show help'
+        '-h:show help'
+        '--version:show version'
+        '-v:show version'
+    )
+    _describe 'commands' commands
+}
+
+_para_args() {
+    case $words[2] in
+        cancel|abort)
+            if [[ $words[CURRENT-1] == '--group' ]]; then
+                # Complete group names
+                local groups=(${(f)"$(para _completion_groups 2>/dev/null)"})
+                _describe 'groups' groups
+            elif [[ $CURRENT == 3 ]]; then
+                # Complete session names
+                local sessions=(${(f)"$(para _completion_sessions 2>/dev/null)"})
+                _describe 'sessions' sessions
+            fi
+            ;;
+        resume)
+            if [[ $CURRENT == 3 ]]; then
+                # Complete session names
+                local sessions=(${(f)"$(para _completion_sessions 2>/dev/null)"})
+                _describe 'sessions' sessions
+            fi
+            ;;
+        finish)
+            if [[ $words[CURRENT-1] == '--branch' ]]; then
+                # Complete branch names
+                local branches=(${(f)"$(para _completion_branches 2>/dev/null)"})
+                _describe 'branches' branches
+            fi
+            ;;
+        dispatch|dispatch-multi)
+            if [[ $words[CURRENT-1] == '--file' || $words[CURRENT-1] == '-f' ]]; then
+                # Complete file paths
+                _files
+            fi
+            ;;
+    esac
+}
+
+_para "$@"
+EOF
+    ;;
+  fish)
+    cat <<'EOF'
+# Para completion for fish shell
+
+# Complete commands
+complete -c para -f -n '__fish_use_subcommand' -a 'start' -d 'create session with optional name'
+complete -c para -f -n '__fish_use_subcommand' -a 'dispatch' -d 'start Claude Code session with prompt'
+complete -c para -f -n '__fish_use_subcommand' -a 'dispatch-multi' -d 'start multiple Claude Code instances'
+complete -c para -f -n '__fish_use_subcommand' -a 'finish' -d 'squash all changes into single commit'
+complete -c para -f -n '__fish_use_subcommand' -a 'cancel' -d 'cancel session'
+complete -c para -f -n '__fish_use_subcommand' -a 'abort' -d 'cancel session'
+complete -c para -f -n '__fish_use_subcommand' -a 'clean' -d 'remove all sessions'
+complete -c para -f -n '__fish_use_subcommand' -a 'list' -d 'list active sessions'
+complete -c para -f -n '__fish_use_subcommand' -a 'ls' -d 'list active sessions'
+complete -c para -f -n '__fish_use_subcommand' -a 'resume' -d 'resume session in IDE'
+complete -c para -f -n '__fish_use_subcommand' -a 'config' -d 'setup configuration'
+complete -c para -f -n '__fish_use_subcommand' -s h -l help -d 'show help'
+complete -c para -f -n '__fish_use_subcommand' -s v -l version -d 'show version'
+
+# Complete session names for cancel/abort and resume
+complete -c para -f -n '__fish_seen_subcommand_from cancel abort' -n 'not __fish_seen_argument -l group' -a '(para _completion_sessions 2>/dev/null)'
+complete -c para -f -n '__fish_seen_subcommand_from resume' -a '(para _completion_sessions 2>/dev/null)'
+
+# Complete group names for cancel/abort --group
+complete -c para -f -n '__fish_seen_subcommand_from cancel abort' -s g -l group -a '(para _completion_groups 2>/dev/null)'
+
+# Complete branch names for finish --branch
+complete -c para -f -n '__fish_seen_subcommand_from finish' -s b -l branch -a '(para _completion_branches 2>/dev/null)'
+
+# Complete file paths for dispatch/dispatch-multi --file
+complete -c para -n '__fish_seen_subcommand_from dispatch dispatch-multi' -s f -l file -F
+EOF
+    ;;
+  *)
+    echo "Unsupported shell: $shell" >&2
+    return 1
+    ;;
+  esac
 }
