@@ -166,7 +166,7 @@ install-dev:
     echo "✅ Development dependencies installed"
 
 # Run tests using bats
-test FILE="": install-dev
+test FILE="": install-dev lint
     @echo "🧪 Running tests..."
     @if [ ! -d "tests" ]; then \
         echo "Creating tests directory..."; \
