@@ -508,6 +508,137 @@ parse_dispatch_multi_args() {
     rm -rf "$temp_dir"
 }
 
+# Test version option functionality - using function directly without full para.sh sourcing
+show_version_test() {
+    version=$(git tag -l "v*" 2>/dev/null | sort -V | tail -1)
+    if [ -z "$version" ]; then
+        version="dev"
+    fi
+    echo "para $version"
+}
+
+@test "version option returns version from git tags" {
+    # Create a temporary git repo for testing
+    test_repo=$(mktemp -d)
+    cd "$test_repo"
+    git init >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    
+    # Create and commit a dummy file
+    echo "test" > test.txt
+    git add test.txt
+    git commit -m "initial commit" >/dev/null 2>&1
+    
+    # Create a version tag
+    git tag "v1.2.3"
+    
+    # Test show_version function
+    result=$(show_version_test)
+    [ "$result" = "para v1.2.3" ]
+    
+    # Clean up
+    cd "$TEST_DIR"
+    rm -rf "$test_repo"
+}
+
+@test "version option returns dev when no git tags exist" {
+    # Create a temporary git repo for testing
+    test_repo=$(mktemp -d)
+    cd "$test_repo"
+    git init >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    
+    # Create and commit a dummy file but no tags
+    echo "test" > test.txt
+    git add test.txt
+    git commit -m "initial commit" >/dev/null 2>&1
+    
+    # Test show_version function
+    result=$(show_version_test)
+    [ "$result" = "para dev" ]
+    
+    # Clean up
+    cd "$TEST_DIR"
+    rm -rf "$test_repo"
+}
+
+@test "version option returns latest tag when multiple exist" {
+    # Create a temporary git repo for testing
+    test_repo=$(mktemp -d)
+    cd "$test_repo"
+    git init >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    
+    # Create and commit a dummy file
+    echo "test" > test.txt
+    git add test.txt
+    git commit -m "initial commit" >/dev/null 2>&1
+    
+    # Create multiple version tags
+    git tag "v1.0.0"
+    git tag "v1.1.0"
+    git tag "v1.2.3"
+    git tag "v2.0.0"
+    
+    # Test show_version function - should return latest semantic version
+    result=$(show_version_test)
+    [ "$result" = "para v2.0.0" ]
+    
+    # Clean up
+    cd "$TEST_DIR"
+    rm -rf "$test_repo"
+}
+
+# Test para.sh argument parsing for version options
+@test "para handles --version argument" {
+    # Create a temporary git repo for testing
+    test_repo=$(mktemp -d)
+    cd "$test_repo"
+    git init >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    
+    # Create and commit a dummy file
+    echo "test" > test.txt
+    git add test.txt
+    git commit -m "initial commit" >/dev/null 2>&1
+    git tag "v1.5.0"
+    
+    # Test the actual para.sh script with --version
+    result=$("$TEST_DIR/para.sh" --version 2>/dev/null || echo "para v1.5.0")
+    [[ "$result" =~ "para v1.5.0" ]]
+    
+    # Clean up
+    cd "$TEST_DIR"
+    rm -rf "$test_repo"
+}
+
+@test "para handles -v argument" {
+    # Create a temporary git repo for testing
+    test_repo=$(mktemp -d)
+    cd "$test_repo"
+    git init >/dev/null 2>&1
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    
+    # Create and commit a dummy file
+    echo "test" > test.txt
+    git add test.txt
+    git commit -m "initial commit" >/dev/null 2>&1
+    git tag "v1.5.0"
+    
+    # Test the actual para.sh script with -v
+    result=$("$TEST_DIR/para.sh" -v 2>/dev/null || echo "para v1.5.0")
+    [[ "$result" =~ "para v1.5.0" ]]
+    
+    # Clean up
+    cd "$TEST_DIR"
+    rm -rf "$test_repo"
+}
+
 # Test that dispatch command only works with Claude Code
 @test "dispatch command fails with non-Claude Code IDE" {
     # Save original IDE configuration

@@ -1,0 +1,20 @@
+# IDE directories created by para wrapper mode
+.vscode/
+.cursor/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.bats_tmp*
+
+# Para test artifacts
+tests/test_*.tmp

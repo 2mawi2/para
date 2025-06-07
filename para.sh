@@ -33,6 +33,15 @@ fi
 . "$LIB_DIR/para-ide.sh"
 . "$LIB_DIR/para-commands.sh"
 
+# Show version information
+show_version() {
+  version=$(git tag -l "v*" 2>/dev/null | sort -V | tail -1)
+  if [ -z "$version" ]; then
+    version="dev"
+  fi
+  echo "para $version"
+}
+
 # Initialize environment
 need_git_repo
 load_config
@@ -62,6 +71,10 @@ handle_command() {
   case "$1" in
   --help | -h)
     usage
+    ;;
+
+  --version | -v)
+    show_version
     ;;
 
   start)
