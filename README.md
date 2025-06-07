@@ -18,6 +18,9 @@ curl -sSL https://raw.githubusercontent.com/2mawi2/para/main/install-para.sh | b
 # Configure your IDE (one-time setup)
 para config
 
+# Optional: Enable shell completion for faster workflow
+para completion generate bash > ~/.local/share/bash-completion/completions/para
+
 # Create a new session (opens your IDE)
 para start
 
@@ -253,6 +256,54 @@ para start my-session
 ```
 
 Para also auto-detects CI environments by checking for `CI` or `GITHUB_ACTIONS` environment variables.
+
+## Shell Completion
+
+Para supports tab completion for faster command-line usage. Enable it for your shell:
+
+### Bash
+```bash
+# Save completion script to standard location
+para completion generate bash > ~/.local/share/bash-completion/completions/para
+
+# Or on some systems:
+para completion generate bash > /usr/local/etc/bash_completion.d/para
+
+# Restart your shell or source the completion
+source ~/.local/share/bash-completion/completions/para
+```
+
+### Zsh
+```bash
+# Add to your fpath (create directory if needed)
+mkdir -p ~/.local/share/zsh/site-functions
+para completion generate zsh > ~/.local/share/zsh/site-functions/_para
+
+# Add to your .zshrc if not already there:
+echo 'fpath=(~/.local/share/zsh/site-functions $fpath)' >> ~/.zshrc
+echo 'autoload -U compinit && compinit' >> ~/.zshrc
+
+# Restart your shell
+```
+
+### Fish
+```bash
+# Save to fish completions directory (create if needed)
+mkdir -p ~/.config/fish/completions
+para completion generate fish > ~/.config/fish/completions/para.fish
+
+# Restart your shell or reload completions
+fish_update_completions
+```
+
+### What Gets Completed
+
+Shell completion will help you with:
+- **Commands**: `para [TAB]` shows all available commands
+- **Session names**: `para cancel [TAB]` or `para resume [TAB]` shows active sessions
+- **Group names**: `para cancel --group [TAB]` shows multi-instance groups
+- **Branch names**: `para finish "msg" --branch [TAB]` shows local branches
+- **File paths**: `para dispatch --file [TAB]` completes file paths
 
 ## Security Notes
 

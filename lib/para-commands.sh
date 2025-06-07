@@ -418,3 +418,74 @@ handle_resume_command() {
     die "resume takes optionally a session name"
   fi
 }
+
+# Handle completion commands
+handle_completion_command() {
+  # Handle direct completion calls (e.g., para _completion_sessions)
+  case "$1" in
+  _completion_sessions)
+    get_session_names
+    return 0
+    ;;
+  _completion_groups)
+    get_group_names
+    return 0
+    ;;
+  _completion_branches)
+    get_branch_names
+    return 0
+    ;;
+  esac
+
+  # Handle regular completion subcommands
+  subcommand="${2:-}"
+  case "$subcommand" in
+  sessions | _completion_sessions)
+    get_session_names
+    ;;
+  groups | _completion_groups)
+    get_group_names
+    ;;
+  branches | _completion_branches)
+    get_branch_names
+    ;;
+  generate)
+    if [ "$#" -lt 3 ]; then
+      echo "Usage: para completion generate [bash|zsh|fish]"
+      echo ""
+      echo "Generate completion script for your shell and save it to the appropriate location:"
+      echo ""
+      echo "For bash:"
+      echo "  para completion generate bash > ~/.local/share/bash-completion/completions/para"
+      echo "  # or on some systems:"
+      echo "  para completion generate bash > /usr/local/etc/bash_completion.d/para"
+      echo ""
+      echo "For zsh:"
+      echo "  para completion generate zsh > ~/.local/share/zsh/site-functions/_para"
+      echo "  # or add to your fpath and then:"
+      echo "  para completion generate zsh > /path/to/your/fpath/_para"
+      echo ""
+      echo "For fish:"
+      echo "  para completion generate fish > ~/.config/fish/completions/para.fish"
+      echo ""
+      echo "After saving, restart your shell or source the completion file."
+      return 1
+    fi
+    shell="$3"
+    generate_completion_script "$shell"
+    ;;
+  *)
+    echo "Usage: para completion [sessions|groups|branches|generate]"
+    echo ""
+    echo "Available commands:"
+    echo "  sessions  - List active session names"
+    echo "  groups    - List multi-instance group names"
+    echo "  branches  - List local branch names"
+    echo "  generate  - Generate shell completion script"
+    echo ""
+    echo "For shell completion setup:"
+    echo "  para completion generate [bash|zsh|fish]"
+    return 1
+    ;;
+  esac
+}
