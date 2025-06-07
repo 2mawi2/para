@@ -251,3 +251,11 @@ read_file_content() {
   # Read file content
   cat "$absolute_path" || die "failed to read file: $file_path"
 }
+
+# Proper JSON string escaping for use in JSON files
+json_escape_string() {
+  input="$1"
+  # Use printf to properly handle the string, then escape JSON special characters
+  # This approach handles newlines, quotes, and other special characters properly
+  printf '%s' "$input" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/; s/\t/\\t/g' | tr -d '\n' | sed 's/\\n$//'
+}

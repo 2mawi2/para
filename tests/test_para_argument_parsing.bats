@@ -432,7 +432,7 @@ parse_dispatch_multi_args() {
     write_vscode_autorun_task "$temp_dir" "Test dispatch prompt"
     
     # Should contain true (stub), not real IDE command
-    grep -q '"command": "true"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*true.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -441,19 +441,19 @@ parse_dispatch_multi_args() {
 @test "build_claude_terminal_command with skip permissions false" {
     export IDE_CMD="claude"
     result=$(build_claude_terminal_command "Test prompt" "" "false")
-    [[ "$result" == "claude 'Test prompt'" ]]
+    [[ "$result" == "claude \"Test prompt\"" ]]
 }
 
 @test "build_claude_terminal_command with skip permissions true" {
     export IDE_CMD="claude"
     result=$(build_claude_terminal_command "Test prompt" "" "true")
-    [[ "$result" == "claude --dangerously-skip-permissions 'Test prompt'" ]]
+    [[ "$result" == "claude --dangerously-skip-permissions \"Test prompt\"" ]]
 }
 
 @test "build_claude_terminal_command with skip permissions and session resumption" {
     export IDE_CMD="claude"
     result=$(build_claude_terminal_command "Test prompt" "my-session" "true")
-    [[ "$result" == "claude --dangerously-skip-permissions --resume 'my-session' 'Test prompt'" ]]
+    [[ "$result" == "claude --dangerously-skip-permissions --resume \"my-session\" \"Test prompt\"" ]]
 }
 
 @test "build_claude_terminal_command with skip permissions but no prompt" {
@@ -465,7 +465,7 @@ parse_dispatch_multi_args() {
 @test "build_claude_terminal_command with session resumption and skip permissions but no prompt" {
     export IDE_CMD="claude"
     result=$(build_claude_terminal_command "" "my-session" "true")
-    [[ "$result" == "claude --dangerously-skip-permissions --resume 'my-session'" ]]
+    [[ "$result" == "claude --dangerously-skip-permissions --resume \"my-session\"" ]]
 }
 
 # Test VS Code task generation with skip permissions flag
@@ -476,8 +476,8 @@ parse_dispatch_multi_args() {
     write_vscode_autorun_task "$temp_dir" "Test prompt" "" "true"
     
     # Should contain --dangerously-skip-permissions in args
-    grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*--dangerously-skip-permissions.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -489,8 +489,8 @@ parse_dispatch_multi_args() {
     write_vscode_autorun_task "$temp_dir" "Test prompt" "" "false"
     
     # Should NOT contain --dangerously-skip-permissions
-    ! grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
+    ! grep -q '"command":.*--dangerously-skip-permissions' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -502,8 +502,8 @@ parse_dispatch_multi_args() {
     write_cursor_autorun_task "$temp_dir" "Test prompt" "" "true"
     
     # Should contain --dangerously-skip-permissions in args
-    grep -q '"--dangerously-skip-permissions"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"Test prompt"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*--dangerously-skip-permissions.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }

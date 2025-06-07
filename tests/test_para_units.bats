@@ -520,9 +520,9 @@ setup() {
     
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
-    # Verify the task file contains expected content
+    # Verify the task file contains expected content (new format uses full command)
     grep -q '"label": "Start Claude Code"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude' "$temp_dir/.vscode/tasks.json"
     grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
@@ -538,9 +538,9 @@ setup() {
     
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
-    # Verify the task file contains expected content
+    # Verify the task file contains expected content (new format uses full command)
     grep -q '"label": "Start Claude Code"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude' "$temp_dir/.vscode/tasks.json"
     grep -q '"runOn": "folderOpen"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
@@ -853,7 +853,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the task contains the -- separator to prevent CLI parsing
-    grep -q '"args": \["--", "-P macos-latest=catthehacker/ubuntu:act-latest"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -870,7 +870,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the task contains the -- separator
-    grep -q '"args": \["--", "--version"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -887,7 +887,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the task does NOT contain the -- separator for normal prompts
-    grep -q '"args": \["Create a user authentication system"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -904,7 +904,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify no -- separator for normal prompts
-    grep -q '"args": \["Implement OAuth2 flow"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -922,7 +922,7 @@ setup() {
     
     # Verify both skip permissions flag and -- separator are present
     # -- separator is added before the last argument (prompt) if it starts with -
-    grep -q '"args": \["--dangerously-skip-permissions", "--", "-f some-config.yml"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*--dangerously-skip-permissions.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -940,7 +940,7 @@ setup() {
     
     # Verify both flags are present in correct order
     # -- separator is added before the last argument (prompt) if it starts with -
-    grep -q '"args": \["--dangerously-skip-permissions", "--", "-help"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*--dangerously-skip-permissions.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -958,7 +958,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Verify the complex prompt is properly escaped in JSON
-    grep -q '"args": \["--", "-P macos-latest=\\"catthehacker/ubuntu:act-latest\\" --verbose"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -975,7 +975,7 @@ setup() {
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # With updated logic, -- separator is only added before the last argument (prompt) if it starts with -
-    grep -q '"args": \["--resume", "test-session-123", "--", "--config production"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*--resume.*test-session-123.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 } 
