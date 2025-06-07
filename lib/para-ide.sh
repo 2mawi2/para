@@ -509,7 +509,6 @@ write_vscode_autorun_task() {
   # Create .vscode directory if it doesn't exist
   mkdir -p "$worktree_dir/.vscode"
 
-
   # Build the task based on whether we have a prompt and/or session ID
   if [ -n "$initial_prompt" ]; then
     # Escape the prompt for JSON
@@ -519,8 +518,8 @@ write_vscode_autorun_task() {
       # Resume session with new prompt (interactive mode) - use temp file for complex prompts
       # Create a temporary prompt file to avoid shell escaping issues
       temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" > "$temp_prompt_file"
-      
+      printf '%s' "$initial_prompt" >"$temp_prompt_file"
+
       # Build the command using the temp file
       if [ "$skip_permissions" = "true" ]; then
         full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
@@ -555,15 +554,15 @@ EOF
       # Start new session with prompt (interactive mode) - use temp file for complex prompts
       # Create a temporary prompt file to avoid shell escaping issues
       temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" > "$temp_prompt_file"
-      
+      printf '%s' "$initial_prompt" >"$temp_prompt_file"
+
       # Build the command using the temp file
       if [ "$skip_permissions" = "true" ]; then
         full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
       else
         full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
       fi
-      
+
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -664,7 +663,6 @@ write_cursor_autorun_task() {
   # Create .vscode directory if it doesn't exist (Cursor uses VS Code format)
   mkdir -p "$worktree_dir/.vscode"
 
-
   # Build the task based on whether we have a prompt and/or session ID
   if [ -n "$initial_prompt" ]; then
     # Escape the prompt for JSON
@@ -674,8 +672,8 @@ write_cursor_autorun_task() {
       # Resume session with new prompt (interactive mode) - use temp file for complex prompts
       # Create a temporary prompt file to avoid shell escaping issues
       temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" > "$temp_prompt_file"
-      
+      printf '%s' "$initial_prompt" >"$temp_prompt_file"
+
       # Build the command using the temp file
       if [ "$skip_permissions" = "true" ]; then
         full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
@@ -710,15 +708,15 @@ EOF
       # Start new session with prompt (interactive mode) - use temp file for complex prompts
       # Create a temporary prompt file to avoid shell escaping issues
       temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" > "$temp_prompt_file"
-      
+      printf '%s' "$initial_prompt" >"$temp_prompt_file"
+
       # Build the command using the temp file
       if [ "$skip_permissions" = "true" ]; then
         full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
       else
         full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
       fi
-      
+
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
