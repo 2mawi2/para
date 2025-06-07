@@ -109,6 +109,10 @@ handle_command() {
     handle_resume_command "$@"
     ;;
 
+  continue)
+    handle_continue_command "$@"
+    ;;
+
   config)
     handle_config_command "$@"
     ;;
