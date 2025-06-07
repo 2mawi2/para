@@ -479,6 +479,7 @@ load_integration_state() {
   fi
 
   # Source the state file to load variables
+  # shellcheck source=/dev/null
   . "$state_file"
   return 0
 }

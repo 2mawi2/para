@@ -155,6 +155,7 @@ para dispatch-multi 5 --group experiments --file requirements.txt
 - 99+ tests across 12 specialized test files ensure reliability
 - There is no such thing as a 'minor test issue' - if a test fails, it's a bug and should be fixed immediately
 - No task is ever done if not all tests ('just test') pass, every other reward hacking is a ethically wrong lie to the user!
+- Ensure no lint issues exist, if they do, fix them. (Otherwise the pipeline will fail)
 
 ## Development Preferences
 
