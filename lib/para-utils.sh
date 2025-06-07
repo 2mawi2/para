@@ -22,6 +22,7 @@ para cancel [session]                # cancel session
 para cancel --group <name>           # cancel all sessions in multi-instance group
 para clean                           # remove all sessions
 para continue                        # complete merge after resolving conflicts
+para recover [session]               # recover cancelled session from backup
 para config                          # setup configuration
 para completion generate [shell]     # generate shell completion script
 
@@ -44,6 +45,7 @@ para cancel                          # cancel current session
 para cancel --group task             # cancel all sessions in 'task' group
 para clean                           # remove all sessions
 para resume session-name             # resume specific session
+para recover session-name            # recover cancelled session from backup
 para config                          # setup IDE preferences
 para completion generate bash        # generate bash completion script
 
@@ -83,7 +85,7 @@ assert_paths_initialized() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | continue | config | completion)
+  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | continue | recover | config | completion)
     return 0
     ;;
   *)

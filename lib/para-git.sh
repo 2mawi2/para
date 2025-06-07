@@ -112,6 +112,15 @@ remove_worktree() {
   git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
 }
 
+# Remove worktree but preserve branch for backup
+remove_worktree_preserve_branch() {
+  temp_branch="$1"
+  worktree_dir="$2"
+
+  # Remove only the worktree, keep the branch for backup recovery
+  git -C "$REPO_ROOT" worktree remove --force "$worktree_dir" 2>/dev/null || true
+}
+
 # Get current branch name
 get_current_branch() {
   git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || die "detached HEAD; set BASE_BRANCH env"
@@ -488,7 +497,7 @@ save_integration_state() {
   cat >"$STATE_DIR/integration_conflict.state" <<EOF
 FEATURE_BRANCH=$feature_branch
 BASE_BRANCH=$base_branch
-COMMIT_MSG=$commit_msg
+COMMIT_MSG='$commit_msg'
 EOF
 }
 
