@@ -254,8 +254,9 @@ handle_finish_command() {
   TARGET_BRANCH_NAME=""
   BRANCH_FLAG_PROVIDED=false
   SESSION_ID=""
+  INTEGRATE=false
 
-  # Parse arguments supporting --branch flag and optional session_id
+  # Parse arguments supporting --branch and --integrate flags and optional session_id
   if [ "$#" -eq 1 ]; then
     die "finish requires a commit message"
   else
@@ -274,6 +275,10 @@ handle_finish_command() {
         TARGET_BRANCH_NAME="$3"
         BRANCH_FLAG_PROVIDED=true
         shift 2
+        ;;
+      --integrate | -i)
+        INTEGRATE=true
+        shift
         ;;
       -*)
         die "unknown option: $2"
@@ -319,7 +324,7 @@ handle_finish_command() {
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
   echo "▶ finishing session $SESSION_ID"
-  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$TARGET_BRANCH_NAME"; then
+  if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$TARGET_BRANCH_NAME" "$INTEGRATE"; then
     echo "▶ cleaning up worktree for session $SESSION_ID"
     # Remove worktree first, then close IDE
     git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
@@ -328,8 +333,12 @@ handle_finish_command() {
     force_close_ide_for_session "$SESSION_ID"
 
     remove_session_state "$SESSION_ID"
-    echo "✅ Session finished - branch ready for manual merge"
-    echo "💡 Worktree cleaned up, but branch preserved for merging"
+    if [ "$INTEGRATE" = true ]; then
+      echo "✅ Session finished and integrated into $BASE_BRANCH"
+    else
+      echo "✅ Session finished - branch ready for manual merge"
+      echo "💡 Worktree cleaned up, but branch preserved for merging"
+    fi
     return 0
   else
     return 1
@@ -432,6 +441,54 @@ handle_cancel_command() {
 
   echo "cancelled session $SESSION_ID"
   echo "🎉 You can safely close this $(get_ide_display_name) session now."
+}
+
+# Handle continue command for conflict resolution
+handle_continue_command() {
+  if [ "$#" -gt 1 ]; then
+    die "continue command takes no arguments"
+  fi
+
+  # Load integration state
+  if ! load_integration_state; then
+    die "no integration in progress - nothing to continue"
+  fi
+
+  # Check if we're in a merge state
+  if [ ! -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then
+    clear_integration_state
+    die "no merge conflicts to resolve"
+  fi
+
+  # Check for unresolved conflicts
+  if git -C "$REPO_ROOT" diff --name-only --diff-filter=U | grep -q .; then
+    echo "⚠️  unresolved conflicts remain in:"
+    git -C "$REPO_ROOT" diff --name-only --diff-filter=U | sed 's/^/  - /'
+    echo ""
+    echo "Please resolve all conflicts before running 'para continue'"
+    return 1
+  fi
+
+  echo "▶ completing merge..."
+
+  # Complete the merge
+  if git -C "$REPO_ROOT" commit --no-edit; then
+    echo "✅ conflicts resolved and merge completed"
+    echo "✅ successfully integrated into $BASE_BRANCH"
+
+    # Clean up feature branch
+    git -C "$REPO_ROOT" branch -D "$FEATURE_BRANCH" 2>/dev/null || true
+    echo "🧹 cleaned up feature branch"
+
+    # Clear integration state
+    clear_integration_state
+
+    return 0
+  else
+    echo "❌ failed to complete merge"
+    echo "Please check git status and resolve any remaining issues"
+    return 1
+  fi
 }
 
 # Handle resume command

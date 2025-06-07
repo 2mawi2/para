@@ -14,11 +14,14 @@ para dispatch-multi N "prompt"       # start N Claude Code instances with same p
 para dispatch-multi N --file path    # start N Claude Code instances with prompt from file
 para finish "message"                # squash all changes into single commit
 para finish "message" --branch <n>   # squash commits + custom branch name
+para finish "message" --integrate    # squash commits + merge into base branch
+para finish "msg" -i --branch <n>    # combine integration with custom branch name
 para list | ls                       # list active sessions
 para resume [session]                # resume session in IDE
 para cancel [session]                # cancel session
 para cancel --group <name>           # cancel all sessions in multi-instance group
 para clean                           # remove all sessions
+para continue                        # complete merge after resolving conflicts
 para config                          # setup configuration
 para completion generate [shell]     # generate shell completion script
 
@@ -34,6 +37,8 @@ para dispatch-multi 5 --group task "Refactor"   # 5 instances with custom group 
 para start --dangerously-skip-permissions name  # skip IDE permission warnings
 para finish "implement user auth"    # squash session changes
 para finish "add feature" --branch feature-xyz  # custom branch name
+para finish "hotfix critical bug" --integrate   # integrate immediately into base branch
+para finish "new API" -i             # shorthand for --integrate
 para list                            # see active sessions (shows multi-instance groups)
 para cancel                          # cancel current session
 para cancel --group task             # cancel all sessions in 'task' group
@@ -78,7 +83,7 @@ assert_paths_initialized() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | config | completion)
+  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | continue | config | completion)
     return 0
     ;;
   *)

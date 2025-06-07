@@ -147,6 +147,7 @@ finish_session() {
   base_branch="$3"
   commit_msg="$4"
   target_branch_name="$5" # Optional custom target branch name
+  integrate="${6:-false}" # Optional integration flag
 
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
@@ -191,29 +192,47 @@ finish_session() {
     final_branch_name="$unique_branch_name"
   fi
 
-  # Change back to repository root
-  cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+  # Handle integration if requested
+  if [ "$integrate" = "true" ]; then
+    # Change to repository root for integration
+    cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+
+    # Perform integration
+    if integrate_branch "$final_branch_name" "$base_branch" "$commit_msg"; then
+      # Integration successful - clean up feature branch
+      git branch -D "$final_branch_name" 2>/dev/null || true
+      echo "🧹 cleaned up feature branch"
+    else
+      # Integration failed (conflicts) - save state for continue command
+      save_integration_state "$final_branch_name" "$base_branch" "$commit_msg"
+      cd "$ORIGINAL_DIR" || true
+      return 1
+    fi
+  else
+    # Change back to repository root
+    cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+
+    # Success - return information about the branch
+    echo ""
+    echo "🎉 Session finished successfully!"
+    echo ""
+    echo "📋 Next steps:"
+    echo "   Your changes are ready on branch: $final_branch_name"
+    echo "   Branch location: local"
+    echo ""
+    echo "   To merge your changes:"
+    echo "   git checkout $base_branch"
+    echo "   git merge $final_branch_name"
+    echo ""
+    echo "   Or create a pull/merge request if using a remote repository."
+    echo ""
+    echo "   After merging, clean up the branch:"
+    echo "   git branch -d $final_branch_name"
+    echo ""
+  fi
 
   # Restore original directory
   cd "$ORIGINAL_DIR" || true
-
-  # Success - return information about the branch
-  echo ""
-  echo "🎉 Session finished successfully!"
-  echo ""
-  echo "📋 Next steps:"
-  echo "   Your changes are ready on branch: $final_branch_name"
-  echo "   Branch location: local"
-  echo ""
-  echo "   To merge your changes:"
-  echo "   git checkout $base_branch"
-  echo "   git merge $final_branch_name"
-  echo ""
-  echo "   Or create a pull/merge request if using a remote repository."
-  echo ""
-  echo "   After merging, clean up the branch:"
-  echo "   git branch -d $final_branch_name"
-  echo ""
 
   return 0
 }
@@ -380,4 +399,125 @@ generate_unique_branch_name() {
 
   # If we get here, we couldn't find a unique name (highly unlikely)
   die "unable to generate unique branch name after 999 attempts"
+}
+
+# Integrate feature branch into base branch
+integrate_branch() {
+  feature_branch="$1"
+  base_branch="$2"
+  commit_msg="$3"
+
+  echo "▶ updating $base_branch with latest changes..."
+
+  # Check if we have a remote configured
+  if git -C "$REPO_ROOT" remote >/dev/null 2>&1; then
+    # Try to pull latest changes from remote if available
+    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+
+    # Check if base branch tracks a remote
+    if git -C "$REPO_ROOT" rev-parse --verify "@{upstream}" >/dev/null 2>&1; then
+      echo "  → pulling latest changes from remote"
+      if ! git -C "$REPO_ROOT" pull; then
+        echo "⚠️  failed to pull latest changes from remote"
+        echo "   continuing with local integration"
+      fi
+    else
+      echo "  → no remote tracking branch, using local $base_branch"
+    fi
+  else
+    echo "  → no remote configured, using local $base_branch"
+    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+  fi
+
+  echo "▶ integrating changes into $base_branch..."
+
+  # Attempt to merge the feature branch
+  if git -C "$REPO_ROOT" merge --no-ff -m "Merge: $commit_msg" "$feature_branch"; then
+    echo "✅ successfully integrated into $base_branch"
+    return 0
+  else
+    # Merge failed due to conflicts
+    echo ""
+    echo "⚠️  merge conflicts detected in the following files:"
+    git -C "$REPO_ROOT" diff --name-only --diff-filter=U | sed 's/^/  - /'
+    echo ""
+    echo "▶ opening IDE to resolve conflicts..."
+
+    # Open IDE for conflict resolution
+    open_ide_for_conflicts
+
+    echo ""
+    echo "Fix conflicts and run: para continue"
+    echo "To abort: git merge --abort"
+    echo ""
+    return 1
+  fi
+}
+
+# Save integration state for continue command
+save_integration_state() {
+  feature_branch="$1"
+  base_branch="$2"
+  commit_msg="$3"
+
+  # Ensure state directory exists
+  mkdir -p "$STATE_DIR"
+
+  # Save integration state
+  cat >"$STATE_DIR/integration_conflict.state" <<EOF
+FEATURE_BRANCH=$feature_branch
+BASE_BRANCH=$base_branch
+COMMIT_MSG=$commit_msg
+EOF
+}
+
+# Load integration state
+load_integration_state() {
+  state_file="$STATE_DIR/integration_conflict.state"
+  if [ ! -f "$state_file" ]; then
+    return 1
+  fi
+
+  # Source the state file to load variables
+  . "$state_file"
+  return 0
+}
+
+# Clear integration state
+clear_integration_state() {
+  rm -f "$STATE_DIR/integration_conflict.state"
+}
+
+# Open IDE for conflict resolution
+open_ide_for_conflicts() {
+  # Get list of conflicted files
+  conflicted_files=$(git -C "$REPO_ROOT" diff --name-only --diff-filter=U)
+
+  if [ -n "$conflicted_files" ]; then
+    echo "  → opening IDE with conflicted files..."
+    # Change to repo root and open IDE
+    cd "$REPO_ROOT" || return
+
+    # Use the configured IDE to open conflicted files
+    case "$IDE_NAME" in
+    "cursor")
+      if command -v cursor >/dev/null 2>&1; then
+        cursor . $conflicted_files &
+      fi
+      ;;
+    "code")
+      if command -v code >/dev/null 2>&1; then
+        code . $conflicted_files &
+      fi
+      ;;
+    "claude")
+      if command -v claude >/dev/null 2>&1; then
+        claude . &
+      fi
+      ;;
+    *)
+      echo "  → IDE not configured for conflict resolution"
+      ;;
+    esac
+  fi
 }
