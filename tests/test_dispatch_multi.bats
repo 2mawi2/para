@@ -171,3 +171,127 @@ teardown() {
         [ "$prompt_content" = "implement authentication system" ]
     done
 }
+
+@test "DM-7: dispatch-multi with file input saves prompt correctly" {
+    cd "$TEST_REPO"
+    
+    # Create prompt file with specific content
+    echo "Build a scalable microservices architecture with Docker and Kubernetes" > microservices-prompt.txt
+    
+    # Create dispatch-multi session with file input
+    run "$PARA_SCRIPT" dispatch-multi 2 --file microservices-prompt.txt
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"creating 2 instances"* ]]
+    [[ "$output" == *"Initialized group"* ]]
+    
+    # Extract group name from output
+    group_name=$(echo "$output" | grep "Initialized group" | sed "s/.*group '\([^']*\)'.*/\1/")
+    [ -n "$group_name" ]
+    
+    # Find the actual session IDs by looking at state files
+    session_ids=""
+    for state_file in .para_state/*.state; do
+        [ -f "$state_file" ] || continue
+        session_id=$(basename "$state_file" .state)
+        if [[ "$session_id" == *"$group_name"* ]]; then
+            session_ids="$session_ids $session_id"
+        fi
+    done
+    
+    # Should have found 2 sessions
+    session_count=$(echo $session_ids | wc -w)
+    [ "$session_count" -eq 2 ]
+    
+    # Verify prompt from file is saved for each session
+    for session_id in $session_ids; do
+        [ -f ".para_state/$session_id.prompt" ]
+        prompt_content=$(cat ".para_state/$session_id.prompt")
+        [ "$prompt_content" = "Build a scalable microservices architecture with Docker and Kubernetes" ]
+    done
+}
+
+@test "DM-8: dispatch-multi with -f short option saves prompt correctly" {
+    cd "$TEST_REPO"
+    
+    # Create prompt file with specific content
+    echo "Implement OAuth2 authentication with PKCE flow and refresh tokens" > oauth-prompt.md
+    
+    # Create dispatch-multi session with -f option
+    run "$PARA_SCRIPT" dispatch-multi 2 -f oauth-prompt.md
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"creating 2 instances"* ]]
+    [[ "$output" == *"Initialized group"* ]]
+    
+    # Extract group name from output
+    group_name=$(echo "$output" | grep "Initialized group" | sed "s/.*group '\([^']*\)'.*/\1/")
+    [ -n "$group_name" ]
+    
+    # Find the actual session IDs by looking at state files
+    session_ids=""
+    for state_file in .para_state/*.state; do
+        [ -f "$state_file" ] || continue
+        session_id=$(basename "$state_file" .state)
+        if [[ "$session_id" == *"$group_name"* ]]; then
+            session_ids="$session_ids $session_id"
+        fi
+    done
+    
+    # Should have found 2 sessions
+    session_count=$(echo $session_ids | wc -w)
+    [ "$session_count" -eq 2 ]
+    
+    # Verify prompt from file is saved for each session
+    for session_id in $session_ids; do
+        [ -f ".para_state/$session_id.prompt" ]
+        prompt_content=$(cat ".para_state/$session_id.prompt")
+        [ "$prompt_content" = "Implement OAuth2 authentication with PKCE flow and refresh tokens" ]
+    done
+}
+
+@test "DM-9: dispatch-multi creates proper VS Code tasks with file input" {
+    cd "$TEST_REPO"
+    
+    # Create prompt file with complex content that could break JSON
+    echo 'Design a "scalable" microservices architecture with Docker & Kubernetes' > complex-prompt.txt
+    
+    # Create dispatch-multi session with file input
+    run "$PARA_SCRIPT" dispatch-multi 2 --file complex-prompt.txt
+    [ "$status" -eq 0 ]
+    
+    # Extract group name from output
+    group_name=$(echo "$output" | grep "Initialized group" | sed "s/.*group '\([^']*\)'.*/\1/")
+    [ -n "$group_name" ]
+    
+    # Find the actual session IDs and check their task files
+    session_ids=""
+    for state_file in .para_state/*.state; do
+        [ -f "$state_file" ] || continue
+        session_id=$(basename "$state_file" .state)
+        if [[ "$session_id" == *"$group_name"* ]]; then
+            session_ids="$session_ids $session_id"
+        fi
+    done
+    
+    # Should have found 2 sessions
+    session_count=$(echo $session_ids | wc -w)
+    [ "$session_count" -eq 2 ]
+    
+    # Verify tasks.json files are created with proper JSON format
+    for session_id in $session_ids; do
+        IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE < ".para_state/$session_id.state"
+        
+        # Check that task.json exists and is valid JSON
+        [ -f "$WORKTREE_DIR/.vscode/tasks.json" ]
+        
+        # Verify the task contains the escaped prompt correctly
+        task_content=$(cat "$WORKTREE_DIR/.vscode/tasks.json")
+        [[ "$task_content" == *'"Design a \"scalable\" microservices architecture with Docker & Kubernetes"'* ]]
+        
+        # Verify it's valid JSON by parsing it
+        if command -v jq >/dev/null 2>&1; then
+            echo "$task_content" | jq . >/dev/null
+        elif command -v python3 >/dev/null 2>&1; then
+            echo "$task_content" | python3 -m json.tool >/dev/null
+        fi
+    done
+}
