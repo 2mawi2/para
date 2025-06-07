@@ -978,4 +978,351 @@ setup() {
     grep -q '"command":.*claude.*--resume.*test-session-123.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
+}
+
+# Tests for finish_session function
+@test "finish_session with no changes prints 'no changes to commit'" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Run finish_session with no changes
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$(git rev-parse --abbrev-ref HEAD)" "Test commit message")
+    
+    [[ "$result" =~ "no changes to commit" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+}
+
+@test "finish_session with uncommitted changes stages and commits them" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Add uncommitted changes in the worktree
+    cd "$worktree_dir"
+    echo "new content" > new-file.txt
+    echo "modified content" >> test-file.py
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$(git rev-parse --abbrev-ref HEAD)" "Test commit message")
+    
+    [[ "$result" =~ "staging all changes" ]]
+    [[ "$result" =~ "committing changes" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+    
+    # Verify the commit was created
+    cd "$worktree_dir"
+    [ "$(git log --oneline | head -1)" = "$(git log --oneline | head -1 | grep 'Test commit message')" ]
+}
+
+@test "finish_session squashes multiple commits into single commit" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Create multiple commits in the worktree
+    cd "$worktree_dir"
+    echo "commit 1" > file1.txt
+    git add file1.txt
+    git commit -m "First commit"
+    
+    echo "commit 2" > file2.txt
+    git add file2.txt
+    git commit -m "Second commit"
+    
+    echo "commit 3" > file3.txt
+    git add file3.txt
+    git commit -m "Third commit"
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$base_branch" "Squashed commit message")
+    
+    [[ "$result" =~ "squashing commits into single commit" ]]
+    [[ "$result" =~ "squashed 3 commits into single commit" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+    
+    # Verify only one commit exists above base
+    cd "$worktree_dir"
+    commit_count=$(git rev-list --count HEAD ^"$base_branch")
+    [ "$commit_count" -eq 1 ]
+    
+    # Verify the commit message
+    last_commit_msg=$(git log --format=%B -n 1)
+    [[ "$last_commit_msg" =~ "Squashed commit message" ]]
+}
+
+@test "finish_session with single commit does not squash" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Create a single commit in the worktree
+    cd "$worktree_dir"
+    echo "single commit" > file1.txt
+    git add file1.txt
+    git commit -m "Single commit"
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$base_branch" "New commit message")
+    
+    [[ "$result" =~ "only one commit, no squashing needed" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+    
+    # Verify only one commit exists above base
+    cd "$worktree_dir"
+    commit_count=$(git rev-list --count HEAD ^"$base_branch")
+    [ "$commit_count" -eq 1 ]
+}
+
+@test "finish_session with custom branch name renames branch" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    custom_branch_name="feature/custom-auth"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Add a commit in the worktree
+    cd "$worktree_dir"
+    echo "custom feature" > custom.txt
+    git add custom.txt
+    git commit -m "Custom feature commit"
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session with custom branch name
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$base_branch" "Custom commit message" "$custom_branch_name")
+    
+    [[ "$result" =~ "renaming branch from '$temp_branch' to '$custom_branch_name'" ]]
+    [[ "$result" =~ "Your changes are ready on branch: $custom_branch_name" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+    
+    # Verify the branch was renamed
+    git branch --list | grep -q "$custom_branch_name"
+    [ $? -eq 0 ]
+    
+    # Verify the old branch doesn't exist
+    ! git branch --list | grep -q "$temp_branch"
+}
+
+@test "finish_session with existing custom branch name generates unique name" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create an existing branch with the target name
+    custom_branch_name="feature/auth"
+    git checkout -b "$custom_branch_name"
+    git checkout "$base_branch"
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Add a commit in the worktree
+    cd "$worktree_dir"
+    echo "new feature" > new-feature.txt
+    git add new-feature.txt
+    git commit -m "New feature commit"
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session with existing custom branch name
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$base_branch" "New commit message" "$custom_branch_name")
+    
+    [[ "$result" =~ "branch '$custom_branch_name' already exists, using '$custom_branch_name-1' instead" ]]
+    [[ "$result" =~ "renaming branch from '$temp_branch' to '$custom_branch_name-1'" ]]
+    [[ "$result" =~ "Your changes are ready on branch: $custom_branch_name-1" ]]
+    
+    # Verify the unique branch was created
+    git branch --list | grep -q "$custom_branch_name-1"
+    [ $? -eq 0 ]
+}
+
+@test "finish_session restores original directory on completion" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create a test directory and change to it
+    test_dir="$TEST_REPO/test-working-dir"
+    mkdir -p "$test_dir"
+    cd "$test_dir"
+    original_pwd="$PWD"
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git -C "$TEST_REPO" worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Run finish_session from test directory
+    finish_session "$temp_branch" "$worktree_dir" "$base_branch" "Test commit"
+    
+    # Verify we're back in the original directory
+    [ "$PWD" = "$original_pwd" ]
+}
+
+@test "finish_session handles mixed uncommitted and untracked files" {
+    setup_temp_git_repo
+    cd "$TEST_REPO"
+    
+    # Source git functions to test
+    . "$LIB_DIR/para-git.sh"
+    . "$LIB_DIR/para-utils.sh"
+    . "$LIB_DIR/para-config.sh"
+    
+    # Initialize paths
+    need_git_repo
+    load_config
+    init_paths
+    
+    # Get base branch name
+    base_branch=$(git rev-parse --abbrev-ref HEAD)
+    
+    # Create a worktree directory to test in
+    temp_branch="pc/test-20240531-120000"
+    worktree_dir="$TEST_REPO/subtrees/para/test-session"
+    mkdir -p "$worktree_dir"
+    git worktree add -b "$temp_branch" "$worktree_dir" HEAD
+    
+    # Add mixed changes in the worktree
+    cd "$worktree_dir"
+    echo "untracked file" > untracked.txt          # Untracked file
+    echo "modified content" >> test-file.py        # Modified file
+    echo "new tracked file" > new-tracked.txt      # New file to stage
+    git add new-tracked.txt                        # Stage one file but not others
+    
+    cd "$TEST_REPO"
+    
+    # Run finish_session
+    result=$(finish_session "$temp_branch" "$worktree_dir" "$base_branch" "Mixed changes commit")
+    
+    [[ "$result" =~ "staging all changes" ]]
+    [[ "$result" =~ "committing changes" ]]
+    [[ "$result" =~ "Session finished successfully!" ]]
+    
+    # Verify all files were committed
+    cd "$worktree_dir"
+    [ -f "untracked.txt" ]
+    [ -f "new-tracked.txt" ]
+    git ls-files | grep -q "untracked.txt"
+    git ls-files | grep -q "new-tracked.txt"
+    
+    # Verify the working tree is clean
+    [ -z "$(git status --porcelain)" ]
 } 
