@@ -132,6 +132,9 @@ handle_dispatch_command() {
   # Handle file input if provided
   if [ -n "$FILE_PATH" ]; then
     INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
+    if [ -z "$INITIAL_PROMPT" ]; then
+      die "file is empty: $FILE_PATH"
+    fi
   fi
 
   # Validate required arguments
@@ -217,6 +220,9 @@ handle_dispatch_multi_command() {
   # Handle file input if provided
   if [ -n "$FILE_PATH" ]; then
     INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
+    if [ -z "$INITIAL_PROMPT" ]; then
+      die "file is empty: $FILE_PATH"
+    fi
   fi
 
   # Validate required arguments
