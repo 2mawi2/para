@@ -499,6 +499,67 @@ launch_claude_fallback() {
   fi
 }
 
+# Generate VS Code task JSON for Claude Code
+generate_claude_task() {
+  label="$1"
+  full_cmd="$2"
+
+  cat <<EOF
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "$label",
+            "type": "shell",
+            "command": "$full_cmd",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+EOF
+}
+
+# Build Claude Code command for wrapper tasks
+build_claude_wrapper_command() {
+  initial_prompt="$1"
+  session_id="${2:-}"
+  skip_permissions="${3:-false}"
+  worktree_dir="$4"
+
+  base_cmd="$IDE_CMD"
+  if [ "$skip_permissions" = "true" ]; then
+    base_cmd="$base_cmd --dangerously-skip-permissions"
+  fi
+
+  if [ -n "$initial_prompt" ]; then
+    temp_prompt_file="$worktree_dir/.claude_prompt_temp"
+    printf '%s' "$initial_prompt" >"$temp_prompt_file"
+
+    if [ -n "$session_id" ]; then
+      echo "$base_cmd --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+    else
+      echo "$base_cmd \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+    fi
+  else
+    if [ -n "$session_id" ]; then
+      echo "$base_cmd --resume \\\"$session_id\\\""
+    else
+      echo "$base_cmd"
+    fi
+  fi
+}
+
 # Write VS Code auto-run task for Claude Code
 write_vscode_autorun_task() {
   worktree_dir="$1"
@@ -506,151 +567,21 @@ write_vscode_autorun_task() {
   session_id="${3:-}"
   skip_permissions="${4:-false}"
 
-  # Create .vscode directory if it doesn't exist
   mkdir -p "$worktree_dir/.vscode"
 
-  # Build the task based on whether we have a prompt and/or session ID
-  if [ -n "$initial_prompt" ]; then
-    # Escape the prompt for JSON
-    prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  full_cmd=$(build_claude_wrapper_command "$initial_prompt" "$session_id" "$skip_permissions" "$worktree_dir")
 
-    if [ -n "$session_id" ]; then
-      # Resume session with new prompt (interactive mode) - use temp file for complex prompts
-      # Create a temporary prompt file to avoid shell escaping issues
-      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" >"$temp_prompt_file"
-
-      # Build the command using the temp file
-      if [ "$skip_permissions" = "true" ]; then
-        full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      else
-        full_cmd="$IDE_CMD --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      fi
-      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Resume Claude Code Session with Prompt",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
-    else
-      # Start new session with prompt (interactive mode) - use temp file for complex prompts
-      # Create a temporary prompt file to avoid shell escaping issues
-      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" >"$temp_prompt_file"
-
-      # Build the command using the temp file
-      if [ "$skip_permissions" = "true" ]; then
-        full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      else
-        full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      fi
-
-      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Start Claude Code with Prompt",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
-    fi
+  if [ -n "$initial_prompt" ] && [ -n "$session_id" ]; then
+    label="Resume Claude Code Session with Prompt"
+  elif [ -n "$initial_prompt" ]; then
+    label="Start Claude Code with Prompt"
   elif [ -n "$session_id" ]; then
-    # Resume session without new prompt (interactive mode)
-    if [ "$skip_permissions" = "true" ]; then
-      full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\""
-    else
-      full_cmd="$IDE_CMD --resume \\\"$session_id\\\""
-    fi
-    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Resume Claude Code Session",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
+    label="Resume Claude Code Session"
   else
-    # Start new interactive session
-    if [ "$skip_permissions" = "true" ]; then
-      full_cmd="$IDE_CMD --dangerously-skip-permissions"
-    else
-      full_cmd="$IDE_CMD"
-    fi
-    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Start Claude Code",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
+    label="Start Claude Code"
   fi
+
+  generate_claude_task "$label" "$full_cmd" >"$worktree_dir/.vscode/tasks.json"
 }
 
 # Write Cursor auto-run task for Claude Code
@@ -660,151 +591,21 @@ write_cursor_autorun_task() {
   session_id="${3:-}"
   skip_permissions="${4:-false}"
 
-  # Create .vscode directory if it doesn't exist (Cursor uses VS Code format)
   mkdir -p "$worktree_dir/.vscode"
 
-  # Build the task based on whether we have a prompt and/or session ID
-  if [ -n "$initial_prompt" ]; then
-    # Escape the prompt for JSON
-    prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  full_cmd=$(build_claude_wrapper_command "$initial_prompt" "$session_id" "$skip_permissions" "$worktree_dir")
 
-    if [ -n "$session_id" ]; then
-      # Resume session with new prompt (interactive mode) - use temp file for complex prompts
-      # Create a temporary prompt file to avoid shell escaping issues
-      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" >"$temp_prompt_file"
-
-      # Build the command using the temp file
-      if [ "$skip_permissions" = "true" ]; then
-        full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      else
-        full_cmd="$IDE_CMD --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      fi
-      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Resume Claude Code Session with Prompt",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
-    else
-      # Start new session with prompt (interactive mode) - use temp file for complex prompts
-      # Create a temporary prompt file to avoid shell escaping issues
-      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
-      printf '%s' "$initial_prompt" >"$temp_prompt_file"
-
-      # Build the command using the temp file
-      if [ "$skip_permissions" = "true" ]; then
-        full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      else
-        full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
-      fi
-
-      cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Start Claude Code with Prompt",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
-    fi
+  if [ -n "$initial_prompt" ] && [ -n "$session_id" ]; then
+    label="Resume Claude Code Session with Prompt"
+  elif [ -n "$initial_prompt" ]; then
+    label="Start Claude Code with Prompt"
   elif [ -n "$session_id" ]; then
-    # Resume session without new prompt (interactive mode)
-    if [ "$skip_permissions" = "true" ]; then
-      full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\""
-    else
-      full_cmd="$IDE_CMD --resume \\\"$session_id\\\""
-    fi
-    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Resume Claude Code Session",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
+    label="Resume Claude Code Session"
   else
-    # Start new interactive session
-    if [ "$skip_permissions" = "true" ]; then
-      full_cmd="$IDE_CMD --dangerously-skip-permissions"
-    else
-      full_cmd="$IDE_CMD"
-    fi
-    cat >"$worktree_dir/.vscode/tasks.json" <<EOF
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Start Claude Code",
-            "type": "shell",
-            "command": "$full_cmd",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "new",
-                "showReuseMessage": false,
-                "clear": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            }
-        }
-    ]
-}
-EOF
+    label="Start Claude Code"
   fi
+
+  generate_claude_task "$label" "$full_cmd" >"$worktree_dir/.vscode/tasks.json"
 }
 
 # VS Code implementation (for completeness)
