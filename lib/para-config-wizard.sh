@@ -25,25 +25,19 @@ run_config_setup() {
 
   case "$ide_choice" in
   2 | claude)
+    # Preserve existing IDE_CMD if we're already using Claude, otherwise use default
+    if [ "${IDE_NAME:-}" != "claude" ] || [ -z "${IDE_CMD:-}" ]; then
+      IDE_CMD="claude"
+    fi
     IDE_NAME="claude"
-    IDE_CMD="claude"
     export IDE_USER_DATA_DIR=""
 
     # Configure how Claude Code should be launched
     echo ""
-    echo "How would you like to run Claude Code?"
-    echo ""
-    echo "🖥️  IDE Integration (Recommended):"
+    echo "🖥️  IDE Integration (Required for Claude Code):"
     echo "1) Inside VS Code (auto-starts in integrated terminal)"
     echo "2) Inside Cursor (auto-starts in integrated terminal)"
-    echo ""
-    echo "🖥️  Terminal Options:"
-    echo "3) Auto-detect terminal (recommended)"
-    echo "4) Terminal.app (macOS default)"
-    echo "5) Warp"
-    echo "6) Ghostty"
-    echo "7) Custom terminal command"
-    echo "8) Back to main menu"
+    echo "3) Back to main menu"
     echo ""
     printf "Choose option [1]: "
     read -r claude_mode_choice
@@ -54,7 +48,6 @@ run_config_setup() {
       export IDE_WRAPPER_ENABLED="true"
       export IDE_WRAPPER_NAME="code"
       export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
       echo "  Mode: IDE Wrapper (VS Code)"
       ;;
     2 | cursor)
@@ -62,58 +55,9 @@ run_config_setup() {
       export IDE_WRAPPER_ENABLED="true"
       export IDE_WRAPPER_NAME="cursor"
       export IDE_WRAPPER_CMD="cursor"
-      export CLAUDE_TERMINAL_CMD="auto" # Not used in wrapper mode, but set for consistency
       echo "  Mode: IDE Wrapper (Cursor)"
       ;;
-    3 | auto)
-      # Terminal mode: Auto-detect
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="auto"
-      echo "  Mode: Terminal (auto-detect)"
-      ;;
-    4 | terminal)
-      # Terminal mode: Terminal.app
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="terminal"
-      echo "  Mode: Terminal (Terminal.app)"
-      ;;
-    5 | warp)
-      # Terminal mode: Warp
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="warp"
-      echo "  Mode: Terminal (Warp)"
-      ;;
-    6 | ghostty)
-      # Terminal mode: Ghostty
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="ghostty"
-      echo "  Mode: Terminal (Ghostty)"
-      ;;
-    7 | custom)
-      # Terminal mode: Custom
-      export IDE_WRAPPER_ENABLED="false"
-      export IDE_WRAPPER_NAME="code"
-      export IDE_WRAPPER_CMD="code"
-      printf "Enter custom terminal command (use %%d for directory, %%c for command): "
-      read -r custom_terminal
-      if [ -n "$custom_terminal" ]; then
-        export CLAUDE_TERMINAL_CMD="$custom_terminal"
-        echo "  Mode: Terminal (custom)"
-      else
-        echo "Invalid input. Using auto-detect."
-        export CLAUDE_TERMINAL_CMD="auto"
-        echo "  Mode: Terminal (auto-detect)"
-      fi
-      ;;
-    8 | back)
+    3 | back)
       # Go back to main menu
       return
       ;;
@@ -122,7 +66,6 @@ run_config_setup() {
       export IDE_WRAPPER_ENABLED="true"
       export IDE_WRAPPER_NAME="code"
       export IDE_WRAPPER_CMD="code"
-      export CLAUDE_TERMINAL_CMD="auto"
       echo "  Mode: IDE Wrapper (VS Code - default)"
       ;;
     esac
@@ -131,7 +74,6 @@ run_config_setup() {
     IDE_NAME="code"
     IDE_CMD="code"
     export IDE_USER_DATA_DIR=".vscode-userdata"
-    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
     export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -149,7 +91,6 @@ run_config_setup() {
       IDE_CMD="cursor"
       export IDE_USER_DATA_DIR=".cursor-userdata"
     fi
-    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
     export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -159,7 +100,6 @@ run_config_setup() {
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    export CLAUDE_TERMINAL_CMD="auto"  # Set default for consistency
     export IDE_WRAPPER_ENABLED="false" # Set default for non-Claude IDEs
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -178,8 +118,6 @@ run_config_setup() {
   if [ "$IDE_NAME" = "claude" ]; then
     if [ "$IDE_WRAPPER_ENABLED" = "true" ]; then
       echo "  Mode: IDE Wrapper ($IDE_WRAPPER_NAME)"
-    else
-      echo "  Terminal: $CLAUDE_TERMINAL_CMD"
     fi
   fi
   echo ""
@@ -198,8 +136,6 @@ show_current_config_brief() {
   if [ "$IDE_NAME" = "claude" ]; then
     if [ "$IDE_WRAPPER_ENABLED" = "true" ]; then
       echo "  Mode: IDE Wrapper ($IDE_WRAPPER_NAME)"
-    else
-      echo "  Terminal: $CLAUDE_TERMINAL_CMD"
     fi
   fi
 }
@@ -212,7 +148,6 @@ auto_setup() {
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    export CLAUDE_TERMINAL_CMD="auto"
     export IDE_WRAPPER_ENABLED="false"
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -221,8 +156,6 @@ auto_setup() {
     IDE_NAME="claude"
     IDE_CMD="claude"
     export IDE_USER_DATA_DIR=""
-    export CLAUDE_TERMINAL_CMD="auto"
-    # Default to VS Code wrapper for Claude Code
     export IDE_WRAPPER_ENABLED="true"
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -231,7 +164,6 @@ auto_setup() {
     IDE_NAME="code"
     IDE_CMD="code"
     export IDE_USER_DATA_DIR=".vscode-userdata"
-    export CLAUDE_TERMINAL_CMD="auto"
     export IDE_WRAPPER_ENABLED="false"
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"
@@ -241,7 +173,6 @@ auto_setup() {
     IDE_NAME="cursor"
     IDE_CMD="cursor"
     export IDE_USER_DATA_DIR=".cursor-userdata"
-    export CLAUDE_TERMINAL_CMD="auto"
     export IDE_WRAPPER_ENABLED="false"
     export IDE_WRAPPER_NAME="code"
     export IDE_WRAPPER_CMD="code"

@@ -90,6 +90,9 @@ create_worktree() {
   temp_branch="$1"
   worktree_dir="$2"
 
+  # Assert paths are initialized before using them
+  assert_paths_initialized
+
   mkdir -p "$SUBTREES_DIR"
   setup_gitignore
 
