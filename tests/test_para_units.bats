@@ -838,4 +838,144 @@ setup() {
 
   result=$(generate_unique_branch_name "existing-feature")
   [ "$result" = "existing-feature-2" ]
+}
+
+# Tests for IDE task generation with argument escaping
+@test "write_vscode_autorun_task handles prompts starting with dash" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with prompt that starts with dash (like .actrc content)
+    write_vscode_autorun_task "$temp_dir" "-P macos-latest=catthehacker/ubuntu:act-latest"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the task contains the -- separator to prevent CLI parsing
+    grep -q '"args": \["--", "-P macos-latest=catthehacker/ubuntu:act-latest"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task handles prompts starting with dash" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with prompt that starts with dash
+    write_cursor_autorun_task "$temp_dir" "--version"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the task contains the -- separator
+    grep -q '"args": \["--", "--version"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_vscode_autorun_task handles normal prompts without separator" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with normal prompt that doesn't start with dash
+    write_vscode_autorun_task "$temp_dir" "Create a user authentication system"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the task does NOT contain the -- separator for normal prompts
+    grep -q '"args": \["Create a user authentication system"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task handles normal prompts without separator" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with normal prompt
+    write_cursor_autorun_task "$temp_dir" "Implement OAuth2 flow"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify no -- separator for normal prompts
+    grep -q '"args": \["Implement OAuth2 flow"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_vscode_autorun_task handles skip permissions flag with dash prompts" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with skip permissions and dash prompt
+    write_vscode_autorun_task "$temp_dir" "-f some-config.yml" "" "true"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify both skip permissions flag and -- separator are present
+    # -- separator is added before the last argument (prompt) if it starts with -
+    grep -q '"args": \["--dangerously-skip-permissions", "--", "-f some-config.yml"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task handles skip permissions flag with dash prompts" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with skip permissions and dash prompt
+    write_cursor_autorun_task "$temp_dir" "-help" "" "true"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify both flags are present in correct order
+    # -- separator is added before the last argument (prompt) if it starts with -
+    grep -q '"args": \["--dangerously-skip-permissions", "--", "-help"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_vscode_autorun_task handles complex prompts with special characters" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test with complex prompt containing quotes and special chars
+    complex_prompt='-P macos-latest="catthehacker/ubuntu:act-latest" --verbose'
+    write_vscode_autorun_task "$temp_dir" "$complex_prompt"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # Verify the complex prompt is properly escaped in JSON
+    grep -q '"args": \["--", "-P macos-latest=\\"catthehacker/ubuntu:act-latest\\" --verbose"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
+}
+
+@test "write_cursor_autorun_task handles session resumption with dash prompts" {
+    temp_dir=$(mktemp -d)
+    
+    # Set IDE_CMD for the test
+    export IDE_CMD="claude"
+    
+    # Test session resumption with dash prompt
+    write_cursor_autorun_task "$temp_dir" "--config production" "test-session-123"
+    
+    [ -f "$temp_dir/.vscode/tasks.json" ]
+    
+    # With updated logic, -- separator is only added before the last argument (prompt) if it starts with -
+    grep -q '"args": \["--resume", "test-session-123", "--", "--config production"\]' "$temp_dir/.vscode/tasks.json"
+    
+    rm -rf "$temp_dir"
 } 

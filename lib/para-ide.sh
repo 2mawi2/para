@@ -231,7 +231,9 @@ launch_claude() {
   # If IDE_CMD is a stub echo command, run it instead of opening a new terminal
   case "$IDE_CMD" in
   echo\ *)
-    eval "$IDE_CMD" "\"$worktree_dir\""
+    # Build the proper command that would be executed
+    claude_cmd=$(build_claude_terminal_command "$initial_prompt" "" "$skip_permissions")
+    eval "$IDE_CMD" "\"$claude_cmd\""
     return 0
     ;;
   esac
@@ -513,8 +515,39 @@ write_vscode_autorun_task() {
       args="\"--dangerously-skip-permissions\""
     fi
 
-    # Add remaining arguments
+    # Check if the last argument (usually the prompt) starts with - and needs separator
+    needs_separator=false
+    last_arg=""
     for arg in "$@"; do
+      last_arg="$arg"
+    done
+
+    # Only add separator if the last argument (prompt) starts with -
+    # This prevents actual prompts from being parsed as CLI options
+    if [ -n "$last_arg" ] && echo "$last_arg" | grep -q "^-"; then
+      needs_separator=true
+    fi
+
+    # Add all arguments except the last one first
+    arg_count=0
+    for arg in "$@"; do
+      arg_count=$((arg_count + 1))
+    done
+
+    current_count=0
+    for arg in "$@"; do
+      current_count=$((current_count + 1))
+
+      # Add -- separator before the last argument if needed
+      if [ "$needs_separator" = "true" ] && [ "$current_count" -eq "$arg_count" ]; then
+        if [ -n "$args" ]; then
+          args="$args, \"--\""
+        else
+          args="\"--\""
+        fi
+      fi
+
+      # Add the argument
       if [ -n "$args" ]; then
         args="$args, \"$arg\""
       else
@@ -662,8 +695,39 @@ write_cursor_autorun_task() {
       args="\"--dangerously-skip-permissions\""
     fi
 
-    # Add remaining arguments
+    # Check if the last argument (usually the prompt) starts with - and needs separator
+    needs_separator=false
+    last_arg=""
     for arg in "$@"; do
+      last_arg="$arg"
+    done
+
+    # Only add separator if the last argument (prompt) starts with -
+    # This prevents actual prompts from being parsed as CLI options
+    if [ -n "$last_arg" ] && echo "$last_arg" | grep -q "^-"; then
+      needs_separator=true
+    fi
+
+    # Add all arguments except the last one first
+    arg_count=0
+    for arg in "$@"; do
+      arg_count=$((arg_count + 1))
+    done
+
+    current_count=0
+    for arg in "$@"; do
+      current_count=$((current_count + 1))
+
+      # Add -- separator before the last argument if needed
+      if [ "$needs_separator" = "true" ] && [ "$current_count" -eq "$arg_count" ]; then
+        if [ -n "$args" ]; then
+          args="$args, \"--\""
+        else
+          args="\"--\""
+        fi
+      fi
+
+      # Add the argument
       if [ -n "$args" ]; then
         args="$args, \"$arg\""
       else
@@ -680,6 +744,7 @@ write_cursor_autorun_task() {
 
     if [ -n "$session_id" ]; then
       # Resume session with new prompt (interactive mode)
+      args_json=$(build_args "--resume" "$session_id" "$prompt_escaped")
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
