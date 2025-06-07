@@ -199,9 +199,8 @@ finish_session() {
 
     # Perform integration
     if integrate_branch "$final_branch_name" "$base_branch" "$commit_msg"; then
-      # Integration successful - clean up feature branch
-      git branch -D "$final_branch_name" 2>/dev/null || true
-      echo "🧹 cleaned up feature branch"
+      echo "✅ integration successful"
+      # Note: Feature branch cleanup will happen after worktree removal
     else
       # Integration failed (conflicts) - save state for continue command
       save_integration_state "$final_branch_name" "$base_branch" "$commit_msg"
@@ -401,7 +400,7 @@ generate_unique_branch_name() {
   die "unable to generate unique branch name after 999 attempts"
 }
 
-# Integrate feature branch into base branch
+# Integrate feature branch into base branch using rebase
 integrate_branch() {
   feature_branch="$1"
   base_branch="$2"
@@ -429,16 +428,38 @@ integrate_branch() {
     git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
   fi
 
-  echo "▶ integrating changes into $base_branch..."
+  echo "▶ integrating changes into $base_branch using rebase..."
 
-  # Attempt to merge the feature branch
-  if git -C "$REPO_ROOT" merge --no-ff -m "Merge: $commit_msg" "$feature_branch"; then
-    echo "✅ successfully integrated into $base_branch"
+  # Since the feature branch is checked out in a worktree, we need to work from the main repo
+  # We'll rebase the commits from the feature branch onto the base branch
+
+  # Get the commit hash of the feature branch
+  feature_commit=$(git -C "$REPO_ROOT" rev-parse "$feature_branch") || die "failed to get feature branch commit"
+
+  # Switch to base branch and attempt to rebase the feature commits
+  git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+
+  # Create a temporary branch from the feature commit for rebasing
+  temp_rebase_branch="temp-rebase-$(date +%s)"
+  git -C "$REPO_ROOT" branch "$temp_rebase_branch" "$feature_commit" || die "failed to create temporary rebase branch"
+
+  # Checkout the temporary branch and rebase it onto base branch
+  git -C "$REPO_ROOT" checkout "$temp_rebase_branch" >/dev/null 2>&1 || die "failed to checkout temporary rebase branch"
+
+  if git -C "$REPO_ROOT" rebase "$base_branch"; then
+    # Rebase successful, fast-forward merge the base branch
+    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch after rebase"
+    git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die "failed to fast-forward merge after rebase"
+
+    # Clean up temporary branch
+    git -C "$REPO_ROOT" branch -D "$temp_rebase_branch" 2>/dev/null || true
+
+    echo "✅ successfully integrated into $base_branch using rebase"
     return 0
   else
-    # Merge failed due to conflicts
+    # Rebase failed due to conflicts - clean up and save state
     echo ""
-    echo "⚠️  merge conflicts detected in the following files:"
+    echo "⚠️  rebase conflicts detected in the following files:"
     git -C "$REPO_ROOT" diff --name-only --diff-filter=U | sed 's/^/  - /'
     echo ""
     echo "▶ opening IDE to resolve conflicts..."
@@ -448,7 +469,7 @@ integrate_branch() {
 
     echo ""
     echo "Fix conflicts and run: para continue"
-    echo "To abort: git merge --abort"
+    echo "To abort: git rebase --abort"
     echo ""
     return 1
   fi
