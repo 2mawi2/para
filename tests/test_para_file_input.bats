@@ -337,3 +337,35 @@ EOF
     [[ "$output" == *"OWASP recommendations"* ]]
     [[ "$output" == *"Testing requirements"* ]]
 }
+
+@test "FI-17: dispatch command handles empty file with clear error message" {
+    cd "$TEST_REPO"
+    
+    # Create empty file
+    touch empty-prompt.txt
+    
+    # Mock Claude IDE
+    export IDE_NAME="claude"
+    export IDE_CMD="echo 'claude-mock'"
+    
+    # Test dispatch with empty file
+    run "$PARA_SCRIPT" dispatch --file empty-prompt.txt
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"file is empty: empty-prompt.txt"* ]]
+}
+
+@test "FI-18: dispatch-multi command handles empty file with clear error message" {
+    cd "$TEST_REPO"
+    
+    # Create empty file
+    touch empty-multi.txt
+    
+    # Mock Claude IDE
+    export IDE_NAME="claude"
+    export IDE_CMD="echo 'claude-mock'"
+    
+    # Test dispatch-multi with empty file
+    run "$PARA_SCRIPT" dispatch-multi 2 --file empty-multi.txt
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"file is empty: empty-multi.txt"* ]]
+}
