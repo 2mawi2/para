@@ -315,7 +315,7 @@ build_claude_terminal_command() {
   if [ -n "$initial_prompt" ]; then
     # Escape the prompt for shell execution using double quotes (safer for nested contexts)
     # Escape backslashes, double quotes, dollar signs, and backticks
-    prompt_escaped=$(printf '%s' "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\$/\\$/g; s/`/\\`/g')
+    prompt_escaped=$(printf '%s' "$initial_prompt" | sed "s/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g; s/\\\$/\\\\\\\$/g; s/\`/\\\\\`/g")
 
     # Use session resumption if session_id is provided
     if [ -n "$session_id" ]; then
