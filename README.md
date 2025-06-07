@@ -65,7 +65,10 @@ Claude Code support for AI-powered development:
 ```bash
 para dispatch "prompt"                    # Create session with AI prompt
 para dispatch name "prompt"               # Named session with AI prompt
+para dispatch --file prompt.txt          # Create session with prompt from file
+para dispatch -f ./auth.prompt            # Create session with prompt from file (short form)
 para dispatch-multi N "prompt"            # Create N parallel sessions with same prompt
+para dispatch-multi N --file prompt.txt   # Create N sessions with prompt from file
 para dispatch-multi N --group name "prompt"  # Create N sessions with custom group name
 
 # Skip permission warnings in trusted environments (CI, scripts)
@@ -180,6 +183,9 @@ para finish "Fix login redirect"   # Finishes current session
 ```bash
 # Create multiple AI sessions to explore different approaches
 para dispatch-multi 3 "Implement user authentication with best security practices"
+
+# Or use a prompt file for complex prompts
+para dispatch-multi 3 --file auth-requirements.prompt
 
 # Each Claude Code instance works on the same prompt independently
 # Compare results across 3 different approaches
