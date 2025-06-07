@@ -313,22 +313,23 @@ build_claude_terminal_command() {
   fi
 
   if [ -n "$initial_prompt" ]; then
-    # Escape the prompt for shell execution
-    prompt_escaped=$(printf '%s' "$initial_prompt" | sed "s/'/'\\\\''/g")
+    # Escape the prompt for shell execution using double quotes (safer for nested contexts)
+    # Escape backslashes, double quotes, dollar signs, and backticks
+    prompt_escaped=$(printf '%s' "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\$/\\$/g; s/`/\\`/g')
 
     # Use session resumption if session_id is provided
     if [ -n "$session_id" ]; then
       # Resume existing session with new prompt (interactive mode)
-      echo "$base_cmd --resume '$session_id' '$prompt_escaped'"
+      echo "$base_cmd --resume \"$session_id\" \"$prompt_escaped\""
     else
       # Start new session with initial prompt (interactive mode)
-      echo "$base_cmd '$prompt_escaped'"
+      echo "$base_cmd \"$prompt_escaped\""
     fi
   else
     # Use session resumption without prompt if session_id is provided
     if [ -n "$session_id" ]; then
       # Resume existing session interactively
-      echo "$base_cmd --resume '$session_id'"
+      echo "$base_cmd --resume \"$session_id\""
     else
       # Start new interactive session
       echo "$base_cmd"
@@ -508,54 +509,6 @@ write_vscode_autorun_task() {
   # Create .vscode directory if it doesn't exist
   mkdir -p "$worktree_dir/.vscode"
 
-  # Build args array with optional skip permissions flag
-  build_args() {
-    args=""
-    if [ "$skip_permissions" = "true" ]; then
-      args="\"--dangerously-skip-permissions\""
-    fi
-
-    # Check if the last argument (usually the prompt) starts with - and needs separator
-    needs_separator=false
-    last_arg=""
-    for arg in "$@"; do
-      last_arg="$arg"
-    done
-
-    # Only add separator if the last argument (prompt) starts with -
-    # This prevents actual prompts from being parsed as CLI options
-    if [ -n "$last_arg" ] && echo "$last_arg" | grep -q "^-"; then
-      needs_separator=true
-    fi
-
-    # Add all arguments except the last one first
-    arg_count=0
-    for arg in "$@"; do
-      arg_count=$((arg_count + 1))
-    done
-
-    current_count=0
-    for arg in "$@"; do
-      current_count=$((current_count + 1))
-
-      # Add -- separator before the last argument if needed
-      if [ "$needs_separator" = "true" ] && [ "$current_count" -eq "$arg_count" ]; then
-        if [ -n "$args" ]; then
-          args="$args, \"--\""
-        else
-          args="\"--\""
-        fi
-      fi
-
-      # Add the argument
-      if [ -n "$args" ]; then
-        args="$args, \"$arg\""
-      else
-        args="\"$arg\""
-      fi
-    done
-    echo "[$args]"
-  }
 
   # Build the task based on whether we have a prompt and/or session ID
   if [ -n "$initial_prompt" ]; then
@@ -563,8 +516,17 @@ write_vscode_autorun_task() {
     prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
     if [ -n "$session_id" ]; then
-      # Resume session with new prompt (interactive mode)
-      args_json=$(build_args "--resume" "$session_id" "$prompt_escaped")
+      # Resume session with new prompt (interactive mode) - use temp file for complex prompts
+      # Create a temporary prompt file to avoid shell escaping issues
+      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
+      printf '%s' "$initial_prompt" > "$temp_prompt_file"
+      
+      # Build the command using the temp file
+      if [ "$skip_permissions" = "true" ]; then
+        full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      else
+        full_cmd="$IDE_CMD --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      fi
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -572,8 +534,7 @@ write_vscode_autorun_task() {
         {
             "label": "Resume Claude Code Session with Prompt",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -591,8 +552,18 @@ write_vscode_autorun_task() {
 }
 EOF
     else
-      # Start new session with prompt (interactive mode)
-      args_json=$(build_args "$prompt_escaped")
+      # Start new session with prompt (interactive mode) - use temp file for complex prompts
+      # Create a temporary prompt file to avoid shell escaping issues
+      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
+      printf '%s' "$initial_prompt" > "$temp_prompt_file"
+      
+      # Build the command using the temp file
+      if [ "$skip_permissions" = "true" ]; then
+        full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      else
+        full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      fi
+      
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -600,8 +571,7 @@ EOF
         {
             "label": "Start Claude Code with Prompt",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -621,7 +591,11 @@ EOF
     fi
   elif [ -n "$session_id" ]; then
     # Resume session without new prompt (interactive mode)
-    args_json=$(build_args "--resume" "$session_id")
+    if [ "$skip_permissions" = "true" ]; then
+      full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\""
+    else
+      full_cmd="$IDE_CMD --resume \\\"$session_id\\\""
+    fi
     cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -629,8 +603,7 @@ EOF
         {
             "label": "Resume Claude Code Session",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -649,7 +622,11 @@ EOF
 EOF
   else
     # Start new interactive session
-    args_json=$(build_args)
+    if [ "$skip_permissions" = "true" ]; then
+      full_cmd="$IDE_CMD --dangerously-skip-permissions"
+    else
+      full_cmd="$IDE_CMD"
+    fi
     cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -657,8 +634,7 @@ EOF
         {
             "label": "Start Claude Code",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -688,54 +664,6 @@ write_cursor_autorun_task() {
   # Create .vscode directory if it doesn't exist (Cursor uses VS Code format)
   mkdir -p "$worktree_dir/.vscode"
 
-  # Build args array with optional skip permissions flag
-  build_args() {
-    args=""
-    if [ "$skip_permissions" = "true" ]; then
-      args="\"--dangerously-skip-permissions\""
-    fi
-
-    # Check if the last argument (usually the prompt) starts with - and needs separator
-    needs_separator=false
-    last_arg=""
-    for arg in "$@"; do
-      last_arg="$arg"
-    done
-
-    # Only add separator if the last argument (prompt) starts with -
-    # This prevents actual prompts from being parsed as CLI options
-    if [ -n "$last_arg" ] && echo "$last_arg" | grep -q "^-"; then
-      needs_separator=true
-    fi
-
-    # Add all arguments except the last one first
-    arg_count=0
-    for arg in "$@"; do
-      arg_count=$((arg_count + 1))
-    done
-
-    current_count=0
-    for arg in "$@"; do
-      current_count=$((current_count + 1))
-
-      # Add -- separator before the last argument if needed
-      if [ "$needs_separator" = "true" ] && [ "$current_count" -eq "$arg_count" ]; then
-        if [ -n "$args" ]; then
-          args="$args, \"--\""
-        else
-          args="\"--\""
-        fi
-      fi
-
-      # Add the argument
-      if [ -n "$args" ]; then
-        args="$args, \"$arg\""
-      else
-        args="\"$arg\""
-      fi
-    done
-    echo "[$args]"
-  }
 
   # Build the task based on whether we have a prompt and/or session ID
   if [ -n "$initial_prompt" ]; then
@@ -743,8 +671,17 @@ write_cursor_autorun_task() {
     prompt_escaped=$(echo "$initial_prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
     if [ -n "$session_id" ]; then
-      # Resume session with new prompt (interactive mode)
-      args_json=$(build_args "--resume" "$session_id" "$prompt_escaped")
+      # Resume session with new prompt (interactive mode) - use temp file for complex prompts
+      # Create a temporary prompt file to avoid shell escaping issues
+      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
+      printf '%s' "$initial_prompt" > "$temp_prompt_file"
+      
+      # Build the command using the temp file
+      if [ "$skip_permissions" = "true" ]; then
+        full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      else
+        full_cmd="$IDE_CMD --resume \\\"$session_id\\\" \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      fi
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -752,8 +689,7 @@ write_cursor_autorun_task() {
         {
             "label": "Resume Claude Code Session with Prompt",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -771,8 +707,18 @@ write_cursor_autorun_task() {
 }
 EOF
     else
-      # Start new session with prompt (interactive mode)
-      args_json=$(build_args "$prompt_escaped")
+      # Start new session with prompt (interactive mode) - use temp file for complex prompts
+      # Create a temporary prompt file to avoid shell escaping issues
+      temp_prompt_file="$worktree_dir/.claude_prompt_temp"
+      printf '%s' "$initial_prompt" > "$temp_prompt_file"
+      
+      # Build the command using the temp file
+      if [ "$skip_permissions" = "true" ]; then
+        full_cmd="$IDE_CMD --dangerously-skip-permissions \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      else
+        full_cmd="$IDE_CMD \\\"\$(cat '$temp_prompt_file'; rm '$temp_prompt_file')\\\""
+      fi
+      
       cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -780,8 +726,7 @@ EOF
         {
             "label": "Start Claude Code with Prompt",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -801,7 +746,11 @@ EOF
     fi
   elif [ -n "$session_id" ]; then
     # Resume session without new prompt (interactive mode)
-    args_json=$(build_args "--resume" "$session_id")
+    if [ "$skip_permissions" = "true" ]; then
+      full_cmd="$IDE_CMD --dangerously-skip-permissions --resume \\\"$session_id\\\""
+    else
+      full_cmd="$IDE_CMD --resume \\\"$session_id\\\""
+    fi
     cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -809,8 +758,7 @@ EOF
         {
             "label": "Resume Claude Code Session",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -829,7 +777,11 @@ EOF
 EOF
   else
     # Start new interactive session
-    args_json=$(build_args)
+    if [ "$skip_permissions" = "true" ]; then
+      full_cmd="$IDE_CMD --dangerously-skip-permissions"
+    else
+      full_cmd="$IDE_CMD"
+    fi
     cat >"$worktree_dir/.vscode/tasks.json" <<EOF
 {
     "version": "2.0.0",
@@ -837,8 +789,7 @@ EOF
         {
             "label": "Start Claude Code",
             "type": "shell",
-            "command": "$IDE_CMD",
-            "args": $args_json,
+            "command": "$full_cmd",
             "group": "build",
             "presentation": {
                 "echo": true,

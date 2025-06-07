@@ -369,3 +369,260 @@ EOF
     [ "$status" -ne 0 ]
     [[ "$output" == *"file is empty: empty-multi.txt"* ]]
 }
+
+@test "FI-19: file content with single quotes is handled correctly" {
+    cd "$TEST_REPO"
+    
+    # Create file with single quotes (the exact issue reported)
+    cat > quotes-prompt.txt << 'EOF'
+please fix the following issue. sometimes when i use 'para finish "message"' but message contains 
+signs like ' or " then
+for example para dispatch 'testtest'
+gives me in claude this error:
+Executing task: claude test'test 
+fish: Unexpected end of string, quotes are not balanced
+claude test'test
+       ^
+EOF
+    
+    # Source the utils to test file reading
+    . "$ORIGINAL_DIR/lib/para-utils.sh"
+    
+    # Test reading file with single quotes
+    run read_file_content "quotes-prompt.txt"
+    [ "$status" -eq 0 ]
+    # Verify it contains the problematic content with quotes
+    [[ "$output" == *"para finish \"message\""* ]]
+    [[ "$output" == *"test'test"* ]]
+    
+    # Test the shell escaping function from para-ide.sh
+    . "$ORIGINAL_DIR/lib/para-ide.sh"
+    
+    # Test build_claude_terminal_command with quotes
+    run build_claude_terminal_command "$output" "" "false"
+    [ "$status" -eq 0 ]
+    # The output should be properly escaped
+    [[ "$output" == *"claude"* ]]
+}
+
+@test "FI-20: file content with double quotes is handled correctly" {
+    cd "$TEST_REPO"
+    
+    # Create file with double quotes
+    cat > doublequotes-prompt.txt << 'EOF'
+Create a function that handles "quoted strings" and processes:
+- JSON like {"key": "value", "nested": {"inner": "data"}}
+- SQL queries like SELECT * FROM users WHERE name = "John Doe"
+- Shell commands like echo "Hello World"
+EOF
+    
+    # Source the utils to test file reading
+    . "$ORIGINAL_DIR/lib/para-utils.sh"
+    
+    # Test reading file with double quotes
+    run read_file_content "doublequotes-prompt.txt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"\"quoted strings\""* ]]
+    [[ "$output" == *"\"Hello World\""* ]]
+}
+
+@test "FI-21: file content with backticks is handled correctly" {
+    cd "$TEST_REPO"
+    
+    # Create file with backticks
+    cat > backticks-prompt.txt << 'EOF'
+Write a script that executes commands like:
+- `ls -la`
+- `git status`
+- `npm install`
+And captures their output properly.
+EOF
+    
+    # Source the utils to test file reading
+    . "$ORIGINAL_DIR/lib/para-utils.sh"
+    
+    # Test reading file with backticks
+    run read_file_content "backticks-prompt.txt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"\`ls -la\`"* ]]
+    [[ "$output" == *"\`git status\`"* ]]
+}
+
+@test "FI-22: file content with dollar signs is handled correctly" {
+    cd "$TEST_REPO"
+    
+    # Create file with dollar signs and variables
+    cat > dollars-prompt.txt << 'EOF'
+Create environment setup with:
+- $HOME directory handling
+- ${USER} variable expansion
+- $PATH modifications
+- $(command substitution)
+EOF
+    
+    # Source the utils to test file reading
+    . "$ORIGINAL_DIR/lib/para-utils.sh"
+    
+    # Test reading file with dollar signs
+    run read_file_content "dollars-prompt.txt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"\$HOME"* ]]
+    [[ "$output" == *"\${USER}"* ]]
+    [[ "$output" == *"\$PATH"* ]]
+    [[ "$output" == *"\$(command"* ]]
+}
+
+@test "FI-23: file content with newlines and complex formatting" {
+    cd "$TEST_REPO"
+    
+    # Create file with complex formatting including newlines, tabs, etc.
+    cat > complex-format.txt << 'EOF'
+Multi-line prompt with:
+
+	Tabs and spaces
+    Mixed indentation
+        Deep nesting
+
+Special characters: !@#$%^&*()
+Brackets: [] {} ()
+Pipes and redirects: | > < >>
+Semicolons and ampersands: ; && ||
+
+Code examples:
+function test() {
+    echo "Hello, World!"
+    return 0
+}
+EOF
+    
+    # Source the utils to test file reading
+    . "$ORIGINAL_DIR/lib/para-utils.sh"
+    
+    # Test reading file with complex formatting
+    run read_file_content "complex-format.txt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Special characters: !@#\$%^&*()"* ]]
+    [[ "$output" == *"function test()"* ]]
+    # Check that newlines are preserved
+    lines=$(echo "$output" | wc -l)
+    [ "$lines" -gt 10 ]
+}
+
+@test "FI-24: dispatch with problematic file content does not break shell execution" {
+    cd "$TEST_REPO"
+    
+    # Create file with the exact content that causes issues
+    cat > problematic.txt << 'EOF'
+test'test with single quote
+test"test with double quote
+test`test with backtick
+test$test with dollar
+test&test with ampersand
+test;test with semicolon
+test|test with pipe
+EOF
+    
+    # Mock Claude IDE with enhanced logging to capture what command would be executed
+    export IDE_NAME="claude"
+    export IDE_CMD="echo"
+    export CLAUDE_TERMINAL_CMD="terminal"
+    
+    # Test dispatch with problematic content - this should not fail
+    run "$PARA_SCRIPT" dispatch --file problematic.txt
+    
+    # The command should not fail due to shell escaping issues
+    # We expect it to fail at some other point (like missing git setup), 
+    # but NOT with shell quoting errors
+    [[ "$output" != *"Unexpected end of string"* ]]
+    [[ "$output" != *"quotes are not balanced"* ]]
+    [[ "$output" != *"command not found"* ]]
+}
+
+@test "FI-25: dispatch-multi with problematic file content does not break shell execution" {
+    cd "$TEST_REPO"
+    
+    # Create file with problematic content
+    cat > multi-problematic.txt << 'EOF'
+please fix ' and " issues
+EOF
+    
+    # Mock Claude IDE
+    export IDE_NAME="claude"
+    export IDE_CMD="echo"
+    export CLAUDE_TERMINAL_CMD="terminal"
+    
+    # Test dispatch-multi with problematic content
+    run "$PARA_SCRIPT" dispatch-multi 2 --file multi-problematic.txt
+    
+    # Should not fail with shell quoting errors
+    [[ "$output" != *"Unexpected end of string"* ]]
+    [[ "$output" != *"quotes are not balanced"* ]]
+}
+
+@test "FI-26: verifies new double-quote escaping produces safe commands" {
+    cd "$TEST_REPO"
+    
+    # Source the IDE functions
+    export IDE_CMD="claude"
+    . "$ORIGINAL_DIR/lib/para-ide.sh"
+    
+    # Test the exact problematic case from the issue report
+    problematic_content="test'test"
+    
+    # Test that the command generation works
+    run build_claude_terminal_command "$problematic_content" "" "false"
+    [ "$status" -eq 0 ]
+    
+    # Verify the command uses double quotes (safer approach)
+    [[ "$output" == *'claude "'* ]]
+    [[ "$output" == *'test'* ]]
+    [[ "$output" == *'"'* ]]
+    
+    # Verify the command doesn't contain unescaped single quotes in problematic positions
+    [[ "$output" != "claude test'test" ]] # This was the broken pattern
+}
+
+@test "FI-27: test new double-quote escaping with different special characters" {
+    cd "$TEST_REPO"
+    
+    # Source the IDE functions to test escaping
+    export IDE_CMD="claude"
+    . "$ORIGINAL_DIR/lib/para-ide.sh"
+    
+    # Test single quotes (should not need escaping in double quotes)
+    run build_claude_terminal_command "test'test" "" "false"
+    [ "$status" -eq 0 ]
+    [ "$output" = "claude \"test'test\"" ]
+    
+    # Test double quotes (should be escaped)
+    run build_claude_terminal_command 'test"test' "" "false"
+    [ "$status" -eq 0 ]
+    [ "$output" = 'claude "test\"test"' ]
+    
+    # Test backticks (should be escaped)
+    run build_claude_terminal_command 'test`test' "" "false"
+    [ "$status" -eq 0 ]
+    [ "$output" = 'claude "test\`test"' ]
+    
+    # Test dollar signs (should be escaped)
+    run build_claude_terminal_command 'test$test' "" "false"
+    [ "$status" -eq 0 ]
+    [ "$output" = 'claude "test\$test"' ]
+    
+    # Test backslashes (should be escaped)
+    run build_claude_terminal_command 'test\test' "" "false"
+    [ "$status" -eq 0 ]
+    [ "$output" = 'claude "test\\test"' ]
+    
+    # Test that all resulting commands use double quotes (safer pattern)
+    for test_input in "test'test" 'test"test' 'test`test' 'test$test' 'test\test'; do
+        claude_cmd=$(build_claude_terminal_command "$test_input" "" "false")
+        
+        # Verify all commands use double quotes
+        [[ "$claude_cmd" == *'claude "'* ]]
+        [[ "$claude_cmd" == *'"' ]]
+        
+        # Verify none use the old problematic single quote pattern
+        [[ "$claude_cmd" != "claude test"* ]]
+    done
+}

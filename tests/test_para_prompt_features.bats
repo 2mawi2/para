@@ -100,7 +100,7 @@ Line 3"
     prompt="Simple test prompt"
     
     result=$(build_claude_terminal_command "$prompt")
-    expected="claude 'Simple test prompt'"
+    expected="claude \"Simple test prompt\""
     [ "$result" = "$expected" ]
 }
 
@@ -109,8 +109,8 @@ Line 3"
     prompt="Test 'single' and \"double\" quotes"
     
     result=$(build_claude_terminal_command "$prompt")
-    # The function escapes single quotes but keeps double quotes as-is
-    expected="claude 'Test '\''single'\'' and \"double\" quotes'"
+    # The function uses double quotes and escapes double quotes
+    expected="claude \"Test 'single' and \\\"double\\\" quotes\""
     [ "$result" = "$expected" ]
 }
 
@@ -127,7 +127,7 @@ Line 3"
     session_id="session-123"
     
     result=$(build_claude_terminal_command "$prompt" "$session_id")
-    expected="claude --resume 'session-123' 'Resume with prompt'"
+    expected="claude --resume \"session-123\" \"Resume with prompt\""
     [ "$result" = "$expected" ]
 }
 
@@ -136,7 +136,7 @@ Line 3"
     session_id="session-123"
     
     result=$(build_claude_terminal_command "" "$session_id")
-    expected="claude --resume 'session-123'"
+    expected="claude --resume \"session-123\""
     [ "$result" = "$expected" ]
 }
 
@@ -162,9 +162,8 @@ Line 3"
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Should contain the prompt as an argument
-    grep -q '"args": \["Test JSON prompt"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     grep -q '"label": "Start Claude Code with Prompt"' "$temp_dir/.vscode/tasks.json"
-    grep -q '"command": "claude"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
 }
@@ -180,7 +179,7 @@ Line 3"
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Should contain resume arguments
-    grep -q '"args": \["--resume", "session-abc", "Resume prompt"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*--resume.*session-abc.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     grep -q '"label": "Resume Claude Code Session with Prompt"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
@@ -195,8 +194,11 @@ Line 3"
     
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
-    # Should properly escape quotes in JSON
-    grep -q '"Test \\"quoted\\" prompt"' "$temp_dir/.vscode/tasks.json"
+    # Should use temp file approach for complex content
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
+    # Check that temp file contains the original unescaped content
+    [ -f "$temp_dir/.claude_prompt_temp" ]
+    grep -q 'Test "quoted" prompt' "$temp_dir/.claude_prompt_temp"
     
     rm -rf "$temp_dir"
 }
@@ -211,7 +213,7 @@ Line 3"
     [ -f "$temp_dir/.vscode/tasks.json" ]
     
     # Should contain the prompt as an argument
-    grep -q '"args": \["Test Cursor prompt"\]' "$temp_dir/.vscode/tasks.json"
+    grep -q '"command":.*claude.*cat.*claude_prompt_temp' "$temp_dir/.vscode/tasks.json"
     grep -q '"label": "Start Claude Code with Prompt"' "$temp_dir/.vscode/tasks.json"
     
     rm -rf "$temp_dir"
