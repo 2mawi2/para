@@ -59,6 +59,7 @@ handle_dispatch_command() {
   INITIAL_PROMPT=""
   SESSION_NAME=""
   SKIP_PERMISSIONS=false
+  FILE_PATH=""
 
   # Parse arguments
   shift # Remove 'dispatch'
@@ -67,6 +68,17 @@ handle_dispatch_command() {
   positional_args=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
+    --file=*)
+      FILE_PATH="${1#--file=}"
+      shift
+      ;;
+    --file|-f)
+      if [ "$#" -lt 2 ]; then
+        die "--file requires a file path"
+      fi
+      FILE_PATH="$2"
+      shift 2
+      ;;
     --dangerously-skip-permissions)
       SKIP_PERMISSIONS=true
       shift
@@ -91,21 +103,40 @@ handle_dispatch_command() {
     arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
 
     if [ "$arg_count" -eq 1 ]; then
-      # Only prompt provided
-      INITIAL_PROMPT="$positional_args"
+      # Check if single argument is a file path or prompt text
+      if [ -z "$FILE_PATH" ] && is_file_path "$positional_args"; then
+        # Auto-detect file path
+        FILE_PATH="$positional_args"
+      else
+        # Only prompt provided
+        INITIAL_PROMPT="$positional_args"
+      fi
     elif [ "$arg_count" -eq 2 ]; then
       # Session name and prompt provided
       SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
-      INITIAL_PROMPT=$(echo "$positional_args" | cut -d'|' -f2)
+      prompt_or_file=$(echo "$positional_args" | cut -d'|' -f2)
+      
+      # Check if second argument is a file path
+      if [ -z "$FILE_PATH" ] && is_file_path "$prompt_or_file"; then
+        FILE_PATH="$prompt_or_file"
+      else
+        INITIAL_PROMPT="$prompt_or_file"
+      fi
+      
       validate_session_name "$SESSION_NAME"
     else
       die "too many arguments"
     fi
   fi
 
+  # Handle file input if provided
+  if [ -n "$FILE_PATH" ]; then
+    INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
+  fi
+
   # Validate required arguments
   if [ -z "$INITIAL_PROMPT" ]; then
-    die "dispatch requires a prompt text"
+    die "dispatch requires a prompt text or file path"
   fi
 
   # Session creation logic with initial prompt
@@ -123,11 +154,12 @@ handle_dispatch_multi_command() {
   INITIAL_PROMPT=""
   SESSION_BASE_NAME=""
   SKIP_PERMISSIONS=false
+  FILE_PATH=""
 
   # Skip the command name (dispatch-multi)
   shift
 
-  # Parse arguments with --group and --dangerously-skip-permissions flag support
+  # Parse arguments with --group, --file, and --dangerously-skip-permissions flag support
   while [ "$#" -gt 0 ]; do
     case "$1" in
     --group=*)
@@ -143,6 +175,17 @@ handle_dispatch_multi_command() {
       validate_session_name "$SESSION_BASE_NAME"
       shift 2
       ;;
+    --file=*)
+      FILE_PATH="${1#--file=}"
+      shift
+      ;;
+    --file|-f)
+      if [ "$#" -lt 2 ]; then
+        die "--file requires a file path"
+      fi
+      FILE_PATH="$2"
+      shift 2
+      ;;
     --dangerously-skip-permissions)
       SKIP_PERMISSIONS=true
       shift
@@ -155,9 +198,14 @@ handle_dispatch_multi_command() {
       if [ -z "$INSTANCE_COUNT" ]; then
         INSTANCE_COUNT="$1"
         shift
-      # Second positional argument should be prompt
-      elif [ -z "$INITIAL_PROMPT" ]; then
-        INITIAL_PROMPT="$1"
+      # Second positional argument should be prompt or file path
+      elif [ -z "$INITIAL_PROMPT" ] && [ -z "$FILE_PATH" ]; then
+        # Check if argument is a file path
+        if is_file_path "$1"; then
+          FILE_PATH="$1"
+        else
+          INITIAL_PROMPT="$1"
+        fi
         shift
       else
         die "too many arguments"
@@ -166,13 +214,18 @@ handle_dispatch_multi_command() {
     esac
   done
 
+  # Handle file input if provided
+  if [ -n "$FILE_PATH" ]; then
+    INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
+  fi
+
   # Validate required arguments
   if [ -z "$INSTANCE_COUNT" ]; then
-    die "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"'"
+    die "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"' or 'para dispatch-multi N --file path'"
   fi
 
   if [ -z "$INITIAL_PROMPT" ]; then
-    die "dispatch-multi requires a prompt text"
+    die "dispatch-multi requires a prompt text or file path"
   fi
 
   # Validate instance count

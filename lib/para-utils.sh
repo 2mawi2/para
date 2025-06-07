@@ -9,7 +9,9 @@ para - Parallel IDE Workflow Helper
 Commands:
 para start [name]                    # create session with optional name
 para dispatch "prompt"               # start Claude Code session with prompt
+para dispatch --file path            # start Claude Code session with prompt from file
 para dispatch-multi N "prompt"       # start N Claude Code instances with same prompt
+para dispatch-multi N --file path    # start N Claude Code instances with prompt from file
 para finish "message"                # squash all changes into single commit
 para finish "message" --branch <n>   # squash commits + custom branch name
 para list | ls                       # list active sessions
@@ -23,7 +25,10 @@ Examples:
 para start                           # create session with auto-generated name
 para start feature-auth              # create named session
 para dispatch "Add user auth"        # Claude Code session with prompt
+para dispatch --file prompt.txt     # Claude Code session with prompt from file
+para dispatch -f ./auth.prompt       # Claude Code session with prompt from file (short form)
 para dispatch-multi 3 "Compare approaches"      # 3 Claude instances with same prompt
+para dispatch-multi 3 --file prompt.txt         # 3 Claude instances with prompt from file
 para dispatch-multi 5 --group task "Refactor"   # 5 instances with custom group name
 para start --dangerously-skip-permissions name  # skip IDE permission warnings
 para finish "implement user auth"    # squash session changes
@@ -203,4 +208,46 @@ setup_para_template() {
 
   echo "✅ Para template created successfully!"
   echo "   Your extensions and settings will now be available in all para sessions."
+}
+
+# Check if a string looks like a file path
+is_file_path() {
+  path="$1"
+  
+  # Return false if empty
+  [ -n "$path" ] || return 1
+  
+  # Check if it's an existing file
+  [ -f "$path" ] && return 0
+  
+  # Check if it looks like a file path (contains / or ends with common extensions)
+  case "$path" in
+    */*) return 0 ;;                    # Contains path separator
+    *.txt|*.md|*.rst|*.org) return 0 ;; # Common text file extensions
+    *.prompt|*.tmpl|*.template) return 0 ;; # Prompt/template extensions
+    *) return 1 ;;                      # Doesn't look like a file path
+  esac
+}
+
+# Read file content with error handling
+read_file_content() {
+  file_path="$1"
+  
+  # Convert relative path to absolute if needed
+  case "$file_path" in
+    /*) absolute_path="$file_path" ;;
+    *) absolute_path="$PWD/$file_path" ;;
+  esac
+  
+  # Check if file exists and is readable
+  if [ ! -f "$absolute_path" ]; then
+    die "file not found: $file_path"
+  fi
+  
+  if [ ! -r "$absolute_path" ]; then
+    die "file not readable: $file_path"
+  fi
+  
+  # Read file content
+  cat "$absolute_path" || die "failed to read file: $file_path"
 }
