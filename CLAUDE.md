@@ -151,3 +151,13 @@ para dispatch-multi 5 --group experiments --file requirements.txt
 - All tests must pass before commits (enforced by git hooks)
 - 99+ tests across 12 specialized test files ensure reliability
 - There is no such thing as a 'minor test issue' - if a test fails, it's a bug and should be fixed immediately
+
+## Development Preferences
+
+### Release Process
+- Use `just release` to create new releases (automatically bumps patch version and creates GitHub release)
+
+### Commit Style  
+- Keep commit messages short and concise (one line preferred)
+- No Claude attributions or co-authored tags
+- Focus on what changed, not implementation details
