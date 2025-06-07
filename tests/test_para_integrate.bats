@@ -130,7 +130,7 @@ teardown() {
   git branch | grep -q "para/test-session"
 }
 
-@test "continue command should complete merge after conflict resolution" {
+@test "continue command should complete rebase after conflict resolution" {
   # Create a conflicting situation
   echo "master branch content" > conflict.txt
   git add conflict.txt
@@ -148,16 +148,16 @@ teardown() {
   git add conflict.txt
   git commit -m "another master change"
   
-  # Simulate conflict state by attempting merge
-  git checkout master
-  git merge test-feature --no-edit || true  # This will fail with conflicts
+  # Simulate conflict state by attempting rebase
+  git checkout test-feature
+  git rebase master || true  # This will fail with conflicts
   
   # Save integration state manually (normally done by finish --integrate)
   mkdir -p "$STATE_DIR"
   cat > "$STATE_DIR/integration_conflict.state" <<EOF
 FEATURE_BRANCH=test-feature
 BASE_BRANCH=master
-COMMIT_MSG=test merge
+COMMIT_MSG=test rebase
 EOF
   
   # Resolve conflicts manually
@@ -168,11 +168,12 @@ EOF
   run handle_continue_command "continue"
   
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "conflicts resolved and merge completed" ]]
+  [[ "$output" =~ "conflicts resolved and rebase completed" ]]
   [[ "$output" =~ "successfully integrated into master" ]]
   
-  # Verify merge was completed
-  [ ! -f "$REPO_ROOT/.git/MERGE_HEAD" ]
+  # Verify rebase was completed (no rebase state)
+  [ ! -d "$REPO_ROOT/.git/rebase-merge" ]
+  [ ! -d "$REPO_ROOT/.git/rebase-apply" ]
   [ "$(cat conflict.txt)" = "resolved content" ]
 }
 
@@ -201,15 +202,16 @@ EOF
   git add conflict2.txt
   git commit -m "other master version"
   
-  # Start merge (will fail)
-  git merge test-feature2 --no-edit || true
+  # Start rebase (will fail)
+  git checkout test-feature2
+  git rebase master || true
   
   # Save integration state
   mkdir -p "$STATE_DIR"
   cat > "$STATE_DIR/integration_conflict.state" <<EOF
 FEATURE_BRANCH=test-feature2
 BASE_BRANCH=master
-COMMIT_MSG=test merge 2
+COMMIT_MSG=test rebase 2
 EOF
   
   # Don't resolve conflicts - try continue
@@ -345,4 +347,154 @@ EOF
   
   # Verify the custom branch name was used and then cleaned up
   ! git branch | grep -q "feature/combined"
+}
+
+@test "integration with non-fast-forward scenario" {
+  # Test scenario where master has moved ahead but rebase can still succeed
+  # Create a session and make changes
+  create_new_session "non-ff-test" "" false
+  session_id=$(ls "$STATE_DIR"/*.state 2>/dev/null | head -1 | xargs basename | sed 's/\.state$//')
+  get_session_info "$session_id"
+  feature_branch="$TEMP_BRANCH"
+  
+  # Make changes in the worktree
+  cd "$WORKTREE_DIR"
+  echo "feature content" > feature_file.txt
+  git add feature_file.txt
+  git commit -m "feature changes"
+  
+  # Add non-conflicting changes to master (moves master ahead)
+  cd "$REPO_ROOT"
+  git checkout master
+  echo "master content" > master_file.txt
+  git add -f master_file.txt  # Force add to bypass .gitignore
+  git commit -m "master advances"
+  
+  # Test integration - should succeed with rebase (not fast-forward)
+  run handle_finish_command "finish" "non-ff commit" "--integrate"
+  
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "successfully integrated into" ]]
+  
+  # Verify feature file is on master after integration
+  git checkout master
+  [ -f "feature_file.txt" ]
+  [ "$(cat feature_file.txt)" = "feature content" ]
+  
+  # Verify feature branch was cleaned up
+  ! git branch | grep -q "$feature_branch"
+}
+
+@test "integration state functions work correctly" {
+  # Test save_integration_state function
+  mkdir -p "$STATE_DIR"
+  save_integration_state "test-feature" "master" "test_message"
+  
+  # Verify state file was created
+  [ -f "$STATE_DIR/integration_conflict.state" ]
+  
+  # Verify state file content
+  grep -q "FEATURE_BRANCH=test-feature" "$STATE_DIR/integration_conflict.state"
+  grep -q "BASE_BRANCH=master" "$STATE_DIR/integration_conflict.state"
+  grep -q "COMMIT_MSG=test_message" "$STATE_DIR/integration_conflict.state"
+  
+  # Test load_integration_state function
+  run load_integration_state
+  [ "$status" -eq 0 ]
+  
+  # Load the state into current shell
+  load_integration_state
+  
+  # Verify variables were loaded correctly
+  [ "$FEATURE_BRANCH" = "test-feature" ]
+  [ "$BASE_BRANCH" = "master" ]
+  [ "$COMMIT_MSG" = "test_message" ]
+  
+  # Test clear_integration_state function
+  clear_integration_state
+  [ ! -f "$STATE_DIR/integration_conflict.state" ]
+  
+  # Test load after clear fails
+  run load_integration_state
+  [ "$status" -eq 1 ]
+}
+
+@test "successful rebase deletes temporary branches properly" {
+  # Create a session and make changes
+  create_new_session "temp-cleanup" "" false
+  session_id=$(ls "$STATE_DIR"/*.state 2>/dev/null | head -1 | xargs basename | sed 's/\.state$//')
+  get_session_info "$session_id"
+  feature_branch="$TEMP_BRANCH"
+  
+  # Verify feature branch exists before integration
+  git branch | grep -q "$feature_branch"
+  
+  # Make changes in the worktree
+  cd "$WORKTREE_DIR"
+  echo "temp cleanup test" > temp_test.txt
+  git add temp_test.txt
+  git commit -m "add temp test"
+  
+  # Go back to main repo
+  cd "$REPO_ROOT"
+  
+  # Test integration
+  run handle_finish_command "finish" "temp cleanup" "--integrate"
+  
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "successfully integrated into" ]]
+  
+  # Verify no temporary rebase branches remain
+  ! git branch | grep -q "temp-rebase-"
+  
+  # Verify feature branch was cleaned up
+  ! git branch | grep -q "$feature_branch"
+  
+  # Verify only master branch remains
+  [ "$(git branch | wc -l)" -eq 1 ]
+  git branch | grep -q "^\* master$"
+}
+
+@test "continue command cleans up temporary branches after successful rebase" {
+  # Create a conflicting situation
+  echo "master for temp test" > temp_conflict.txt
+  git add temp_conflict.txt
+  git commit -m "master temp"
+  
+  # Create feature branch with conflict manually
+  git checkout -b manual-feature
+  echo "feature temp content" > temp_conflict.txt
+  git add temp_conflict.txt
+  git commit -m "feature temp"
+  
+  # Switch back and create conflict
+  git checkout master
+  echo "master temp conflict" > temp_conflict.txt
+  git add temp_conflict.txt
+  git commit -m "master temp conflict"
+  
+  # Start rebase manually (will fail)
+  git checkout manual-feature
+  git rebase master || true
+  
+  # Save integration state
+  mkdir -p "$STATE_DIR"
+  save_integration_state "manual-feature" "master" "temp test"
+  
+  # Resolve conflicts
+  echo "resolved temp content" > temp_conflict.txt
+  git add temp_conflict.txt
+  
+  # Test continue command
+  run handle_continue_command "continue"
+  
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "conflicts resolved and rebase completed" ]]
+  [[ "$output" =~ "cleaned up feature branch" ]]
+  
+  # Verify no temporary branches remain
+  ! git branch | grep -q "temp-rebase-"
+  
+  # Verify original feature branch was cleaned up
+  ! git branch | grep -q "manual-feature"
 }

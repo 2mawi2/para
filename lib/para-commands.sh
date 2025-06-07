@@ -332,6 +332,27 @@ handle_finish_command() {
     # Force close IDE/terminal window since session is ending successfully
     force_close_ide_for_session "$SESSION_ID"
 
+    # Clean up feature branch after successful integration (now that worktree is removed)
+    if [ "$INTEGRATE" = true ]; then
+      # Get all branches and find the one that matches our pattern
+      # Either the original TEMP_BRANCH or the TARGET_BRANCH_NAME (with possible suffix)
+      cleanup_branch=""
+      if [ -n "$TARGET_BRANCH_NAME" ]; then
+        # Look for the target branch name (could have suffix like -1, -2, etc.)
+        cleanup_branch=$(git -C "$REPO_ROOT" branch | grep -E "^\s*${TARGET_BRANCH_NAME}(-[0-9]+)?$" | head -1 | sed 's/^[* ]*//') || true
+      fi
+
+      # If no custom branch found, try the original temp branch
+      if [ -z "$cleanup_branch" ] && git -C "$REPO_ROOT" rev-parse --verify "$TEMP_BRANCH" >/dev/null 2>&1; then
+        cleanup_branch="$TEMP_BRANCH"
+      fi
+
+      # Now we can safely delete the feature branch
+      if [ -n "$cleanup_branch" ] && git -C "$REPO_ROOT" branch -D "$cleanup_branch" 2>/dev/null; then
+        echo "🧹 cleaned up feature branch"
+      fi
+    fi
+
     remove_session_state "$SESSION_ID"
     if [ "$INTEGRATE" = true ]; then
       echo "✅ Session finished and integrated into $BASE_BRANCH"
@@ -454,10 +475,10 @@ handle_continue_command() {
     die "no integration in progress - nothing to continue"
   fi
 
-  # Check if we're in a merge state
-  if [ ! -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then
+  # Check if we're in a rebase state
+  if [ ! -d "$REPO_ROOT/.git/rebase-merge" ] && [ ! -d "$REPO_ROOT/.git/rebase-apply" ]; then
     clear_integration_state
-    die "no merge conflicts to resolve"
+    die "no rebase conflicts to resolve"
   fi
 
   # Check for unresolved conflicts
@@ -469,24 +490,39 @@ handle_continue_command() {
     return 1
   fi
 
-  echo "▶ completing merge..."
+  echo "▶ continuing rebase..."
 
-  # Complete the merge
-  if git -C "$REPO_ROOT" commit --no-edit; then
-    echo "✅ conflicts resolved and merge completed"
-    echo "✅ successfully integrated into $BASE_BRANCH"
+  # Continue the rebase
+  if git -C "$REPO_ROOT" rebase --continue; then
+    # Rebase completed successfully, now fast-forward merge
+    echo "▶ completing integration..."
 
-    # Clean up feature branch
-    git -C "$REPO_ROOT" branch -D "$FEATURE_BRANCH" 2>/dev/null || true
-    echo "🧹 cleaned up feature branch"
+    # Get the current branch (should be the temporary rebase branch)
+    current_branch=$(git -C "$REPO_ROOT" symbolic-ref --short HEAD)
+    git -C "$REPO_ROOT" checkout "$BASE_BRANCH" >/dev/null 2>&1 || die "failed to checkout $BASE_BRANCH"
 
-    # Clear integration state
-    clear_integration_state
+    if git -C "$REPO_ROOT" merge --ff-only "$current_branch"; then
+      echo "✅ conflicts resolved and rebase completed"
+      echo "✅ successfully integrated into $BASE_BRANCH"
 
-    return 0
+      # Clean up feature branch and temporary branch since rebase was successful
+      git -C "$REPO_ROOT" branch -D "$FEATURE_BRANCH" 2>/dev/null || true
+      git -C "$REPO_ROOT" branch -D "$current_branch" 2>/dev/null || true
+      echo "🧹 cleaned up feature branch"
+
+      # Clear integration state
+      clear_integration_state
+
+      return 0
+    else
+      echo "❌ failed to complete fast-forward merge after rebase"
+      echo "Please check git status and resolve any remaining issues"
+      return 1
+    fi
   else
-    echo "❌ failed to complete merge"
+    echo "❌ failed to continue rebase"
     echo "Please check git status and resolve any remaining issues"
+    echo "To abort: git rebase --abort"
     return 1
   fi
 }
