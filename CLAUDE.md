@@ -22,9 +22,11 @@ just benchmark        # Run performance benchmarks
 ### Common Development Tasks
 ```bash
 just install          # Install para globally
+just uninstall        # Remove para from system
 just setup-hooks      # Configure git pre-commit/pre-push hooks
 just status           # Check dependencies and project health
 just clean            # Clean development artifacts
+just release          # Create new release (patch version bump)
 
 # Testing specific components
 just test tests/test_para_units.bats              # Run specific test file
@@ -42,6 +44,7 @@ just test-args                                    # Test argument parsing
 ### Modular Library Design
 ```
 lib/
+├── para-commands.sh       # Command implementations (dispatch, start, finish, etc.)
 ├── para-config.sh         # Configuration management and environment setup
 ├── para-config-wizard.sh  # Interactive configuration wizard  
 ├── para-session.sh        # Session lifecycle and state management
@@ -151,13 +154,21 @@ para dispatch-multi 5 --group experiments --file requirements.txt
 - All tests must pass before commits (enforced by git hooks)
 - 99+ tests across 12 specialized test files ensure reliability
 - There is no such thing as a 'minor test issue' - if a test fails, it's a bug and should be fixed immediately
+- No task is ever done if not all tests ('just test') pass, every other reward hacking is a ethically wrong lie to the user!
 
 ## Development Preferences
 
 ### Release Process
 - Use `just release` to create new releases (automatically bumps patch version and creates GitHub release)
+- Must be on master branch with clean working directory
+- Requires GitHub Actions workflow for automated publishing
 
 ### Commit Style  
 - Keep commit messages short and concise (one line preferred)
 - No Claude attributions or co-authored tags
 - Focus on what changed, not implementation details
+
+### Error Handling
+- Always provide specific, user-friendly error messages
+- Include relevant context (file names, session names, etc.) in error messages
+- Test error conditions thoroughly with unit tests
