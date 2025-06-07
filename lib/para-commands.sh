@@ -253,12 +253,13 @@ handle_finish_command() {
   COMMIT_MSG=""
   TARGET_BRANCH_NAME=""
   BRANCH_FLAG_PROVIDED=false
+  SESSION_ID=""
 
-  # Parse arguments supporting --branch flag
+  # Parse arguments supporting --branch flag and optional session_id
   if [ "$#" -eq 1 ]; then
     die "finish requires a commit message"
   else
-    # Parse all arguments to handle flags in any order
+    # Parse all arguments to handle flags and optional session_id in any order
     while [ "$#" -gt 1 ]; do
       case "$2" in
       --branch=*)
@@ -278,11 +279,21 @@ handle_finish_command() {
         die "unknown option: $2"
         ;;
       *)
-        # This must be the commit message
-        if [ -n "$COMMIT_MSG" ]; then
-          die "multiple commit messages provided"
+        # Could be session_id or commit message
+        if [ -z "$SESSION_ID" ] && [ -z "$COMMIT_MSG" ]; then
+          # First positional argument - could be session_id or commit message
+          # Check if it looks like a session_id (has timestamp pattern)
+          if echo "$2" | grep -q "[0-9]\{8\}-[0-9]\{6\}"; then
+            SESSION_ID="$2"
+          else
+            COMMIT_MSG="$2"
+          fi
+        elif [ -z "$COMMIT_MSG" ]; then
+          # Second positional argument must be commit message
+          COMMIT_MSG="$2"
+        else
+          die "too many arguments"
         fi
-        COMMIT_MSG="$2"
         shift
         ;;
       esac
@@ -293,12 +304,15 @@ handle_finish_command() {
       die "finish requires a commit message"
     fi
 
+    # Auto-detect session if not provided
+    if [ -z "$SESSION_ID" ]; then
+      SESSION_ID=$(auto_detect_session)
+    fi
+
     # Validate target branch name if --branch flag was explicitly provided
     if [ "$BRANCH_FLAG_PROVIDED" = true ]; then
       validate_target_branch_name "$TARGET_BRANCH_NAME"
     fi
-
-    SESSION_ID=$(auto_detect_session)
   fi
 
   get_session_info "$SESSION_ID"
@@ -307,8 +321,12 @@ handle_finish_command() {
   echo "▶ finishing session $SESSION_ID"
   if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$TARGET_BRANCH_NAME"; then
     echo "▶ cleaning up worktree for session $SESSION_ID"
-    # Remove worktree and session state, but keep the branch for manual merging
+    # Remove worktree first, then close IDE
     git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
+
+    # Force close IDE/terminal window since session is ending successfully
+    force_close_ide_for_session "$SESSION_ID"
+
     remove_session_state "$SESSION_ID"
     echo "✅ Session finished - branch ready for manual merge"
     echo "💡 Worktree cleaned up, but branch preserved for merging"
@@ -373,8 +391,15 @@ handle_cancel_command() {
     for session_id in $GROUP_SESSIONS; do
       echo "  → cancelling session $session_id"
 
-      # Get session info and remove
+      # Get session info first (needed by close function)
       get_session_info "$session_id"
+
+      # Force close IDE/terminal window since session is being cancelled
+      # Capture and display close results for visibility
+      echo "    ▶ closing IDE/terminal window..."
+      force_close_ide_for_session "$session_id" 2>&1 | sed 's/^/    /'
+
+      # Remove worktree and session state
       remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
       remove_session_state "$session_id"
     done
@@ -394,6 +419,9 @@ handle_cancel_command() {
 
   # Optimize: Reduce verbose output during operations for speed
   echo "▶ aborting session $SESSION_ID"
+
+  # Force close IDE/terminal window for this session (cancel always closes)
+  force_close_ide_for_session "$SESSION_ID"
 
   # Optimize: Run git operations and state cleanup in parallel where possible
   # Remove worktree and branch first (heavier operations)

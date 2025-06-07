@@ -4,6 +4,10 @@
 # Load session information from state file
 get_session_info() {
   SESSION_ID="$1"
+
+  # Assert paths are initialized before using them
+  assert_paths_initialized
+
   STATE_FILE="$STATE_DIR/$SESSION_ID.state"
   [ -f "$STATE_FILE" ] || die "session '$SESSION_ID' not found"
 
@@ -29,9 +33,21 @@ save_session_state() {
   worktree_dir="$3"
   base_branch="$4"
   merge_mode="${5:-squash}" # Default to squash if not provided
+  launch_method="${6:-ide}" # Default to ide if not provided
+  launch_ide="${7:-}"       # The actual IDE used for launching
+  wrapper_ide="${8:-}"      # The wrapper IDE if in wrapper mode
 
+  echo "DEBUG: Creating directory $STATE_DIR" >&2
   mkdir -p "$STATE_DIR"
+  echo "DEBUG: Writing state file" >&2
   echo "$temp_branch|$worktree_dir|$base_branch|$merge_mode" >"$STATE_DIR/$session_id.state"
+  echo "DEBUG: Writing launch file" >&2
+  {
+    echo "LAUNCH_METHOD=$launch_method"
+    [ -n "$launch_ide" ] && echo "LAUNCH_IDE=$launch_ide"
+    [ -n "$wrapper_ide" ] && echo "WRAPPER_IDE=$wrapper_ide"
+  } >"$STATE_DIR/$session_id.launch"
+  echo "DEBUG: All files written successfully" >&2
 }
 
 # Update merge mode for existing session
@@ -48,7 +64,7 @@ remove_session_state() {
   session_id="$1"
 
   # Optimize: Use single rm command with multiple files for efficiency
-  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" "$STATE_DIR/$session_id.multi" 2>/dev/null || true
+  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" "$STATE_DIR/$session_id.multi" "$STATE_DIR/$session_id.launch" 2>/dev/null || true
 
   # Optimize: Only try to remove directory if it exists and might be empty
   # Use rmdir instead of more expensive directory checks
@@ -304,6 +320,9 @@ create_session() {
   session_name="$1"
   base_branch="$2"
 
+  # Ensure IDE_NAME is properly set with a default
+  ide_name="${IDE_NAME:-cursor}"
+
   if [ -n "$session_name" ]; then
     SESSION_ID="$session_name"
     TS=$(generate_timestamp)
@@ -327,7 +346,7 @@ create_session() {
 
   # Create worktree and save state
   create_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
-  save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$base_branch"
+  save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$base_branch" "squash" "ide" "$ide_name" ""
 
   echo "$SESSION_ID"
 }
@@ -443,6 +462,9 @@ clean_all_sessions() {
     get_session_info "$session_id"
 
     echo "  → cleaning session $session_id"
+
+    # Force close IDE/terminal window since session is being cleaned
+    force_close_ide_for_session "$session_id"
 
     remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
     remove_session_state "$session_id"
@@ -619,25 +641,69 @@ create_new_session() {
   initial_prompt="$2"
   skip_permissions="${3:-false}"
 
-  # Determine base branch
+  # --- 1. Initialize paths first ---
+  init_paths
+
+  # --- 2. Determine all parameters ---
   if [ -z "$BASE_BRANCH" ]; then
     BASE_BRANCH=$(get_current_branch)
   fi
 
-  # Check for uncommitted changes and warn, but don't block
-  check_uncommitted_changes
+  ide_name="$(get_default_ide)"
+  launch_method="ide"
+  launch_ide="$ide_name"
+  wrapper_ide=""
 
-  # Create session
-  SESSION_ID=$(create_session "$session_name" "$BASE_BRANCH")
-  get_session_info "$SESSION_ID"
-
-  # Store initial prompt in session state if provided
-  if [ -n "$initial_prompt" ]; then
-    save_session_prompt "$SESSION_ID" "$initial_prompt"
+  if [ "$ide_name" = "claude" ]; then
+    if [ "${IDE_WRAPPER_ENABLED:-false}" = "true" ]; then
+      launch_method="wrapper"
+      wrapper_ide="$IDE_WRAPPER_NAME"
+    else
+      launch_method="terminal"
+    fi
   fi
 
-  # Launch IDE with optional initial prompt and skip permissions flag
-  launch_ide "$(get_default_ide)" "$WORKTREE_DIR" "$initial_prompt" "$skip_permissions"
+  SESSION_ID=""
+  TEMP_BRANCH=""
+  WORKTREE_DIR=""
+  if [ -n "$session_name" ]; then
+    SESSION_ID="$session_name"
+    TS=$(generate_timestamp)
+    prefix=$(get_branch_prefix)
+    TEMP_BRANCH="${prefix}/${session_name}-${TS}"
+  else
+    SESSION_ID=$(generate_session_id)
+    prefix=$(get_branch_prefix)
+    TEMP_BRANCH="${prefix}/${SESSION_ID}"
+  fi
+  WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
+
+  if session_exists "$SESSION_ID"; then
+    die "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
+  fi
+
+  # --- 3. Perform actions ---
+  check_uncommitted_changes
+
+  echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $BASE_BRANCH)" >&2
+
+  # Call the simple, reliable function from para-git.sh
+  create_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
+
+  # Save the state with the correct, fully determined parameters
+  echo "DEBUG: About to call save_session_state" >&2
+  save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "$launch_method" "$launch_ide" "$wrapper_ide"
+  echo "DEBUG: save_session_state completed" >&2
+
+  if [ -n "$initial_prompt" ]; then
+    save_session_prompt "$SESSION_ID" "$initial_prompt"
+    echo "DEBUG: save_session_prompt completed" >&2
+  fi
+
+  # Launch the IDE, passing the session_id for the terminal wrapper
+  echo "DEBUG: about to launch IDE" >&2
+  launch_ide "$ide_name" "$WORKTREE_DIR" "$initial_prompt" "$skip_permissions" "$SESSION_ID"
+  echo "DEBUG: launch_ide completed" >&2
 
   echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
 }
@@ -673,8 +739,28 @@ create_new_multi_session() {
     done
   fi
 
+  # Determine launch method and update all sessions
+  ide_name="$(get_default_ide)"
+  launch_ide="$ide_name"
+  wrapper_ide=""
+
+  if [ "$ide_name" = "claude" ] && [ "${IDE_WRAPPER_ENABLED:-false}" = "true" ]; then
+    launch_method="wrapper"
+    wrapper_ide="$IDE_WRAPPER_NAME"
+  elif [ "$ide_name" = "claude" ]; then
+    launch_method="terminal"
+  else
+    launch_method="ide"
+  fi
+
+  # Update launch method for all sessions with proper wrapper information
+  for session_id in $SESSION_IDS; do
+    get_session_info "$session_id"
+    save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "$launch_method" "$launch_ide" "$wrapper_ide"
+  done
+
   # Launch IDEs for all instances
-  launch_multi_ide "$(get_default_ide)" "$SESSION_IDS" "$initial_prompt" "$skip_permissions"
+  launch_multi_ide "$ide_name" "$SESSION_IDS" "$initial_prompt" "$skip_permissions"
 
   # Show summary
   echo ""

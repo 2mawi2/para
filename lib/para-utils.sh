@@ -52,6 +52,28 @@ die() {
   exit 1
 }
 
+# Assert that paths are properly initialized - prevents silent failures
+assert_paths_initialized() {
+  if [ -z "$STATE_DIR" ] || [ -z "$SUBTREES_DIR" ]; then
+    die "INTERNAL ERROR: Paths not initialized. STATE_DIR='$STATE_DIR', SUBTREES_DIR='$SUBTREES_DIR'. This is a bug - init_paths() must be called first."
+  fi
+
+  if [ -z "$REPO_ROOT" ]; then
+    die "INTERNAL ERROR: REPO_ROOT not set. This is a bug - need_git_repo() must be called first."
+  fi
+
+  # Verify paths look reasonable (not just variables)
+  case "$STATE_DIR" in
+  */*) ;; # Contains a slash, looks like a path
+  *) die "INTERNAL ERROR: STATE_DIR='$STATE_DIR' doesn't look like a valid path. This is a bug." ;;
+  esac
+
+  case "$SUBTREES_DIR" in
+  */*) ;; # Contains a slash, looks like a path
+  *) die "INTERNAL ERROR: SUBTREES_DIR='$SUBTREES_DIR' doesn't look like a valid path. This is a bug." ;;
+  esac
+}
+
 # Check if command is a known command
 is_known_command() {
   cmd="$1"

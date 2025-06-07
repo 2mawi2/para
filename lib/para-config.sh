@@ -9,7 +9,6 @@ DEFAULT_BRANCH_PREFIX="para"
 DEFAULT_IDE_NAME="cursor"
 DEFAULT_IDE_CMD="cursor"
 export DEFAULT_IDE_USER_DATA_DIR=".cursor-userdata"
-DEFAULT_CLAUDE_TERMINAL_CMD="auto"
 DEFAULT_IDE_WRAPPER_ENABLED="false"
 DEFAULT_IDE_WRAPPER_NAME="code"
 DEFAULT_IDE_WRAPPER_CMD="code"
@@ -37,10 +36,6 @@ create_default_config() {
 IDE_NAME="cursor"
 IDE_CMD="cursor"
 IDE_USER_DATA_DIR=".cursor-userdata"
-
-# Claude Code terminal settings (only used when IDE_NAME="claude")
-# Options: "auto", "terminal", "warp", "ghostty", or custom command
-CLAUDE_TERMINAL_CMD="auto"
 
 # IDE Wrapper settings - allows opening Claude Code inside another IDE
 # Set to "true" to enable launching Claude Code inside a wrapper IDE
@@ -154,10 +149,6 @@ load_config() {
     ENV_SUBTREES_DIR_NAME="${SUBTREES_DIR_NAME:-}"
     ENV_STATE_DIR_NAME="${STATE_DIR_NAME:-}"
     ENV_BRANCH_PREFIX="${BRANCH_PREFIX:-}"
-    ENV_CLAUDE_TERMINAL_CMD="${CLAUDE_TERMINAL_CMD:-}"
-    ENV_IDE_WRAPPER_ENABLED="${IDE_WRAPPER_ENABLED:-}"
-    ENV_IDE_WRAPPER_NAME="${IDE_WRAPPER_NAME:-}"
-    ENV_IDE_WRAPPER_CMD="${IDE_WRAPPER_CMD:-}"
     _PARA_CONFIG_LOADED=1
   fi
   # On subsequent loads, don't re-capture ENV_* variables
@@ -182,9 +173,6 @@ load_config() {
   # IDE configuration - environment takes priority, then backwards compatibility, then config, then defaults
   IDE_NAME="${ENV_IDE_NAME:-${CURSOR_IDE:-${IDE_NAME:-$DEFAULT_IDE_NAME}}}"
   IDE_CMD="${ENV_IDE_CMD:-${CURSOR_CMD:-${IDE_CMD:-$DEFAULT_IDE_CMD}}}"
-
-  # Claude terminal configuration
-  CLAUDE_TERMINAL_CMD="${ENV_CLAUDE_TERMINAL_CMD:-${CLAUDE_TERMINAL_CMD:-$DEFAULT_CLAUDE_TERMINAL_CMD}}"
 
   # IDE Wrapper configuration
   IDE_WRAPPER_ENABLED="${ENV_IDE_WRAPPER_ENABLED:-${IDE_WRAPPER_ENABLED:-$DEFAULT_IDE_WRAPPER_ENABLED}}"
@@ -226,10 +214,6 @@ save_config() {
 IDE_NAME="$IDE_NAME"
 IDE_CMD="$IDE_CMD"
 IDE_USER_DATA_DIR="$IDE_USER_DATA_DIR"
-
-# Claude Code terminal settings (only used when IDE_NAME="claude")
-# Options: "auto", "terminal", "warp", "ghostty", or custom command
-CLAUDE_TERMINAL_CMD="$CLAUDE_TERMINAL_CMD"
 
 # IDE Wrapper settings - allows opening Claude Code inside another IDE
 # Set to "true" to enable launching Claude Code inside a wrapper IDE
@@ -277,9 +261,6 @@ show_config() {
   echo "Command: $IDE_CMD"
   if [ -n "$IDE_USER_DATA_DIR" ]; then
     echo "User data: $IDE_USER_DATA_DIR"
-  fi
-  if [ "$IDE_NAME" = "claude" ]; then
-    echo "Claude terminal: $CLAUDE_TERMINAL_CMD"
   fi
   if [ "$IDE_WRAPPER_ENABLED" = "true" ]; then
     echo ""

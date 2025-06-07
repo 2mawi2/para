@@ -16,13 +16,21 @@ setup() {
     
     # Set up safe test configuration
     export IDE_NAME="claude"
-    export IDE_CMD="true"  # Use stub command - NEVER launch real IDE
-    export STATE_DIR_NAME=".para_state"
+    export IDE_CMD="echo"
+    export IDE_WRAPPER_ENABLED="true"
+    export IDE_WRAPPER_NAME="code"
+    export IDE_WRAPPER_CMD="echo"
     
     # Create temporary test directory
     export TEST_TEMP_DIR=$(mktemp -d)
     export STATE_DIR="$TEST_TEMP_DIR/.para_state"
     mkdir -p "$STATE_DIR"
+
+    # Stub the launch function that outputs the command
+    launch_claude_terminal_app() {
+        echo "launch_claude_terminal_app called with args: $*"
+    }
+    export -f launch_claude_terminal_app
 }
 
 teardown() {
@@ -32,123 +40,91 @@ teardown() {
 
 # Tests for session prompt persistence
 @test "save_session_prompt stores prompt correctly" {
+    # Set up a clean test directory
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
+    
+    prompt="This is a test prompt"
     session_id="test-session"
-    prompt="Test prompt for session"
     
     save_session_prompt "$session_id" "$prompt"
     
     [ -f "$STATE_DIR/$session_id.prompt" ]
-    stored_prompt=$(cat "$STATE_DIR/$session_id.prompt")
-    [ "$stored_prompt" = "$prompt" ]
+    [ "$(cat "$STATE_DIR/$session_id.prompt")" = "$prompt" ]
 }
 
 @test "load_session_prompt retrieves stored prompt" {
-    session_id="test-session"
-    prompt="Test prompt for loading"
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
     
-    # Store prompt first
+    prompt="Another test prompt"
+    session_id="test-session-2"
+    
+    # Save the prompt first
     save_session_prompt "$session_id" "$prompt"
     
-    # Load it back
-    loaded_prompt=$(load_session_prompt "$session_id")
-    [ "$loaded_prompt" = "$prompt" ]
+    # Load and verify
+    result=$(load_session_prompt "$session_id")
+    [ "$result" = "$prompt" ]
 }
 
 @test "load_session_prompt returns empty for non-existent session" {
-    session_id="non-existent-session"
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
     
-    loaded_prompt=$(load_session_prompt "$session_id")
-    [ -z "$loaded_prompt" ]
+    result=$(load_session_prompt "non-existent-session")
+    [ -z "$result" ]
 }
 
 @test "remove_session_prompt deletes prompt file" {
-    session_id="test-session"
-    prompt="Test prompt for deletion"
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
     
-    # Store prompt first
+    prompt="Prompt to be deleted"
+    session_id="test-session-3"
+    
+    # Save and verify it exists
     save_session_prompt "$session_id" "$prompt"
     [ -f "$STATE_DIR/$session_id.prompt" ]
     
-    # Remove it
+    # Remove and verify it's gone
     remove_session_prompt "$session_id"
     [ ! -f "$STATE_DIR/$session_id.prompt" ]
 }
 
 @test "save_session_prompt handles special characters" {
-    session_id="test-session"
-    prompt="Test 'prompt' with \"quotes\" and $special & characters"
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
+    
+    prompt='Special chars: !@#$%^&*(){}[]"'\''`~'
+    session_id="test-session-special"
     
     save_session_prompt "$session_id" "$prompt"
-    loaded_prompt=$(load_session_prompt "$session_id")
-    [ "$loaded_prompt" = "$prompt" ]
+    result=$(load_session_prompt "$session_id")
+    [ "$result" = "$prompt" ]
 }
 
 @test "save_session_prompt handles multiline prompts" {
-    session_id="test-session"
+    export STATE_DIR="$TEST_TEMP_DIR/.para_state"
+    mkdir -p "$STATE_DIR"
+    
     prompt="Line 1
 Line 2
 Line 3"
+    session_id="test-session-multiline"
     
     save_session_prompt "$session_id" "$prompt"
-    loaded_prompt=$(load_session_prompt "$session_id")
-    [ "$loaded_prompt" = "$prompt" ]
+    result=$(load_session_prompt "$session_id")
+    [ "$result" = "$prompt" ]
 }
 
 # Tests for command building functions
-@test "build_claude_terminal_command with simple prompt" {
-    export IDE_CMD="claude"
-    prompt="Simple test prompt"
-    
-    result=$(build_claude_terminal_command "$prompt")
-    expected="claude \"Simple test prompt\""
-    [ "$result" = "$expected" ]
-}
-
-@test "build_claude_terminal_command with quotes in prompt" {
-    export IDE_CMD="claude"
-    prompt="Test 'single' and \"double\" quotes"
-    
-    result=$(build_claude_terminal_command "$prompt")
-    # The function uses double quotes and escapes double quotes
-    expected="claude \"Test 'single' and \\\"double\\\" quotes\""
-    [ "$result" = "$expected" ]
-}
-
-@test "build_claude_terminal_command without prompt" {
-    export IDE_CMD="claude"
-    
-    result=$(build_claude_terminal_command "")
-    [ "$result" = "claude" ]
-}
-
-@test "build_claude_terminal_command with session resumption" {
-    export IDE_CMD="claude"
-    prompt="Resume with prompt"
-    session_id="session-123"
-    
-    result=$(build_claude_terminal_command "$prompt" "$session_id")
-    expected="claude --resume \"session-123\" \"Resume with prompt\""
-    [ "$result" = "$expected" ]
-}
-
-@test "build_claude_terminal_command resume without prompt" {
-    export IDE_CMD="claude"
-    session_id="session-123"
-    
-    result=$(build_claude_terminal_command "" "$session_id")
-    expected="claude --resume \"session-123\""
-    [ "$result" = "$expected" ]
-}
-
 @test "build_claude_command returns IDE_CMD for JSON usage" {
-    export IDE_CMD="claude"
-    prompt="Test prompt"
+    result=$(build_claude_command "Test prompt")
+    [ "$result" = "$IDE_CMD" ]
     
-    result=$(build_claude_command "$prompt")
-    [ "$result" = "claude" ]
-    
-    result_no_prompt=$(build_claude_command "")
-    [ "$result_no_prompt" = "claude" ]
+    result=$(build_claude_command "")
+    [ "$result" = "$IDE_CMD" ]
 }
 
 # Tests for enhanced JSON task generation with prompts
@@ -220,20 +196,25 @@ Line 3"
 }
 
 # Tests for IDE launch functions with prompts (using stubs)
-@test "launch_claude passes prompt to terminal command builder" {
+@test "launch_claude uses wrapper mode" {
     temp_dir=$(mktemp -d)
     export IDE_CMD="true"  # Stub command - NEVER launch real IDE
-    export CLAUDE_TERMINAL_CMD="terminal"
+    export IDE_WRAPPER_ENABLED="true"
+    export IDE_WRAPPER_NAME="code"
     prompt="Test launch prompt"
     
-    # Mock the terminal app launcher to capture what command would be built
-    launch_claude_terminal_app() {
-        echo "terminal_app_called:$1:$2"
+    # Mock the wrapper functions
+    write_vscode_autorun_task() {
+        echo "vscode_task_written:$1:$2"
     }
-    export -f launch_claude_terminal_app
+    launch_vscode_wrapper() {
+        echo "vscode_wrapper_launched:$1:$2"
+    }
+    export -f write_vscode_autorun_task launch_vscode_wrapper
     
     result=$(launch_claude "$temp_dir" "$prompt")
-    [[ "$result" =~ terminal_app_called.*Test.launch.prompt ]]
+    [[ "$result" =~ vscode_task_written.*Test.launch.prompt ]]
+    [[ "$result" =~ vscode_wrapper_launched.*Test.launch.prompt ]]
     
     rm -rf "$temp_dir"
 }
@@ -256,21 +237,6 @@ Line 3"
     result=$(launch_ide_with_wrapper "claude" "$temp_dir" "$prompt")
     [[ "$result" =~ vscode_task_written.*Test.wrapper.prompt ]]
     [[ "$result" =~ vscode_wrapper_launched.*Test.wrapper.prompt ]]
-    
-    rm -rf "$temp_dir"
-}
-
-@test "launch_claude_custom_terminal uses prompt in command substitution" {
-    temp_dir=$(mktemp -d)
-    export IDE_CMD="claude"
-    prompt="Custom terminal prompt"
-    custom_cmd="echo 'Terminal: %d Command: %c'"
-    
-    result=$(launch_claude_custom_terminal "$temp_dir" "$custom_cmd" "$prompt")
-    
-    # Should substitute %d with directory and %c with full claude command including prompt
-    [[ "$result" =~ Terminal:.*$temp_dir ]]
-    [[ "$result" =~ Command:.*claude.*Custom.terminal.prompt ]]
     
     rm -rf "$temp_dir"
 }

@@ -4,40 +4,16 @@
 
 Para supports multiple IDEs with easy configuration:
 
-### Claude Code (Recommended for Claude AI users)
+### Claude Code (AI Development - Wrapper Mode Only)
 ```bash
 export IDE_NAME="claude"
 export IDE_CMD="claude"
 # Note: Claude Code doesn't support --user-data-dir isolation
 ```
 
-#### Terminal Configuration for Claude Code
+#### IDE Wrapper for Claude Code (Required)
 
-Claude Code runs in a terminal window. You can configure which terminal application to use:
-
-```bash
-# Auto-detect the best available terminal (default)
-export CLAUDE_TERMINAL_CMD="auto"
-
-# Force specific terminal applications
-export CLAUDE_TERMINAL_CMD="terminal"    # Terminal.app
-export CLAUDE_TERMINAL_CMD="warp"        # Warp terminal
-export CLAUDE_TERMINAL_CMD="ghostty"     # Ghostty
-export CLAUDE_TERMINAL_CMD="custom command here"  # Custom terminal
-
-# Custom terminal command with placeholders
-export CLAUDE_TERMINAL_CMD="alacritty --working-directory %d --command %c"
-# Placeholders: %d = directory, %c = command
-```
-
-**Auto-detection priority** (when `CLAUDE_TERMINAL_CMD="auto"`):
-1. **Warp** (if `warp-cli` is available)
-2. **Ghostty** (if installed)
-3. **Terminal.app** (macOS default)
-
-#### IDE Wrapper for Claude Code (Recommended Workflow)
-
-For the best Claude Code experience, you can launch Claude Code **inside** VS Code or Cursor. This gives you both a full IDE interface and Claude Code running automatically in the integrated terminal:
+Claude Code must be launched **inside** VS Code or Cursor to work with Para. This gives you both a full IDE interface and Claude Code running automatically in the integrated terminal:
 
 ```bash
 # Configure Claude Code with VS Code wrapper
