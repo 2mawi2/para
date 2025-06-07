@@ -468,6 +468,86 @@ setup() {
     [[ "$TEMPLATE_DIR" =~ cursor-template$ ]]
 }
 
+# Tests for is_file_path function
+@test "is_file_path returns false for empty string" {
+    run is_file_path ""
+    [ "$status" -ne 0 ]
+}
+
+@test "is_file_path returns true for existing files" {
+    # Create a temporary file
+    temp_file=$(mktemp)
+    
+    run is_file_path "$temp_file"
+    [ "$status" -eq 0 ]
+    
+    rm -f "$temp_file"
+}
+
+@test "is_file_path returns true for paths with separators" {
+    run is_file_path "path/to/file"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "/absolute/path"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "./relative/path"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_file_path returns true for common text extensions" {
+    run is_file_path "README.md"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "notes.txt"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "document.rst"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "notes.org"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_file_path returns true for prompt and template extensions" {
+    run is_file_path "task.prompt"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "config.tmpl"
+    [ "$status" -eq 0 ]
+    
+    run is_file_path "base.template"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_file_path returns false for plain strings without indicators" {
+    run is_file_path "simple"
+    [ "$status" -ne 0 ]
+    
+    run is_file_path "command"
+    [ "$status" -ne 0 ]
+    
+    run is_file_path "test123"
+    [ "$status" -ne 0 ]
+    
+    run is_file_path "feature-auth"
+    [ "$status" -ne 0 ]
+}
+
+@test "is_file_path handles edge cases" {
+    # Single character paths
+    run is_file_path "/"
+    [ "$status" -eq 0 ]
+    
+    # Hidden files with paths
+    run is_file_path ".hidden/file"
+    [ "$status" -eq 0 ]
+    
+    # Files with no extension but with path
+    run is_file_path "bin/command"
+    [ "$status" -eq 0 ]
+}
+
 # Tests for edge cases in timestamp generation
 @test "generate_timestamp format consistency" {
     # Call multiple times and verify format is consistent
