@@ -450,17 +450,21 @@ handle_cancel_command() {
   # Optimize: Reduce verbose output during operations for speed
   echo "▶ aborting session $SESSION_ID"
 
+  # Save session to backup before cancelling
+  save_cancelled_session_backup "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
+
   # Force close IDE/terminal window for this session (cancel always closes)
   force_close_ide_for_session "$SESSION_ID"
 
   # Optimize: Run git operations and state cleanup in parallel where possible
-  # Remove worktree and branch first (heavier operations)
-  remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
+  # Remove worktree but preserve branch for backup recovery
+  remove_worktree_preserve_branch "$TEMP_BRANCH" "$WORKTREE_DIR"
 
   # Then clean up state files (lighter operation)
   remove_session_state "$SESSION_ID"
 
   echo "cancelled session $SESSION_ID"
+  echo "💡 Session backed up for recovery. Use 'para recover $SESSION_ID' to restore."
   echo "🎉 You can safely close this $(get_ide_display_name) session now."
 }
 
@@ -537,6 +541,19 @@ handle_resume_command() {
     enhanced_resume "$SESSION_ID"
   else
     die "resume takes optionally a session name"
+  fi
+}
+
+# Handle recover command
+handle_recover_command() {
+  if [ "$#" -eq 1 ]; then
+    # No session specified - show available backups
+    list_cancelled_session_backups
+  elif [ "$#" -eq 2 ]; then
+    SESSION_ID="$2"
+    recover_cancelled_session "$SESSION_ID"
+  else
+    die "recover takes optionally a session name"
   fi
 }
 

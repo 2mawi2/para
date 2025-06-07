@@ -86,13 +86,14 @@ teardown() {
     # 2. Cancel from within worktree
     run "$PARA_SCRIPT" cancel
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session backed up for recovery"* ]]
     
     cd "$TEST_REPO"
     
-    # Verify branch is deleted
+    # Verify branch is preserved for backup recovery
     run git branch --list "$branch_name"
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
+    [ -n "$output" ]  # Branch should still exist for backup
     
     # Verify worktree directory is gone
     assert_session_not_exists "$session_dir"
@@ -276,13 +277,14 @@ teardown() {
     # 2. Test cancel from within worktree (should auto-detect session)
     run "$PARA_SCRIPT" cancel
     [ "$status" -eq 0 ]
+    [[ "$output" == *"Session backed up for recovery"* ]]
     
     cd "$TEST_REPO"
     
-    # Verify branch is deleted
+    # Verify branch is preserved for backup recovery
     run git branch --list "$branch_name"
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
+    [ -n "$output" ]  # Branch should still exist for backup
     
     # Verify worktree directory is gone
     assert_session_not_exists "$session_dir"
