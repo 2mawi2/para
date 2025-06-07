@@ -213,41 +213,41 @@ setup_para_template() {
 # Check if a string looks like a file path
 is_file_path() {
   path="$1"
-  
+
   # Return false if empty
   [ -n "$path" ] || return 1
-  
+
   # Check if it's an existing file
   [ -f "$path" ] && return 0
-  
+
   # Check if it looks like a file path (contains / or ends with common extensions)
   case "$path" in
-    */*) return 0 ;;                    # Contains path separator
-    *.txt|*.md|*.rst|*.org) return 0 ;; # Common text file extensions
-    *.prompt|*.tmpl|*.template) return 0 ;; # Prompt/template extensions
-    *) return 1 ;;                      # Doesn't look like a file path
+  */*) return 0 ;;                            # Contains path separator
+  *.txt | *.md | *.rst | *.org) return 0 ;;   # Common text file extensions
+  *.prompt | *.tmpl | *.template) return 0 ;; # Prompt/template extensions
+  *) return 1 ;;                              # Doesn't look like a file path
   esac
 }
 
 # Read file content with error handling
 read_file_content() {
   file_path="$1"
-  
+
   # Convert relative path to absolute if needed
   case "$file_path" in
-    /*) absolute_path="$file_path" ;;
-    *) absolute_path="$PWD/$file_path" ;;
+  /*) absolute_path="$file_path" ;;
+  *) absolute_path="$PWD/$file_path" ;;
   esac
-  
+
   # Check if file exists and is readable
   if [ ! -f "$absolute_path" ]; then
     die "file not found: $file_path"
   fi
-  
+
   if [ ! -r "$absolute_path" ]; then
     die "file not readable: $file_path"
   fi
-  
+
   # Read file content
   cat "$absolute_path" || die "failed to read file: $file_path"
 }
