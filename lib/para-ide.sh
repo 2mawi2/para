@@ -307,8 +307,8 @@ build_claude_wrapper_command() {
   fi
 }
 
-# Write VS Code auto-run task for Claude Code
-write_vscode_autorun_task() {
+# Internal helper function for writing autorun tasks
+_write_autorun_task_for_claude() {
   worktree_dir="$1"
   initial_prompt="${2:-}"
   session_id="${3:-}"
@@ -331,28 +331,14 @@ write_vscode_autorun_task() {
   generate_claude_task "$label" "$full_cmd" >"$worktree_dir/.vscode/tasks.json"
 }
 
+# Write VS Code auto-run task for Claude Code
+write_vscode_autorun_task() {
+  _write_autorun_task_for_claude "$@"
+}
+
 # Write Cursor auto-run task for Claude Code
 write_cursor_autorun_task() {
-  worktree_dir="$1"
-  initial_prompt="${2:-}"
-  session_id="${3:-}"
-  skip_permissions="${4:-false}"
-
-  mkdir -p "$worktree_dir/.vscode"
-
-  full_cmd=$(build_claude_wrapper_command "$initial_prompt" "$session_id" "$skip_permissions" "$worktree_dir")
-
-  if [ -n "$initial_prompt" ] && [ -n "$session_id" ]; then
-    label="Resume Claude Code Session with Prompt"
-  elif [ -n "$initial_prompt" ]; then
-    label="Start Claude Code with Prompt"
-  elif [ -n "$session_id" ]; then
-    label="Resume Claude Code Session"
-  else
-    label="Start Claude Code"
-  fi
-
-  generate_claude_task "$label" "$full_cmd" >"$worktree_dir/.vscode/tasks.json"
+  _write_autorun_task_for_claude "$@"
 }
 
 # VS Code implementation (for completeness)
