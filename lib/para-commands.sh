@@ -13,7 +13,7 @@ handle_start_command() {
   positional_args=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
-    --dangerously-skip-permissions)
+    --dangerously-skip-permissions | -d)
       SKIP_PERMISSIONS=true
       shift
       ;;
@@ -79,7 +79,7 @@ handle_dispatch_command() {
       FILE_PATH="$2"
       shift 2
       ;;
-    --dangerously-skip-permissions)
+    --dangerously-skip-permissions | -d)
       SKIP_PERMISSIONS=true
       shift
       ;;
@@ -189,7 +189,7 @@ handle_dispatch_multi_command() {
       FILE_PATH="$2"
       shift 2
       ;;
-    --dangerously-skip-permissions)
+    --dangerously-skip-permissions | -d)
       SKIP_PERMISSIONS=true
       shift
       ;;
