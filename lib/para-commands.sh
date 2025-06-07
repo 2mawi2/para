@@ -72,7 +72,7 @@ handle_dispatch_command() {
       FILE_PATH="${1#--file=}"
       shift
       ;;
-    --file|-f)
+    --file | -f)
       if [ "$#" -lt 2 ]; then
         die "--file requires a file path"
       fi
@@ -115,14 +115,14 @@ handle_dispatch_command() {
       # Session name and prompt provided
       SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
       prompt_or_file=$(echo "$positional_args" | cut -d'|' -f2)
-      
+
       # Check if second argument is a file path
       if [ -z "$FILE_PATH" ] && is_file_path "$prompt_or_file"; then
         FILE_PATH="$prompt_or_file"
       else
         INITIAL_PROMPT="$prompt_or_file"
       fi
-      
+
       validate_session_name "$SESSION_NAME"
     else
       die "too many arguments"
@@ -179,7 +179,7 @@ handle_dispatch_multi_command() {
       FILE_PATH="${1#--file=}"
       shift
       ;;
-    --file|-f)
+    --file | -f)
       if [ "$#" -lt 2 ]; then
         die "--file requires a file path"
       fi
