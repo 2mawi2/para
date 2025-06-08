@@ -409,6 +409,28 @@ generate_unique_branch_name() {
   die "unable to generate unique branch name after 999 attempts"
 }
 
+# Check if a branch is currently checked out in any worktree
+is_branch_in_worktree() {
+  branch_name="$1"
+  git -C "$REPO_ROOT" worktree list --porcelain | grep -q "branch refs/heads/$branch_name"
+}
+
+# Validate repository state for safe integration
+validate_repo_state() {
+  # Run fsck and filter out harmless dangling objects
+  fsck_output=$(git -C "$REPO_ROOT" fsck 2>&1)
+  fsck_status=$?
+
+  # Filter out dangling objects (normal in repositories with complex histories)
+  critical_errors=$(echo "$fsck_output" | grep -v "^dangling " | grep -v "^Checking " | grep -v "^$")
+
+  if [ $fsck_status -ne 0 ] && [ -n "$critical_errors" ]; then
+    echo "Critical repository integrity issues detected:" >&2
+    echo "$critical_errors" >&2
+    die "repository integrity check failed - unsafe to proceed with integration"
+  fi
+}
+
 # Integrate feature branch into base branch using rebase
 integrate_branch() {
   feature_branch="$1"
@@ -417,36 +439,59 @@ integrate_branch() {
 
   echo "▶ updating $base_branch with latest changes..."
 
-  # Check if we have a remote configured
-  if git -C "$REPO_ROOT" remote >/dev/null 2>&1; then
-    # Try to pull latest changes from remote if available
-    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+  # Validate repository state before proceeding
+  validate_repo_state
 
-    # Check if base branch tracks a remote
-    if git -C "$REPO_ROOT" rev-parse --verify "@{upstream}" >/dev/null 2>&1; then
-      echo "  → pulling latest changes from remote"
-      if ! git -C "$REPO_ROOT" pull; then
-        echo "⚠️  failed to pull latest changes from remote"
-        echo "   continuing with local integration"
+  # Check if base branch is checked out in a worktree
+  if is_branch_in_worktree "$base_branch"; then
+    echo "  ⚠️  base branch $base_branch is checked out in a worktree"
+    echo "  → using worktree-safe integration (bypasses Git's checkout protection)"
+    echo "  → this is safe but may cause working tree desynchronization"
+
+    # Check if we have a remote configured and try to update base branch reference
+    if git -C "$REPO_ROOT" remote >/dev/null 2>&1; then
+      # Check if base branch tracks a remote
+      upstream_ref="${base_branch}@{upstream}"
+      if git -C "$REPO_ROOT" rev-parse --verify "$upstream_ref" >/dev/null 2>&1; then
+        echo "  → fetching latest changes from remote"
+        if git -C "$REPO_ROOT" fetch origin "$base_branch:$base_branch" 2>/dev/null; then
+          echo "  → updated base branch from remote"
+        else
+          echo "  → could not update base branch from remote, continuing with local"
+        fi
+      else
+        echo "  → no remote tracking branch, using local $base_branch"
       fi
     else
-      echo "  → no remote tracking branch, using local $base_branch"
+      echo "  → no remote configured, using local $base_branch"
     fi
   else
-    echo "  → no remote configured, using local $base_branch"
-    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+    # Standard approach when base branch is not in a worktree
+    # Check if we have a remote configured
+    if git -C "$REPO_ROOT" remote >/dev/null 2>&1; then
+      # Try to pull latest changes from remote if available
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+
+      # Check if base branch tracks a remote
+      if git -C "$REPO_ROOT" rev-parse --verify "@{upstream}" >/dev/null 2>&1; then
+        echo "  → pulling latest changes from remote"
+        if ! git -C "$REPO_ROOT" pull; then
+          echo "⚠️  failed to pull latest changes from remote"
+          echo "   continuing with local integration"
+        fi
+      else
+        echo "  → no remote tracking branch, using local $base_branch"
+      fi
+    else
+      echo "  → no remote configured, using local $base_branch"
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+    fi
   fi
 
   echo "▶ integrating changes into $base_branch using rebase..."
 
-  # Since the feature branch is checked out in a worktree, we need to work from the main repo
-  # We'll rebase the commits from the feature branch onto the base branch
-
   # Get the commit hash of the feature branch
   feature_commit=$(git -C "$REPO_ROOT" rev-parse "$feature_branch") || die "failed to get feature branch commit"
-
-  # Switch to base branch and attempt to rebase the feature commits
-  git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
 
   # Create a temporary branch from the feature commit for rebasing
   temp_rebase_branch="temp-rebase-$(date +%s)"
@@ -456,14 +501,37 @@ integrate_branch() {
   git -C "$REPO_ROOT" checkout "$temp_rebase_branch" >/dev/null 2>&1 || die "failed to checkout temporary rebase branch"
 
   if git -C "$REPO_ROOT" rebase "$base_branch"; then
-    # Rebase successful, fast-forward merge the base branch
-    git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch after rebase"
-    git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die "failed to fast-forward merge after rebase"
+    # Rebase successful, now update the base branch
+    if is_branch_in_worktree "$base_branch"; then
+      # Base branch is in a worktree, use git update-ref to update it safely
+      rebased_commit=$(git -C "$REPO_ROOT" rev-parse "$temp_rebase_branch") || die "failed to get rebased commit"
+
+      # Backup current branch state before update
+      current_base_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
+      echo "  ⚠️  updating $base_branch using git update-ref (bypassing checkout protection)"
+      echo "  → backup of current state: $current_base_commit"
+
+      git -C "$REPO_ROOT" update-ref "refs/heads/$base_branch" "$rebased_commit" ||
+        die "failed to update base branch reference (backup: $current_base_commit)"
+
+      # Validate the update was successful
+      updated_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
+      if [ "$updated_commit" != "$rebased_commit" ]; then
+        die "branch update validation failed - expected $rebased_commit, got $updated_commit"
+      fi
+
+      echo "✅ successfully integrated into $base_branch using update-ref"
+      echo "  → note: worktrees with $base_branch checked out may need refresh"
+    else
+      # Standard fast-forward merge
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch after rebase"
+      git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die "failed to fast-forward merge after rebase"
+      echo "✅ successfully integrated into $base_branch using rebase"
+    fi
 
     # Clean up temporary branch
     git -C "$REPO_ROOT" branch -D "$temp_rebase_branch" 2>/dev/null || true
 
-    echo "✅ successfully integrated into $base_branch using rebase"
     return 0
   else
     # Rebase failed due to conflicts - clean up and save state
