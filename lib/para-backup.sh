@@ -30,7 +30,7 @@ save_cancelled_session_backup() {
     echo "temp_branch=$temp_branch"
     echo "worktree_dir=$worktree_dir"
     echo "base_branch=$base_branch"
-    echo "merge_mode=$merge_mode"
+    echo "merge_mode='$merge_mode'"
   } >"$backup_file"
 
   # Cleanup old backups to maintain only the last 3
@@ -44,11 +44,32 @@ cleanup_old_backups() {
   backup_count=$(find "$BACKUP_DIR" -name "*.backup" 2>/dev/null | wc -l)
 
   if [ "$backup_count" -gt "$MAX_BACKUP_SESSIONS" ]; then
-    # Remove oldest backups, keep only the newest ones
-    old_backups=$(find "$BACKUP_DIR" -name "*.backup" -print0 2>/dev/null |
-      xargs -0 ls -t |
-      tail -n +$((MAX_BACKUP_SESSIONS + 1)))
-
+    # Create temporary file to store backup info sorted by cancellation timestamp
+    temp_list=$(mktemp)
+    
+    # Extract timestamp and file path for each backup
+    for backup_file in "$BACKUP_DIR"/*.backup; do
+      [ -f "$backup_file" ] || continue
+      
+      # Load backup to get timestamp
+      # shellcheck source=/dev/null
+      . "$backup_file"
+      
+      # Convert timestamp to sortable format and store with file path
+      timestamp_sort=$(echo "$timestamp" | sed 's/[-: ]//g')
+      echo "$timestamp_sort|$backup_file" >> "$temp_list"
+    done
+    
+    # Sort by timestamp (oldest first) and get files to remove
+    total_backups=$(wc -l < "$temp_list")
+    files_to_remove=$((total_backups - MAX_BACKUP_SESSIONS))
+    
+    if [ "$files_to_remove" -gt 0 ]; then
+      old_backups=$(sort "$temp_list" | head -n "$files_to_remove" | cut -d'|' -f2)
+    else
+      old_backups=""
+    fi
+    
     # Remove backup files and their corresponding branches
     for backup_file in $old_backups; do
       if [ -f "$backup_file" ]; then
@@ -63,6 +84,9 @@ cleanup_old_backups() {
         git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
       fi
     done
+    
+    # Cleanup temporary file
+    rm -f "$temp_list"
   fi
 }
 
