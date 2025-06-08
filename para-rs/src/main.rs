@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 mod config;
+mod utils;
 
 #[derive(Parser)]
 #[command(name = "para")]
@@ -16,14 +17,14 @@ enum Commands {
     /// Create session with optional name
     Start { name: Option<String> },
     /// Start Claude Code session with prompt
-    Dispatch { 
+    Dispatch {
         name_or_prompt: Option<String>,
         prompt: Option<String>,
         #[arg(long, short)]
         file: Option<String>,
     },
     /// Squash all changes into single commit
-    Finish { 
+    Finish {
         message: String,
         #[arg(long)]
         branch: Option<String>,
@@ -51,7 +52,7 @@ enum Commands {
     /// Setup configuration
     Config { subcommand: Option<String> },
     /// Generate shell completion script
-    Completion { 
+    Completion {
         #[command(subcommand)]
         command: Option<CompletionCommands>,
     },
@@ -72,18 +73,32 @@ fn main() {
             println!();
             println!("Commands:");
             println!("para start [name]                    # create session with optional name");
-            println!("para dispatch \"prompt\"               # start Claude Code session with prompt");
+            println!(
+                "para dispatch \"prompt\"               # start Claude Code session with prompt"
+            );
             println!("para dispatch --file path            # start Claude Code session with prompt from file");
-            println!("para finish \"message\"                # squash all changes into single commit");
-            println!("para finish \"message\" --branch <n>   # squash commits + custom branch name");
-            println!("para finish \"message\" --integrate    # squash commits + merge into base branch");
+            println!(
+                "para finish \"message\"                # squash all changes into single commit"
+            );
+            println!(
+                "para finish \"message\" --branch <n>   # squash commits + custom branch name"
+            );
+            println!(
+                "para finish \"message\" --integrate    # squash commits + merge into base branch"
+            );
             println!("para list | ls                       # list active sessions");
             println!("para resume [session]                # resume session in IDE");
-            println!("para recover [session]               # recover cancelled session from archive");
+            println!(
+                "para recover [session]               # recover cancelled session from archive"
+            );
             println!("para cancel [session]                # cancel session (moves to archive)");
             println!("para clean                           # remove all active sessions");
-            println!("para clean --backups                 # remove all cancelled sessions from archive");
-            println!("para continue                        # complete merge after resolving conflicts");
+            println!(
+                "para clean --backups                 # remove all cancelled sessions from archive"
+            );
+            println!(
+                "para continue                        # complete merge after resolving conflicts"
+            );
             println!("para config                          # setup configuration");
             println!("para completion generate [shell]     # generate shell completion script");
             println!();
@@ -98,11 +113,19 @@ fn handle_command(command: Commands) {
             eprintln!("para: start command not implemented yet");
             std::process::exit(1);
         }
-        Commands::Dispatch { name_or_prompt, prompt, file } => {
+        Commands::Dispatch {
+            name_or_prompt,
+            prompt,
+            file,
+        } => {
             eprintln!("para: dispatch command not implemented yet");
             std::process::exit(1);
         }
-        Commands::Finish { message, branch, integrate } => {
+        Commands::Finish {
+            message,
+            branch,
+            integrate,
+        } => {
             eprintln!("para: finish command not implemented yet");
             std::process::exit(1);
         }
