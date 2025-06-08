@@ -548,6 +548,39 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
+@test "is_file_path correctly identifies URLs as NOT file paths" {
+    # HTTPS URLs should not be detected as file paths
+    run is_file_path "https://github.com/eyaltoledano/claude-task-master"
+    [ "$status" -ne 0 ]
+    
+    # HTTP URLs should not be detected as file paths
+    run is_file_path "http://example.com/page"
+    [ "$status" -ne 0 ]
+    
+    # FTP URLs should not be detected as file paths
+    run is_file_path "ftp://files.example.com/data"
+    [ "$status" -ne 0 ]
+    
+    # SSH URLs should not be detected as file paths
+    run is_file_path "ssh://user@host/path"
+    [ "$status" -ne 0 ]
+}
+
+@test "is_file_path correctly handles prompts with URLs" {
+    # Long prompts containing URLs should not be detected as file paths
+    long_prompt_with_url="Make me a plan how to integrate this tool in a fully automated software development cycle https://github.com/eyaltoledano/claude-task-master where each of the tasks that are being split by Taskmaster can be distributed among multiple agents in parallel"
+    run is_file_path "$long_prompt_with_url"
+    [ "$status" -ne 0 ]
+    
+    # Short prompts with URLs should not be detected as file paths
+    run is_file_path "Check out https://example.com for details"
+    [ "$status" -ne 0 ]
+    
+    # Prompts with multiple URLs should not be detected as file paths
+    run is_file_path "Compare https://site1.com and https://site2.com"
+    [ "$status" -ne 0 ]
+}
+
 # Tests for edge cases in timestamp generation
 @test "generate_timestamp format consistency" {
     # Call multiple times and verify format is consistent
