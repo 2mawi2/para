@@ -46,30 +46,30 @@ cleanup_old_backups() {
   if [ "$backup_count" -gt "$MAX_BACKUP_SESSIONS" ]; then
     # Create temporary file to store backup info sorted by cancellation timestamp
     temp_list=$(mktemp)
-    
+
     # Extract timestamp and file path for each backup
     for backup_file in "$BACKUP_DIR"/*.backup; do
       [ -f "$backup_file" ] || continue
-      
+
       # Load backup to get timestamp
       # shellcheck source=/dev/null
       . "$backup_file"
-      
+
       # Convert timestamp to sortable format and store with file path
       timestamp_sort=$(echo "$timestamp" | sed 's/[-: ]//g')
-      echo "$timestamp_sort|$backup_file" >> "$temp_list"
+      echo "$timestamp_sort|$backup_file" >>"$temp_list"
     done
-    
+
     # Sort by timestamp (oldest first) and get files to remove
-    total_backups=$(wc -l < "$temp_list")
+    total_backups=$(wc -l <"$temp_list")
     files_to_remove=$((total_backups - MAX_BACKUP_SESSIONS))
-    
+
     if [ "$files_to_remove" -gt 0 ]; then
       old_backups=$(sort "$temp_list" | head -n "$files_to_remove" | cut -d'|' -f2)
     else
       old_backups=""
     fi
-    
+
     # Remove backup files and their corresponding branches
     for backup_file in $old_backups; do
       if [ -f "$backup_file" ]; then
@@ -84,7 +84,7 @@ cleanup_old_backups() {
         git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
       fi
     done
-    
+
     # Cleanup temporary file
     rm -f "$temp_list"
   fi
