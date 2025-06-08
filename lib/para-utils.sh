@@ -251,9 +251,25 @@ is_file_path() {
   # Check if it's an existing file
   [ -f "$path" ] && return 0
 
+  # Check if it looks like a URL scheme - if so, it's NOT a file path
+  case "$path" in
+  http://* | https://* | ftp://* | ftps://* | ssh://* | git://* | file://*) return 1 ;;
+  esac
+
   # Check if it looks like a file path (contains / or ends with common extensions)
   case "$path" in
-  */*) return 0 ;;                            # Contains path separator
+  */*)
+    # Contains path separator, but make sure it's not just text with URLs
+    # If it contains spaces and URLs, it's likely a prompt, not a file path
+    case "$path" in
+    *\ *http://* | *\ *https://* | *\ *ftp://* | *\ *ssh://*)
+      return 1
+      ;; # Contains spaces and URLs - likely a prompt
+    *)
+      return 0
+      ;; # Looks like a real file path
+    esac
+    ;;
   *.txt | *.md | *.rst | *.org) return 0 ;;   # Common text file extensions
   *.prompt | *.tmpl | *.template) return 0 ;; # Prompt/template extensions
   *) return 1 ;;                              # Doesn't look like a file path
