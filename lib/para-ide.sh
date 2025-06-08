@@ -46,7 +46,7 @@ launch_multi_ide() {
   # Launch each instance with a brief delay to avoid overwhelming the system
   for session_id in $session_ids; do
     # Get worktree directory for this session
-    get_session_info "$session_id"
+    ensure_session_loaded "$session_id"
 
     echo "  → launching instance for session $session_id"
     # shellcheck disable=SC2153
@@ -450,7 +450,7 @@ close_gui_ide_window() {
   fi
 
   # Get session info to find worktree path
-  get_session_info "$session_id"
+  ensure_session_loaded "$session_id"
   worktree_basename=$(basename "$WORKTREE_DIR")
 
   # Determine which IDE app to close based on saved launch information

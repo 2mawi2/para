@@ -1,15 +1,19 @@
 #!/usr/bin/env sh
 # Session management for para
 
-# Load session information from state file
-get_session_info() {
-  SESSION_ID="$1"
+# Ensure session is loaded and validate state
+ensure_session_loaded() {
+  session_id="$1"
+
+  # Validate session_id is provided
+  [ -n "$session_id" ] || die "session ID is required"
 
   # Assert paths are initialized before using them
   assert_paths_initialized
 
-  STATE_FILE="$STATE_DIR/$SESSION_ID.state"
-  [ -f "$STATE_FILE" ] || die "session '$SESSION_ID' not found"
+  # Check if session state file exists
+  STATE_FILE="$STATE_DIR/$session_id.state"
+  [ -f "$STATE_FILE" ] || die "session '$session_id' not found"
 
   # Read state file with backward compatibility
   STATE_CONTENT=$(cat "$STATE_FILE")
@@ -24,6 +28,15 @@ get_session_info() {
     MERGE_MODE="squash"
     ;;
   esac
+
+  # Set SESSION_ID global for compatibility
+  SESSION_ID="$session_id"
+}
+
+# Load session information from state file
+get_session_info() {
+  SESSION_ID="$1"
+  ensure_session_loaded "$SESSION_ID"
 }
 
 # Save session state to file
@@ -55,7 +68,7 @@ update_session_merge_mode() {
   session_id="$1"
   merge_mode="$2"
 
-  get_session_info "$session_id"
+  ensure_session_loaded "$session_id"
   save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$merge_mode"
 }
 
@@ -127,16 +140,8 @@ auto_detect_session() {
           [ -f "$state_file" ] || continue
           SESSION_ID=$(basename "$state_file" .state)
 
-          # Use backward-compatible state reading
-          STATE_CONTENT=$(cat "$state_file")
-          case "$STATE_CONTENT" in
-          *"|"*"|"*"|"*)
-            IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH MERGE_MODE <"$state_file"
-            ;;
-          *)
-            IFS='|' read -r TEMP_BRANCH WORKTREE_DIR BASE_BRANCH <"$state_file"
-            ;;
-          esac
+          # Use centralized session loading
+          ensure_session_loaded "$SESSION_ID"
 
           # Check if current directory is within this session's worktree
           # Normalize both paths to handle ./ prefixes
@@ -192,8 +197,8 @@ list_sessions() {
       SESSIONS_FOUND=1
       session_id=$(basename "$state_file" .state)
 
-      # Use get_session_info for backward compatibility
-      get_session_info "$session_id"
+      # Use centralized session loading
+      ensure_session_loaded "$session_id"
 
       # Make session display more user-friendly
       if echo "$session_id" | grep -q "^pc-[0-9]\{8\}-[0-9]\{6\}$"; then
@@ -250,7 +255,7 @@ list_sessions() {
         for state_file in "$STATE_DIR"/*.state; do
           [ -f "$state_file" ] || continue
           session_id=$(basename "$state_file" .state)
-          get_session_info "$session_id"
+          ensure_session_loaded "$session_id"
           if [ "$WORKTREE_DIR" = "$worktree_dir" ]; then
             found_in_state=true
             break
@@ -459,7 +464,7 @@ clean_all_sessions() {
     session_id=$(basename "$state_file" .state)
 
     # Use get_session_info for backward compatibility
-    get_session_info "$session_id"
+    ensure_session_loaded "$session_id"
 
     echo "  → cleaning session $session_id"
 
@@ -539,7 +544,7 @@ discover_all_sessions() {
         for state_file in "$STATE_DIR"/*.state; do
           [ -f "$state_file" ] || continue
           session_id=$(basename "$state_file" .state)
-          get_session_info "$session_id"
+          ensure_session_loaded "$session_id"
           if [ "$WORKTREE_DIR" = "$worktree_dir" ]; then
             found_in_state=true
             break
@@ -567,7 +572,7 @@ enhanced_resume() {
     # Specific session requested
     if session_exists "$target_session"; then
       # Session has state file - use normal resume
-      get_session_info "$target_session"
+      ensure_session_loaded "$target_session"
       [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $target_session"
 
       # Load initial prompt if it exists for this session
@@ -616,7 +621,7 @@ enhanced_resume() {
       if [ "$total_active" -gt 0 ]; then
         echo "Active sessions (with full para state):"
         for session_id in $active_sessions; do
-          get_session_info "$session_id"
+          ensure_session_loaded "$session_id"
           echo "  → $session_id (Branch: $TEMP_BRANCH)"
         done
         echo ""
@@ -755,7 +760,7 @@ create_new_multi_session() {
 
   # Update launch method for all sessions with proper wrapper information
   for session_id in $SESSION_IDS; do
-    get_session_info "$session_id"
+    ensure_session_loaded "$session_id"
     save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "$launch_method" "$launch_ide" "$wrapper_ide"
   done
 
