@@ -1,0 +1,273 @@
+use clap::{Parser, Subcommand, Args, ValueEnum};
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(name = "para")]
+#[command(about = "Parallel IDE Workflow Helper")]
+#[command(version, long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Create session with optional name
+    Start(StartArgs),
+    /// Start Claude Code session with prompt
+    Dispatch(DispatchArgs),
+    /// Squash all changes into single commit
+    Finish(FinishArgs),
+    /// Squash commits and merge into base branch
+    Integrate(IntegrateArgs),
+    /// Cancel session (moves to archive)
+    Cancel(CancelArgs),
+    /// Remove all active sessions
+    Clean(CleanArgs),
+    /// List active sessions
+    #[command(alias = "ls")]
+    List(ListArgs),
+    /// Resume session in IDE
+    Resume(ResumeArgs),
+    /// Recover cancelled session from archive
+    Recover(RecoverArgs),
+    /// Complete merge after resolving conflicts
+    Continue,
+    /// Setup configuration
+    Config(ConfigArgs),
+    /// Generate shell completion script
+    Completion(CompletionArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct StartArgs {
+    /// Session name (optional, generates friendly name if not provided)
+    pub name: Option<String>,
+    
+    /// Skip IDE permission warnings (dangerous)
+    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
+    pub dangerously_skip_permissions: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct DispatchArgs {
+    /// Session name or prompt text
+    pub name_or_prompt: Option<String>,
+    
+    /// Additional prompt text (when first arg is session name)
+    pub prompt: Option<String>,
+    
+    /// Read prompt from file
+    #[arg(long, short = 'f', help = "Read prompt from specified file")]
+    pub file: Option<PathBuf>,
+    
+    /// Skip IDE permission warnings (dangerous)
+    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
+    pub dangerously_skip_permissions: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct FinishArgs {
+    /// Commit message
+    pub message: String,
+    
+    /// Custom branch name after finishing
+    #[arg(long, help = "Rename feature branch to specified name")]
+    pub branch: Option<String>,
+    
+    /// Automatically integrate into base branch
+    #[arg(long, short = 'i', help = "Automatically integrate into base branch")]
+    pub integrate: bool,
+    
+    /// Session ID (optional, auto-detects if not provided)
+    pub session: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct IntegrateArgs {
+    /// Commit message for the integration
+    pub message: String,
+    
+    /// Session ID (optional, auto-detects if not provided)
+    pub session: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct CancelArgs {
+    /// Session ID (optional, auto-detects if not provided)
+    pub session: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct CleanArgs {
+    /// Also clean backup archives
+    #[arg(long, help = "Also remove archived sessions")]
+    pub backups: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ListArgs {
+    /// Show additional session details
+    #[arg(long, short = 'v', help = "Show verbose session information")]
+    pub verbose: bool,
+    
+    /// Show archived sessions
+    #[arg(long, short = 'a', help = "Show archived sessions")]
+    pub archived: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ResumeArgs {
+    /// Session ID to resume (optional, shows list if not provided)
+    pub session: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct RecoverArgs {
+    /// Session ID to recover from archive (optional, shows list if not provided)
+    pub session: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigArgs {
+    #[command(subcommand)]
+    pub command: Option<ConfigCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Interactive configuration wizard
+    Setup,
+    /// Auto-detect and configure IDE
+    Auto,
+    /// Show current configuration
+    Show,
+    /// Edit configuration file
+    Edit,
+}
+
+#[derive(Args, Debug)]
+pub struct CompletionArgs {
+    /// Shell to generate completion for
+    #[arg(value_enum)]
+    pub shell: Shell,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+}
+
+impl StartArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        if let Some(ref name) = self.name {
+            validate_session_name(name)?;
+        }
+        Ok(())
+    }
+}
+
+impl DispatchArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        match (&self.name_or_prompt, &self.prompt, &self.file) {
+            (None, None, None) => {
+                Err(crate::utils::ParaError::invalid_args("Must provide either a prompt, session name, or file"))
+            }
+            _ => Ok(())
+        }
+    }
+}
+
+impl FinishArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        if self.message.trim().is_empty() {
+            return Err(crate::utils::ParaError::invalid_args("Commit message cannot be empty"));
+        }
+        
+        if let Some(ref branch) = self.branch {
+            validate_branch_name(branch)?;
+        }
+        
+        Ok(())
+    }
+}
+
+impl Commands {
+    #[allow(dead_code)]
+    pub fn examples(&self) -> &'static str {
+        match self {
+            Commands::Start(_) => {
+                "Examples:\n  para start\n  para start my-feature\n  para start --dangerously-skip-permissions feature-auth"
+            }
+            Commands::Dispatch(_) => {
+                "Examples:\n  para dispatch \"Add user authentication\"\n  para dispatch --file prompt.txt\n  para dispatch auth-feature --file requirements.md"
+            }
+            Commands::Finish(_) => {
+                "Examples:\n  para finish \"Implement user auth\"\n  para finish \"Add login form\" --branch feature-login\n  para finish \"Complete auth\" --integrate"
+            }
+            Commands::Integrate(_) => {
+                "Examples:\n  para integrate \"Merge auth feature\"\n  para integrate \"Add user system\" session-123"
+            }
+            Commands::Cancel(_) => {
+                "Examples:\n  para cancel\n  para cancel session-123"
+            }
+            Commands::Clean(_) => {
+                "Examples:\n  para clean\n  para clean --backups"
+            }
+            Commands::List(_) => {
+                "Examples:\n  para list\n  para ls -v\n  para list --archived"
+            }
+            Commands::Resume(_) => {
+                "Examples:\n  para resume\n  para resume session-123"
+            }
+            Commands::Recover(_) => {
+                "Examples:\n  para recover\n  para recover old-session"
+            }
+            Commands::Continue => {
+                "Examples:\n  para continue"
+            }
+            Commands::Config(_) => {
+                "Examples:\n  para config setup\n  para config auto\n  para config show"
+            }
+            Commands::Completion(_) => {
+                "Examples:\n  para completion bash\n  para completion zsh > ~/.zsh_completions/_para"
+            }
+        }
+    }
+}
+
+pub fn validate_session_name(name: &str) -> crate::utils::Result<()> {
+    if name.is_empty() {
+        return Err(crate::utils::ParaError::invalid_args("Session name cannot be empty"));
+    }
+    
+    if name.len() > 50 {
+        return Err(crate::utils::ParaError::invalid_args("Session name too long (max 50 characters)"));
+    }
+    
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(crate::utils::ParaError::invalid_args("Session name can only contain alphanumeric characters, hyphens, and underscores"));
+    }
+    
+    Ok(())
+}
+
+pub fn validate_branch_name(name: &str) -> crate::utils::Result<()> {
+    if name.is_empty() {
+        return Err(crate::utils::ParaError::invalid_args("Branch name cannot be empty"));
+    }
+    
+    if name.starts_with('-') || name.ends_with('-') {
+        return Err(crate::utils::ParaError::invalid_args("Branch name cannot start or end with hyphen"));
+    }
+    
+    if name.contains("..") || name.contains("//") {
+        return Err(crate::utils::ParaError::invalid_args("Branch name contains invalid character sequence"));
+    }
+    
+    Ok(())
+}

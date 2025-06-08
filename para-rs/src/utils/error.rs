@@ -151,6 +151,12 @@ impl ParaError {
             message: message.into(),
         }
     }
+
+    pub fn not_implemented(feature: impl Into<String>) -> Self {
+        Self::InvalidArgs {
+            message: format!("{} not implemented yet", feature.into()),
+        }
+    }
 }
 
 impl From<PathBuf> for ParaError {
