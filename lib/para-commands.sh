@@ -21,7 +21,7 @@ parse_common_args() {
         shift
         ;;
       -*)
-        die "unknown option: $1"
+        die_invalid_args "unknown option: $1"
         ;;
       *)
         if [ -z "$positional_args" ]; then
@@ -43,7 +43,7 @@ parse_common_args() {
         ;;
       --file | -f)
         if [ "$#" -lt 2 ]; then
-          die "--file requires a file path"
+          die_invalid_args "--file requires a file path"
         fi
         file_path="$2"
         shift 2
@@ -53,7 +53,7 @@ parse_common_args() {
         shift
         ;;
       -*)
-        die "unknown option: $1"
+        die_invalid_args "unknown option: $1"
         ;;
       *)
         if [ -z "$positional_args" ]; then
@@ -92,7 +92,7 @@ handle_start_command() {
     SESSION_NAME="$positional_args"
     validate_session_name "$SESSION_NAME"
   elif [ "$arg_count" -gt 1 ]; then
-    die "too many arguments"
+    die_invalid_args "too many arguments"
   fi
 
   # Session creation logic - no initial prompt
@@ -103,7 +103,7 @@ handle_start_command() {
 handle_dispatch_command() {
   # Validate that Claude Code is configured (wrapper mode is also supported)
   if [ "$IDE_NAME" != "claude" ]; then
-    die "dispatch command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
+    die_config_invalid "dispatch command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
   fi
 
   shift # Remove 'dispatch'
@@ -140,20 +140,20 @@ handle_dispatch_command() {
 
     validate_session_name "$SESSION_NAME"
   elif [ "$arg_count" -gt 2 ]; then
-    die "too many arguments"
+    die_invalid_args "too many arguments"
   fi
 
   # Handle file input if provided
   if [ -n "$FILE_PATH" ]; then
     INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
     if [ -z "$INITIAL_PROMPT" ]; then
-      die "file is empty: $FILE_PATH"
+      die_file_not_found "file is empty: $FILE_PATH"
     fi
   fi
 
   # Validate required arguments
   if [ -z "$INITIAL_PROMPT" ]; then
-    die "dispatch requires a prompt text or file path"
+    die_invalid_args "dispatch requires a prompt text or file path"
   fi
 
   # Session creation logic with initial prompt
@@ -164,7 +164,7 @@ handle_dispatch_command() {
 handle_dispatch_multi_command() {
   # Validate that Claude Code is configured
   if [ "$IDE_NAME" != "claude" ]; then
-    die "dispatch-multi command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
+    die_config_invalid "dispatch-multi command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
   fi
 
   INSTANCE_COUNT=""
@@ -186,7 +186,7 @@ handle_dispatch_multi_command() {
       ;;
     --group)
       if [ "$#" -lt 2 ]; then
-        die "--group requires a group name"
+        die_invalid_args "--group requires a group name"
       fi
       SESSION_BASE_NAME="$2"
       validate_session_name "$SESSION_BASE_NAME"
@@ -198,7 +198,7 @@ handle_dispatch_multi_command() {
       ;;
     --file | -f)
       if [ "$#" -lt 2 ]; then
-        die "--file requires a file path"
+        die_invalid_args "--file requires a file path"
       fi
       FILE_PATH="$2"
       shift 2
@@ -208,7 +208,7 @@ handle_dispatch_multi_command() {
       shift
       ;;
     -*)
-      die "unknown option: $1"
+      die_invalid_args "unknown option: $1"
       ;;
     *)
       # First positional argument should be instance count
@@ -225,7 +225,7 @@ handle_dispatch_multi_command() {
         fi
         shift
       else
-        die "too many arguments"
+        die_invalid_args "too many arguments"
       fi
       ;;
     esac
@@ -235,27 +235,27 @@ handle_dispatch_multi_command() {
   if [ -n "$FILE_PATH" ]; then
     INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
     if [ -z "$INITIAL_PROMPT" ]; then
-      die "file is empty: $FILE_PATH"
+      die_file_not_found "file is empty: $FILE_PATH"
     fi
   fi
 
   # Validate required arguments
   if [ -z "$INSTANCE_COUNT" ]; then
-    die "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"' or 'para dispatch-multi N --file path'"
+    die_invalid_args "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"' or 'para dispatch-multi N --file path'"
   fi
 
   if [ -z "$INITIAL_PROMPT" ]; then
-    die "dispatch-multi requires a prompt text or file path"
+    die_invalid_args "dispatch-multi requires a prompt text or file path"
   fi
 
   # Validate instance count
   if ! echo "$INSTANCE_COUNT" | grep -q "^[1-9][0-9]*$"; then
-    die "instance count must be a positive integer"
+    die_invalid_args "instance count must be a positive integer"
   fi
 
   # Reasonable limit to prevent system overload
   if [ "$INSTANCE_COUNT" -gt 10 ]; then
-    die "instance count limited to 10 to prevent system overload"
+    die_invalid_args "instance count limited to 10 to prevent system overload"
   fi
 
   # Multi-session creation logic with initial prompt
@@ -266,7 +266,7 @@ handle_dispatch_multi_command() {
 handle_integrate_command() {
   # Simply delegate to finish command with --integrate flag added
   if [ "$#" -eq 1 ]; then
-    die "integrate requires a commit message"
+    die_invalid_args "integrate requires a commit message"
   fi
 
   # Replace 'integrate' with 'finish' and add --integrate flag
@@ -284,7 +284,7 @@ handle_finish_command() {
 
   # Parse arguments supporting --branch and --integrate flags and optional session_id
   if [ "$#" -eq 1 ]; then
-    die "finish requires a commit message"
+    die_invalid_args "finish requires a commit message"
   else
     # Parse all arguments to handle flags and optional session_id in any order
     while [ "$#" -gt 1 ]; do
@@ -296,7 +296,7 @@ handle_finish_command() {
         ;;
       --branch)
         if [ "$#" -lt 3 ]; then
-          die "--branch requires a branch name"
+          die_invalid_args "--branch requires a branch name"
         fi
         TARGET_BRANCH_NAME="$3"
         BRANCH_FLAG_PROVIDED=true
@@ -307,7 +307,7 @@ handle_finish_command() {
         shift
         ;;
       -*)
-        die "unknown option: $2"
+        die_invalid_args "unknown option: $2"
         ;;
       *)
         # Could be session_id or commit message
@@ -323,7 +323,7 @@ handle_finish_command() {
           # Second positional argument must be commit message
           COMMIT_MSG="$2"
         else
-          die "too many arguments"
+          die_invalid_args "too many arguments"
         fi
         shift
         ;;
@@ -332,7 +332,7 @@ handle_finish_command() {
 
     # Validate that we have a commit message
     if [ -z "$COMMIT_MSG" ]; then
-      die "finish requires a commit message"
+      die_invalid_args "finish requires a commit message"
     fi
 
     # Auto-detect session if not provided
@@ -346,8 +346,8 @@ handle_finish_command() {
     fi
   fi
 
-  ensure_session_loaded "$SESSION_ID"
-  [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
+  get_session_info "$SESSION_ID"
+  [ -d "$WORKTREE_DIR" ] || die_session_not_found "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
   echo "▶ finishing session $SESSION_ID"
   if finish_session "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$COMMIT_MSG" "$TARGET_BRANCH_NAME" "$INTEGRATE"; then
@@ -406,13 +406,13 @@ handle_cancel_command() {
       ;;
     --group)
       if [ "$#" -lt 3 ]; then
-        die "--group requires a group name"
+        die_invalid_args "--group requires a group name"
       fi
       GROUP_NAME="$3"
       shift 2
       ;;
     -*)
-      die "unknown option: $2"
+      die_invalid_args "unknown option: $2"
       ;;
     *)
       # Positional argument should be session ID
@@ -420,7 +420,7 @@ handle_cancel_command() {
         SESSION_ID="$2"
         shift
       else
-        die "too many arguments"
+        die_invalid_args "too many arguments"
       fi
       ;;
     esac
@@ -432,7 +432,7 @@ handle_cancel_command() {
     GROUP_SESSIONS=$(get_multi_session_group "$GROUP_NAME")
 
     if [ -z "$GROUP_SESSIONS" ]; then
-      die "no multi-instance group found with name '$GROUP_NAME'"
+      die_session_not_found "no multi-instance group found with name '$GROUP_NAME'"
     fi
 
     # Count sessions
@@ -497,18 +497,18 @@ handle_cancel_command() {
 # Handle continue command for conflict resolution
 handle_continue_command() {
   if [ "$#" -gt 1 ]; then
-    die "continue command takes no arguments"
+    die_invalid_args "continue command takes no arguments"
   fi
 
   # Load integration state
   if ! load_integration_state; then
-    die "no integration in progress - nothing to continue"
+    die_repo_state "no integration in progress - nothing to continue"
   fi
 
   # Check if we're in a rebase state
   if [ ! -d "$REPO_ROOT/.git/rebase-merge" ] && [ ! -d "$REPO_ROOT/.git/rebase-apply" ]; then
     clear_integration_state
-    die "no rebase conflicts to resolve"
+    die_repo_state "no rebase conflicts to resolve"
   fi
 
   # Check for unresolved conflicts
@@ -529,7 +529,7 @@ handle_continue_command() {
 
     # Get the current branch (should be the temporary rebase branch)
     current_branch=$(git -C "$REPO_ROOT" symbolic-ref --short HEAD)
-    git -C "$REPO_ROOT" checkout "$BASE_BRANCH" >/dev/null 2>&1 || die "failed to checkout $BASE_BRANCH"
+    git -C "$REPO_ROOT" checkout "$BASE_BRANCH" >/dev/null 2>&1 || die_git_operation "failed to checkout $BASE_BRANCH"
 
     if git -C "$REPO_ROOT" merge --ff-only "$current_branch"; then
       echo "✅ conflicts resolved and rebase completed"
@@ -566,7 +566,7 @@ handle_resume_command() {
     SESSION_ID="$2"
     enhanced_resume "$SESSION_ID"
   else
-    die "resume takes optionally a session name"
+    die_invalid_args "resume takes optionally a session name"
   fi
 }
 
@@ -579,7 +579,7 @@ handle_recover_command() {
     SESSION_ID="$2"
     recover_cancelled_session "$SESSION_ID"
   else
-    die "recover takes optionally a session name"
+    die_invalid_args "recover takes optionally a session name"
   fi
 }
 

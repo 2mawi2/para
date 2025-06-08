@@ -29,7 +29,7 @@ launch_ide() {
     launch_vscode "$worktree_dir"
     ;;
   *)
-    die "unsupported IDE: $ide_name"
+    die_ide_not_available "unsupported IDE: $ide_name"
     ;;
   esac
 }
