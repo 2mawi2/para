@@ -163,6 +163,8 @@ mod tests {
     #[test]
     fn test_ide_detection() {
         let available = get_available_ides();
-        assert!(!available.is_empty() || true); // Allow empty for CI environments
+        // Note: This test allows empty IDE lists for CI environments
+        // where IDEs might not be installed
+        println!("Available IDEs: {:?}", available);
     }
 }
