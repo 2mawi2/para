@@ -346,7 +346,7 @@ handle_finish_command() {
     fi
   fi
 
-  get_session_info "$SESSION_ID"
+  ensure_session_loaded "$SESSION_ID"
   [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $SESSION_ID"
 
   echo "▶ finishing session $SESSION_ID"
@@ -448,7 +448,7 @@ handle_cancel_command() {
       echo "  → cancelling session $session_id"
 
       # Get session info first (needed by close function)
-      get_session_info "$session_id"
+      ensure_session_loaded "$session_id"
 
       # Force close IDE/terminal window since session is being cancelled
       # Capture and display close results for visibility
@@ -471,7 +471,7 @@ handle_cancel_command() {
   fi
 
   # Optimize: Get session info and immediately proceed with removal
-  get_session_info "$SESSION_ID"
+  ensure_session_loaded "$SESSION_ID"
 
   # Optimize: Reduce verbose output during operations for speed
   echo "▶ aborting session $SESSION_ID"
