@@ -1,0 +1,65 @@
+# Para-rs justfile - Rust implementation testing
+
+# Run legacy bats tests against Rust implementation
+test-legacy:
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "▶ Building Rust binary..."
+    cargo build
+    
+    RUST_BINARY_PATH="$(pwd)/target/debug/para"
+    
+    if [ ! -f "$RUST_BINARY_PATH" ]; then
+        echo "❌ Rust binary not found at: $RUST_BINARY_PATH"
+        exit 1
+    fi
+    
+    echo "▶ Setting up test environment..."
+    
+    # Backup original para.sh if it exists
+    if [ -f "para.sh" ]; then
+        cp para.sh para.sh.bak
+    fi
+    
+    # Create shim that calls the Rust binary
+    echo "▶ Creating Rust binary shim..."
+    cat > para.sh << EOF
+    #!/bin/sh
+    exec "$RUST_BINARY_PATH" "\$@"
+    EOF
+    chmod +x para.sh
+    
+    # Function to cleanup and restore original para.sh
+    cleanup() {
+        echo "▶ Restoring original para.sh..."
+        if [ -f "para.sh.bak" ]; then
+            mv para.sh.bak para.sh
+        else
+            rm -f para.sh
+        fi
+    }
+    
+    # Trap cleanup function to ensure restoration
+    trap cleanup EXIT
+    
+    echo "▶ Running legacy bats tests against Rust binary..."
+    echo "  Binary: $RUST_BINARY_PATH"
+    echo ""
+    
+    # Run the legacy bats tests
+    if command -v bats >/dev/null 2>&1; then
+        # Run all bats tests from legacytests directory
+        bats legacytests/test_*.bats 2>/dev/null || test_result=$?
+    else
+        echo "❌ bats not found. Please install bats-core:"
+        echo "  macOS: brew install bats-core"
+        echo "  Ubuntu: apt-get install bats"
+        exit 1
+    fi
+    
+    echo ""
+    echo "✅ Legacy test run completed"
+    
+    # Exit with the test result if there was one
+    exit ${test_result:-0}
