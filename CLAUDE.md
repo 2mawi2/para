@@ -64,7 +64,6 @@ lib/
 - **Context-Aware**: Auto-detects current session from working directory
 - **Auto-Staging**: Automatically stages all changes during finish operations
 - **Recovery System**: Session snapshots for later recovery with `para recover`
-- **Multi-Instance Support**: `para dispatch-multi` for parallel AI development
 - **File Input Support**: `para dispatch --file prompt.txt` for complex prompts from files
 - **IDE Wrapper Mode**: Claude Code can run inside VS Code/Cursor terminals
 
@@ -118,10 +117,6 @@ para dispatch -f ./complex-task.txt
 # Named session with file input
 para dispatch auth-feature --file auth-spec.md
 
-# Multiple parallel sessions for approach comparison
-para dispatch-multi 3 "Compare OAuth vs JWT implementation"
-para dispatch-multi 3 --file auth-comparison.prompt
-para dispatch-multi 5 --group experiments --file requirements.txt
 ```
 
 ## File Structure Notes

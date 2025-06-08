@@ -562,7 +562,7 @@ on:
         required: true
         type: string
       instance:
-        description: 'Instance number (for multi-instance sessions)'
+        description: 'Instance number (for session recovery)'
         required: false
         type: string
         default: '1'
@@ -729,7 +729,7 @@ para auth setup-github --registry myregistry.com --tag-prefix para-auth
 ### Phase 2: Workflow Integration
 - [ ] Create prompt files for common tasks
 - [ ] Configure repository secrets (if using private registry)
-- [ ] Test multi-instance sessions
+- [ ] Test development sessions
 - [ ] Verify session recovery functionality
 - [ ] Train team on new workflows
 

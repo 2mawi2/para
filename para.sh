@@ -86,10 +86,6 @@ handle_command() {
     handle_dispatch_command "$@"
     ;;
 
-  dispatch-multi)
-    handle_dispatch_multi_command "$@"
-    ;;
-
   finish)
     handle_finish_command "$@"
     ;;
@@ -126,7 +122,7 @@ handle_command() {
     handle_config_command "$@"
     ;;
 
-  completion | _completion_sessions | _completion_groups | _completion_branches)
+  completion | _completion_sessions | _completion_branches)
     handle_completion_command "$@"
     ;;
 

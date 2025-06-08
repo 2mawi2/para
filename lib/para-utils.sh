@@ -10,8 +10,6 @@ Commands:
 para start [name]                    # create session with optional name
 para dispatch "prompt"               # start Claude Code session with prompt
 para dispatch --file path            # start Claude Code session with prompt from file
-para dispatch-multi N "prompt"       # start N Claude Code instances with same prompt
-para dispatch-multi N --file path    # start N Claude Code instances with prompt from file
 para finish "message"                # squash all changes into single commit
 para finish "message" --branch <n>   # squash commits + custom branch name
 para finish "message" --integrate    # squash commits + merge into base branch
@@ -19,7 +17,6 @@ para finish "msg" -i --branch <n>    # combine integration with custom branch na
 para list | ls                       # list active sessions
 para resume [session]                # resume session in IDE
 para cancel [session]                # cancel session
-para cancel --group <name>           # cancel all sessions in multi-instance group
 para clean                           # remove all sessions
 para continue                        # complete merge after resolving conflicts
 para recover [session]               # recover cancelled session from backup
@@ -32,17 +29,13 @@ para start feature-auth              # create named session
 para dispatch "Add user auth"        # Claude Code session with prompt
 para dispatch --file prompt.txt     # Claude Code session with prompt from file
 para dispatch -f ./auth.prompt       # Claude Code session with prompt from file (short form)
-para dispatch-multi 3 "Compare approaches"      # 3 Claude instances with same prompt
-para dispatch-multi 3 --file prompt.txt         # 3 Claude instances with prompt from file
-para dispatch-multi 5 --group task "Refactor"   # 5 instances with custom group name
 para start --dangerously-skip-permissions name  # skip IDE permission warnings
 para finish "implement user auth"    # squash session changes
 para finish "add feature" --branch feature-xyz  # custom branch name
 para finish "hotfix critical bug" --integrate   # integrate immediately into base branch
 para finish "new API" -i             # shorthand for --integrate
-para list                            # see active sessions (shows multi-instance groups)
+para list                            # see active sessions
 para cancel                          # cancel current session
-para cancel --group task             # cancel all sessions in 'task' group
 para clean                           # remove all sessions
 para resume session-name             # resume specific session
 para recover session-name            # recover cancelled session from backup
@@ -152,7 +145,7 @@ assert_paths_initialized() {
 is_known_command() {
   cmd="$1"
   case "$cmd" in
-  list | ls | clean | --help | -h | start | dispatch | dispatch-multi | finish | cancel | abort | resume | continue | recover | config | completion)
+  list | ls | clean | --help | -h | start | dispatch | finish | cancel | abort | resume | continue | recover | config | completion)
     return 0
     ;;
   *)
@@ -386,29 +379,6 @@ get_session_names() {
   done
 }
 
-# Get list of multi-instance group names for completion
-get_group_names() {
-  if [ ! -d "$STATE_DIR" ]; then
-    return 0
-  fi
-
-  for state_file in "$STATE_DIR"/*.state; do
-    [ -f "$state_file" ] || continue
-    session_id=$(basename "$state_file" .state)
-
-    # Check for multi-session metadata
-    meta_file="$STATE_DIR/$session_id.meta"
-    if [ -f "$meta_file" ]; then
-      # Extract group name from metadata
-      while IFS='=' read -r key value; do
-        case "$key" in
-        GROUP_NAME) echo "$value" ;;
-        esac
-      done <"$meta_file"
-    fi
-  done | sort -u
-}
-
 # Get list of local branches for completion
 get_branch_names() {
   git branch --format='%(refname:short)' 2>/dev/null | grep -v '^pc/' || true
@@ -425,7 +395,7 @@ _para_completion() {
     
     # Complete first argument (commands)
     if [[ ${COMP_CWORD} == 1 ]]; then
-        opts="start dispatch dispatch-multi finish cancel abort clean list ls resume config --help -h --version -v"
+        opts="start dispatch finish cancel abort clean list ls resume config --help -h --version -v"
         COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
         return 0
     fi
@@ -433,18 +403,11 @@ _para_completion() {
     # Complete based on command
     case "${COMP_WORDS[1]}" in
         cancel|abort)
-            case "$prev" in
-                --group)
-                    # Complete group names
-                    local groups=$(para _completion_groups 2>/dev/null)
-                    COMPREPLY=($(compgen -W "${groups}" -- ${cur}))
-                    ;;
-                cancel|abort)
-                    # Complete session names for direct cancel
-                    local sessions=$(para _completion_sessions 2>/dev/null)
-                    COMPREPLY=($(compgen -W "${sessions}" -- ${cur}))
-                    ;;
-            esac
+            # Complete session names for direct cancel
+            if [[ ${COMP_CWORD} == 2 ]]; then
+                local sessions=$(para _completion_sessions 2>/dev/null)
+                COMPREPLY=($(compgen -W "${sessions}" -- ${cur}))
+            fi
             ;;
         resume)
             # Complete session names
@@ -462,7 +425,7 @@ _para_completion() {
                     ;;
             esac
             ;;
-        dispatch|dispatch-multi)
+        dispatch)
             case "$prev" in
                 --file|-f)
                     # Complete file paths
@@ -494,7 +457,6 @@ _para_commands() {
     commands=(
         'start:create session with optional name'
         'dispatch:start Claude Code session with prompt'
-        'dispatch-multi:start multiple Claude Code instances'
         'finish:squash all changes into single commit'
         'cancel:cancel session'
         'abort:cancel session'
@@ -514,11 +476,7 @@ _para_commands() {
 _para_args() {
     case $words[2] in
         cancel|abort)
-            if [[ $words[CURRENT-1] == '--group' ]]; then
-                # Complete group names
-                local groups=(${(f)"$(para _completion_groups 2>/dev/null)"})
-                _describe 'groups' groups
-            elif [[ $CURRENT == 3 ]]; then
+            if [[ $CURRENT == 3 ]]; then
                 # Complete session names
                 local sessions=(${(f)"$(para _completion_sessions 2>/dev/null)"})
                 _describe 'sessions' sessions
@@ -538,7 +496,7 @@ _para_args() {
                 _describe 'branches' branches
             fi
             ;;
-        dispatch|dispatch-multi)
+        dispatch)
             if [[ $words[CURRENT-1] == '--file' || $words[CURRENT-1] == '-f' ]]; then
                 # Complete file paths
                 _files
@@ -558,7 +516,6 @@ generate_fish_completion() {
 # Complete commands
 complete -c para -f -n '__fish_use_subcommand' -a 'start' -d 'create session with optional name'
 complete -c para -f -n '__fish_use_subcommand' -a 'dispatch' -d 'start Claude Code session with prompt'
-complete -c para -f -n '__fish_use_subcommand' -a 'dispatch-multi' -d 'start multiple Claude Code instances'
 complete -c para -f -n '__fish_use_subcommand' -a 'finish' -d 'squash all changes into single commit'
 complete -c para -f -n '__fish_use_subcommand' -a 'cancel' -d 'cancel session'
 complete -c para -f -n '__fish_use_subcommand' -a 'abort' -d 'cancel session'
@@ -571,17 +528,14 @@ complete -c para -f -n '__fish_use_subcommand' -s h -l help -d 'show help'
 complete -c para -f -n '__fish_use_subcommand' -s v -l version -d 'show version'
 
 # Complete session names for cancel/abort and resume
-complete -c para -f -n '__fish_seen_subcommand_from cancel abort' -n 'not __fish_seen_argument -l group' -a '(para _completion_sessions 2>/dev/null)'
+complete -c para -f -n '__fish_seen_subcommand_from cancel abort' -a '(para _completion_sessions 2>/dev/null)'
 complete -c para -f -n '__fish_seen_subcommand_from resume' -a '(para _completion_sessions 2>/dev/null)'
-
-# Complete group names for cancel/abort --group
-complete -c para -f -n '__fish_seen_subcommand_from cancel abort' -s g -l group -a '(para _completion_groups 2>/dev/null)'
 
 # Complete branch names for finish --branch
 complete -c para -f -n '__fish_seen_subcommand_from finish' -s b -l branch -a '(para _completion_branches 2>/dev/null)'
 
-# Complete file paths for dispatch/dispatch-multi --file
-complete -c para -n '__fish_seen_subcommand_from dispatch dispatch-multi' -s f -l file -F
+# Complete file paths for dispatch --file
+complete -c para -n '__fish_seen_subcommand_from dispatch' -s f -l file -F
 EOF
 }
 

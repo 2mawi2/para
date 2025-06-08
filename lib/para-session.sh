@@ -77,7 +77,7 @@ remove_session_state() {
   session_id="$1"
 
   # Optimize: Use single rm command with multiple files for efficiency
-  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" "$STATE_DIR/$session_id.multi" "$STATE_DIR/$session_id.launch" 2>/dev/null || true
+  rm -f "$STATE_DIR/$session_id.state" "$STATE_DIR/$session_id.prompt" "$STATE_DIR/$session_id.launch" 2>/dev/null || true
 
   # Optimize: Only try to remove directory if it exists and might be empty
   # Use rmdir instead of more expensive directory checks
@@ -208,11 +208,6 @@ list_sessions() {
         display_name="$session_id"
       else
         display_name="$session_id (custom)"
-      fi
-
-      # Check if this is part of a multi-instance group
-      if load_multi_session_metadata "$session_id"; then
-        display_name="$display_name [Group: $GROUP_NAME, Instance: $INSTANCE_NUMBER/$TOTAL_INSTANCES]"
       fi
 
       echo "Session: $display_name"
@@ -354,95 +349,6 @@ create_session() {
   save_session_state "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$base_branch" "squash" "ide" "$ide_name" ""
 
   echo "$SESSION_ID"
-}
-
-# Create multiple sessions for multi-instance dispatch
-create_multi_session() {
-  session_base_name="$1"
-  instance_count="$2"
-  base_branch="$3"
-
-  # Generate group ID if no base name provided
-  if [ -z "$session_base_name" ]; then
-    session_base_name="multi-$(generate_timestamp)"
-  fi
-
-  # Create instances
-  instance_ids=""
-  i=1
-  while [ "$i" -le "$instance_count" ]; do
-    instance_name="${session_base_name}-${i}"
-    instance_id=$(create_session "$instance_name" "$base_branch")
-
-    # Save group metadata for this instance
-    save_multi_session_metadata "$instance_id" "$session_base_name" "$i" "$instance_count"
-
-    if [ "$i" -eq 1 ]; then
-      instance_ids="$instance_id"
-    else
-      instance_ids="$instance_ids $instance_id"
-    fi
-    i=$((i + 1))
-  done
-
-  echo "$instance_ids"
-}
-
-# Save multi-session group metadata
-save_multi_session_metadata() {
-  session_id="$1"
-  group_name="$2"
-  instance_number="$3"
-  total_instances="$4"
-
-  mkdir -p "$STATE_DIR"
-  echo "$group_name|$instance_number|$total_instances" >"$STATE_DIR/$session_id.multi"
-}
-
-# Load multi-session group metadata
-load_multi_session_metadata() {
-  session_id="$1"
-  multi_file="$STATE_DIR/$session_id.multi"
-
-  if [ -f "$multi_file" ]; then
-    IFS='|' read -r GROUP_NAME INSTANCE_NUMBER TOTAL_INSTANCES <"$multi_file"
-    return 0
-  else
-    return 1
-  fi
-}
-
-# Get all sessions in a multi-instance group
-get_multi_session_group() {
-  group_name="$1"
-
-  if [ ! -d "$STATE_DIR" ]; then
-    return 1
-  fi
-
-  group_sessions=""
-  for multi_file in "$STATE_DIR"/*.multi; do
-    [ -f "$multi_file" ] || continue
-
-    session_id=$(basename "$multi_file" .multi)
-    if load_multi_session_metadata "$session_id"; then
-      if [ "$GROUP_NAME" = "$group_name" ]; then
-        if [ -z "$group_sessions" ]; then
-          group_sessions="$session_id"
-        else
-          group_sessions="$group_sessions $session_id"
-        fi
-      fi
-    fi
-  done
-
-  echo "$group_sessions"
-}
-
-# Remove multi-session metadata
-remove_multi_session_metadata() {
-  session_id="$1"
-  rm -f "$STATE_DIR/$session_id.multi" 2>/dev/null || true
 }
 
 # Clean up all sessions
@@ -711,70 +617,4 @@ create_new_session() {
   echo "DEBUG: launch_ide completed" >&2
 
   echo "initialized session $SESSION_ID. Use 'para finish \"msg\"' to finish or 'para cancel' to cancel."
-}
-
-# Create new multi-instance session group
-create_new_multi_session() {
-  instance_count="$1"
-  session_base_name="$2"
-  initial_prompt="$3"
-  skip_permissions="${4:-false}"
-
-  # Determine base branch
-  if [ -z "$BASE_BRANCH" ]; then
-    BASE_BRANCH=$(get_current_branch)
-  fi
-
-  # Check for uncommitted changes and warn, but don't block
-  check_uncommitted_changes
-
-  # Generate group name if not provided
-  if [ -z "$session_base_name" ]; then
-    session_base_name="multi-$(generate_timestamp)"
-  fi
-
-  # Create multiple sessions
-  echo "▶ creating $instance_count instances for group '$session_base_name'..."
-  SESSION_IDS=$(create_multi_session "$session_base_name" "$instance_count" "$BASE_BRANCH")
-
-  # Store initial prompt for each session if provided
-  if [ -n "$initial_prompt" ]; then
-    for session_id in $SESSION_IDS; do
-      save_session_prompt "$session_id" "$initial_prompt"
-    done
-  fi
-
-  # Determine launch method and update all sessions
-  ide_name="$(get_default_ide)"
-  launch_ide="$ide_name"
-  wrapper_ide=""
-
-  if [ "$ide_name" = "claude" ] && [ "${IDE_WRAPPER_ENABLED:-false}" = "true" ]; then
-    launch_method="wrapper"
-    wrapper_ide="$IDE_WRAPPER_NAME"
-  elif [ "$ide_name" = "claude" ]; then
-    launch_method="terminal"
-  else
-    launch_method="ide"
-  fi
-
-  # Update launch method for all sessions with proper wrapper information
-  for session_id in $SESSION_IDS; do
-    ensure_session_loaded "$session_id"
-    save_session_state "$session_id" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "$launch_method" "$launch_ide" "$wrapper_ide"
-  done
-
-  # Launch IDEs for all instances
-  launch_multi_ide "$ide_name" "$SESSION_IDS" "$initial_prompt" "$skip_permissions"
-
-  # Show summary
-  echo ""
-  echo "✅ Initialized group '$session_base_name' with $instance_count instances:"
-  for session_id in $SESSION_IDS; do
-    echo "  → $session_id"
-  done
-  echo ""
-  echo "💡 Use 'para list' to see all instances"
-  echo "💡 Use 'para finish \"msg\"' in any instance to finish that session"
-  echo "💡 Use 'para cancel --group $session_base_name' to cancel all instances"
 }
