@@ -1,48 +1,98 @@
 #!/usr/bin/env sh
 # Command handlers for para
 
+# Common argument parsing helper
+parse_common_args() {
+  command_name="$1"
+  shift
+
+  # Initialize output variables
+  positional_args=""
+  skip_permissions=false
+  file_path=""
+
+  # Command-specific parsing
+  case "$command_name" in
+  "start")
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+      --dangerously-skip-permissions | -d)
+        skip_permissions=true
+        shift
+        ;;
+      -*)
+        die "unknown option: $1"
+        ;;
+      *)
+        if [ -z "$positional_args" ]; then
+          positional_args="$1"
+        else
+          positional_args="$positional_args|$1"
+        fi
+        shift
+        ;;
+      esac
+    done
+    ;;
+  "dispatch")
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+      --file=*)
+        file_path="${1#--file=}"
+        shift
+        ;;
+      --file | -f)
+        if [ "$#" -lt 2 ]; then
+          die "--file requires a file path"
+        fi
+        file_path="$2"
+        shift 2
+        ;;
+      --dangerously-skip-permissions | -d)
+        skip_permissions=true
+        shift
+        ;;
+      -*)
+        die "unknown option: $1"
+        ;;
+      *)
+        if [ -z "$positional_args" ]; then
+          positional_args="$1"
+        else
+          positional_args="$positional_args|$1"
+        fi
+        shift
+        ;;
+      esac
+    done
+    ;;
+  esac
+
+  # Count positional arguments
+  if [ -n "$positional_args" ]; then
+    arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
+  else
+    arg_count=0
+  fi
+}
+
 # Handle start command (simplified - no more --prompt support)
 handle_start_command() {
-  SESSION_NAME=""
-  SKIP_PERMISSIONS=false
-
-  # Parse arguments
   shift # Remove 'start'
 
-  # Collect positional arguments separately from flags
-  positional_args=""
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-    --dangerously-skip-permissions | -d)
-      SKIP_PERMISSIONS=true
-      shift
-      ;;
-    -*)
-      die "unknown option: $1"
-      ;;
-    *)
-      if [ -z "$positional_args" ]; then
-        positional_args="$1"
-      else
-        positional_args="$positional_args|$1"
-      fi
-      shift
-      ;;
-    esac
-  done
+  # Parse arguments using common helper
+  parse_common_args "start" "$@"
+
+  SESSION_NAME=""
+  SKIP_PERMISSIONS="$skip_permissions"
 
   # Process positional arguments
-  if [ -n "$positional_args" ]; then
-    # Count the number of positional arguments
-    arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
-
-    if [ "$arg_count" -eq 1 ]; then
-      # Only session name provided
-      SESSION_NAME="$positional_args"
-      validate_session_name "$SESSION_NAME"
-    else
-      die "too many arguments"
-    fi
+  if [ "$arg_count" -eq 1 ]; then
+    # Only session name provided
+    SESSION_NAME="$positional_args"
+    validate_session_name "$SESSION_NAME"
+  elif [ "$arg_count" -gt 1 ]; then
+    die "too many arguments"
   fi
 
   # Session creation logic - no initial prompt
@@ -56,77 +106,41 @@ handle_dispatch_command() {
     die "dispatch command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
   fi
 
-  INITIAL_PROMPT=""
-  SESSION_NAME=""
-  SKIP_PERMISSIONS=false
-  FILE_PATH=""
-
-  # Parse arguments
   shift # Remove 'dispatch'
 
-  # Collect positional arguments separately from flags
-  positional_args=""
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-    --file=*)
-      FILE_PATH="${1#--file=}"
-      shift
-      ;;
-    --file | -f)
-      if [ "$#" -lt 2 ]; then
-        die "--file requires a file path"
-      fi
-      FILE_PATH="$2"
-      shift 2
-      ;;
-    --dangerously-skip-permissions | -d)
-      SKIP_PERMISSIONS=true
-      shift
-      ;;
-    -*)
-      die "unknown option: $1"
-      ;;
-    *)
-      if [ -z "$positional_args" ]; then
-        positional_args="$1"
-      else
-        positional_args="$positional_args|$1"
-      fi
-      shift
-      ;;
-    esac
-  done
+  # Parse arguments using common helper
+  parse_common_args "dispatch" "$@"
+
+  INITIAL_PROMPT=""
+  SESSION_NAME=""
+  SKIP_PERMISSIONS="$skip_permissions"
+  FILE_PATH="$file_path"
 
   # Process positional arguments
-  if [ -n "$positional_args" ]; then
-    # Count the number of positional arguments
-    arg_count=$(echo "$positional_args" | tr '|' '\n' | wc -l)
-
-    if [ "$arg_count" -eq 1 ]; then
-      # Check if single argument is a file path or prompt text
-      if [ -z "$FILE_PATH" ] && is_file_path "$positional_args"; then
-        # Auto-detect file path
-        FILE_PATH="$positional_args"
-      else
-        # Only prompt provided
-        INITIAL_PROMPT="$positional_args"
-      fi
-    elif [ "$arg_count" -eq 2 ]; then
-      # Session name and prompt provided
-      SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
-      prompt_or_file=$(echo "$positional_args" | cut -d'|' -f2)
-
-      # Check if second argument is a file path
-      if [ -z "$FILE_PATH" ] && is_file_path "$prompt_or_file"; then
-        FILE_PATH="$prompt_or_file"
-      else
-        INITIAL_PROMPT="$prompt_or_file"
-      fi
-
-      validate_session_name "$SESSION_NAME"
+  if [ "$arg_count" -eq 1 ]; then
+    # Check if single argument is a file path or prompt text
+    if [ -z "$FILE_PATH" ] && is_file_path "$positional_args"; then
+      # Auto-detect file path
+      FILE_PATH="$positional_args"
     else
-      die "too many arguments"
+      # Only prompt provided
+      INITIAL_PROMPT="$positional_args"
     fi
+  elif [ "$arg_count" -eq 2 ]; then
+    # Session name and prompt provided
+    SESSION_NAME=$(echo "$positional_args" | cut -d'|' -f1)
+    prompt_or_file=$(echo "$positional_args" | cut -d'|' -f2)
+
+    # Check if second argument is a file path
+    if [ -z "$FILE_PATH" ] && is_file_path "$prompt_or_file"; then
+      FILE_PATH="$prompt_or_file"
+    else
+      INITIAL_PROMPT="$prompt_or_file"
+    fi
+
+    validate_session_name "$SESSION_NAME"
+  elif [ "$arg_count" -gt 2 ]; then
+    die "too many arguments"
   fi
 
   # Handle file input if provided
