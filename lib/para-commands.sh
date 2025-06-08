@@ -248,6 +248,18 @@ handle_dispatch_multi_command() {
   create_new_multi_session "$INSTANCE_COUNT" "$SESSION_BASE_NAME" "$INITIAL_PROMPT" "$SKIP_PERMISSIONS"
 }
 
+# Handle integrate command - equivalent to finish with --integrate flag
+handle_integrate_command() {
+  # Simply delegate to finish command with --integrate flag added
+  if [ "$#" -eq 1 ]; then
+    die "integrate requires a commit message"
+  fi
+
+  # Replace 'integrate' with 'finish' and add --integrate flag
+  shift # Remove 'integrate'
+  handle_finish_command "finish" "$@" "--integrate"
+}
+
 # Handle finish command
 handle_finish_command() {
   COMMIT_MSG=""
