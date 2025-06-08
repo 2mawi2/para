@@ -415,12 +415,8 @@ get_branch_names() {
 }
 
 # Generate shell completion script
-generate_completion_script() {
-  shell="$1"
-
-  case "$shell" in
-  bash)
-    cat <<'EOF'
+generate_bash_completion() {
+  cat <<'EOF'
 _para_completion() {
     local cur prev opts
     COMPREPLY=()
@@ -479,9 +475,10 @@ _para_completion() {
 
 complete -F _para_completion para
 EOF
-    ;;
-  zsh)
-    cat <<'EOF'
+}
+
+generate_zsh_completion() {
+  cat <<'EOF'
 #compdef para
 
 _para() {
@@ -552,9 +549,10 @@ _para_args() {
 
 _para "$@"
 EOF
-    ;;
-  fish)
-    cat <<'EOF'
+}
+
+generate_fish_completion() {
+  cat <<'EOF'
 # Para completion for fish shell
 
 # Complete commands
@@ -585,6 +583,20 @@ complete -c para -f -n '__fish_seen_subcommand_from finish' -s b -l branch -a '(
 # Complete file paths for dispatch/dispatch-multi --file
 complete -c para -n '__fish_seen_subcommand_from dispatch dispatch-multi' -s f -l file -F
 EOF
+}
+
+generate_completion_script() {
+  shell="$1"
+
+  case "$shell" in
+  bash)
+    generate_bash_completion
+    ;;
+  zsh)
+    generate_zsh_completion
+    ;;
+  fish)
+    generate_fish_completion
     ;;
   *)
     echo "Unsupported shell: $shell" >&2
