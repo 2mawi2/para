@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod config;
 mod utils;
 
 #[derive(Parser)]
@@ -157,11 +158,78 @@ fn handle_command(command: Commands) {
             std::process::exit(1);
         }
         Commands::Config { subcommand } => {
-            eprintln!("para: config command not implemented yet");
-            std::process::exit(1);
+            handle_config_command(subcommand);
         }
         Commands::Completion { command } => {
             eprintln!("para: completion command not implemented yet");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn handle_config_command(subcommand: Option<String>) {
+    match subcommand.as_deref() {
+        Some("wizard") | Some("setup") => {
+            if let Err(e) = config::run_config_wizard() {
+                eprintln!("Configuration error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some("auto") => {
+            if let Err(e) = config::wizard::run_quick_setup() {
+                eprintln!("Configuration error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some("show") => {
+            match config::Config::load_or_create() {
+                Ok(config) => {
+                    println!("{}", serde_json::to_string_pretty(&config).unwrap());
+                }
+                Err(e) => {
+                    eprintln!("Failed to load configuration: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some("edit") => {
+            eprintln!("para: config edit not implemented yet");
+            std::process::exit(1);
+        }
+        Some("validate") => {
+            match config::Config::load_or_create() {
+                Ok(config) => {
+                    if let Err(e) = config.validate() {
+                        eprintln!("Configuration validation failed: {}", e);
+                        std::process::exit(1);
+                    } else {
+                        println!("✅ Configuration is valid");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to load configuration: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some("reset") => {
+            match config::ConfigManager::reset_to_defaults() {
+                Ok(_) => println!("✅ Configuration reset to defaults"),
+                Err(e) => {
+                    eprintln!("Failed to reset configuration: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        None => {
+            if let Err(e) = config::run_config_wizard() {
+                eprintln!("Configuration error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(unknown) => {
+            eprintln!("Unknown config subcommand: {}", unknown);
+            eprintln!("Available subcommands: wizard, auto, show, edit, validate, reset");
             std::process::exit(1);
         }
     }
