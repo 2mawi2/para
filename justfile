@@ -313,10 +313,10 @@ release BUMP="patch":
         exit 1
     fi
     
-    # Pull latest changes and check working directory is clean
+    # Pull latest changes and check no staged changes exist
     git pull origin master
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "Error: Working directory is not clean. Commit or stash changes first."
+    if [ -n "$(git diff --cached --name-only)" ]; then
+        echo "Error: Staged changes detected. Commit or unstage changes first."
         exit 1
     fi
     
