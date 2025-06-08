@@ -6,14 +6,14 @@ ensure_session_loaded() {
   session_id="$1"
 
   # Validate session_id is provided
-  [ -n "$session_id" ] || die "session ID is required"
+  [ -n "$session_id" ] || die_invalid_args "session ID is required"
 
   # Assert paths are initialized before using them
   assert_paths_initialized
 
   # Check if session state file exists
   STATE_FILE="$STATE_DIR/$session_id.state"
-  [ -f "$STATE_FILE" ] || die "session '$session_id' not found"
+  [ -f "$STATE_FILE" ] || die_session_not_found "session '$session_id' not found"
 
   # Read state file with backward compatibility
   STATE_CONTENT=$(cat "$STATE_FILE")
@@ -158,7 +158,7 @@ auto_detect_session() {
   fi
 
   if [ ! -d "$STATE_DIR" ]; then
-    die "no active sessions found"
+    die_session_not_found "no active sessions found"
   fi
 
   SESSIONS_COUNT=0
@@ -170,9 +170,9 @@ auto_detect_session() {
   done
 
   if [ "$SESSIONS_COUNT" -eq 0 ]; then
-    die "no active sessions found"
+    die_session_not_found "no active sessions found"
   elif [ "$SESSIONS_COUNT" -gt 1 ]; then
-    die "multiple sessions found; specify which one to use:"
+    die_session_not_found "multiple sessions found; specify which one to use:"
     list_sessions >&2
     exit 1
   fi
@@ -221,7 +221,7 @@ list_sessions() {
       echo "  Base: $BASE_BRANCH"
       echo "  Mode: $MERGE_MODE"
       if [ -d "$WORKTREE_DIR" ]; then
-        cd "$WORKTREE_DIR" || die "failed to change to worktree directory"
+        cd "$WORKTREE_DIR" || die_repo_state "failed to change to worktree directory"
         if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
           echo "  Status: ⚠️  Has merge conflicts"
         elif git diff --quiet --exit-code --cached --ignore-submodules --; then
@@ -233,7 +233,7 @@ list_sessions() {
         else
           echo "  Status: 📦 Has staged changes"
         fi
-        cd "$REPO_ROOT" || die "failed to change to repository root"
+        cd "$REPO_ROOT" || die_repo_state "failed to change to repository root"
       else
         echo "  Status: ❌ Worktree missing"
       fi
@@ -292,7 +292,7 @@ list_sessions() {
           else
             echo "  Status: ❌ Not a valid git worktree"
           fi
-          cd "$REPO_ROOT" || die "failed to change to repository root"
+          cd "$REPO_ROOT" || die_repo_state "failed to change to repository root"
         else
           echo "  Status: ❌ Directory missing"
         fi
@@ -344,7 +344,7 @@ create_session() {
 
   # Check if session already exists
   if session_exists "$SESSION_ID"; then
-    die "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
+    die_session_exists "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
   fi
 
   echo "▶ creating session $SESSION_ID: branch $TEMP_BRANCH and worktree $WORKTREE_DIR (base $base_branch)" >&2
@@ -572,8 +572,8 @@ enhanced_resume() {
     # Specific session requested
     if session_exists "$target_session"; then
       # Session has state file - use normal resume
-      ensure_session_loaded "$target_session"
-      [ -d "$WORKTREE_DIR" ] || die "worktree $WORKTREE_DIR missing for session $target_session"
+      get_session_info "$target_session"
+      [ -d "$WORKTREE_DIR" ] || die_session_not_found "worktree $WORKTREE_DIR missing for session $target_session"
 
       # Load initial prompt if it exists for this session
       STORED_PROMPT=$(load_session_prompt "$target_session")
@@ -594,7 +594,7 @@ enhanced_resume() {
         fi
       done
 
-      die "session '$target_session' not found in active sessions or worktrees"
+      die_session_not_found "session '$target_session' not found in active sessions or worktrees"
     fi
   else
     # Auto-discover and present options
@@ -606,7 +606,7 @@ enhanced_resume() {
     total_orphaned=$(echo "$orphaned_sessions" | wc -w)
 
     if [ "$total_active" -eq 0 ] && [ "$total_orphaned" -eq 0 ]; then
-      die "no sessions found to resume"
+      die_session_not_found "no sessions found to resume"
     fi
 
     if [ "$total_active" -eq 1 ] && [ "$total_orphaned" -eq 0 ]; then
@@ -684,7 +684,7 @@ create_new_session() {
   WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
 
   if session_exists "$SESSION_ID"; then
-    die "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
+    die_session_exists "session '$SESSION_ID' already exists. Use 'para resume $SESSION_ID' or choose a different name."
   fi
 
   # --- 3. Perform actions ---
