@@ -498,3 +498,57 @@ EOF
   # Verify original feature branch was cleaned up
   ! git branch | grep -q "manual-feature"
 }
+
+@test "integrate command should work the same as finish --integrate" {
+  # Create a session and make changes
+  create_new_session "integrate-test" "" false
+  session_id=$(ls "$STATE_DIR"/*.state 2>/dev/null | head -1 | xargs basename | sed 's/\.state$//')
+  get_session_info "$session_id"
+  
+  # Make changes in the worktree
+  cd "$WORKTREE_DIR"
+  echo "integrate command test" > integrate_test.txt
+  git add integrate_test.txt
+  git commit -m "add integrate test"
+  
+  # Go back to main repo
+  cd "$REPO_ROOT"
+  
+  # Test integrate command
+  run handle_integrate_command "integrate" "integrate commit message"
+  
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "successfully integrated into" ]]
+  
+  # Verify changes are on master branch
+  git checkout master
+  [ -f "integrate_test.txt" ]
+  [ "$(cat integrate_test.txt)" = "integrate command test" ]
+}
+
+@test "integrate command should support --branch flag" {
+  # Create a session and make changes
+  create_new_session "integrate-branch-test" "" false
+  session_id=$(ls "$STATE_DIR"/*.state 2>/dev/null | head -1 | xargs basename | sed 's/\.state$//')
+  get_session_info "$session_id"
+  
+  # Make changes in the worktree
+  cd "$WORKTREE_DIR"
+  echo "integrate with branch" > integrate_branch.txt
+  git add integrate_branch.txt
+  git commit -m "add integrate branch test"
+  
+  # Go back to main repo
+  cd "$REPO_ROOT"
+  
+  # Test integrate command with --branch
+  run handle_integrate_command "integrate" "integrate branch commit" "--branch" "feature/integrate-test"
+  
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "successfully integrated into" ]]
+  
+  # Verify changes are on master branch
+  git checkout master
+  [ -f "integrate_branch.txt" ]
+  [ "$(cat integrate_branch.txt)" = "integrate with branch" ]
+}

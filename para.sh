@@ -94,6 +94,10 @@ handle_command() {
     handle_finish_command "$@"
     ;;
 
+  integrate)
+    handle_integrate_command "$@"
+    ;;
+
   cancel | abort)
     handle_cancel_command "$@"
     ;;
