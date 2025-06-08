@@ -79,15 +79,13 @@ validate_ide_name() {
 validate_config() {
   # Only check the essential things
   if [ -z "$IDE_NAME" ] || [ -z "$IDE_CMD" ]; then
-    echo "Error: IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix." >&2
-    return 1
+    die_config_invalid "IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix."
   fi
 
   # Basic safety checks for directory names
   case "$SUBTREES_DIR_NAME$STATE_DIR_NAME" in
   */* | *\\*)
-    echo "Error: Directory names cannot contain path separators. Run 'para config' to fix." >&2
-    return 1
+    die_config_invalid "Directory names cannot contain path separators. Run 'para config' to fix."
     ;;
   esac
 
@@ -159,8 +157,7 @@ load_config() {
   # Validate what was loaded from file before applying defaults
   if [ -f "$CONFIG_FILE" ]; then
     if [ -z "${IDE_NAME:-}" ] || [ -z "${IDE_CMD:-}" ]; then
-      echo "Error: IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix." >&2
-      return 1
+      die_config_invalid "IDE configuration is incomplete: IDE_NAME and IDE_CMD cannot be empty. Run 'para config' to fix."
     fi
   fi
 

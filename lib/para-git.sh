@@ -4,7 +4,7 @@
 # Find repository root and set up Git environment
 need_git_repo() {
   # First check if we're in a git repository at all
-  git rev-parse --git-dir >/dev/null 2>&1 || die "not in a Git repository"
+  git rev-parse --git-dir >/dev/null 2>&1 || die_repo_state "not in a Git repository"
 
   # Get the common git directory (works for both main repo and worktrees)
   GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
@@ -19,7 +19,7 @@ need_git_repo() {
     REPO_ROOT=$(dirname "$GIT_COMMON_DIR")
   else
     # Fallback to the traditional method
-    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || die "could not find repository root"
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || die_repo_state "could not find repository root"
   fi
 
   # Ensure REPO_ROOT is absolute
@@ -96,7 +96,7 @@ create_worktree() {
   mkdir -p "$SUBTREES_DIR"
   setup_gitignore
 
-  git -C "$REPO_ROOT" worktree add -b "$temp_branch" "$worktree_dir" HEAD >&2 || die "git worktree add failed"
+  git -C "$REPO_ROOT" worktree add -b "$temp_branch" "$worktree_dir" HEAD >&2 || die_git_operation "git worktree add failed"
 }
 
 # Remove worktree and branch
@@ -123,7 +123,7 @@ remove_worktree_preserve_branch() {
 
 # Get current branch name
 get_current_branch() {
-  git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || die "detached HEAD; set BASE_BRANCH env"
+  git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || die_repo_state "detached HEAD; set BASE_BRANCH env"
 }
 
 # Check for uncommitted changes
@@ -161,14 +161,14 @@ finish_session() {
   # Save current directory for restoration
   ORIGINAL_DIR="$PWD"
 
-  cd "$worktree_dir" || die "failed to change to worktree directory: $worktree_dir"
+  cd "$worktree_dir" || die_repo_state "failed to change to worktree directory: $worktree_dir"
 
   # Always commit any uncommitted changes first
   if ! git diff --quiet --exit-code --ignore-submodules -- || ! git diff --quiet --exit-code --cached --ignore-submodules -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
     echo "▶ staging all changes"
-    git add -A || die "failed to stage changes"
+    git add -A || die_git_operation "failed to stage changes"
     echo "▶ committing changes"
-    git commit -m "$commit_msg" || die "failed to commit changes"
+    git commit -m "$commit_msg" || die_git_operation "failed to commit changes"
   else
     echo "ℹ️  no changes to commit"
   fi
@@ -179,8 +179,8 @@ finish_session() {
   COMMIT_COUNT=$(git rev-list --count HEAD ^"$base_branch")
   if [ "$COMMIT_COUNT" -gt 1 ]; then
     # Reset to squash all commits, but keep the changes staged
-    git reset --soft "$base_branch" || die "failed to reset to base branch for squashing"
-    git commit -m "$commit_msg" || die "failed to create squash commit"
+    git reset --soft "$base_branch" || die_git_operation "failed to reset to base branch for squashing"
+    git commit -m "$commit_msg" || die_git_operation "failed to create squash commit"
     echo "✅ squashed $COMMIT_COUNT commits into single commit with message: $commit_msg"
   else
     echo "ℹ️  only one commit, no squashing needed"
@@ -197,14 +197,14 @@ finish_session() {
     fi
 
     echo "▶ renaming branch from '$temp_branch' to '$unique_branch_name'"
-    git branch -m "$unique_branch_name" || die "failed to rename branch to '$unique_branch_name'"
+    git branch -m "$unique_branch_name" || die_git_operation "failed to rename branch to '$unique_branch_name'"
     final_branch_name="$unique_branch_name"
   fi
 
   # Handle integration if requested
   if [ "$integrate" = "true" ]; then
     # Change to repository root for integration
-    cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+    cd "$REPO_ROOT" || die_repo_state "failed to change to repository root: $REPO_ROOT"
 
     # Perform integration
     if integrate_branch "$final_branch_name" "$base_branch" "$commit_msg"; then
@@ -218,7 +218,7 @@ finish_session() {
     fi
   else
     # Change back to repository root
-    cd "$REPO_ROOT" || die "failed to change to repository root: $REPO_ROOT"
+    cd "$REPO_ROOT" || die_repo_state "failed to change to repository root: $REPO_ROOT"
 
     # Success - return information about the branch
     echo ""
@@ -321,20 +321,20 @@ validate_target_branch_name() {
 
   # Check for empty branch name
   if [ -z "$branch_name" ]; then
-    die "branch name cannot be empty"
+    die_invalid_args "branch name cannot be empty"
   fi
 
   # Check for spaces
   case "$branch_name" in
   *\ *)
-    die "invalid branch name '$branch_name': contains spaces"
+    die_invalid_args "invalid branch name '$branch_name': contains spaces"
     ;;
   esac
 
   # Check for other invalid characters
   case "$branch_name" in
   *~* | *^* | *:* | *\?* | *\** | *\[* | *\\*)
-    die "invalid branch name '$branch_name': contains invalid characters"
+    die_invalid_args "invalid branch name '$branch_name': contains invalid characters"
     ;;
   esac
 
@@ -352,31 +352,31 @@ validate_target_branch_name() {
   # Check for invalid sequences
   case "$branch_name" in
   *..* | *@\{* | *//*)
-    die "invalid branch name '$branch_name': contains invalid sequences"
+    die_invalid_args "invalid branch name '$branch_name': contains invalid sequences"
     ;;
   esac
 
   # Check for invalid start characters
   case "$branch_name" in
   -* | .*)
-    die "invalid branch name '$branch_name': cannot start with '-' or '.'"
+    die_invalid_args "invalid branch name '$branch_name': cannot start with '-' or '.'"
     ;;
   esac
 
   # Check for invalid end characters
   case "$branch_name" in
   */)
-    die "invalid branch name '$branch_name': cannot end with '/'"
+    die_invalid_args "invalid branch name '$branch_name': cannot end with '/'"
     ;;
   esac
 
   # Check for specific invalid patterns
   case "$branch_name" in
   . | /)
-    die "invalid branch name '$branch_name': invalid name"
+    die_invalid_args "invalid branch name '$branch_name': invalid name"
     ;;
   */.*)
-    die "invalid branch name '$branch_name': cannot contain '/.' sequence"
+    die_invalid_args "invalid branch name '$branch_name': cannot contain '/.' sequence"
     ;;
   esac
 
@@ -406,7 +406,7 @@ generate_unique_branch_name() {
   done
 
   # If we get here, we couldn't find a unique name (highly unlikely)
-  die "unable to generate unique branch name after 999 attempts"
+  die_repo_state "unable to generate unique branch name after 999 attempts"
 }
 
 # Check if a branch is currently checked out in any worktree
@@ -427,7 +427,7 @@ validate_repo_state() {
   if [ $fsck_status -ne 0 ] && [ -n "$critical_errors" ]; then
     echo "Critical repository integrity issues detected:" >&2
     echo "$critical_errors" >&2
-    die "repository integrity check failed - unsafe to proceed with integration"
+    die_repo_state "repository integrity check failed - unsafe to proceed with integration"
   fi
 }
 
@@ -470,7 +470,7 @@ integrate_branch() {
     # Check if we have a remote configured
     if git -C "$REPO_ROOT" remote >/dev/null 2>&1; then
       # Try to pull latest changes from remote if available
-      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die_git_operation "failed to checkout $base_branch"
 
       # Check if base branch tracks a remote
       if git -C "$REPO_ROOT" rev-parse --verify "@{upstream}" >/dev/null 2>&1; then
@@ -484,27 +484,27 @@ integrate_branch() {
       fi
     else
       echo "  → no remote configured, using local $base_branch"
-      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch"
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die_git_operation "failed to checkout $base_branch"
     fi
   fi
 
   echo "▶ integrating changes into $base_branch using rebase..."
 
   # Get the commit hash of the feature branch
-  feature_commit=$(git -C "$REPO_ROOT" rev-parse "$feature_branch") || die "failed to get feature branch commit"
+  feature_commit=$(git -C "$REPO_ROOT" rev-parse "$feature_branch") || die_git_operation "failed to get feature branch commit"
 
   # Create a temporary branch from the feature commit for rebasing
   temp_rebase_branch="temp-rebase-$(date +%s)"
-  git -C "$REPO_ROOT" branch "$temp_rebase_branch" "$feature_commit" || die "failed to create temporary rebase branch"
+  git -C "$REPO_ROOT" branch "$temp_rebase_branch" "$feature_commit" || die_git_operation "failed to create temporary rebase branch"
 
   # Checkout the temporary branch and rebase it onto base branch
-  git -C "$REPO_ROOT" checkout "$temp_rebase_branch" >/dev/null 2>&1 || die "failed to checkout temporary rebase branch"
+  git -C "$REPO_ROOT" checkout "$temp_rebase_branch" >/dev/null 2>&1 || die_git_operation "failed to checkout temporary rebase branch"
 
   if git -C "$REPO_ROOT" rebase "$base_branch"; then
     # Rebase successful, now update the base branch
     if is_branch_in_worktree "$base_branch"; then
       # Base branch is in a worktree, use git update-ref to update it safely
-      rebased_commit=$(git -C "$REPO_ROOT" rev-parse "$temp_rebase_branch") || die "failed to get rebased commit"
+      rebased_commit=$(git -C "$REPO_ROOT" rev-parse "$temp_rebase_branch") || die_git_operation "failed to get rebased commit"
 
       # Backup current branch state before update
       current_base_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
@@ -512,20 +512,20 @@ integrate_branch() {
       echo "  → backup of current state: $current_base_commit"
 
       git -C "$REPO_ROOT" update-ref "refs/heads/$base_branch" "$rebased_commit" ||
-        die "failed to update base branch reference (backup: $current_base_commit)"
+        die_git_operation "failed to update base branch reference (backup: $current_base_commit)"
 
       # Validate the update was successful
       updated_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
       if [ "$updated_commit" != "$rebased_commit" ]; then
-        die "branch update validation failed - expected $rebased_commit, got $updated_commit"
+        die_git_operation "branch update validation failed - expected $rebased_commit, got $updated_commit"
       fi
 
       echo "✅ successfully integrated into $base_branch using update-ref"
       echo "  → note: worktrees with $base_branch checked out may need refresh"
     else
       # Standard fast-forward merge
-      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch after rebase"
-      git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die "failed to fast-forward merge after rebase"
+      git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die_git_operation "failed to checkout $base_branch after rebase"
+      git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die_git_operation "failed to fast-forward merge after rebase"
       echo "✅ successfully integrated into $base_branch using rebase"
     fi
 
