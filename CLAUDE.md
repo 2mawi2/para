@@ -159,6 +159,9 @@ para dispatch-multi 5 --group experiments --file requirements.txt
 
 ## Development Preferences
 
+### Para Rules
+- You never run `para cancel` yourself, this will likely delete the session you are working on and all of it's data.
+
 ### Release Process
 - Use `just release` to create new releases (automatically bumps patch version and creates GitHub release)
 - Must be on master branch with clean working directory
