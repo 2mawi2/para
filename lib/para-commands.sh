@@ -160,108 +160,6 @@ handle_dispatch_command() {
   create_new_session "$SESSION_NAME" "$INITIAL_PROMPT" "$SKIP_PERMISSIONS"
 }
 
-# Handle dispatch-multi command - creates multiple sessions with same prompt
-handle_dispatch_multi_command() {
-  # Validate that Claude Code is configured
-  if [ "$IDE_NAME" != "claude" ]; then
-    die_config_invalid "dispatch-multi command only works with Claude Code. Current IDE: $(get_ide_display_name). Run 'para config' to switch to Claude Code."
-  fi
-
-  INSTANCE_COUNT=""
-  INITIAL_PROMPT=""
-  SESSION_BASE_NAME=""
-  SKIP_PERMISSIONS=false
-  FILE_PATH=""
-
-  # Skip the command name (dispatch-multi)
-  shift
-
-  # Parse arguments with --group, --file, and --dangerously-skip-permissions flag support
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-    --group=*)
-      SESSION_BASE_NAME="${1#--group=}"
-      validate_session_name "$SESSION_BASE_NAME"
-      shift
-      ;;
-    --group)
-      if [ "$#" -lt 2 ]; then
-        die_invalid_args "--group requires a group name"
-      fi
-      SESSION_BASE_NAME="$2"
-      validate_session_name "$SESSION_BASE_NAME"
-      shift 2
-      ;;
-    --file=*)
-      FILE_PATH="${1#--file=}"
-      shift
-      ;;
-    --file | -f)
-      if [ "$#" -lt 2 ]; then
-        die_invalid_args "--file requires a file path"
-      fi
-      FILE_PATH="$2"
-      shift 2
-      ;;
-    --dangerously-skip-permissions | -d)
-      SKIP_PERMISSIONS=true
-      shift
-      ;;
-    -*)
-      die_invalid_args "unknown option: $1"
-      ;;
-    *)
-      # First positional argument should be instance count
-      if [ -z "$INSTANCE_COUNT" ]; then
-        INSTANCE_COUNT="$1"
-        shift
-      # Second positional argument should be prompt or file path
-      elif [ -z "$INITIAL_PROMPT" ] && [ -z "$FILE_PATH" ]; then
-        # Check if argument is a file path
-        if is_file_path "$1"; then
-          FILE_PATH="$1"
-        else
-          INITIAL_PROMPT="$1"
-        fi
-        shift
-      else
-        die_invalid_args "too many arguments"
-      fi
-      ;;
-    esac
-  done
-
-  # Handle file input if provided
-  if [ -n "$FILE_PATH" ]; then
-    INITIAL_PROMPT=$(read_file_content "$FILE_PATH")
-    if [ -z "$INITIAL_PROMPT" ]; then
-      die_file_not_found "file is empty: $FILE_PATH"
-    fi
-  fi
-
-  # Validate required arguments
-  if [ -z "$INSTANCE_COUNT" ]; then
-    die_invalid_args "dispatch-multi usage: 'para dispatch-multi N \"prompt\"' or 'para dispatch-multi N --group name \"prompt\"' or 'para dispatch-multi N --file path'"
-  fi
-
-  if [ -z "$INITIAL_PROMPT" ]; then
-    die_invalid_args "dispatch-multi requires a prompt text or file path"
-  fi
-
-  # Validate instance count
-  if ! echo "$INSTANCE_COUNT" | grep -q "^[1-9][0-9]*$"; then
-    die_invalid_args "instance count must be a positive integer"
-  fi
-
-  # Reasonable limit to prevent system overload
-  if [ "$INSTANCE_COUNT" -gt 10 ]; then
-    die_invalid_args "instance count limited to 10 to prevent system overload"
-  fi
-
-  # Multi-session creation logic with initial prompt
-  create_new_multi_session "$INSTANCE_COUNT" "$SESSION_BASE_NAME" "$INITIAL_PROMPT" "$SKIP_PERMISSIONS"
-}
-
 # Handle integrate command - equivalent to finish with --integrate flag
 handle_integrate_command() {
   # Simply delegate to finish command with --integrate flag added
@@ -394,86 +292,30 @@ handle_finish_command() {
 
 # Handle cancel command
 handle_cancel_command() {
-  GROUP_NAME=""
   SESSION_ID=""
 
-  # Parse arguments with --group flag support
-  while [ "$#" -gt 1 ]; do
+  # Parse arguments - only accept session ID
+  if [ "$#" -gt 2 ]; then
+    die_invalid_args "too many arguments"
+  elif [ "$#" -eq 2 ]; then
     case "$2" in
-    --group=*)
-      GROUP_NAME="${2#--group=}"
-      shift
-      ;;
-    --group)
-      if [ "$#" -lt 3 ]; then
-        die_invalid_args "--group requires a group name"
-      fi
-      GROUP_NAME="$3"
-      shift 2
-      ;;
     -*)
       die_invalid_args "unknown option: $2"
       ;;
     *)
-      # Positional argument should be session ID
-      if [ -z "$SESSION_ID" ]; then
-        SESSION_ID="$2"
-        shift
-      else
-        die_invalid_args "too many arguments"
-      fi
+      SESSION_ID="$2"
       ;;
     esac
-  done
-
-  # Handle group cancellation
-  if [ -n "$GROUP_NAME" ]; then
-    # Get all sessions in the group
-    GROUP_SESSIONS=$(get_multi_session_group "$GROUP_NAME")
-
-    if [ -z "$GROUP_SESSIONS" ]; then
-      die_session_not_found "no multi-instance group found with name '$GROUP_NAME'"
-    fi
-
-    # Count sessions
-    SESSION_COUNT=0
-    for session_id in $GROUP_SESSIONS; do
-      SESSION_COUNT=$((SESSION_COUNT + 1))
-    done
-
-    echo "▶ aborting $SESSION_COUNT sessions in group '$GROUP_NAME'..."
-
-    # Cancel each session in the group
-    for session_id in $GROUP_SESSIONS; do
-      echo "  → cancelling session $session_id"
-
-      # Get session info first (needed by close function)
-      ensure_session_loaded "$session_id"
-
-      # Force close IDE/terminal window since session is being cancelled
-      # Capture and display close results for visibility
-      echo "    ▶ closing IDE/terminal window..."
-      force_close_ide_for_session "$session_id" 2>&1 | sed 's/^/    /'
-
-      # Remove worktree and session state
-      remove_worktree "$TEMP_BRANCH" "$WORKTREE_DIR"
-      remove_session_state "$session_id"
-    done
-
-    echo "✅ cancelled all $SESSION_COUNT sessions in group '$GROUP_NAME'"
-    echo "🎉 You can safely close all $(get_ide_display_name) sessions now."
-    return
   fi
 
-  # Handle single session cancellation
+  # Auto-detect session if not provided
   if [ -z "$SESSION_ID" ]; then
     SESSION_ID=$(auto_detect_session)
   fi
 
-  # Optimize: Get session info and immediately proceed with removal
+  # Get session info and proceed with removal
   ensure_session_loaded "$SESSION_ID"
 
-  # Optimize: Reduce verbose output during operations for speed
   echo "▶ aborting session $SESSION_ID"
 
   # Save session to backup before cancelling
@@ -482,11 +324,10 @@ handle_cancel_command() {
   # Force close IDE/terminal window for this session (cancel always closes)
   force_close_ide_for_session "$SESSION_ID"
 
-  # Optimize: Run git operations and state cleanup in parallel where possible
   # Remove worktree but preserve branch for backup recovery
   remove_worktree_preserve_branch "$TEMP_BRANCH" "$WORKTREE_DIR"
 
-  # Then clean up state files (lighter operation)
+  # Clean up state files
   remove_session_state "$SESSION_ID"
 
   echo "cancelled session $SESSION_ID"
@@ -591,10 +432,6 @@ handle_completion_command() {
     get_session_names
     return 0
     ;;
-  _completion_groups)
-    get_group_names
-    return 0
-    ;;
   _completion_branches)
     get_branch_names
     return 0
@@ -606,9 +443,6 @@ handle_completion_command() {
   case "$subcommand" in
   sessions | _completion_sessions)
     get_session_names
-    ;;
-  groups | _completion_groups)
-    get_group_names
     ;;
   branches | _completion_branches)
     get_branch_names
@@ -639,11 +473,10 @@ handle_completion_command() {
     generate_completion_script "$shell"
     ;;
   *)
-    echo "Usage: para completion [sessions|groups|branches|generate]"
+    echo "Usage: para completion [sessions|branches|generate]"
     echo ""
     echo "Available commands:"
     echo "  sessions  - List active session names"
-    echo "  groups    - List multi-instance group names"
     echo "  branches  - List local branch names"
     echo "  generate  - Generate shell completion script"
     echo ""

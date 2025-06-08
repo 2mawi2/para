@@ -51,7 +51,6 @@ para finish "Add new feature"
 - `para list` - Show all active sessions
 - `para continue` - Resume after resolving finish conflicts (auto-stages)
 - `para cancel [session]` - Discard current or specified session
-- `para cancel --group <name>` - Cancel all sessions in a multi-instance group
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
 - `para recover [session]` - Recover cancelled session from backup
@@ -71,9 +70,6 @@ para dispatch "prompt"                    # Create session with AI prompt
 para dispatch name "prompt"               # Named session with AI prompt
 para dispatch --file prompt.txt          # Create session with prompt from file
 para dispatch -f ./auth.prompt            # Create session with prompt from file (short form)
-para dispatch-multi N "prompt"            # Create N parallel sessions with same prompt
-para dispatch-multi N --file prompt.txt   # Create N sessions with prompt from file
-para dispatch-multi N --group name "prompt"  # Create N sessions with custom group name
 
 # Skip permission warnings in trusted environments (CI, scripts)
 para dispatch --dangerously-skip-permissions "prompt"
@@ -105,28 +101,9 @@ para finish "Fix bug" --branch existing-feature
 - Cannot end with `/`
 - Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
-### Multi-Instance AI Development
+The `dispatch` command creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
 
-The `dispatch-multi` command creates multiple parallel sessions with the same prompt, perfect for comparing different AI approaches:
-
-```bash
-# Create 3 sessions to explore different approaches
-para dispatch-multi 3 "Implement user authentication system"
-
-# Create 5 sessions with a custom group name for organization
-para dispatch-multi 5 --group auth-experiments "Compare OAuth vs JWT implementation"
-
-# List all sessions (shows group information)
-para list
-
-# Cancel individual sessions or entire groups
-para cancel session-name              # Cancel one session
-para cancel --group auth-experiments  # Cancel all sessions in group
-```
-
-The `dispatch` and `dispatch-multi` commands create new sessions and immediately open Claude Code with your prompt, perfect for AI-assisted development.
-
-**Note:** Dispatch commands only work with Claude Code. Use `para config` to switch IDEs if needed.
+**Note:** Dispatch command only works with Claude Code. Use `para config` to switch IDEs if needed.
 
 ## How It Works
 
@@ -183,25 +160,18 @@ para finish "Fix login redirect"   # Finishes current session
 # All features now merged to main branch
 ```
 
-### AI-Powered Multi-Instance Development
+### AI-Powered Development
 ```bash
-# Create multiple AI sessions to explore different approaches
-para dispatch-multi 3 "Implement user authentication with best security practices"
+# Create AI session with prompt
+para dispatch "Implement user authentication with best security practices"
 
 # Or use a prompt file for complex prompts
-para dispatch-multi 3 --file auth-requirements.prompt
+para dispatch --file auth-requirements.prompt
 
-# Each Claude Code instance works on the same prompt independently
-# Compare results across 3 different approaches
+# Claude Code opens with your prompt for AI-assisted development
 
-# Pick the best implementation
-para finish "Implement OAuth authentication"  # Keep this approach
-para cancel --group multi-instance-group     # Discard other experiments
-
-# Or finish multiple sessions with different messages
-para finish "OAuth implementation - approach 1"
-para finish "JWT implementation - approach 2"  
-para finish "Session-based auth - approach 3"
+# Finish when ready
+para finish "Implement OAuth authentication"
 ```
 
 ## When Things Conflict
@@ -242,11 +212,10 @@ para recover my-session
 
 Para is ideal when working with AI assistants:
 
-- **Multiple agents**: Each agent works in its own session without conflicts
-- **Parallel experiments**: Use `dispatch-multi` to try different approaches simultaneously  
-- **Safe iteration**: Main branch stays clean while you experiment
+- **Isolated workspaces**: Each session works independently without conflicts
+- **Safe iteration**: Main branch stays clean while you experiment  
 - **Easy comparison**: See results side-by-side in different IDE windows
-- **A/B testing**: Compare multiple AI-generated solutions with identical prompts
+- **Focused development**: Each session maintains its own context and state
 
 ## Documentation
 
@@ -324,13 +293,12 @@ fish_update_completions
 Shell completion will help you with:
 - **Commands**: `para [TAB]` shows all available commands
 - **Session names**: `para cancel [TAB]` or `para resume [TAB]` shows active sessions
-- **Group names**: `para cancel --group [TAB]` shows multi-instance groups
 - **Branch names**: `para finish "msg" --branch [TAB]` shows local branches
 - **File paths**: `para dispatch --file [TAB]` completes file paths
 
 ## Security Notes
 
-The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start`, `dispatch`, and `dispatch-multi` commands.
+The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start` and `dispatch` commands.
 
 **⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
 

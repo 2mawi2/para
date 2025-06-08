@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Tests for file input functionality in dispatch and dispatch-multi commands
+# Tests for file input functionality in dispatch command
 # Tests argument parsing, file detection, and content reading without opening IDEs
 
 # Source common test functions
@@ -158,72 +158,8 @@ teardown() {
     [[ "$output" != *"requires a prompt text"* ]]
 }
 
-@test "FI-8: dispatch-multi command accepts --file option" {
-    cd "$TEST_REPO"
-    
-    # Create prompt file
-    echo "Compare three authentication approaches" > multi-auth.txt
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with --file option
-    run "$PARA_SCRIPT" dispatch-multi 2 --file multi-auth.txt
-    # Should not fail with unknown option error
-    [[ "$output" != *"unknown option"* ]]
-}
 
-@test "FI-9: dispatch-multi command accepts -f short option" {
-    cd "$TEST_REPO"
-    
-    # Create prompt file
-    echo "Implement three different caching strategies" > cache-strategies.prompt
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with -f option
-    run "$PARA_SCRIPT" dispatch-multi 3 -f cache-strategies.prompt
-    # Should not fail with unknown option error
-    [[ "$output" != *"unknown option"* ]]
-}
-
-@test "FI-10: dispatch-multi command auto-detects file paths" {
-    cd "$TEST_REPO"
-    
-    # Create prompt file with common extension
-    echo "Design microservices architecture" > microservices.md
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with file as positional argument
-    run "$PARA_SCRIPT" dispatch-multi 2 microservices.md
-    # Should not fail with unknown option or missing prompt error
-    [[ "$output" != *"unknown option"* ]]
-    [[ "$output" != *"requires a prompt text"* ]]
-}
-
-@test "FI-11: dispatch-multi with --group and --file works together" {
-    cd "$TEST_REPO"
-    
-    # Create prompt file
-    echo "Evaluate different frontend frameworks" > frontend-eval.txt
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with both --group and --file
-    run "$PARA_SCRIPT" dispatch-multi 3 --group frontend --file frontend-eval.txt
-    # Should not fail with unknown option error
-    [[ "$output" != *"unknown option"* ]]
-}
-
-@test "FI-12: file input takes precedence over auto-detection" {
+@test "FI-8: file input takes precedence over auto-detection" {
     cd "$TEST_REPO"
     
     # Create two files
@@ -242,7 +178,7 @@ teardown() {
     [[ "$output" != *"unknown option"* ]]
 }
 
-@test "FI-13: error handling for missing file with --file option" {
+@test "FI-9: error handling for missing file with --file option" {
     cd "$TEST_REPO"
     
     # Mock Claude IDE
@@ -255,7 +191,7 @@ teardown() {
     [[ "$output" == *"file not found"* ]]
 }
 
-@test "FI-14: error handling for missing file argument" {
+@test "FI-10: error handling for missing file argument" {
     cd "$TEST_REPO"
     
     # Mock Claude IDE
@@ -268,7 +204,7 @@ teardown() {
     [[ "$output" == *"--file requires a file path"* ]]
 }
 
-@test "FI-15: dispatch preserves session name with file input" {
+@test "FI-11: dispatch preserves session name with file input" {
     cd "$TEST_REPO"
     
     # Create prompt file
@@ -285,7 +221,7 @@ teardown() {
     [[ "$output" != *"session name can only contain"* ]]
 }
 
-@test "FI-16: complex file content is handled correctly" {
+@test "FI-12: complex file content is handled correctly" {
     cd "$TEST_REPO"
     
     # Create file with complex content including quotes and special characters
@@ -338,7 +274,7 @@ EOF
     [[ "$output" == *"Testing requirements"* ]]
 }
 
-@test "FI-17: dispatch command handles empty file with clear error message" {
+@test "FI-13: dispatch command handles empty file with clear error message" {
     cd "$TEST_REPO"
     
     # Create empty file
@@ -354,23 +290,8 @@ EOF
     [[ "$output" == *"file is empty: empty-prompt.txt"* ]]
 }
 
-@test "FI-18: dispatch-multi command handles empty file with clear error message" {
-    cd "$TEST_REPO"
-    
-    # Create empty file
-    touch empty-multi.txt
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with empty file
-    run "$PARA_SCRIPT" dispatch-multi 2 --file empty-multi.txt
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"file is empty: empty-multi.txt"* ]]
-}
 
-@test "FI-19: file content with single quotes is handled correctly" {
+@test "FI-14: file content with single quotes is handled correctly" {
     cd "$TEST_REPO"
     
     # Create file with single quotes (the exact issue reported)
@@ -406,7 +327,7 @@ EOF
     [[ "$output" == *"claude"* ]]
 }
 
-@test "FI-20: file content with double quotes is handled correctly" {
+@test "FI-15: file content with double quotes is handled correctly" {
     cd "$TEST_REPO"
     
     # Create file with double quotes
@@ -427,7 +348,7 @@ EOF
     [[ "$output" == *"\"Hello World\""* ]]
 }
 
-@test "FI-21: file content with backticks is handled correctly" {
+@test "FI-16: file content with backticks is handled correctly" {
     cd "$TEST_REPO"
     
     # Create file with backticks
@@ -449,7 +370,7 @@ EOF
     [[ "$output" == *"\`git status\`"* ]]
 }
 
-@test "FI-22: file content with dollar signs is handled correctly" {
+@test "FI-17: file content with dollar signs is handled correctly" {
     cd "$TEST_REPO"
     
     # Create file with dollar signs and variables
@@ -473,7 +394,7 @@ EOF
     [[ "$output" == *"\$(command"* ]]
 }
 
-@test "FI-23: file content with newlines and complex formatting" {
+@test "FI-18: file content with newlines and complex formatting" {
     cd "$TEST_REPO"
     
     # Create file with complex formatting including newlines, tabs, etc.
@@ -509,7 +430,7 @@ EOF
     [ "$lines" -gt 10 ]
 }
 
-@test "FI-24: dispatch with problematic file content does not break shell execution" {
+@test "FI-19: dispatch with problematic file content does not break shell execution" {
     cd "$TEST_REPO"
     
     # Create file with the exact content that causes issues
@@ -538,27 +459,8 @@ EOF
     [[ "$output" != *"command not found"* ]]
 }
 
-@test "FI-25: dispatch-multi with problematic file content does not break shell execution" {
-    cd "$TEST_REPO"
-    
-    # Create file with problematic content
-    cat > multi-problematic.txt << 'EOF'
-please fix ' and " issues
-EOF
-    
-    # Mock Claude IDE
-    export IDE_NAME="claude"
-    export IDE_CMD="echo"
-    
-    # Test dispatch-multi with problematic content
-    run "$PARA_SCRIPT" dispatch-multi 2 --file multi-problematic.txt
-    
-    # Should not fail with shell quoting errors
-    [[ "$output" != *"Unexpected end of string"* ]]
-    [[ "$output" != *"quotes are not balanced"* ]]
-}
 
-@test "FI-26: verifies new double-quote escaping produces safe commands" {
+@test "FI-20: verifies new double-quote escaping produces safe commands" {
     cd "$TEST_REPO"
     
     # Source the IDE functions
@@ -577,7 +479,7 @@ EOF
     [[ "$output" == *'test'* ]]
 }
 
-@test "FI-27: test new double-quote escaping with different special characters" {
+@test "FI-21: test new double-quote escaping with different special characters" {
     cd "$TEST_REPO"
     
     # Source the IDE functions to test escaping

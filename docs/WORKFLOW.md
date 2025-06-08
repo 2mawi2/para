@@ -10,34 +10,22 @@ stateDiagram-v2
     
     Idle --> Starting: para start <session-name>
     Idle --> Dispatching: para dispatch <prompt>
-    Idle --> DispatchingMulti: para dispatch-multi <count> <prompt>
     
     Starting --> Active: worktree + branch created
     Dispatching --> Active: session auto-created
-    DispatchingMulti --> ActiveMultiple: multiple sessions created
-    
     Active --> Working: IDE opened
-    ActiveMultiple --> WorkingMultiple: multiple IDEs opened
     
     Working --> Finishing: para finish <message>
     Working --> Canceling: para cancel
     Working --> Pausing: exit IDE (session preserved)
     
-    WorkingMultiple --> FinishingMultiple: para finish in each session
-    WorkingMultiple --> CancelingMultiple: para cancel in sessions
-    
     Finishing --> Committed: changes staged & committed
     Canceling --> Cancelled: session deleted
     Pausing --> Paused: session preserved
     
-    FinishingMultiple --> CommittedMultiple: all sessions committed
-    CancelingMultiple --> CancelledMultiple: sessions cleaned up
-    
     Committed --> Idle: back to master branch
     Cancelled --> Idle: session removed
     Paused --> Recovering: para recover <session-name>
-    CommittedMultiple --> Idle: all sessions complete
-    CancelledMultiple --> Idle: cleanup complete
     
     Recovering --> Active: session restored
 ```
@@ -50,7 +38,6 @@ flowchart TD
     
     B --> C[para start]
     B --> D[para dispatch]
-    B --> E[para dispatch-multi]
     B --> F[para finish]
     B --> G[para cancel]
     B --> H[para recover]
@@ -65,13 +52,7 @@ flowchart TD
     D2 --> D3[Open IDE with prompt]
     D3 --> I
     
-    E --> E1[Generate multiple session names]
-    E1 --> E2[Create multiple worktrees & branches]
-    E2 --> E3[Open multiple IDEs]
-    E3 --> J[Multiple Active Sessions]
-    
     I --> F
-    J --> F
     
     F --> F1[Auto-stage all changes]
     F1 --> F2[Create commit]
@@ -80,7 +61,6 @@ flowchart TD
     F4 --> K[Session Complete]
     
     I --> G
-    J --> G
     
     G --> G1[Confirm deletion]
     G1 --> G2[Remove worktree]
@@ -119,29 +99,6 @@ sequenceDiagram
     Para->>User: Session complete
 ```
 
-## Multi-Session Workflow
-
-```mermaid
-flowchart LR
-    A[para dispatch-multi 3 'Compare auth methods'] --> B[Session 1: OAuth]
-    A --> C[Session 2: JWT]  
-    A --> D[Session 3: Session-based]
-    
-    B --> B1[IDE 1 Opens]
-    C --> C1[IDE 2 Opens]
-    D --> D1[IDE 3 Opens]
-    
-    B1 --> B2[Develop OAuth solution]
-    C1 --> C2[Develop JWT solution]
-    D1 --> D2[Develop session solution]
-    
-    B2 --> E[para finish in each]
-    C2 --> E
-    D2 --> E
-    
-    E --> F[Compare results]
-    F --> G[Choose best approach]
-```
 
 ## File Input Workflow
 
