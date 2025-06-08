@@ -90,10 +90,11 @@ teardown() {
     
     cd "$TEST_REPO"
     
-    # Verify branch is preserved for backup recovery
-    run git branch --list "$branch_name"
+    # Verify branch is moved to archive namespace for backup recovery
+    archive_branch_name=$(echo "$branch_name" | sed 's|para/|para/archive/|')
+    run git branch --list "$archive_branch_name"
     [ "$status" -eq 0 ]
-    [ -n "$output" ]  # Branch should still exist for backup
+    [ -n "$output" ]  # Branch should exist in archive for backup
     
     # Verify worktree directory is gone
     assert_session_not_exists "$session_dir"
@@ -281,10 +282,11 @@ teardown() {
     
     cd "$TEST_REPO"
     
-    # Verify branch is preserved for backup recovery
-    run git branch --list "$branch_name"
+    # Verify branch is moved to archive namespace for backup recovery
+    archive_branch_name=$(echo "$branch_name" | sed 's|para/|para/archive/|')
+    run git branch --list "$archive_branch_name"
     [ "$status" -eq 0 ]
-    [ -n "$output" ]  # Branch should still exist for backup
+    [ -n "$output" ]  # Branch should exist in archive for backup
     
     # Verify worktree directory is gone
     assert_session_not_exists "$session_dir"

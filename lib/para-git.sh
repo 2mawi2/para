@@ -156,16 +156,11 @@ cancel_session() {
   # Remove worktree first
   git -C "$REPO_ROOT" worktree remove --force "$worktree_dir" 2>/dev/null || true
 
-  # Move branch from wip to archive namespace
+  # Move branch to archive namespace
   if git -C "$REPO_ROOT" rev-parse --verify "$temp_branch" >/dev/null 2>&1; then
-    # Convert para/wip/session-name to para/archive/session-name
-    archive_branch=$(echo "$temp_branch" | sed 's|/wip/|/archive/|')
-
-    # If no wip in the name, still move to archive by replacing prefix
-    if [ "$archive_branch" = "$temp_branch" ]; then
-      prefix=$(get_branch_prefix)
-      archive_branch=$(echo "$temp_branch" | sed "s|^$prefix/|$prefix/archive/|")
-    fi
+    # Convert para/session-name to para/archive/session-name
+    prefix=$(get_branch_prefix)
+    archive_branch=$(echo "$temp_branch" | sed "s|^$prefix/|$prefix/archive/|")
 
     echo "▶ moving branch '$temp_branch' to archive: '$archive_branch'"
     git -C "$REPO_ROOT" branch -m "$temp_branch" "$archive_branch" 2>/dev/null || true
@@ -227,10 +222,10 @@ recover_archive_session() {
   fi
 
   # Generate new session info
-  wip_branch="${prefix}/wip/${session_name}"
+  active_branch="${prefix}/${session_name}"
 
-  # Check if a session with this name already exists in wip
-  if git -C "$REPO_ROOT" rev-parse --verify "$wip_branch" >/dev/null 2>&1; then
+  # Check if a session with this name already exists
+  if git -C "$REPO_ROOT" rev-parse --verify "$active_branch" >/dev/null 2>&1; then
     echo "❌ Session '$session_name' already exists in active sessions"
     echo "   Use 'para list' to see active sessions"
     echo "   Or choose a different name for recovery"
@@ -239,23 +234,23 @@ recover_archive_session() {
 
   echo "▶ recovering session '$session_name' from archive"
 
-  # Move branch from archive back to wip
-  git -C "$REPO_ROOT" branch -m "$archive_branch" "$wip_branch" || die "failed to move branch from archive to wip"
+  # Move branch from archive back to active
+  git -C "$REPO_ROOT" branch -m "$archive_branch" "$active_branch" || die "failed to move branch from archive"
 
   # Create worktree directory path
-  WORKTREE_DIR="$SUBTREES_DIR/$wip_branch"
+  WORKTREE_DIR="$SUBTREES_DIR/$active_branch"
 
   # Recreate the worktree
   echo "▶ recreating worktree: $WORKTREE_DIR"
   mkdir -p "$SUBTREES_DIR"
   setup_gitignore
-  git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" "$wip_branch" >&2 || die "git worktree add failed"
+  git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" "$active_branch" >&2 || die "git worktree add failed"
 
   # Generate session ID from session name
   SESSION_ID="$session_name"
 
   # Determine base branch (try to detect from branch history)
-  BASE_BRANCH=$(git -C "$REPO_ROOT" merge-base --fork-point HEAD "$wip_branch" 2>/dev/null | git -C "$REPO_ROOT" name-rev --name-only --refs="refs/heads/*" 2>/dev/null | head -1) || BASE_BRANCH="master"
+  BASE_BRANCH=$(git -C "$REPO_ROOT" merge-base --fork-point HEAD "$active_branch" 2>/dev/null | git -C "$REPO_ROOT" name-rev --name-only --refs="refs/heads/*" 2>/dev/null | head -1) || BASE_BRANCH="master"
 
   # If we can't determine base branch, default to current branch
   if [ -z "$BASE_BRANCH" ] || [ "$BASE_BRANCH" = "undefined" ]; then
@@ -263,13 +258,13 @@ recover_archive_session() {
   fi
 
   # Save session state
-  save_session_state "$SESSION_ID" "$wip_branch" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "ide" "${IDE_NAME:-cursor}" ""
+  save_session_state "$SESSION_ID" "$active_branch" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "ide" "${IDE_NAME:-cursor}" ""
 
   echo "✅ session '$session_name' recovered successfully"
   echo ""
   echo "📋 Session details:"
   echo "   Session ID: $SESSION_ID"
-  echo "   Branch: $wip_branch"
+  echo "   Branch: $active_branch"
   echo "   Worktree: $WORKTREE_DIR"
   echo "   Base: $BASE_BRANCH"
   echo ""
