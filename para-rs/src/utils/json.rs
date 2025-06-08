@@ -1,5 +1,5 @@
-use serde_json::{Value, Map};
-use crate::utils::{Result, ParaError};
+use crate::utils::{ParaError, Result};
+use serde_json::{Map, Value};
 
 pub fn json_escape_string(input: &str) -> String {
     input
@@ -20,21 +20,24 @@ pub fn json_escape_string(input: &str) -> String {
 
 pub fn create_vscode_task(label: &str, command: &str, args: &[&str]) -> Value {
     let mut task = Map::new();
-    
+
     task.insert("label".to_string(), Value::String(label.to_string()));
     task.insert("type".to_string(), Value::String("shell".to_string()));
     task.insert("command".to_string(), Value::String(command.to_string()));
-    
+
     if !args.is_empty() {
-        let args_array: Vec<Value> = args.iter().map(|arg| Value::String(arg.to_string())).collect();
+        let args_array: Vec<Value> = args
+            .iter()
+            .map(|arg| Value::String(arg.to_string()))
+            .collect();
         task.insert("args".to_string(), Value::Array(args_array));
     }
-    
+
     let mut group = Map::new();
     group.insert("kind".to_string(), Value::String("build".to_string()));
     group.insert("isDefault".to_string(), Value::Bool(false));
     task.insert("group".to_string(), Value::Object(group));
-    
+
     let mut presentation = Map::new();
     presentation.insert("echo".to_string(), Value::Bool(true));
     presentation.insert("reveal".to_string(), Value::String("always".to_string()));
@@ -43,14 +46,17 @@ pub fn create_vscode_task(label: &str, command: &str, args: &[&str]) -> Value {
     presentation.insert("showReuseMessage".to_string(), Value::Bool(true));
     presentation.insert("clear".to_string(), Value::Bool(false));
     task.insert("presentation".to_string(), Value::Object(presentation));
-    
+
     let mut options = Map::new();
-    options.insert("cwd".to_string(), Value::String("${workspaceFolder}".to_string()));
+    options.insert(
+        "cwd".to_string(),
+        Value::String("${workspaceFolder}".to_string()),
+    );
     task.insert("options".to_string(), Value::Object(options));
-    
+
     task.insert("problemMatcher".to_string(), Value::Array(vec![]));
     task.insert("runOptions".to_string(), Value::Object(Map::new()));
-    
+
     Value::Object(task)
 }
 
@@ -62,30 +68,33 @@ pub fn create_tasks_json(tasks: Vec<Value>) -> Value {
     let mut tasks_json = Map::new();
     tasks_json.insert("version".to_string(), Value::String("2.0.0".to_string()));
     tasks_json.insert("tasks".to_string(), Value::Array(tasks));
-    
+
     Value::Object(tasks_json)
 }
 
 pub fn create_claude_task(prompt: &str, working_dir: Option<&str>) -> Value {
     let mut task = Map::new();
-    
-    task.insert("label".to_string(), Value::String("Para Session".to_string()));
+
+    task.insert(
+        "label".to_string(),
+        Value::String("Para Session".to_string()),
+    );
     task.insert("type".to_string(), Value::String("shell".to_string()));
     task.insert("command".to_string(), Value::String("claude".to_string()));
-    
+
     let mut args = vec!["--prompt".to_string(), json_escape_string(prompt)];
     if let Some(dir) = working_dir {
         args.extend(vec!["--cwd".to_string(), dir.to_string()]);
     }
-    
+
     let args_array: Vec<Value> = args.iter().map(|arg| Value::String(arg.clone())).collect();
     task.insert("args".to_string(), Value::Array(args_array));
-    
+
     let mut group = Map::new();
     group.insert("kind".to_string(), Value::String("build".to_string()));
     group.insert("isDefault".to_string(), Value::Bool(true));
     task.insert("group".to_string(), Value::Object(group));
-    
+
     let mut presentation = Map::new();
     presentation.insert("echo".to_string(), Value::Bool(false));
     presentation.insert("reveal".to_string(), Value::String("always".to_string()));
@@ -94,18 +103,21 @@ pub fn create_claude_task(prompt: &str, working_dir: Option<&str>) -> Value {
     presentation.insert("showReuseMessage".to_string(), Value::Bool(false));
     presentation.insert("clear".to_string(), Value::Bool(true));
     task.insert("presentation".to_string(), Value::Object(presentation));
-    
+
     let mut options = Map::new();
     if let Some(dir) = working_dir {
         options.insert("cwd".to_string(), Value::String(dir.to_string()));
     } else {
-        options.insert("cwd".to_string(), Value::String("${workspaceFolder}".to_string()));
+        options.insert(
+            "cwd".to_string(),
+            Value::String("${workspaceFolder}".to_string()),
+        );
     }
     task.insert("options".to_string(), Value::Object(options));
-    
+
     task.insert("problemMatcher".to_string(), Value::Array(vec![]));
     task.insert("runOptions".to_string(), Value::Object(Map::new()));
-    
+
     Value::Object(task)
 }
 
@@ -165,36 +177,53 @@ pub fn validate_json_structure(value: &Value, required_keys: &[&str]) -> Result<
 
 pub fn create_workspace_settings(settings: &Map<String, Value>) -> Value {
     let mut workspace = Map::new();
-    
+
     for (key, value) in settings {
         workspace.insert(key.clone(), value.clone());
     }
-    
+
     Value::Object(workspace)
 }
 
-pub fn create_launch_config(name: &str, program: &str, args: &[&str], working_dir: Option<&str>) -> Value {
+pub fn create_launch_config(
+    name: &str,
+    program: &str,
+    args: &[&str],
+    working_dir: Option<&str>,
+) -> Value {
     let mut config = Map::new();
-    
+
     config.insert("name".to_string(), Value::String(name.to_string()));
     config.insert("type".to_string(), Value::String("node".to_string()));
     config.insert("request".to_string(), Value::String("launch".to_string()));
     config.insert("program".to_string(), Value::String(program.to_string()));
-    
+
     if !args.is_empty() {
-        let args_array: Vec<Value> = args.iter().map(|arg| Value::String(arg.to_string())).collect();
+        let args_array: Vec<Value> = args
+            .iter()
+            .map(|arg| Value::String(arg.to_string()))
+            .collect();
         config.insert("args".to_string(), Value::Array(args_array));
     }
-    
+
     if let Some(dir) = working_dir {
         config.insert("cwd".to_string(), Value::String(dir.to_string()));
     } else {
-        config.insert("cwd".to_string(), Value::String("${workspaceFolder}".to_string()));
+        config.insert(
+            "cwd".to_string(),
+            Value::String("${workspaceFolder}".to_string()),
+        );
     }
-    
-    config.insert("console".to_string(), Value::String("integratedTerminal".to_string()));
-    config.insert("internalConsoleOptions".to_string(), Value::String("neverOpen".to_string()));
-    
+
+    config.insert(
+        "console".to_string(),
+        Value::String("integratedTerminal".to_string()),
+    );
+    config.insert(
+        "internalConsoleOptions".to_string(),
+        Value::String("neverOpen".to_string()),
+    );
+
     Value::Object(config)
 }
 
@@ -202,7 +231,7 @@ pub fn create_launch_json(configurations: Vec<Value>) -> Value {
     let mut launch = Map::new();
     launch.insert("version".to_string(), Value::String("0.2.0".to_string()));
     launch.insert("configurations".to_string(), Value::Array(configurations));
-    
+
     Value::Object(launch)
 }
 
@@ -223,11 +252,20 @@ mod tests {
     #[test]
     fn test_create_vscode_task() {
         let task = create_vscode_task("Test Task", "echo", &["hello", "world"]);
-        
-        assert_eq!(extract_string_from_json(&task, "label"), Some("Test Task".to_string()));
-        assert_eq!(extract_string_from_json(&task, "type"), Some("shell".to_string()));
-        assert_eq!(extract_string_from_json(&task, "command"), Some("echo".to_string()));
-        
+
+        assert_eq!(
+            extract_string_from_json(&task, "label"),
+            Some("Test Task".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&task, "type"),
+            Some("shell".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&task, "command"),
+            Some("echo".to_string())
+        );
+
         let args = extract_array_from_json(&task, "args").unwrap();
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], Value::String("hello".to_string()));
@@ -237,10 +275,16 @@ mod tests {
     #[test]
     fn test_create_claude_task() {
         let task = create_claude_task("Test prompt", Some("/test/dir"));
-        
-        assert_eq!(extract_string_from_json(&task, "label"), Some("Para Session".to_string()));
-        assert_eq!(extract_string_from_json(&task, "command"), Some("claude".to_string()));
-        
+
+        assert_eq!(
+            extract_string_from_json(&task, "label"),
+            Some("Para Session".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&task, "command"),
+            Some("claude".to_string())
+        );
+
         let args = extract_array_from_json(&task, "args").unwrap();
         assert!(args.len() >= 2);
         assert_eq!(args[0], Value::String("--prompt".to_string()));
@@ -251,11 +295,14 @@ mod tests {
     fn test_create_tasks_json() {
         let task1 = create_vscode_task("Task 1", "echo", &["test1"]);
         let task2 = create_vscode_task("Task 2", "echo", &["test2"]);
-        
+
         let tasks_json = create_tasks_json(vec![task1, task2]);
-        
-        assert_eq!(extract_string_from_json(&tasks_json, "version"), Some("2.0.0".to_string()));
-        
+
+        assert_eq!(
+            extract_string_from_json(&tasks_json, "version"),
+            Some("2.0.0".to_string())
+        );
+
         let tasks = extract_array_from_json(&tasks_json, "tasks").unwrap();
         assert_eq!(tasks.len(), 2);
     }
@@ -266,11 +313,11 @@ mod tests {
         obj.insert("key1".to_string(), Value::String("value1".to_string()));
         obj.insert("key2".to_string(), Value::Number(42.into()));
         let value = Value::Object(obj);
-        
+
         let pretty = pretty_print_json(&value).unwrap();
         assert!(pretty.contains('\n'));
         assert!(pretty.contains("  "));
-        
+
         let minified = minify_json(&value).unwrap();
         assert!(!minified.contains('\n'));
         assert!(!minified.contains("  "));
@@ -284,19 +331,25 @@ mod tests {
                 "keep": "this"
             }
         });
-        
+
         let overlay = serde_json::json!({
             "new": "value",
             "nested": {
                 "add": "this"
             }
         });
-        
+
         merge_json_objects(&mut base, &overlay).unwrap();
-        
-        assert_eq!(extract_string_from_json(&base, "existing"), Some("value".to_string()));
-        assert_eq!(extract_string_from_json(&base, "new"), Some("value".to_string()));
-        
+
+        assert_eq!(
+            extract_string_from_json(&base, "existing"),
+            Some("value".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&base, "new"),
+            Some("value".to_string())
+        );
+
         let nested = extract_object_from_json(&base, "nested").unwrap();
         assert!(nested.contains_key("keep"));
         assert!(nested.contains_key("add"));
@@ -308,26 +361,40 @@ mod tests {
             "name": "test",
             "version": "1.0"
         });
-        
+
         let invalid = serde_json::json!({
             "name": "test"
         });
-        
+
         assert!(validate_json_structure(&valid, &["name", "version"]).is_ok());
         assert!(validate_json_structure(&invalid, &["name", "version"]).is_err());
-        
+
         let not_object = serde_json::json!(["array"]);
         assert!(validate_json_structure(&not_object, &["name"]).is_err());
     }
 
     #[test]
     fn test_create_launch_config() {
-        let config = create_launch_config("Test Launch", "/path/to/program", &["arg1", "arg2"], Some("/working/dir"));
-        
-        assert_eq!(extract_string_from_json(&config, "name"), Some("Test Launch".to_string()));
-        assert_eq!(extract_string_from_json(&config, "program"), Some("/path/to/program".to_string()));
-        assert_eq!(extract_string_from_json(&config, "cwd"), Some("/working/dir".to_string()));
-        
+        let config = create_launch_config(
+            "Test Launch",
+            "/path/to/program",
+            &["arg1", "arg2"],
+            Some("/working/dir"),
+        );
+
+        assert_eq!(
+            extract_string_from_json(&config, "name"),
+            Some("Test Launch".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&config, "program"),
+            Some("/path/to/program".to_string())
+        );
+        assert_eq!(
+            extract_string_from_json(&config, "cwd"),
+            Some("/working/dir".to_string())
+        );
+
         let args = extract_array_from_json(&config, "args").unwrap();
         assert_eq!(args.len(), 2);
     }
@@ -336,11 +403,14 @@ mod tests {
     fn test_create_launch_json() {
         let config1 = create_launch_config("Config 1", "/prog1", &[], None);
         let config2 = create_launch_config("Config 2", "/prog2", &[], None);
-        
+
         let launch_json = create_launch_json(vec![config1, config2]);
-        
-        assert_eq!(extract_string_from_json(&launch_json, "version"), Some("0.2.0".to_string()));
-        
+
+        assert_eq!(
+            extract_string_from_json(&launch_json, "version"),
+            Some("0.2.0".to_string())
+        );
+
         let configs = extract_array_from_json(&launch_json, "configurations").unwrap();
         assert_eq!(configs.len(), 2);
     }

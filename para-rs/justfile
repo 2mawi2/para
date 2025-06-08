@@ -1,5 +1,27 @@
 # Para-rs justfile - Rust implementation testing
 
+# Run Rust unit tests
+test-unit:
+    cargo test
+
+# Run Rust linting with clippy (skeleton-friendly)
+lint:
+    cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious -W clippy::style -W clippy::complexity -W clippy::perf
+
+# Run Rust formatting check
+fmt-check:
+    cargo fmt --all -- --check
+
+# Fix Rust formatting
+fmt:
+    cargo fmt --all
+
+# Run all Rust checks (tests + linting + formatting)
+test:
+    just test-unit
+    just lint
+    just fmt-check
+
 # Run legacy bats tests against Rust implementation
 test-legacy:
     #!/bin/bash

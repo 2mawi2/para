@@ -1,12 +1,12 @@
 pub mod error;
 pub mod fs;
-pub mod names;
 pub mod json;
+pub mod names;
 
 pub use error::{ParaError, Result};
 pub use fs::*;
-pub use names::*;
 pub use json::*;
+pub use names::*;
 
 pub type CommandResult = Result<()>;
 pub type StringResult = Result<String>;
