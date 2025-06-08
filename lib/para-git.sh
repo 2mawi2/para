@@ -1,6 +1,42 @@
 #!/usr/bin/env sh
 # Git operations for para
 
+# Execute git command with consistent error handling
+safe_git_execute() {
+  operation="$1"
+  shift
+  error_msg="$1"
+  shift
+
+  git -C "$REPO_ROOT" "$operation" "$@" || die "$error_msg"
+}
+
+# Execute git command that returns output with consistent error handling
+safe_git_capture() {
+  operation="$1"
+  shift
+  error_msg="$1"
+  shift
+
+  output=$(git -C "$REPO_ROOT" "$operation" "$@") || die "$error_msg"
+  echo "$output"
+}
+
+# Check if a git branch exists
+git_branch_exists() {
+  branch_name="$1"
+  git -C "$REPO_ROOT" rev-parse --verify "$branch_name" >/dev/null 2>&1
+}
+
+# Ensure repository is in clean state (no uncommitted changes)
+git_ensure_clean_state() {
+  operation_name="${1:-operation}"
+
+  if ! git -C "$REPO_ROOT" diff --quiet --exit-code || ! git -C "$REPO_ROOT" diff --quiet --exit-code --cached; then
+    die "repository has uncommitted changes - cannot proceed with $operation_name"
+  fi
+}
+
 # Find repository root and set up Git environment
 need_git_repo() {
   # First check if we're in a git repository at all
@@ -388,7 +424,7 @@ generate_unique_branch_name() {
   target_branch="$1"
 
   # Check if branch already exists
-  if ! git -C "$REPO_ROOT" rev-parse --verify "$target_branch" >/dev/null 2>&1; then
+  if ! git_branch_exists "$target_branch"; then
     # Branch doesn't exist, use as-is
     echo "$target_branch"
     return 0
@@ -398,7 +434,7 @@ generate_unique_branch_name() {
   counter=1
   while [ "$counter" -le 999 ]; do
     candidate="${target_branch}-${counter}"
-    if ! git -C "$REPO_ROOT" rev-parse --verify "$candidate" >/dev/null 2>&1; then
+    if ! git_branch_exists "$candidate"; then
       echo "$candidate"
       return 0
     fi
@@ -491,11 +527,11 @@ integrate_branch() {
   echo "▶ integrating changes into $base_branch using rebase..."
 
   # Get the commit hash of the feature branch
-  feature_commit=$(git -C "$REPO_ROOT" rev-parse "$feature_branch") || die "failed to get feature branch commit"
+  feature_commit=$(safe_git_capture rev-parse "failed to get feature branch commit" "$feature_branch")
 
   # Create a temporary branch from the feature commit for rebasing
   temp_rebase_branch="temp-rebase-$(date +%s)"
-  git -C "$REPO_ROOT" branch "$temp_rebase_branch" "$feature_commit" || die "failed to create temporary rebase branch"
+  safe_git_execute branch "failed to create temporary rebase branch" "$temp_rebase_branch" "$feature_commit"
 
   # Checkout the temporary branch and rebase it onto base branch
   git -C "$REPO_ROOT" checkout "$temp_rebase_branch" >/dev/null 2>&1 || die "failed to checkout temporary rebase branch"
@@ -504,18 +540,17 @@ integrate_branch() {
     # Rebase successful, now update the base branch
     if is_branch_in_worktree "$base_branch"; then
       # Base branch is in a worktree, use git update-ref to update it safely
-      rebased_commit=$(git -C "$REPO_ROOT" rev-parse "$temp_rebase_branch") || die "failed to get rebased commit"
+      rebased_commit=$(safe_git_capture rev-parse "failed to get rebased commit" "$temp_rebase_branch")
 
       # Backup current branch state before update
-      current_base_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
+      current_base_commit=$(safe_git_capture rev-parse "failed to get current base commit" "refs/heads/$base_branch")
       echo "  ⚠️  updating $base_branch using git update-ref (bypassing checkout protection)"
       echo "  → backup of current state: $current_base_commit"
 
-      git -C "$REPO_ROOT" update-ref "refs/heads/$base_branch" "$rebased_commit" ||
-        die "failed to update base branch reference (backup: $current_base_commit)"
+      safe_git_execute update-ref "failed to update base branch reference (backup: $current_base_commit)" "refs/heads/$base_branch" "$rebased_commit"
 
       # Validate the update was successful
-      updated_commit=$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base_branch")
+      updated_commit=$(safe_git_capture rev-parse "failed to validate branch update" "refs/heads/$base_branch")
       if [ "$updated_commit" != "$rebased_commit" ]; then
         die "branch update validation failed - expected $rebased_commit, got $updated_commit"
       fi
@@ -525,7 +560,7 @@ integrate_branch() {
     else
       # Standard fast-forward merge
       git -C "$REPO_ROOT" checkout "$base_branch" >/dev/null 2>&1 || die "failed to checkout $base_branch after rebase"
-      git -C "$REPO_ROOT" merge --ff-only "$temp_rebase_branch" || die "failed to fast-forward merge after rebase"
+      safe_git_execute merge "failed to fast-forward merge after rebase" --ff-only "$temp_rebase_branch"
       echo "✅ successfully integrated into $base_branch using rebase"
     fi
 
