@@ -48,11 +48,7 @@ pub fn default_session_config() -> SessionConfig {
 }
 
 pub fn detect_ide() -> (String, String) {
-    let ides = [
-        ("claude", "claude"),
-        ("cursor", "cursor"),
-        ("code", "code"),
-    ];
+    let ides = [("claude", "claude"), ("cursor", "cursor"), ("code", "code")];
 
     for (name, command) in &ides {
         if is_command_available(command) {
@@ -64,11 +60,7 @@ pub fn detect_ide() -> (String, String) {
 }
 
 pub fn get_available_ides() -> Vec<(String, String)> {
-    let ides = [
-        ("claude", "claude"),
-        ("cursor", "cursor"),
-        ("code", "code"),
-    ];
+    let ides = [("claude", "claude"), ("cursor", "cursor"), ("code", "code")];
 
     ides.iter()
         .filter(|(_, command)| is_command_available(command))
@@ -155,7 +147,7 @@ mod tests {
     fn test_config_paths() {
         let config_dir = get_default_config_dir();
         let config_file = get_config_file_path();
-        
+
         assert!(config_file.ends_with("config.json"));
         assert!(config_file.starts_with(&config_dir));
     }

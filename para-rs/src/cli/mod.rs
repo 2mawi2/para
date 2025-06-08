@@ -1,6 +1,6 @@
-pub mod parser;
 pub mod commands;
 pub mod completion;
+pub mod parser;
 
 #[cfg(test)]
 mod tests;
@@ -14,15 +14,15 @@ pub fn execute_command(cli: Cli) -> Result<()> {
         Some(Commands::Start(args)) => {
             args.validate()?;
             commands::start::execute(args)
-        },
+        }
         Some(Commands::Dispatch(args)) => {
             args.validate()?;
             commands::dispatch::execute(args)
-        },
+        }
         Some(Commands::Finish(args)) => {
             args.validate()?;
             commands::finish::execute(args)
-        },
+        }
         Some(Commands::Integrate(args)) => commands::integrate::execute(args),
         Some(Commands::Cancel(args)) => commands::cancel::execute(args),
         Some(Commands::Clean(args)) => commands::clean::execute(args),

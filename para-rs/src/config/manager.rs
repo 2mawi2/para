@@ -1,5 +1,5 @@
-use super::{Config, ConfigError, Result};
 use super::defaults::{default_config, get_config_file_path, get_legacy_config_path};
+use super::{Config, ConfigError, Result};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -9,7 +9,7 @@ pub struct ConfigManager;
 impl ConfigManager {
     pub fn load_or_create() -> Result<Config> {
         let config_path = get_config_file_path();
-        
+
         if config_path.exists() {
             Self::load_from_file(&config_path)
         } else {
@@ -35,7 +35,7 @@ impl ConfigManager {
 
     pub fn save(config: &Config) -> Result<()> {
         config.validate()?;
-        
+
         let config_path = get_config_file_path();
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
@@ -79,7 +79,9 @@ impl ConfigManager {
         }
 
         if let Ok(preserve_on_finish) = std::env::var("PARA_PRESERVE_ON_FINISH") {
-            config.session.preserve_on_finish = preserve_on_finish.parse().unwrap_or(config.session.preserve_on_finish);
+            config.session.preserve_on_finish = preserve_on_finish
+                .parse()
+                .unwrap_or(config.session.preserve_on_finish);
         }
 
         config
@@ -88,34 +90,38 @@ impl ConfigManager {
     fn migrate_legacy_config(legacy_path: &Path, new_path: &Path) -> Result<Config> {
         let legacy_content = fs::read_to_string(legacy_path)?;
         let config = Self::parse_legacy_config(&legacy_content)?;
-        
+
         if let Some(parent) = new_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         Self::save(&config)?;
-        
+
         match fs::rename(legacy_path, legacy_path.with_extension("backup")) {
-            Ok(_) => eprintln!("Migrated legacy config from {} to {}", legacy_path.display(), new_path.display()),
+            Ok(_) => eprintln!(
+                "Migrated legacy config from {} to {}",
+                legacy_path.display(),
+                new_path.display()
+            ),
             Err(_) => eprintln!("Migrated config but could not backup legacy file"),
         }
-        
+
         Ok(config)
     }
 
     fn parse_legacy_config(content: &str) -> Result<Config> {
         let mut config = default_config();
-        
+
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            
+
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim();
                 let value = value.trim().trim_matches('"').trim_matches('\'');
-                
+
                 match key {
                     "IDE_NAME" => config.ide.name = value.to_string(),
                     "IDE_CMD" => config.ide.command = value.to_string(),
@@ -126,19 +132,21 @@ impl ConfigManager {
                 }
             }
         }
-        
+
         Ok(config)
     }
 
     pub fn backup_config() -> Result<()> {
         let config_path = get_config_file_path();
         if !config_path.exists() {
-            return Err(ConfigError::NotFound("No config file to backup".to_string()));
+            return Err(ConfigError::NotFound(
+                "No config file to backup".to_string(),
+            ));
         }
 
         let backup_path = config_path.with_extension("json.backup");
         fs::copy(&config_path, &backup_path)?;
-        
+
         Ok(())
     }
 
@@ -150,13 +158,13 @@ impl ConfigManager {
 
         let config_path = get_config_file_path();
         fs::copy(&backup_path, &config_path)?;
-        
+
         Self::load_from_file(&config_path)
     }
 
     pub fn reset_to_defaults() -> Result<Config> {
         Self::backup_config().ok(); // Backup if possible, but don't fail if it doesn't exist
-        
+
         let config = default_config();
         Self::save(&config)?;
         Ok(config)
@@ -221,29 +229,32 @@ mod tests {
     fn test_save_and_load_config() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.json");
-        
+
         let original_config = create_test_config();
-        
+
         let json = serde_json::to_string_pretty(&original_config).unwrap();
         fs::write(&config_path, json).unwrap();
-        
+
         let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
-        
+
         assert_eq!(original_config.ide.name, loaded_config.ide.name);
         assert_eq!(original_config.ide.command, loaded_config.ide.command);
-        assert_eq!(original_config.git.branch_prefix, loaded_config.git.branch_prefix);
+        assert_eq!(
+            original_config.git.branch_prefix,
+            loaded_config.git.branch_prefix
+        );
     }
 
     #[test]
     fn test_env_overrides() {
         std::env::set_var("PARA_IDE_NAME", "test_override");
         std::env::set_var("PARA_BRANCH_PREFIX", "override_prefix");
-        
+
         let config = ConfigManager::apply_env_overrides(create_test_config());
-        
+
         assert_eq!(config.ide.name, "test_override");
         assert_eq!(config.git.branch_prefix, "override_prefix");
-        
+
         std::env::remove_var("PARA_IDE_NAME");
         std::env::remove_var("PARA_BRANCH_PREFIX");
     }
@@ -257,9 +268,9 @@ IDE_CMD="cursor"
 SUBTREES_DIR="legacy_subtrees"
 BRANCH_PREFIX="legacy"
 "#;
-        
+
         let config = ConfigManager::parse_legacy_config(legacy_content).unwrap();
-        
+
         assert_eq!(config.ide.name, "cursor");
         assert_eq!(config.ide.command, "cursor");
         assert_eq!(config.directories.subtrees_dir, "legacy_subtrees");
@@ -270,7 +281,7 @@ BRANCH_PREFIX="legacy"
     fn test_validate_and_fix() {
         let mut config = create_test_config();
         config.ide.command = "nonexistent_command".to_string();
-        
+
         let fixes = ConfigManager::validate_and_fix(&mut config).unwrap();
         assert!(!fixes.is_empty());
         assert_ne!(config.ide.command, "nonexistent_command");

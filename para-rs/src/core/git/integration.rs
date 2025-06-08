@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use crate::utils::error::{ParaError, Result};
-use super::repository::{GitRepository, execute_git_command, execute_git_command_with_status};
 use super::branch::BranchManager;
+use super::repository::{execute_git_command, execute_git_command_with_status, GitRepository};
+use crate::utils::error::{ParaError, Result};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct FinishRequest {
@@ -49,10 +49,16 @@ impl<'a> IntegrationManager<'a> {
             self.repo.commit(&request.commit_message)?;
         }
 
-        let commit_count = self.repo.get_commit_count_since(&request.base_branch, &request.feature_branch)?;
-        
+        let commit_count = self
+            .repo
+            .get_commit_count_since(&request.base_branch, &request.feature_branch)?;
+
         if commit_count > 1 {
-            self.squash_commits(&request.feature_branch, &request.base_branch, &request.commit_message)?;
+            self.squash_commits(
+                &request.feature_branch,
+                &request.base_branch,
+                &request.commit_message,
+            )?;
         }
 
         if request.integrate {
@@ -61,29 +67,32 @@ impl<'a> IntegrationManager<'a> {
                 base_branch: request.base_branch.clone(),
                 commit_message: request.commit_message,
             })? {
-                IntegrationResult::Success => {
-                    Ok(FinishResult::Success { 
-                        final_branch: request.base_branch 
-                    })
-                },
+                IntegrationResult::Success => Ok(FinishResult::Success {
+                    final_branch: request.base_branch,
+                }),
                 IntegrationResult::ConflictsPending { .. } => {
                     Ok(FinishResult::ConflictsPending { state_saved: true })
-                },
-                IntegrationResult::Failed { error } => {
-                    Err(ParaError::git_operation(error))
                 }
+                IntegrationResult::Failed { error } => Err(ParaError::git_operation(error)),
             }
         } else {
             let target_branch = request.target_branch_name.unwrap_or(request.feature_branch);
-            Ok(FinishResult::Success { final_branch: target_branch })
+            Ok(FinishResult::Success {
+                final_branch: target_branch,
+            })
         }
     }
 
-    pub fn squash_commits(&self, feature_branch: &str, base_branch: &str, message: &str) -> Result<()> {
+    pub fn squash_commits(
+        &self,
+        feature_branch: &str,
+        base_branch: &str,
+        message: &str,
+    ) -> Result<()> {
         let merge_base = self.repo.get_merge_base(base_branch, feature_branch)?;
-        
+
         execute_git_command_with_status(self.repo, &["reset", "--soft", &merge_base])?;
-        
+
         let status_output = execute_git_command(self.repo, &["status", "--porcelain"])?;
         if !status_output.trim().is_empty() {
             self.repo.commit(message)?;
@@ -98,21 +107,21 @@ impl<'a> IntegrationManager<'a> {
         match self.prepare_rebase(&request.feature_branch, &request.base_branch) {
             Ok(()) => {
                 self.repo.checkout_branch(&request.base_branch)?;
-                
+
                 execute_git_command_with_status(
-                    self.repo, 
-                    &["merge", "--ff-only", &request.feature_branch]
+                    self.repo,
+                    &["merge", "--ff-only", &request.feature_branch],
                 )?;
-                
+
                 Ok(IntegrationResult::Success)
-            },
+            }
             Err(_) => {
                 if self.has_rebase_conflicts()? {
                     let conflicted_files = self.get_conflicted_files()?;
                     Ok(IntegrationResult::ConflictsPending { conflicted_files })
                 } else {
-                    Ok(IntegrationResult::Failed { 
-                        error: "Rebase failed without conflicts".to_string() 
+                    Ok(IntegrationResult::Failed {
+                        error: "Rebase failed without conflicts".to_string(),
                     })
                 }
             }
@@ -135,7 +144,7 @@ impl<'a> IntegrationManager<'a> {
     pub fn has_rebase_conflicts(&self) -> Result<bool> {
         let rebase_dir = self.repo.git_dir.join("rebase-merge");
         let rebase_apply_dir = self.repo.git_dir.join("rebase-apply");
-        
+
         Ok(rebase_dir.exists() || rebase_apply_dir.exists())
     }
 
@@ -145,7 +154,7 @@ impl<'a> IntegrationManager<'a> {
         }
 
         let output = execute_git_command(self.repo, &["diff", "--name-only", "--diff-filter=U"])?;
-        
+
         Ok(output
             .lines()
             .filter(|line| !line.trim().is_empty())
@@ -159,16 +168,14 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn update_base_branch(&self, branch: &str) -> Result<()> {
         let current_branch = self.repo.get_current_branch()?;
-        
+
         if current_branch != branch {
             self.repo.checkout_branch(branch)?;
         }
 
         match self.pull_latest_changes(branch) {
             Ok(()) => Ok(()),
-            Err(_) => {
-                Ok(())
-            }
+            Err(_) => Ok(()),
         }
     }
 
@@ -181,16 +188,25 @@ impl<'a> IntegrationManager<'a> {
         let current_branch = self.repo.get_current_branch()?;
         if current_branch != branch {
             return Err(ParaError::git_operation(format!(
-                "Cannot pull changes: not on branch {}", branch
+                "Cannot pull changes: not on branch {}",
+                branch
             )));
         }
 
         execute_git_command_with_status(self.repo, &["pull", "--ff-only"])
     }
 
-    pub fn create_merge_commit(&self, feature_branch: &str, base_branch: &str, message: &str) -> Result<()> {
+    pub fn create_merge_commit(
+        &self,
+        feature_branch: &str,
+        base_branch: &str,
+        message: &str,
+    ) -> Result<()> {
         self.repo.checkout_branch(base_branch)?;
-        execute_git_command_with_status(self.repo, &["merge", "--no-ff", "-m", message, feature_branch])
+        execute_git_command_with_status(
+            self.repo,
+            &["merge", "--no-ff", "-m", message, feature_branch],
+        )
     }
 
     pub fn cherry_pick_commits(&self, commits: &[String]) -> Result<()> {
@@ -203,7 +219,7 @@ impl<'a> IntegrationManager<'a> {
     pub fn get_commit_range(&self, base_branch: &str, feature_branch: &str) -> Result<Vec<String>> {
         let range = format!("{}..{}", base_branch, feature_branch);
         let output = execute_git_command(self.repo, &["rev-list", "--reverse", &range])?;
-        
+
         Ok(output
             .lines()
             .filter(|line| !line.trim().is_empty())
@@ -213,7 +229,7 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn get_merge_conflicts_summary(&self) -> Result<String> {
         let conflicted_files = self.get_conflicted_files()?;
-        
+
         if conflicted_files.is_empty() {
             return Ok("No conflicts detected".to_string());
         }
@@ -229,7 +245,7 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn stage_resolved_files(&self) -> Result<()> {
         let conflicted_files = self.get_conflicted_files()?;
-        
+
         for file in conflicted_files {
             let file_str = file.to_string_lossy();
             execute_git_command_with_status(self.repo, &["add", &file_str])?;
@@ -241,22 +257,22 @@ impl<'a> IntegrationManager<'a> {
     pub fn create_backup_branch(&self, branch: &str, suffix: &str) -> Result<String> {
         let branch_manager = BranchManager::new(self.repo);
         let backup_name = format!("{}-{}", branch, suffix);
-        
+
         let unique_backup_name = branch_manager.generate_unique_branch_name(&backup_name)?;
         let commit = branch_manager.get_branch_commit(branch)?;
-        
+
         branch_manager.create_branch_from_commit(&unique_backup_name, &commit)?;
-        
+
         Ok(unique_backup_name)
     }
 
     pub fn restore_from_backup(&self, backup_branch: &str, target_branch: &str) -> Result<()> {
         let branch_manager = BranchManager::new(self.repo);
         let backup_commit = branch_manager.get_branch_commit(backup_branch)?;
-        
+
         self.repo.checkout_branch(target_branch)?;
         self.repo.reset_hard(&backup_commit)?;
-        
+
         Ok(())
     }
 
@@ -278,24 +294,30 @@ impl<'a> IntegrationManager<'a> {
         Ok(())
     }
 
-    pub fn validate_integration_preconditions(&self, feature_branch: &str, base_branch: &str) -> Result<()> {
+    pub fn validate_integration_preconditions(
+        &self,
+        feature_branch: &str,
+        base_branch: &str,
+    ) -> Result<()> {
         let branch_manager = BranchManager::new(self.repo);
-        
+
         if !branch_manager.branch_exists(feature_branch)? {
             return Err(ParaError::git_operation(format!(
-                "Feature branch '{}' does not exist", feature_branch
+                "Feature branch '{}' does not exist",
+                feature_branch
             )));
         }
 
         if !branch_manager.branch_exists(base_branch)? {
             return Err(ParaError::git_operation(format!(
-                "Base branch '{}' does not exist", base_branch
+                "Base branch '{}' does not exist",
+                base_branch
             )));
         }
 
         if self.is_rebase_in_progress()? {
             return Err(ParaError::git_operation(
-                "Cannot start integration: rebase in progress".to_string()
+                "Cannot start integration: rebase in progress".to_string(),
             ));
         }
 
@@ -306,9 +328,9 @@ impl<'a> IntegrationManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
     use std::process::Command;
+    use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, GitRepository) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -332,7 +354,8 @@ mod tests {
             .status()
             .expect("Failed to set git user email");
 
-        fs::write(repo_path.join("README.md"), "# Test Repository").expect("Failed to write README");
+        fs::write(repo_path.join("README.md"), "# Test Repository")
+            .expect("Failed to write README");
 
         Command::new("git")
             .current_dir(repo_path)
@@ -355,15 +378,18 @@ mod tests {
         let (temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
         let branch_manager = BranchManager::new(&repo);
-        
-        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
-        
-        branch_manager.create_branch("feature", &main_branch)
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        branch_manager
+            .create_branch("feature", &main_branch)
             .expect("Failed to create feature branch");
-        
+
         fs::write(temp_dir.path().join("feature.txt"), "New feature")
             .expect("Failed to write feature file");
-        
+
         let request = FinishRequest {
             feature_branch: "feature".to_string(),
             base_branch: main_branch.clone(),
@@ -372,12 +398,14 @@ mod tests {
             integrate: false,
         };
 
-        let result = manager.finish_session(request).expect("Failed to finish session");
-        
+        let result = manager
+            .finish_session(request)
+            .expect("Failed to finish session");
+
         match result {
             FinishResult::Success { final_branch } => {
                 assert_eq!(final_branch, "feature");
-            },
+            }
             _ => panic!("Expected success result"),
         }
     }
@@ -387,30 +415,36 @@ mod tests {
         let (temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
         let branch_manager = BranchManager::new(&repo);
-        
-        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
-        
-        branch_manager.create_branch("multi-commit", &main_branch)
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        branch_manager
+            .create_branch("multi-commit", &main_branch)
             .expect("Failed to create branch");
-        
+
         fs::write(temp_dir.path().join("file1.txt"), "First change")
             .expect("Failed to write file1");
         repo.stage_all_changes().expect("Failed to stage changes");
         repo.commit("First commit").expect("Failed to commit");
-        
+
         fs::write(temp_dir.path().join("file2.txt"), "Second change")
             .expect("Failed to write file2");
         repo.stage_all_changes().expect("Failed to stage changes");
         repo.commit("Second commit").expect("Failed to commit");
-        
-        let commits_before = repo.get_commit_count_since(&main_branch, "multi-commit")
+
+        let commits_before = repo
+            .get_commit_count_since(&main_branch, "multi-commit")
             .expect("Failed to count commits");
         assert_eq!(commits_before, 2);
-        
-        manager.squash_commits("multi-commit", &main_branch, "Combined changes")
+
+        manager
+            .squash_commits("multi-commit", &main_branch, "Combined changes")
             .expect("Failed to squash commits");
-        
-        let commits_after = repo.get_commit_count_since(&main_branch, "multi-commit")
+
+        let commits_after = repo
+            .get_commit_count_since(&main_branch, "multi-commit")
             .expect("Failed to count commits");
         assert_eq!(commits_after, 1);
     }
@@ -419,15 +453,17 @@ mod tests {
     fn test_integration_validation() {
         let (_temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
-        
-        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
-        
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
         let result = manager.validate_integration_preconditions("nonexistent", &main_branch);
         assert!(result.is_err());
-        
+
         let result = manager.validate_integration_preconditions(&main_branch, "nonexistent");
         assert!(result.is_err());
-        
+
         let result = manager.validate_integration_preconditions(&main_branch, &main_branch);
         assert!(result.is_ok());
     }
@@ -437,31 +473,38 @@ mod tests {
         let (temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
         let branch_manager = BranchManager::new(&repo);
-        
-        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
-        
-        branch_manager.create_branch("backup-test", &main_branch)
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        branch_manager
+            .create_branch("backup-test", &main_branch)
             .expect("Failed to create branch");
-        
+
         fs::write(temp_dir.path().join("backup-file.txt"), "Original content")
             .expect("Failed to write file");
         repo.stage_all_changes().expect("Failed to stage");
         repo.commit("Original commit").expect("Failed to commit");
-        
-        let backup_name = manager.create_backup_branch("backup-test", "backup")
+
+        let backup_name = manager
+            .create_backup_branch("backup-test", "backup")
             .expect("Failed to create backup");
-        
+
         assert!(backup_name.starts_with("backup-test-backup"));
-        assert!(branch_manager.branch_exists(&backup_name).expect("Failed to check backup"));
-        
+        assert!(branch_manager
+            .branch_exists(&backup_name)
+            .expect("Failed to check backup"));
+
         fs::write(temp_dir.path().join("backup-file.txt"), "Modified content")
             .expect("Failed to write file");
         repo.stage_all_changes().expect("Failed to stage");
         repo.commit("Modified commit").expect("Failed to commit");
-        
-        manager.restore_from_backup(&backup_name, "backup-test")
+
+        manager
+            .restore_from_backup(&backup_name, "backup-test")
             .expect("Failed to restore from backup");
-        
+
         let content = fs::read_to_string(temp_dir.path().join("backup-file.txt"))
             .expect("Failed to read file");
         assert_eq!(content, "Original content");
@@ -472,25 +515,27 @@ mod tests {
         let (temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
         let branch_manager = BranchManager::new(&repo);
-        
-        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
-        
-        branch_manager.create_branch("range-test", &main_branch)
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        branch_manager
+            .create_branch("range-test", &main_branch)
             .expect("Failed to create branch");
-        
-        fs::write(temp_dir.path().join("commit1.txt"), "First")
-            .expect("Failed to write file");
+
+        fs::write(temp_dir.path().join("commit1.txt"), "First").expect("Failed to write file");
         repo.stage_all_changes().expect("Failed to stage");
         repo.commit("First commit").expect("Failed to commit");
-        
-        fs::write(temp_dir.path().join("commit2.txt"), "Second")
-            .expect("Failed to write file");
+
+        fs::write(temp_dir.path().join("commit2.txt"), "Second").expect("Failed to write file");
         repo.stage_all_changes().expect("Failed to stage");
         repo.commit("Second commit").expect("Failed to commit");
-        
-        let commits = manager.get_commit_range(&main_branch, "range-test")
+
+        let commits = manager
+            .get_commit_range(&main_branch, "range-test")
             .expect("Failed to get commit range");
-        
+
         assert_eq!(commits.len(), 2);
         for commit in commits {
             assert_eq!(commit.len(), 40);
@@ -501,8 +546,9 @@ mod tests {
     fn test_cleanup_integration_state() {
         let (_temp_dir, repo) = setup_test_repo();
         let manager = IntegrationManager::new(&repo);
-        
-        manager.cleanup_integration_state()
+
+        manager
+            .cleanup_integration_state()
             .expect("Failed to cleanup integration state");
     }
 }

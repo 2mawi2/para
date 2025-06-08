@@ -1,14 +1,14 @@
 mod cli;
 mod config;
-mod utils;
 mod core;
+mod utils;
 
 use clap::Parser;
-use cli::{Cli, execute_command};
+use cli::{execute_command, Cli};
 
 fn main() {
     let cli = Cli::parse();
-    
+
     if let Err(e) = execute_command(cli) {
         eprintln!("para: {}", e);
         std::process::exit(1);

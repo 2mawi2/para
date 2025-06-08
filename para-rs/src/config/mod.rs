@@ -6,7 +6,7 @@ pub mod validation;
 pub mod wizard;
 
 pub use manager::ConfigManager;
-pub use wizard::run_config_wizard;
+pub use wizard::{run_config_wizard, run_quick_setup};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {

@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, Args, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -43,7 +43,7 @@ pub enum Commands {
 pub struct StartArgs {
     /// Session name (optional, generates friendly name if not provided)
     pub name: Option<String>,
-    
+
     /// Skip IDE permission warnings (dangerous)
     #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
@@ -53,14 +53,14 @@ pub struct StartArgs {
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
-    
+
     /// Additional prompt text (when first arg is session name)
     pub prompt: Option<String>,
-    
+
     /// Read prompt from file
     #[arg(long, short = 'f', help = "Read prompt from specified file")]
     pub file: Option<PathBuf>,
-    
+
     /// Skip IDE permission warnings (dangerous)
     #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
@@ -70,15 +70,15 @@ pub struct DispatchArgs {
 pub struct FinishArgs {
     /// Commit message
     pub message: String,
-    
+
     /// Custom branch name after finishing
     #[arg(long, help = "Rename feature branch to specified name")]
     pub branch: Option<String>,
-    
+
     /// Automatically integrate into base branch
     #[arg(long, short = 'i', help = "Automatically integrate into base branch")]
     pub integrate: bool,
-    
+
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
 }
@@ -87,7 +87,7 @@ pub struct FinishArgs {
 pub struct IntegrateArgs {
     /// Commit message for the integration
     pub message: String,
-    
+
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
 }
@@ -110,7 +110,7 @@ pub struct ListArgs {
     /// Show additional session details
     #[arg(long, short = 'v', help = "Show verbose session information")]
     pub verbose: bool,
-    
+
     /// Show archived sessions
     #[arg(long, short = 'a', help = "Show archived sessions")]
     pub archived: bool,
@@ -174,10 +174,10 @@ impl StartArgs {
 impl DispatchArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
-            (None, None, None) => {
-                Err(crate::utils::ParaError::invalid_args("Must provide either a prompt, session name, or file"))
-            }
-            _ => Ok(())
+            (None, None, None) => Err(crate::utils::ParaError::invalid_args(
+                "Must provide either a prompt, session name, or file",
+            )),
+            _ => Ok(()),
         }
     }
 }
@@ -185,13 +185,15 @@ impl DispatchArgs {
 impl FinishArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         if self.message.trim().is_empty() {
-            return Err(crate::utils::ParaError::invalid_args("Commit message cannot be empty"));
+            return Err(crate::utils::ParaError::invalid_args(
+                "Commit message cannot be empty",
+            ));
         }
-        
+
         if let Some(ref branch) = self.branch {
             validate_branch_name(branch)?;
         }
-        
+
         Ok(())
     }
 }
@@ -242,32 +244,47 @@ impl Commands {
 
 pub fn validate_session_name(name: &str) -> crate::utils::Result<()> {
     if name.is_empty() {
-        return Err(crate::utils::ParaError::invalid_args("Session name cannot be empty"));
+        return Err(crate::utils::ParaError::invalid_args(
+            "Session name cannot be empty",
+        ));
     }
-    
+
     if name.len() > 50 {
-        return Err(crate::utils::ParaError::invalid_args("Session name too long (max 50 characters)"));
+        return Err(crate::utils::ParaError::invalid_args(
+            "Session name too long (max 50 characters)",
+        ));
     }
-    
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return Err(crate::utils::ParaError::invalid_args("Session name can only contain alphanumeric characters, hyphens, and underscores"));
+
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(crate::utils::ParaError::invalid_args(
+            "Session name can only contain alphanumeric characters, hyphens, and underscores",
+        ));
     }
-    
+
     Ok(())
 }
 
 pub fn validate_branch_name(name: &str) -> crate::utils::Result<()> {
     if name.is_empty() {
-        return Err(crate::utils::ParaError::invalid_args("Branch name cannot be empty"));
+        return Err(crate::utils::ParaError::invalid_args(
+            "Branch name cannot be empty",
+        ));
     }
-    
+
     if name.starts_with('-') || name.ends_with('-') {
-        return Err(crate::utils::ParaError::invalid_args("Branch name cannot start or end with hyphen"));
+        return Err(crate::utils::ParaError::invalid_args(
+            "Branch name cannot start or end with hyphen",
+        ));
     }
-    
+
     if name.contains("..") || name.contains("//") {
-        return Err(crate::utils::ParaError::invalid_args("Branch name contains invalid character sequence"));
+        return Err(crate::utils::ParaError::invalid_args(
+            "Branch name contains invalid character sequence",
+        ));
     }
-    
+
     Ok(())
 }

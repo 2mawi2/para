@@ -1,11 +1,11 @@
 use crate::cli::parser::StartArgs;
-use crate::utils::{Result, ParaError};
+use crate::utils::{ParaError, Result};
 
 pub fn execute(args: StartArgs) -> Result<()> {
     validate_start_args(&args)?;
-    
+
     println!("Start command would execute with args: {:?}", args);
-    
+
     Err(ParaError::not_implemented("start command"))
 }
 
@@ -20,14 +20,21 @@ fn validate_session_name(name: &str) -> Result<()> {
     if name.is_empty() {
         return Err(ParaError::invalid_args("Session name cannot be empty"));
     }
-    
+
     if name.len() > 50 {
-        return Err(ParaError::invalid_args("Session name too long (max 50 characters)"));
+        return Err(ParaError::invalid_args(
+            "Session name too long (max 50 characters)",
+        ));
     }
-    
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return Err(ParaError::invalid_args("Session name can only contain alphanumeric characters, hyphens, and underscores"));
+
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(ParaError::invalid_args(
+            "Session name can only contain alphanumeric characters, hyphens, and underscores",
+        ));
     }
-    
+
     Ok(())
 }

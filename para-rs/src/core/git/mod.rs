@@ -1,21 +1,17 @@
-use std::path::{Path, PathBuf};
 use crate::utils::error::Result;
+use std::path::{Path, PathBuf};
 
-pub mod repository;
-pub mod worktree;
 pub mod branch;
 pub mod integration;
+pub mod repository;
+pub mod worktree;
 
-pub use repository::GitRepository;
-pub use worktree::{WorktreeManager, WorktreeInfo};
-pub use branch::{BranchManager, BranchInfo};
+pub use branch::{BranchInfo, BranchManager};
 pub use integration::{
-    IntegrationManager, 
-    FinishRequest, 
-    FinishResult, 
-    IntegrationRequest, 
-    IntegrationResult
+    FinishRequest, FinishResult, IntegrationManager, IntegrationRequest, IntegrationResult,
 };
+pub use repository::GitRepository;
+pub use worktree::{WorktreeInfo, WorktreeManager};
 
 pub trait GitOperations {
     fn create_worktree(&self, branch: &str, path: &Path) -> Result<()>;
@@ -164,10 +160,10 @@ impl GitService {
 
     pub fn validate_session_environment(&self, session_path: &Path) -> Result<SessionEnvironment> {
         let worktree_manager = self.worktree_manager();
-        
+
         let is_worktree = worktree_manager.is_worktree_path(session_path);
         let is_main_repo = session_path == self.repo.root;
-        
+
         if !is_worktree && !is_main_repo {
             return Ok(SessionEnvironment::Invalid);
         }
@@ -178,20 +174,17 @@ impl GitService {
 
         let branch = worktree_manager.get_worktree_branch(session_path)?;
         let is_clean = worktree_manager.is_worktree_clean(session_path)?;
-        
-        Ok(SessionEnvironment::Worktree { 
-            branch, 
-            is_clean 
-        })
+
+        Ok(SessionEnvironment::Worktree { branch, is_clean })
     }
 
     pub fn cleanup_all_stale_state(&self) -> Result<CleanupSummary> {
         let worktree_manager = self.worktree_manager();
         let integration_manager = self.integration_manager();
-        
+
         let cleaned_worktrees = worktree_manager.cleanup_stale_worktrees()?;
         integration_manager.cleanup_integration_state()?;
-        
+
         Ok(CleanupSummary {
             cleaned_worktrees,
             cleaned_integration_state: true,
@@ -294,9 +287,9 @@ pub struct CleanupSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
     use std::process::Command;
+    use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, GitService) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -320,7 +313,8 @@ mod tests {
             .status()
             .expect("Failed to set git user email");
 
-        fs::write(repo_path.join("README.md"), "# Test Repository").expect("Failed to write README");
+        fs::write(repo_path.join("README.md"), "# Test Repository")
+            .expect("Failed to write README");
 
         Command::new("git")
             .current_dir(repo_path)
@@ -341,7 +335,7 @@ mod tests {
     #[test]
     fn test_git_service_discovery() {
         let (_temp_dir, service) = setup_test_repo();
-        
+
         let repo_info = service.get_repo_info().expect("Failed to get repo info");
         assert!(!repo_info.current_branch.is_empty());
         assert!(!repo_info.has_uncommitted_changes);
@@ -351,20 +345,26 @@ mod tests {
     #[test]
     fn test_git_operations_trait() {
         let (temp_dir, service) = setup_test_repo();
-        
-        let current_branch = service.get_current_branch().expect("Failed to get current branch");
-        
-        service.create_branch("test-trait", &current_branch)
+
+        let current_branch = service
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        service
+            .create_branch("test-trait", &current_branch)
             .expect("Failed to create branch via trait");
-        
-        assert!(service.branch_exists("test-trait").expect("Failed to check branch"));
-        
+
+        assert!(service
+            .branch_exists("test-trait")
+            .expect("Failed to check branch"));
+
         let worktree_path = temp_dir.path().join("trait-worktree");
-        service.create_worktree("test-trait-wt", &worktree_path)
+        service
+            .create_worktree("test-trait-wt", &worktree_path)
             .expect("Failed to create worktree via trait");
-        
+
         assert!(worktree_path.exists());
-        
+
         let worktrees = service.list_worktrees().expect("Failed to list worktrees");
         assert_eq!(worktrees.len(), 2);
     }
@@ -372,33 +372,37 @@ mod tests {
     #[test]
     fn test_session_environment_validation() {
         let (temp_dir, service) = setup_test_repo();
-        
-        let main_env = service.validate_session_environment(&service.repo.root)
+
+        let main_env = service
+            .validate_session_environment(&service.repo.root)
             .expect("Failed to validate main repo");
         match main_env {
-            SessionEnvironment::MainRepository => {},
+            SessionEnvironment::MainRepository => {}
             _ => panic!("Expected MainRepository environment"),
         }
-        
+
         let worktree_path = temp_dir.path().join("env-test");
-        service.create_worktree("env-branch", &worktree_path)
+        service
+            .create_worktree("env-branch", &worktree_path)
             .expect("Failed to create worktree");
-        
-        let worktree_env = service.validate_session_environment(&worktree_path)
+
+        let worktree_env = service
+            .validate_session_environment(&worktree_path)
             .expect("Failed to validate worktree");
         match worktree_env {
             SessionEnvironment::Worktree { branch, is_clean } => {
                 assert_eq!(branch, "env-branch");
                 assert!(is_clean);
-            },
+            }
             _ => panic!("Expected Worktree environment"),
         }
-        
+
         let invalid_path = temp_dir.path().join("nonexistent");
-        let invalid_env = service.validate_session_environment(&invalid_path)
+        let invalid_env = service
+            .validate_session_environment(&invalid_path)
             .expect("Failed to validate invalid path");
         match invalid_env {
-            SessionEnvironment::Invalid => {},
+            SessionEnvironment::Invalid => {}
             _ => panic!("Expected Invalid environment"),
         }
     }
@@ -406,7 +410,7 @@ mod tests {
     #[test]
     fn test_manager_access() {
         let (_temp_dir, service) = setup_test_repo();
-        
+
         let _worktree_manager = service.worktree_manager();
         let _branch_manager = service.branch_manager();
         let _integration_manager = service.integration_manager();
@@ -416,10 +420,11 @@ mod tests {
     #[test]
     fn test_cleanup_functionality() {
         let (_temp_dir, service) = setup_test_repo();
-        
-        let summary = service.cleanup_all_stale_state()
+
+        let summary = service
+            .cleanup_all_stale_state()
             .expect("Failed to cleanup stale state");
-        
+
         assert!(summary.cleaned_integration_state);
     }
 }

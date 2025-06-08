@@ -11,11 +11,15 @@ pub fn validate_config(config: &Config) -> Result<()> {
 
 pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
     if ide.name.is_empty() {
-        return Err(ConfigError::ValidationError("IDE name cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "IDE name cannot be empty".to_string(),
+        ));
     }
 
     if ide.command.is_empty() {
-        return Err(ConfigError::ValidationError("IDE command cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "IDE command cannot be empty".to_string(),
+        ));
     }
 
     if !is_valid_ide_name(&ide.name) {
@@ -34,10 +38,14 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
 
     if ide.wrapper.enabled {
         if ide.wrapper.name.is_empty() {
-            return Err(ConfigError::ValidationError("Wrapper name cannot be empty when wrapper is enabled".to_string()));
+            return Err(ConfigError::ValidationError(
+                "Wrapper name cannot be empty when wrapper is enabled".to_string(),
+            ));
         }
         if ide.wrapper.command.is_empty() {
-            return Err(ConfigError::ValidationError("Wrapper command cannot be empty when wrapper is enabled".to_string()));
+            return Err(ConfigError::ValidationError(
+                "Wrapper command cannot be empty when wrapper is enabled".to_string(),
+            ));
         }
         if !super::defaults::is_command_available(&ide.wrapper.command) {
             return Err(ConfigError::ValidationError(format!(
@@ -52,11 +60,15 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
 
 pub fn validate_directory_config(dirs: &super::DirectoryConfig) -> Result<()> {
     if dirs.subtrees_dir.is_empty() {
-        return Err(ConfigError::ValidationError("Subtrees directory cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "Subtrees directory cannot be empty".to_string(),
+        ));
     }
 
     if dirs.state_dir.is_empty() {
-        return Err(ConfigError::ValidationError("State directory cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "State directory cannot be empty".to_string(),
+        ));
     }
 
     if !is_valid_directory_name(&dirs.subtrees_dir) {
@@ -78,7 +90,9 @@ pub fn validate_directory_config(dirs: &super::DirectoryConfig) -> Result<()> {
 
 pub fn validate_git_config(git: &super::GitConfig) -> Result<()> {
     if git.branch_prefix.is_empty() {
-        return Err(ConfigError::ValidationError("Branch prefix cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "Branch prefix cannot be empty".to_string(),
+        ));
     }
 
     if !is_valid_git_ref_name(&git.branch_prefix) {
@@ -93,15 +107,21 @@ pub fn validate_git_config(git: &super::GitConfig) -> Result<()> {
 
 pub fn validate_session_config(session: &super::SessionConfig) -> Result<()> {
     if session.default_name_format.is_empty() {
-        return Err(ConfigError::ValidationError("Default name format cannot be empty".to_string()));
+        return Err(ConfigError::ValidationError(
+            "Default name format cannot be empty".to_string(),
+        ));
     }
 
     if let Some(days) = session.auto_cleanup_days {
         if days == 0 {
-            return Err(ConfigError::ValidationError("Auto cleanup days must be greater than 0".to_string()));
+            return Err(ConfigError::ValidationError(
+                "Auto cleanup days must be greater than 0".to_string(),
+            ));
         }
         if days > 365 {
-            return Err(ConfigError::ValidationError("Auto cleanup days cannot exceed 365".to_string()));
+            return Err(ConfigError::ValidationError(
+                "Auto cleanup days cannot exceed 365".to_string(),
+            ));
         }
     }
 
@@ -109,7 +129,10 @@ pub fn validate_session_config(session: &super::SessionConfig) -> Result<()> {
 }
 
 fn is_valid_ide_name(name: &str) -> bool {
-    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 fn is_valid_directory_name(name: &str) -> bool {
@@ -141,7 +164,10 @@ fn is_valid_git_ref_name(name: &str) -> bool {
     }
 
     let invalid_chars = ['~', '^', ':', '?', '*', '[', '\\', ' '];
-    if name.chars().any(|c| invalid_chars.contains(&c) || c.is_control()) {
+    if name
+        .chars()
+        .any(|c| invalid_chars.contains(&c) || c.is_control())
+    {
         return false;
     }
 
@@ -161,7 +187,10 @@ pub fn suggest_ide_fix(ide_name: &str) -> String {
         "vscode" | "vs-code" | "visual-studio-code" => "code".to_string(),
         "cursor-ai" | "cursor.ai" => "cursor".to_string(),
         "claude-code" | "claude_code" => "claude".to_string(),
-        _ => format!("Check if '{}' is installed and available in your PATH", ide_name),
+        _ => format!(
+            "Check if '{}' is installed and available in your PATH",
+            ide_name
+        ),
     }
 }
 

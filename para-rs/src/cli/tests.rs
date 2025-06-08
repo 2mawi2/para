@@ -29,7 +29,8 @@ mod tests {
 
     #[test]
     fn test_start_command_with_dangerous_flag() {
-        let cli = Cli::try_parse_from(&["para", "start", "--dangerously-skip-permissions"]).unwrap();
+        let cli =
+            Cli::try_parse_from(&["para", "start", "--dangerously-skip-permissions"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
                 assert!(args.name.is_none());
@@ -44,7 +45,10 @@ mod tests {
         let cli = Cli::try_parse_from(&["para", "dispatch", "Add user authentication"]).unwrap();
         match cli.command.unwrap() {
             Commands::Dispatch(args) => {
-                assert_eq!(args.name_or_prompt, Some("Add user authentication".to_string()));
+                assert_eq!(
+                    args.name_or_prompt,
+                    Some("Add user authentication".to_string())
+                );
                 assert!(args.prompt.is_none());
                 assert!(args.file.is_none());
             }
@@ -81,7 +85,14 @@ mod tests {
 
     #[test]
     fn test_finish_command_with_branch() {
-        let cli = Cli::try_parse_from(&["para", "finish", "Complete feature", "--branch", "my-branch"]).unwrap();
+        let cli = Cli::try_parse_from(&[
+            "para",
+            "finish",
+            "Complete feature",
+            "--branch",
+            "my-branch",
+        ])
+        .unwrap();
         match cli.command.unwrap() {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
@@ -94,7 +105,8 @@ mod tests {
 
     #[test]
     fn test_finish_command_with_integrate() {
-        let cli = Cli::try_parse_from(&["para", "finish", "Complete feature", "--integrate"]).unwrap();
+        let cli =
+            Cli::try_parse_from(&["para", "finish", "Complete feature", "--integrate"]).unwrap();
         match cli.command.unwrap() {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
@@ -108,7 +120,7 @@ mod tests {
     fn test_list_command_alias() {
         let cli = Cli::try_parse_from(&["para", "ls"]).unwrap();
         match cli.command.unwrap() {
-            Commands::List(_) => {},
+            Commands::List(_) => {}
             _ => panic!("Expected List command"),
         }
     }
@@ -129,12 +141,10 @@ mod tests {
     fn test_config_subcommands() {
         let cli = Cli::try_parse_from(&["para", "config", "setup"]).unwrap();
         match cli.command.unwrap() {
-            Commands::Config(args) => {
-                match args.command.unwrap() {
-                    ConfigCommands::Setup => {},
-                    _ => panic!("Expected Setup subcommand"),
-                }
-            }
+            Commands::Config(args) => match args.command.unwrap() {
+                ConfigCommands::Setup => {}
+                _ => panic!("Expected Setup subcommand"),
+            },
             _ => panic!("Expected Config command"),
         }
     }
@@ -143,12 +153,10 @@ mod tests {
     fn test_completion_command() {
         let cli = Cli::try_parse_from(&["para", "completion", "bash"]).unwrap();
         match cli.command.unwrap() {
-            Commands::Completion(args) => {
-                match args.shell {
-                    Shell::Bash => {},
-                    _ => panic!("Expected Bash shell"),
-                }
-            }
+            Commands::Completion(args) => match args.shell {
+                Shell::Bash => {}
+                _ => panic!("Expected Bash shell"),
+            },
             _ => panic!("Expected Completion command"),
         }
     }
@@ -156,15 +164,15 @@ mod tests {
     #[test]
     fn test_session_name_validation() {
         use crate::cli::parser::validate_session_name;
-        
+
         assert!(validate_session_name("valid-name").is_ok());
         assert!(validate_session_name("valid_name").is_ok());
         assert!(validate_session_name("valid123").is_ok());
-        
+
         assert!(validate_session_name("").is_err());
         assert!(validate_session_name("invalid name").is_err());
         assert!(validate_session_name("invalid@name").is_err());
-        
+
         let long_name = "a".repeat(51);
         assert!(validate_session_name(&long_name).is_err());
     }
@@ -172,10 +180,10 @@ mod tests {
     #[test]
     fn test_branch_name_validation() {
         use crate::cli::parser::validate_branch_name;
-        
+
         assert!(validate_branch_name("valid-branch").is_ok());
         assert!(validate_branch_name("feature/auth").is_ok());
-        
+
         assert!(validate_branch_name("").is_err());
         assert!(validate_branch_name("-invalid").is_err());
         assert!(validate_branch_name("invalid-").is_err());

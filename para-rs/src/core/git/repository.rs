@@ -1,6 +1,6 @@
+use crate::utils::error::{ParaError, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::utils::error::{ParaError, Result};
 
 #[derive(Debug, Clone)]
 pub struct GitRepository {
@@ -10,9 +10,10 @@ pub struct GitRepository {
 
 impl GitRepository {
     pub fn discover() -> Result<Self> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| ParaError::git_operation(format!("Failed to get current directory: {}", e)))?;
-        
+        let current_dir = std::env::current_dir().map_err(|e| {
+            ParaError::git_operation(format!("Failed to get current directory: {}", e))
+        })?;
+
         Self::discover_from(&current_dir)
     }
 
@@ -26,7 +27,8 @@ impl GitRepository {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ParaError::git_operation(format!(
-                "Not a git repository or git not found: {}", stderr.trim()
+                "Not a git repository or git not found: {}",
+                stderr.trim()
             )));
         }
 
@@ -41,13 +43,13 @@ impl GitRepository {
     pub fn validate(&self) -> Result<()> {
         if !self.root.exists() {
             return Err(ParaError::git_operation(
-                "Repository root does not exist".to_string()
+                "Repository root does not exist".to_string(),
             ));
         }
 
         if !self.git_dir.exists() {
             return Err(ParaError::git_operation(
-                "Git directory does not exist".to_string()
+                "Git directory does not exist".to_string(),
             ));
         }
 
@@ -59,7 +61,7 @@ impl GitRepository {
 
         if !output.status.success() {
             return Err(ParaError::git_operation(
-                "Repository is in an invalid state".to_string()
+                "Repository is in an invalid state".to_string(),
             ));
         }
 
@@ -78,15 +80,17 @@ impl GitRepository {
     pub fn get_commit_count_since(&self, base_branch: &str, feature_branch: &str) -> Result<usize> {
         let range = format!("{}..{}", base_branch, feature_branch);
         let output = execute_git_command(self, &["rev-list", "--count", &range])?;
-        
-        output.trim().parse::<usize>()
+
+        output
+            .trim()
+            .parse::<usize>()
             .map_err(|e| ParaError::git_operation(format!("Failed to parse commit count: {}", e)))
     }
 
     pub fn is_clean_working_tree(&self) -> Result<bool> {
         let status_output = execute_git_command(self, &["status", "--porcelain"])?;
         let has_staged = !status_output.trim().is_empty();
-        
+
         if has_staged {
             return Ok(false);
         }
@@ -116,7 +120,7 @@ impl GitRepository {
             .args(["merge-base", "--is-ancestor", ancestor, descendant])
             .status()
             .map_err(|e| ParaError::git_operation(format!("Failed to check ancestry: {}", e)))?;
-        
+
         Ok(result.success())
     }
 
@@ -145,7 +149,9 @@ impl GitRepository {
             .map_err(|e| ParaError::git_operation(format!("Failed to get git dir: {}", e)))?;
 
         if !output.status.success() {
-            return Err(ParaError::git_operation("Failed to determine git directory".to_string()));
+            return Err(ParaError::git_operation(
+                "Failed to determine git directory".to_string(),
+            ));
         }
 
         let git_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -165,16 +171,16 @@ pub fn execute_git_command(repo: &GitRepository, args: &[&str]) -> Result<String
         .args(args)
         .output()
         .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {}", e)))?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(ParaError::git_operation(format!(
-            "Git command failed ({}): {}", 
-            args.join(" "), 
+            "Git command failed ({}): {}",
+            args.join(" "),
             stderr.trim()
         )));
     }
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout);
     Ok(stdout.trim().to_string())
 }
@@ -185,14 +191,14 @@ pub fn execute_git_command_with_status(repo: &GitRepository, args: &[&str]) -> R
         .args(args)
         .status()
         .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {}", e)))?;
-    
+
     if !status.success() {
         return Err(ParaError::git_operation(format!(
-            "Git command failed: {}", 
+            "Git command failed: {}",
             args.join(" ")
         )));
     }
-    
+
     Ok(())
 }
 
@@ -209,8 +215,8 @@ fn sanitize_commit_message(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, GitRepository) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -234,7 +240,8 @@ mod tests {
             .status()
             .expect("Failed to set git user email");
 
-        fs::write(repo_path.join("README.md"), "# Test Repository").expect("Failed to write README");
+        fs::write(repo_path.join("README.md"), "# Test Repository")
+            .expect("Failed to write README");
 
         Command::new("git")
             .current_dir(repo_path)
@@ -268,14 +275,18 @@ mod tests {
     #[test]
     fn test_get_current_branch() {
         let (_temp_dir, repo) = setup_test_repo();
-        let branch = repo.get_current_branch().expect("Failed to get current branch");
+        let branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
         assert!(branch == "main" || branch == "master");
     }
 
     #[test]
     fn test_clean_working_tree() {
         let (_temp_dir, repo) = setup_test_repo();
-        assert!(repo.is_clean_working_tree().expect("Failed to check clean state"));
+        assert!(repo
+            .is_clean_working_tree()
+            .expect("Failed to check clean state"));
     }
 
     #[test]
@@ -288,11 +299,16 @@ mod tests {
     #[test]
     fn test_has_uncommitted_changes() {
         let (temp_dir, repo) = setup_test_repo();
-        
-        assert!(!repo.has_uncommitted_changes().expect("Failed to check changes"));
-        
-        fs::write(temp_dir.path().join("test.txt"), "test content").expect("Failed to write test file");
-        
-        assert!(repo.has_uncommitted_changes().expect("Failed to check changes"));
+
+        assert!(!repo
+            .has_uncommitted_changes()
+            .expect("Failed to check changes"));
+
+        fs::write(temp_dir.path().join("test.txt"), "test content")
+            .expect("Failed to write test file");
+
+        assert!(repo
+            .has_uncommitted_changes()
+            .expect("Failed to check changes"));
     }
 }

@@ -1,7 +1,7 @@
-use super::{Config, Result, ConfigError};
-use super::defaults::{default_config, get_available_ides, detect_wrapper_context};
+use super::defaults::{default_config, detect_wrapper_context, get_available_ides};
 use super::validation;
-use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
+use super::{Config, ConfigError, Result};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
 pub fn run_config_wizard() -> Result<Config> {
     println!("🔧 Para Configuration Wizard");
@@ -27,7 +27,9 @@ pub fn run_config_wizard() -> Result<Config> {
         println!("✅ Configuration saved successfully!");
     } else {
         println!("❌ Configuration not saved.");
-        return Err(ConfigError::ValidationError("Configuration cancelled by user".to_string()));
+        return Err(ConfigError::ValidationError(
+            "Configuration cancelled by user".to_string(),
+        ));
     }
 
     Ok(config)
@@ -38,14 +40,19 @@ fn configure_ide() -> Result<super::IdeConfig> {
     println!("Para can work with various IDEs. Let's configure your preferred IDE.\n");
 
     let available_ides = get_available_ides();
-    
+
     if available_ides.is_empty() {
         println!("⚠️  No supported IDEs detected on your system.");
         println!("Please install one of the following: cursor, code (VS Code), or claude");
-        return Err(ConfigError::ValidationError("No supported IDEs found".to_string()));
+        return Err(ConfigError::ValidationError(
+            "No supported IDEs found".to_string(),
+        ));
     }
 
-    let ide_names: Vec<String> = available_ides.iter().map(|(name, _)| name.clone()).collect();
+    let ide_names: Vec<String> = available_ides
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
     let ide_selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which IDE would you like to use?")
         .items(&ide_names)
@@ -69,10 +76,14 @@ fn configure_ide() -> Result<super::IdeConfig> {
         .interact()
         .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
     {
-        Some(Input::<String>::with_theme(&ColorfulTheme::default())
-            .with_prompt("User data directory path")
-            .interact()
-            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?)
+        Some(
+            Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt("User data directory path")
+                .interact()
+                .map_err(|e| {
+                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
+                })?,
+        )
     } else {
         None
     };
@@ -88,8 +99,11 @@ fn configure_ide() -> Result<super::IdeConfig> {
 fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
     if ide_name == "claude" {
         if let Some((wrapper_name, wrapper_command)) = detect_wrapper_context() {
-            println!("🔍 Detected that Claude Code is running inside {}", wrapper_name);
-            
+            println!(
+                "🔍 Detected that Claude Code is running inside {}",
+                wrapper_name
+            );
+
             if Confirm::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enable wrapper mode? (Recommended for Claude Code inside other IDEs)")
                 .default(true)
@@ -114,14 +128,18 @@ fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
                 .items(&wrapper_options)
                 .default(0)
                 .interact()
-                .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-            
+                .map_err(|e| {
+                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
+                })?;
+
             let wrapper_name = wrapper_options[wrapper_selection].to_string();
             let wrapper_command = Input::<String>::with_theme(&ColorfulTheme::default())
                 .with_prompt("Wrapper IDE command")
                 .default(wrapper_name.clone())
                 .interact()
-                .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+                .map_err(|e| {
+                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
+                })?;
 
             return Ok(super::WrapperConfig {
                 enabled: true,
@@ -149,7 +167,9 @@ fn configure_directories(mut config: super::DirectoryConfig) -> Result<super::Di
             if validation::validate_directory_config(&super::DirectoryConfig {
                 subtrees_dir: input.clone(),
                 state_dir: config.state_dir.clone(),
-            }).is_ok() {
+            })
+            .is_ok()
+            {
                 Ok(())
             } else {
                 Err("Invalid directory name")
@@ -165,7 +185,9 @@ fn configure_directories(mut config: super::DirectoryConfig) -> Result<super::Di
             if validation::validate_directory_config(&super::DirectoryConfig {
                 subtrees_dir: config.subtrees_dir.clone(),
                 state_dir: input.clone(),
-            }).is_ok() {
+            })
+            .is_ok()
+            {
                 Ok(())
             } else {
                 Err("Invalid directory name")
@@ -189,7 +211,9 @@ fn configure_git(mut config: super::GitConfig) -> Result<super::GitConfig> {
                 branch_prefix: input.clone(),
                 auto_stage: config.auto_stage,
                 auto_commit: config.auto_commit,
-            }).is_ok() {
+            })
+            .is_ok()
+            {
                 Ok(())
             } else {
                 Err("Invalid branch prefix")
@@ -241,7 +265,7 @@ fn configure_session(mut config: super::SessionConfig) -> Result<super::SessionC
             })
             .interact()
             .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-        
+
         config.auto_cleanup_days = Some(days);
     } else {
         config.auto_cleanup_days = None;
@@ -253,7 +277,10 @@ fn configure_session(mut config: super::SessionConfig) -> Result<super::SessionC
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);
     if config.ide.wrapper.enabled {
-        println!("  Wrapper: {} ({})", config.ide.wrapper.name, config.ide.wrapper.command);
+        println!(
+            "  Wrapper: {} ({})",
+            config.ide.wrapper.name, config.ide.wrapper.command
+        );
     }
     println!("  Subtrees: {}", config.directories.subtrees_dir);
     println!("  State: {}", config.directories.state_dir);
@@ -273,7 +300,7 @@ pub fn run_quick_setup() -> Result<Config> {
     println!("Using detected defaults with minimal prompts.\n");
 
     let mut config = default_config();
-    
+
     let available_ides = get_available_ides();
     if !available_ides.is_empty() {
         let (ide_name, ide_command) = available_ides[0].clone();

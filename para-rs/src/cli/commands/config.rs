@@ -1,5 +1,6 @@
 use crate::cli::parser::{ConfigArgs, ConfigCommands};
-use crate::utils::{Result, ParaError};
+use crate::config::{self, Config, ConfigManager};
+use crate::utils::{ParaError, Result};
 
 pub fn execute(args: ConfigArgs) -> Result<()> {
     match args.command {
@@ -12,26 +13,39 @@ pub fn execute(args: ConfigArgs) -> Result<()> {
 }
 
 fn execute_setup() -> Result<()> {
-    println!("Config setup command would execute");
-    Err(ParaError::not_implemented("config setup command"))
+    config::run_config_wizard()
+        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {}", e)))?;
+    println!("✅ Configuration wizard completed successfully");
+    Ok(())
 }
 
 fn execute_auto() -> Result<()> {
-    println!("Config auto command would execute");
-    Err(ParaError::not_implemented("config auto command"))
+    config::run_quick_setup()
+        .map_err(|e| ParaError::config_error(format!("Auto-configuration failed: {}", e)))?;
+    println!("✅ Auto-configuration completed successfully");
+    Ok(())
 }
 
 fn execute_show() -> Result<()> {
-    println!("Config show command would execute");
-    Err(ParaError::not_implemented("config show command"))
+    match ConfigManager::load_or_create() {
+        Ok(config) => {
+            println!("{}", serde_json::to_string_pretty(&config).unwrap());
+            Ok(())
+        }
+        Err(e) => Err(ParaError::config_error(format!(
+            "Failed to load configuration: {}",
+            e
+        ))),
+    }
 }
 
 fn execute_edit() -> Result<()> {
-    println!("Config edit command would execute");
     Err(ParaError::not_implemented("config edit command"))
 }
 
 fn execute_default() -> Result<()> {
-    println!("Config command (interactive) would execute");
-    Err(ParaError::not_implemented("config command"))
+    config::run_config_wizard()
+        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {}", e)))?;
+    println!("✅ Configuration wizard completed successfully");
+    Ok(())
 }
