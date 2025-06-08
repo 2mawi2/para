@@ -53,10 +53,77 @@ For configuration help: para config
 EOF
 }
 
+# Error codes (only set if not already defined)
+if [ -z "${ERROR_GENERAL+x}" ]; then
+  readonly ERROR_GENERAL=1
+  readonly ERROR_INVALID_ARGS=2
+  readonly ERROR_MISSING_DEPENDENCY=3
+  readonly ERROR_GIT_OPERATION=4
+  readonly ERROR_SESSION_NOT_FOUND=5
+  readonly ERROR_SESSION_EXISTS=6
+  readonly ERROR_FILE_NOT_FOUND=7
+  readonly ERROR_CONFIG_INVALID=8
+  readonly ERROR_REPO_STATE=9
+  readonly ERROR_IDE_NOT_AVAILABLE=10
+fi
+
 # Print error message and exit
 die() {
   echo "para: $*" >&2
   exit 1
+}
+
+# Print error message with specific error code and exit
+die_with_code() {
+  code="$1"
+  shift
+  echo "para: $*" >&2
+  exit "$code"
+}
+
+# Print error message for invalid arguments
+die_invalid_args() {
+  die_with_code "$ERROR_INVALID_ARGS" "$@"
+}
+
+# Print error message for missing dependencies
+die_missing_dependency() {
+  die_with_code "$ERROR_MISSING_DEPENDENCY" "$@"
+}
+
+# Print error message for Git operations
+die_git_operation() {
+  die_with_code "$ERROR_GIT_OPERATION" "$@"
+}
+
+# Print error message for session not found
+die_session_not_found() {
+  die_with_code "$ERROR_SESSION_NOT_FOUND" "$@"
+}
+
+# Print error message for session already exists
+die_session_exists() {
+  die_with_code "$ERROR_SESSION_EXISTS" "$@"
+}
+
+# Print error message for file not found
+die_file_not_found() {
+  die_with_code "$ERROR_FILE_NOT_FOUND" "$@"
+}
+
+# Print error message for invalid configuration
+die_config_invalid() {
+  die_with_code "$ERROR_CONFIG_INVALID" "$@"
+}
+
+# Print error message for repository state issues
+die_repo_state() {
+  die_with_code "$ERROR_REPO_STATE" "$@"
+}
+
+# Print error message for IDE not available
+die_ide_not_available() {
+  die_with_code "$ERROR_IDE_NOT_AVAILABLE" "$@"
 }
 
 # Assert that paths are properly initialized - prevents silent failures
@@ -99,7 +166,7 @@ validate_session_name() {
   session_name="$1"
   case "$session_name" in
   *[!a-zA-Z0-9_-]*)
-    die "session name can only contain letters, numbers, dashes, and underscores"
+    die_invalid_args "session name can only contain letters, numbers, dashes, and underscores"
     ;;
   esac
 }
@@ -288,15 +355,15 @@ read_file_content() {
 
   # Check if file exists and is readable
   if [ ! -f "$absolute_path" ]; then
-    die "file not found: $file_path"
+    die_file_not_found "file not found: $file_path"
   fi
 
   if [ ! -r "$absolute_path" ]; then
-    die "file not readable: $file_path"
+    die_file_not_found "file not readable: $file_path"
   fi
 
   # Read file content
-  cat "$absolute_path" || die "failed to read file: $file_path"
+  cat "$absolute_path" || die_file_not_found "failed to read file: $file_path"
 }
 
 # Proper JSON string escaping for use in JSON files
