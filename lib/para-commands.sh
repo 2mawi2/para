@@ -454,7 +454,6 @@ handle_resume_command() {
   fi
 }
 
-
 # Handle completion commands
 handle_completion_command() {
   # Handle direct completion calls (e.g., para _completion_sessions)

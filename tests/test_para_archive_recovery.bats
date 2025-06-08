@@ -40,14 +40,14 @@ teardown() {
   rm -rf "$TEST_DIR"
 }
 
-@test "session creation uses para/wip/ namespace" {
+@test "session creation uses standard para/ namespace" {
   # Create a new session
   SESSION_ID=$(create_session "test-session" "master")
   
-  # Verify branch was created in wip namespace
-  run git branch --list "para/wip/*"
+  # Verify branch was created in standard namespace
+  run git branch --list "para/*"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ para/wip/test-session- ]]
+  [[ "$output" =~ para/test-session- ]]
 }
 
 @test "cancel command moves branch to archive namespace" {
@@ -63,7 +63,7 @@ teardown() {
   [ "$status" -ne 0 ]
   
   # Verify branch was moved to archive
-  ARCHIVE_BRANCH=$(echo "$TEMP_BRANCH" | sed 's|/wip/|/archive/|')
+  ARCHIVE_BRANCH=$(echo "$TEMP_BRANCH" | sed 's|para/|para/archive/|')
   run git rev-parse --verify "$ARCHIVE_BRANCH"
   [ "$status" -eq 0 ]
 }
@@ -91,15 +91,15 @@ teardown() {
   remove_session_state "$SESSION_ID"
   
   # Extract session name for recovery
-  SESSION_NAME=$(echo "$ORIGINAL_BRANCH" | sed 's|para/wip/||')
+  SESSION_NAME=$(echo "$ORIGINAL_BRANCH" | sed 's|para/||')
   
   # Recover the session
   run recover_archive_session "$SESSION_NAME"
   [ "$status" -eq 0 ]
   
-  # Verify branch was moved back to wip
-  WIP_BRANCH="para/wip/$SESSION_NAME"
-  run git rev-parse --verify "$WIP_BRANCH"
+  # Verify branch was moved back to active namespace
+  ACTIVE_BRANCH="para/$SESSION_NAME"
+  run git rev-parse --verify "$ACTIVE_BRANCH"
   [ "$status" -eq 0 ]
   
   # Verify archive branch no longer exists
@@ -108,20 +108,20 @@ teardown() {
   [ "$status" -ne 0 ]
   
   # Verify worktree was recreated
-  WORKTREE_PATH="$SUBTREES_DIR/$WIP_BRANCH"
+  WORKTREE_PATH="$SUBTREES_DIR/$ACTIVE_BRANCH"
   [ -d "$WORKTREE_PATH" ]
 }
 
-@test "recover fails if session already exists in wip" {
+@test "recover fails if session already exists in active namespace" {
   # Create a session and move it to archive manually
   git checkout -b "para/archive/test-session-20240101-120000"
   git checkout master
   
-  # Create a conflicting branch in wip namespace 
-  git checkout -b "para/wip/test-session-20240101-120000"
+  # Create a conflicting branch in active namespace 
+  git checkout -b "para/test-session-20240101-120000"
   git checkout master
   
-  # Try to recover - should fail because wip branch already exists
+  # Try to recover - should fail because active branch already exists
   run recover_archive_session "test-session-20240101-120000"
   [ "$status" -ne 0 ]
   [[ "$output" =~ "already exists in active sessions" ]]
