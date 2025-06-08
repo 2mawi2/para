@@ -31,7 +31,6 @@ fi
 . "$LIB_DIR/para-git.sh"
 . "$LIB_DIR/para-session.sh"
 . "$LIB_DIR/para-ide.sh"
-. "$LIB_DIR/para-backup.sh"
 . "$LIB_DIR/para-commands.sh"
 
 # Show version information
@@ -99,7 +98,7 @@ handle_command() {
     ;;
 
   clean)
-    clean_all_sessions
+    handle_clean_command "$@"
     ;;
 
   list | ls)
@@ -110,12 +109,12 @@ handle_command() {
     handle_resume_command "$@"
     ;;
 
-  continue)
-    handle_continue_command "$@"
-    ;;
-
   recover)
     handle_recover_command "$@"
+    ;;
+
+  continue)
+    handle_continue_command "$@"
     ;;
 
   config)

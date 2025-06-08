@@ -318,21 +318,64 @@ handle_cancel_command() {
 
   echo "▶ aborting session $SESSION_ID"
 
-  # Save session to backup before cancelling
-  save_cancelled_session_backup "$SESSION_ID" "$TEMP_BRANCH" "$WORKTREE_DIR" "$BASE_BRANCH" "$MERGE_MODE"
-
   # Force close IDE/terminal window for this session (cancel always closes)
   force_close_ide_for_session "$SESSION_ID"
 
-  # Remove worktree but preserve branch for backup recovery
-  remove_worktree_preserve_branch "$TEMP_BRANCH" "$WORKTREE_DIR"
+  # Cancel session (moves to archive)
+  cancel_session "$TEMP_BRANCH" "$WORKTREE_DIR"
 
   # Clean up state files
   remove_session_state "$SESSION_ID"
 
   echo "cancelled session $SESSION_ID"
-  echo "💡 Session backed up for recovery. Use 'para recover $SESSION_ID' to restore."
+  echo "💡 Session moved to archive. Use 'para recover $SESSION_ID' to restore."
   echo "🎉 You can safely close this $(get_ide_display_name) session now."
+}
+
+# Handle recover command
+handle_recover_command() {
+  SESSION_NAME=""
+
+  # Parse arguments
+  if [ "$#" -eq 1 ]; then
+    # No session specified - list available sessions in archive
+    list_archive_sessions
+    return 0
+  elif [ "$#" -eq 2 ]; then
+    SESSION_NAME="$2"
+  else
+    die "recover takes optionally a session name"
+  fi
+
+  # Find and recover the specified session
+  recover_archive_session "$SESSION_NAME"
+}
+
+# Handle clean command
+handle_clean_command() {
+  CLEAN_BACKUPS=false
+
+  # Parse arguments
+  while [ "$#" -gt 1 ]; do
+    case "$2" in
+    --backups)
+      CLEAN_BACKUPS=true
+      shift
+      ;;
+    -*)
+      die "unknown option: $2"
+      ;;
+    *)
+      die "clean command does not accept positional arguments"
+      ;;
+    esac
+  done
+
+  if [ "$CLEAN_BACKUPS" = true ]; then
+    clean_archive_sessions
+  else
+    clean_all_sessions
+  fi
 }
 
 # Handle continue command for conflict resolution
@@ -411,18 +454,6 @@ handle_resume_command() {
   fi
 }
 
-# Handle recover command
-handle_recover_command() {
-  if [ "$#" -eq 1 ]; then
-    # No session specified - show available backups
-    list_cancelled_session_backups
-  elif [ "$#" -eq 2 ]; then
-    SESSION_ID="$2"
-    recover_cancelled_session "$SESSION_ID"
-  else
-    die_invalid_args "recover takes optionally a session name"
-  fi
-}
 
 # Handle completion commands
 handle_completion_command() {
