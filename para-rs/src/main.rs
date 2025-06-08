@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+mod utils;
+
 #[derive(Parser)]
 #[command(name = "para")]
 #[command(about = "Parallel IDE Workflow Helper", long_about = None)]
