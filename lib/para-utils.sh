@@ -16,10 +16,11 @@ para finish "message" --integrate    # squash commits + merge into base branch
 para finish "msg" -i --branch <n>    # combine integration with custom branch name
 para list | ls                       # list active sessions
 para resume [session]                # resume session in IDE
-para cancel [session]                # cancel session
-para clean                           # remove all sessions
+para recover [session]               # recover cancelled session from archive
+para cancel [session]                # cancel session (moves to archive)
+para clean                           # remove all active sessions
+para clean --backups                 # remove all cancelled sessions from archive
 para continue                        # complete merge after resolving conflicts
-para recover [session]               # recover cancelled session from backup
 para config                          # setup configuration
 para completion generate [shell]     # generate shell completion script
 
@@ -35,10 +36,12 @@ para finish "add feature" --branch feature-xyz  # custom branch name
 para finish "hotfix critical bug" --integrate   # integrate immediately into base branch
 para finish "new API" -i             # shorthand for --integrate
 para list                            # see active sessions
-para cancel                          # cancel current session
-para clean                           # remove all sessions
+para cancel                          # cancel current session (moves to archive)
+para recover                         # list cancelled sessions
+para recover session-name            # recover specific cancelled session
+para clean                           # remove all active sessions
+para clean --backups                 # remove all cancelled sessions
 para resume session-name             # resume specific session
-para recover session-name            # recover cancelled session from backup
 para config                          # setup IDE preferences
 para completion generate bash        # generate bash completion script
 

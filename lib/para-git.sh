@@ -148,13 +148,169 @@ remove_worktree() {
   git -C "$REPO_ROOT" branch -D "$temp_branch" 2>/dev/null || true
 }
 
-# Remove worktree but preserve branch for backup
-remove_worktree_preserve_branch() {
+# Cancel session - move branch to archive namespace
+cancel_session() {
   temp_branch="$1"
   worktree_dir="$2"
 
-  # Remove only the worktree, keep the branch for backup recovery
+  # Remove worktree first
   git -C "$REPO_ROOT" worktree remove --force "$worktree_dir" 2>/dev/null || true
+
+  # Move branch from wip to archive namespace
+  if git -C "$REPO_ROOT" rev-parse --verify "$temp_branch" >/dev/null 2>&1; then
+    # Convert para/wip/session-name to para/archive/session-name
+    archive_branch=$(echo "$temp_branch" | sed 's|/wip/|/archive/|')
+
+    # If no wip in the name, still move to archive by replacing prefix
+    if [ "$archive_branch" = "$temp_branch" ]; then
+      prefix=$(get_branch_prefix)
+      archive_branch=$(echo "$temp_branch" | sed "s|^$prefix/|$prefix/archive/|")
+    fi
+
+    echo "▶ moving branch '$temp_branch' to archive: '$archive_branch'"
+    git -C "$REPO_ROOT" branch -m "$temp_branch" "$archive_branch" 2>/dev/null || true
+  fi
+}
+
+# List sessions in archive namespace
+list_archive_sessions() {
+  prefix=$(get_branch_prefix)
+  archive_pattern="${prefix}/archive/"
+
+  # Get all branches in archive namespace
+  archive_branches=$(git -C "$REPO_ROOT" branch -a | sed 's/^[* ]*//g' | grep "^$archive_pattern" | sed "s|^$archive_pattern||" || true)
+
+  if [ -z "$archive_branches" ]; then
+    echo "No cancelled sessions found in archive."
+    echo ""
+    echo "💡 Sessions are moved to the archive when cancelled with 'para cancel'"
+    echo "   Use 'para recover <session-name>' to restore a cancelled session"
+    return 0
+  fi
+
+  echo "Cancelled sessions available for recovery:"
+  echo ""
+
+  for session_branch in $archive_branches; do
+    # Extract session info from branch name
+    if echo "$session_branch" | grep -q "^[a-z_]*[0-9]\{8\}-[0-9]\{6\}$"; then
+      # Friendly name format
+      session_name=$(echo "$session_branch" | sed 's/-[0-9]\{8\}-[0-9]\{6\}$//')
+      timestamp=$(echo "$session_branch" | sed 's/.*-\([0-9]\{8\}-[0-9]\{6\}\)$/\1/')
+      display_name="$session_name (cancelled: $timestamp)"
+    else
+      display_name="$session_branch"
+    fi
+
+    echo "  $session_branch"
+    echo "    Name: $display_name"
+    echo "    Recover: para recover $session_branch"
+    echo ""
+  done
+
+  echo "💡 Use 'para recover <session-name>' to restore a cancelled session"
+}
+
+# Recover session from archive namespace
+recover_archive_session() {
+  session_name="$1"
+  prefix=$(get_branch_prefix)
+  archive_branch="${prefix}/archive/${session_name}"
+
+  # Check if the archive branch exists
+  if ! git -C "$REPO_ROOT" rev-parse --verify "$archive_branch" >/dev/null 2>&1; then
+    echo "❌ Session '$session_name' not found in archive"
+    echo ""
+    echo "Available sessions:"
+    list_archive_sessions
+    return 1
+  fi
+
+  # Generate new session info
+  wip_branch="${prefix}/wip/${session_name}"
+
+  # Check if a session with this name already exists in wip
+  if git -C "$REPO_ROOT" rev-parse --verify "$wip_branch" >/dev/null 2>&1; then
+    echo "❌ Session '$session_name' already exists in active sessions"
+    echo "   Use 'para list' to see active sessions"
+    echo "   Or choose a different name for recovery"
+    return 1
+  fi
+
+  echo "▶ recovering session '$session_name' from archive"
+
+  # Move branch from archive back to wip
+  git -C "$REPO_ROOT" branch -m "$archive_branch" "$wip_branch" || die "failed to move branch from archive to wip"
+
+  # Create worktree directory path
+  WORKTREE_DIR="$SUBTREES_DIR/$wip_branch"
+
+  # Recreate the worktree
+  echo "▶ recreating worktree: $WORKTREE_DIR"
+  mkdir -p "$SUBTREES_DIR"
+  setup_gitignore
+  git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" "$wip_branch" >&2 || die "git worktree add failed"
+
+  # Generate session ID from session name
+  SESSION_ID="$session_name"
+
+  # Determine base branch (try to detect from branch history)
+  BASE_BRANCH=$(git -C "$REPO_ROOT" merge-base --fork-point HEAD "$wip_branch" 2>/dev/null | git -C "$REPO_ROOT" name-rev --name-only --refs="refs/heads/*" 2>/dev/null | head -1) || BASE_BRANCH="master"
+
+  # If we can't determine base branch, default to current branch
+  if [ -z "$BASE_BRANCH" ] || [ "$BASE_BRANCH" = "undefined" ]; then
+    BASE_BRANCH=$(get_current_branch)
+  fi
+
+  # Save session state
+  save_session_state "$SESSION_ID" "$wip_branch" "$WORKTREE_DIR" "$BASE_BRANCH" "squash" "ide" "${IDE_NAME:-cursor}" ""
+
+  echo "✅ session '$session_name' recovered successfully"
+  echo ""
+  echo "📋 Session details:"
+  echo "   Session ID: $SESSION_ID"
+  echo "   Branch: $wip_branch"
+  echo "   Worktree: $WORKTREE_DIR"
+  echo "   Base: $BASE_BRANCH"
+  echo ""
+  echo "💡 Resume with: para resume $SESSION_ID"
+  echo "💡 Or navigate to: cd $WORKTREE_DIR"
+}
+
+# Clean all sessions from archive namespace
+clean_archive_sessions() {
+  prefix=$(get_branch_prefix)
+  archive_pattern="${prefix}/archive/"
+
+  # Get all branches in archive namespace
+  archive_branches=$(git -C "$REPO_ROOT" branch -a | sed 's/^[* ]*//g' | grep "^$archive_pattern" || true)
+
+  if [ -z "$archive_branches" ]; then
+    echo "No cancelled sessions found in archive to clean."
+    return 0
+  fi
+
+  # Count branches
+  branch_count=0
+  for branch in $archive_branches; do
+    branch_count=$((branch_count + 1))
+  done
+
+  echo "▶ cleaning up $branch_count cancelled session(s) from archive..."
+
+  deleted_count=0
+  for branch in $archive_branches; do
+    echo "  → deleting branch: $branch"
+    if git -C "$REPO_ROOT" branch -D "$branch" 2>/dev/null; then
+      deleted_count=$((deleted_count + 1))
+    fi
+  done
+
+  echo "✅ cleaned up $deleted_count cancelled session(s) from archive"
+
+  if [ "$deleted_count" -lt "$branch_count" ]; then
+    echo "⚠️  Some branches could not be deleted (may be checked out elsewhere)"
+  fi
 }
 
 # Get current branch name

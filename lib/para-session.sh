@@ -93,7 +93,19 @@ auto_detect_session() {
   # Get current configurable prefix for new detection
   current_prefix=$(get_branch_prefix)
 
-  # Try to detect friendly session (new format with configurable prefix)
+  # Try to detect friendly session (new format with wip namespace)
+  if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/$current_prefix/wip/[a-z_]*[0-9]\{8\}-[0-9]\{6\}"; then
+    FRIENDLY_SESSION=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/$current_prefix/wip/\([a-z_]*[0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
+    if [ -n "$FRIENDLY_SESSION" ]; then
+      CONTEXT_SESSION_ID="$FRIENDLY_SESSION"
+      if [ -f "$STATE_DIR/$CONTEXT_SESSION_ID.state" ]; then
+        echo "$CONTEXT_SESSION_ID"
+        return 0
+      fi
+    fi
+  fi
+
+  # Try to detect friendly session (legacy format with configurable prefix, no wip)
   if echo "$CURRENT_DIR" | grep -q "/$SUBTREES_DIR_NAME/$current_prefix/[a-z_]*[0-9]\{8\}-[0-9]\{6\}"; then
     FRIENDLY_SESSION=$(echo "$CURRENT_DIR" | sed -n "s|.*/$SUBTREES_DIR_NAME/$current_prefix/\([a-z_]*[0-9]\{8\}-[0-9]\{6\}\).*|\1|p")
     if [ -n "$FRIENDLY_SESSION" ]; then
@@ -326,14 +338,14 @@ create_session() {
   if [ -n "$session_name" ]; then
     SESSION_ID="$session_name"
     TS=$(generate_timestamp)
-    # Use configurable prefix instead of hardcoded "pc/"
+    # Use configurable prefix with wip namespace
     prefix=$(get_branch_prefix)
-    TEMP_BRANCH="${prefix}/$session_name-$TS"
+    TEMP_BRANCH="${prefix}/wip/$session_name-$TS"
   else
     SESSION_ID=$(generate_session_id)
-    # Use configurable prefix instead of hardcoded "pc/"
+    # Use configurable prefix with wip namespace
     prefix=$(get_branch_prefix)
-    TEMP_BRANCH="${prefix}/$SESSION_ID"
+    TEMP_BRANCH="${prefix}/wip/$SESSION_ID"
   fi
   WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
 
@@ -581,11 +593,11 @@ create_new_session() {
     SESSION_ID="$session_name"
     TS=$(generate_timestamp)
     prefix=$(get_branch_prefix)
-    TEMP_BRANCH="${prefix}/${session_name}-${TS}"
+    TEMP_BRANCH="${prefix}/wip/${session_name}-${TS}"
   else
     SESSION_ID=$(generate_session_id)
     prefix=$(get_branch_prefix)
-    TEMP_BRANCH="${prefix}/${SESSION_ID}"
+    TEMP_BRANCH="${prefix}/wip/${SESSION_ID}"
   fi
   WORKTREE_DIR="$SUBTREES_DIR/$TEMP_BRANCH"
 
