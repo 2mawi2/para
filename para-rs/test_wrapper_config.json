@@ -1,0 +1,26 @@
+{
+  "ide": {
+    "name": "claude",
+    "command": "claude", 
+    "user_data_dir": null,
+    "wrapper": {
+      "enabled": true,
+      "name": "cursor",
+      "command": "cursor"
+    }
+  },
+  "directories": {
+    "subtrees_dir": "subtrees/pc",
+    "state_dir": ".para_state"
+  },
+  "git": {
+    "branch_prefix": "para",
+    "auto_stage": true,
+    "auto_commit": false
+  },
+  "session": {
+    "default_name_format": "%Y%m%d-%H%M%S",
+    "preserve_on_finish": false,
+    "auto_cleanup_days": 7
+  }
+}
