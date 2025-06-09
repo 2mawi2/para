@@ -40,6 +40,12 @@ pub enum Commands {
     /// Dynamic completion (hidden)
     #[command(hide = true)]
     CompleteCommand(CompleteCommandArgs),
+    /// Legacy completion endpoint for sessions (hidden)
+    #[command(name = "_completion_sessions", hide = true)]
+    CompletionSessions,
+    /// Legacy completion endpoint for branches (hidden)
+    #[command(name = "_completion_branches", hide = true)]
+    CompletionBranches,
 }
 
 #[derive(Args, Debug)]
@@ -290,6 +296,12 @@ impl Commands {
             }
             Commands::CompleteCommand(_) => {
                 "Examples:\n  para complete-command --command-line 'para start' --current-word '' --position 2"
+            }
+            Commands::CompletionSessions => {
+                "Examples:\n  para _completion_sessions"
+            }
+            Commands::CompletionBranches => {
+                "Examples:\n  para _completion_branches"
             }
         }
     }
