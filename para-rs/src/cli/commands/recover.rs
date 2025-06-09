@@ -1,5 +1,5 @@
 use crate::cli::parser::RecoverArgs;
-use crate::config::Config;
+use crate::config::{Config, ConfigManager};
 use crate::core::git::GitService;
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{ParaError, Result};
@@ -9,9 +9,9 @@ use std::path::PathBuf;
 pub fn execute(args: RecoverArgs) -> Result<()> {
     validate_recover_args(&args)?;
 
-    let config = Config::load_or_create()?;
+    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(&config);
+    let session_manager = SessionManager::new(config.clone())?;
 
     match args.session {
         Some(session_name) => {
@@ -168,8 +168,16 @@ fn recover_session_from_archive(
     worktree_manager.create_worktree(&restored_branch, &worktree_path)?;
     println!("Created worktree at: {}", worktree_path.display());
 
-    let session_state = SessionState::new(session_name.to_string(), restored_branch, worktree_path);
-    session_manager.save_state(&session_state)?;
+    let config_snapshot = crate::core::session::SessionConfig::from_config(&config);
+    let session_state = SessionState::new_recovered(
+        session_name.to_string(),
+        restored_branch,
+        "main".to_string(), // TODO: should detect base branch properly
+        worktree_path,
+        git_service.repository().root.clone(),
+        config_snapshot,
+    );
+    session_manager.save_session(&session_state)?;
     println!("Restored session state");
 
     Ok(())

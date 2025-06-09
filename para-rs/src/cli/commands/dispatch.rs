@@ -1,6 +1,7 @@
 use crate::cli::parser::DispatchArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
+use crate::core::session::{SessionManager, CreateSessionParams, SessionType};
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,10 +17,7 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 
     validate_claude_code_ide(&config)?;
 
-    let git_service = GitService::discover()
-        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
-
-    let repo_root = git_service.repository().root.clone();
+    let mut session_manager = SessionManager::new(config.clone())?;
 
     let session_name = match session_name {
         Some(name) => {
@@ -29,57 +27,24 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
         None => generate_friendly_name(),
     };
 
-    let branch_name = generate_branch_name(config.get_branch_prefix());
-    let session_timestamp = generate_timestamp();
-    let session_id = format!("{}_{}", session_name, session_timestamp);
-
-    let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
-    let session_path = subtrees_path
-        .join(config.get_branch_prefix())
-        .join(&session_id);
-
-    if !subtrees_path.exists() {
-        fs::create_dir_all(&subtrees_path).map_err(|e| {
-            ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
-        })?;
-    }
-
-    git_service
-        .create_worktree(&branch_name, &session_path)
-        .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
-
-    let state_dir = repo_root.join(&config.directories.state_dir);
-    if !state_dir.exists() {
-        fs::create_dir_all(&state_dir)
-            .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {}", e)))?;
-    }
-
-    let session_state_file = state_dir.join(format!("{}.json", session_id));
-    let session_state = SessionState {
-        id: session_id.clone(),
-        name: session_name,
-        branch: branch_name,
-        path: session_path.clone(),
-        prompt: prompt.clone(),
-        created_at: chrono::Utc::now(),
-        status: SessionStatus::Active,
+    let params = CreateSessionParams {
+        name: session_name.clone(),
+        session_type: SessionType::Dispatched,
+        initial_prompt: Some(prompt.clone()),
+        base_branch: None,
     };
 
-    let state_json = serde_json::to_string_pretty(&session_state)
-        .map_err(|e| ParaError::json_error(format!("Failed to serialize session state: {}", e)))?;
-
-    fs::write(&session_state_file, state_json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write session state: {}", e)))?;
+    let session_state = session_manager.create_session(params)?;
 
     launch_claude_code(
         &config,
-        &session_path,
+        &session_state.worktree_path,
         &prompt,
         args.dangerously_skip_permissions,
     )?;
 
-    println!("Created session '{}' with Claude Code", session_id);
-    println!("Session path: {}", session_path.display());
+    println!("Created session '{}' with Claude Code", session_state.id);
+    println!("Session path: {}", session_state.worktree_path.display());
 
     Ok(())
 }
@@ -137,23 +102,7 @@ fn launch_claude_code(
     Ok(())
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct SessionState {
-    id: String,
-    name: String,
-    branch: String,
-    path: PathBuf,
-    prompt: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    status: SessionStatus,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum SessionStatus {
-    Active,
-    Finished,
-    Cancelled,
-}
+// Removed old SessionState and SessionStatus - now using unified session system
 
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {

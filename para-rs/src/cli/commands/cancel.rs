@@ -11,11 +11,11 @@ pub fn execute(args: CancelArgs) -> Result<()> {
 
     let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(&config);
+    let session_manager = SessionManager::new(config.clone())?;
 
     let session_id = detect_session_id(&args, &git_service, &session_manager)?;
 
-    let session_state = session_manager.load_state(&session_id)?;
+    let session_state = session_manager.load_session(&session_id)?;
 
     let has_uncommitted = git_service.repository().has_uncommitted_changes()?;
     if has_uncommitted {
@@ -27,17 +27,16 @@ pub fn execute(args: CancelArgs) -> Result<()> {
 
     git_service.remove_worktree(&session_state.worktree_path)?;
 
-    let mut updated_state = session_state;
-    updated_state.update_status(SessionStatus::Cancelled);
-    session_manager.save_state(&updated_state)?;
+    let mut session_manager = session_manager;  // Make mutable for update
+    session_manager.update_session_status(&session_state.id, SessionStatus::Cancelled)?;
 
     println!(
         "Session '{}' has been cancelled and archived as '{}'",
-        session_id, archived_branch
+        session_state.id, archived_branch
     );
     println!(
         "To recover this session later, use: para recover {}",
-        session_id
+        session_state.name
     );
     println!("The archived branch is: {}", archived_branch);
 
@@ -62,10 +61,15 @@ fn detect_session_id(
 
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
-            let sessions = session_manager.list_sessions()?;
-            for session in sessions {
+            if let Ok(session) = session_manager.auto_detect_session() {
+                return Ok(session.id);
+            }
+            
+            let sessions = session_manager.list_all_sessions()?;
+            for summary in sessions {
+                let session = session_manager.load_session(&summary.id)?;
                 if session.branch == branch && session.worktree_path == current_dir {
-                    return Ok(session.name);
+                    return Ok(session.id);
                 }
             }
             Err(ParaError::session_not_found(format!(
@@ -227,7 +231,7 @@ mod tests {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config.clone())?;
 
         let session_state = SessionState::new(
             "test-session".to_string(),
@@ -252,7 +256,7 @@ mod tests {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config.clone())?;
 
         let args = CancelArgs {
             session: Some("nonexistent-session".to_string()),
@@ -268,7 +272,7 @@ mod tests {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config.clone())?;
 
         let args = CancelArgs { session: None };
 
@@ -284,7 +288,7 @@ mod tests {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config.clone())?;
 
         let args = CancelArgs { session: None };
 

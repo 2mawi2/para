@@ -2,9 +2,9 @@ use crate::cli::parser::StartArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::ide::IdeManager;
-use crate::core::session::{SessionManager, SessionState};
+use crate::core::session::{SessionManager, CreateSessionParams, SessionType};
 use crate::utils::{
-    generate_branch_name, generate_unique_name, validate_session_name, ParaError, Result,
+    generate_unique_name, validate_session_name, ParaError, Result,
 };
 use std::path::{Path, PathBuf};
 
@@ -14,35 +14,25 @@ pub fn execute(args: StartArgs) -> Result<()> {
     let config = ConfigManager::load_or_create()
         .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
 
-    let git_service = GitService::discover()
-        .map_err(|e| ParaError::git_operation(format!("Not in a git repository: {}", e)))?;
-
-    let session_manager = SessionManager::new(&config);
+    let mut session_manager = SessionManager::new(config.clone())?;
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    let branch_name = generate_branch_name(config.get_branch_prefix());
+    let params = CreateSessionParams {
+        name: session_name.clone(),
+        session_type: SessionType::Manual,
+        initial_prompt: None,
+        base_branch: None,
+    };
 
-    let worktree_path = create_worktree_path(&config, &session_name)?;
-
-    check_session_conflicts(&session_manager, &session_name, &worktree_path)?;
-
-    git_service.create_worktree(&branch_name, &worktree_path)?;
-
-    let session_state = SessionState::new(
-        session_name.clone(),
-        branch_name.clone(),
-        worktree_path.clone(),
-    );
-
-    session_manager.save_state(&session_state)?;
+    let session_state = session_manager.create_session(params)?;
 
     let ide_manager = IdeManager::new(&config);
-    ide_manager.launch(&worktree_path, args.dangerously_skip_permissions)?;
+    ide_manager.launch(&session_state.worktree_path, args.dangerously_skip_permissions)?;
 
     println!("✅ Session '{}' started successfully", session_name);
-    println!("   Branch: {}", branch_name);
-    println!("   Worktree: {}", worktree_path.display());
+    println!("   Branch: {}", session_state.branch);
+    println!("   Worktree: {}", session_state.worktree_path.display());
     println!("   IDE: {} launched", config.ide.name);
 
     Ok(())
@@ -52,14 +42,16 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
     match &args.name {
         Some(name) => {
             validate_session_name(name)?;
-            if session_manager.session_exists(name) {
+            // Generate ID to check for conflicts  
+            let session_id = crate::utils::generate_session_id(name);
+            if session_manager.session_exists(&session_id) {
                 return Err(ParaError::session_exists(name));
             }
             Ok(name.clone())
         }
         None => {
             let existing_sessions = session_manager
-                .list_sessions()?
+                .list_all_sessions()?
                 .into_iter()
                 .map(|s| s.name)
                 .collect::<Vec<String>>();
@@ -68,38 +60,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
     }
 }
 
-fn create_worktree_path(config: &Config, session_name: &str) -> Result<PathBuf> {
-    let subtrees_dir = PathBuf::from(config.get_subtrees_dir());
-    let worktree_path = subtrees_dir.join(session_name);
-
-    if worktree_path.exists() {
-        return Err(ParaError::file_operation(format!(
-            "Worktree directory already exists: {}",
-            worktree_path.display()
-        )));
-    }
-
-    Ok(worktree_path)
-}
-
-fn check_session_conflicts(
-    session_manager: &SessionManager,
-    session_name: &str,
-    worktree_path: &Path,
-) -> Result<()> {
-    if session_manager.session_exists(session_name) {
-        return Err(ParaError::session_exists(session_name));
-    }
-
-    if worktree_path.exists() {
-        return Err(ParaError::file_operation(format!(
-            "Worktree path already exists: {}",
-            worktree_path.display()
-        )));
-    }
-
-    Ok(())
-}
+// Removed helper functions - now handled by SessionManager
 
 #[cfg(test)]
 mod tests {

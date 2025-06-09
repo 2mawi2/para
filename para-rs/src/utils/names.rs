@@ -96,6 +96,11 @@ pub fn generate_session_id() -> String {
     format!("{}_{}", friendly, timestamp)
 }
 
+pub fn generate_session_id_with_name(name: &str) -> String {
+    let timestamp = generate_timestamp();
+    format!("{}_{}", name, timestamp)
+}
+
 pub fn generate_timestamp() -> String {
     let now: DateTime<Utc> = Utc::now();
     now.format("%Y%m%d-%H%M%S").to_string()

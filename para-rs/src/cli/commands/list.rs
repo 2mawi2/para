@@ -1,5 +1,7 @@
 use crate::cli::parser::ListArgs;
+use crate::config::ConfigManager;
 use crate::core::git::{BranchInfo, GitOperations, GitService, WorktreeInfo};
+use crate::core::session::{SessionManager, SessionSummary, SessionStatus as UnifiedSessionStatus};
 use crate::utils::{ParaError, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -49,13 +51,15 @@ impl SessionStatus {
 }
 
 pub fn execute(args: ListArgs) -> Result<()> {
-    let git_service =
-        GitService::discover().map_err(|_| ParaError::repo_state("Not in a git repository"))?;
+    let config = ConfigManager::load_or_create()
+        .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
+
+    let session_manager = SessionManager::new(config)?;
 
     let sessions = if args.archived {
-        list_archived_sessions(&git_service)?
+        list_archived_sessions(&session_manager)?
     } else {
-        list_active_sessions(&git_service)?
+        list_active_sessions(&session_manager)?
     };
 
     if sessions.is_empty() {
@@ -71,38 +75,42 @@ pub fn execute(args: ListArgs) -> Result<()> {
     Ok(())
 }
 
-fn list_active_sessions(git_service: &GitService) -> Result<Vec<SessionInfo>> {
-    let repo_root = &git_service.repository().root;
-    let state_dir = repo_root.join(".para_state");
-
-    if !state_dir.exists() {
-        return Ok(Vec::new());
-    }
-
+fn list_active_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
+    let summaries = session_manager.list_active_sessions()?;
+    let git_service = GitService::discover()?;
+    
     let mut sessions = Vec::new();
-    let worktrees = git_service.list_worktrees()?;
-    let branches = git_service.list_branches()?;
+    
+    for summary in summaries {
+        let session_state = session_manager.load_session(&summary.id)?;
+        
+        let has_uncommitted_changes = if session_state.worktree_path.exists() {
+            git_service_for_path(&session_state.worktree_path)
+                .and_then(|service| service.has_uncommitted_changes().ok())
+        } else {
+            None
+        };
 
-    let worktree_map: HashMap<String, &WorktreeInfo> =
-        worktrees.iter().map(|w| (w.branch.clone(), w)).collect();
+        let is_current = std::env::current_dir()
+            .map(|cwd| cwd.starts_with(&session_state.worktree_path))
+            .unwrap_or(false);
+        
+        let status = determine_unified_session_status(&session_state, &git_service)?;
 
-    let branch_map: HashMap<String, &BranchInfo> =
-        branches.iter().map(|b| (b.name.clone(), b)).collect();
-
-    for entry in fs::read_dir(&state_dir)? {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        let file_name_str = file_name.to_string_lossy();
-
-        if file_name_str.ends_with(".state") {
-            let session_id = file_name_str.trim_end_matches(".state").to_string();
-
-            if let Ok(session_info) =
-                parse_session_state_file(&entry.path(), &session_id, &worktree_map, &branch_map)
-            {
-                sessions.push(session_info);
-            }
-        }
+        let session_info = SessionInfo {
+            session_id: summary.id,
+            branch: summary.branch,
+            worktree_path: session_state.worktree_path,
+            base_branch: session_state.base_branch,
+            merge_mode: "squash".to_string(), // Default for now
+            status,
+            last_modified: Some(summary.last_modified),
+            commit_count: Some(summary.commit_count as usize),
+            has_uncommitted_changes,
+            is_current,
+        };
+        
+        sessions.push(session_info);
     }
 
     sessions.sort_by(|a, b| {
@@ -114,7 +122,8 @@ fn list_active_sessions(git_service: &GitService) -> Result<Vec<SessionInfo>> {
     Ok(sessions)
 }
 
-fn list_archived_sessions(git_service: &GitService) -> Result<Vec<SessionInfo>> {
+fn list_archived_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
+    let git_service = GitService::discover()?;
     let branch_manager = git_service.branch_manager();
     let archived_branches = branch_manager.list_archived_branches("para")?;
 
@@ -141,75 +150,34 @@ fn list_archived_sessions(git_service: &GitService) -> Result<Vec<SessionInfo>> 
     Ok(sessions)
 }
 
-fn parse_session_state_file(
-    state_file: &Path,
-    session_id: &str,
-    worktree_map: &HashMap<String, &WorktreeInfo>,
-    branch_map: &HashMap<String, &BranchInfo>,
-) -> Result<SessionInfo> {
-    let content = fs::read_to_string(state_file)?;
-    let parts: Vec<&str> = content.trim().split('|').collect();
-
-    if parts.len() < 3 {
-        return Err(ParaError::state_corruption(format!(
-            "Invalid state file format for session: {}",
-            session_id
-        )));
-    }
-
-    let temp_branch = parts[0].to_string();
-    let worktree_dir = PathBuf::from(parts[1]);
-    let base_branch = parts[2].to_string();
-    let merge_mode = parts.get(3).unwrap_or(&"squash").to_string();
-
-    let worktree_exists = worktree_dir.exists();
-    let worktree_info = worktree_map.get(&temp_branch);
-    let branch_info = branch_map.get(&temp_branch);
-
-    let status =
-        determine_session_status(&worktree_dir, worktree_info.copied(), branch_info.copied())?;
-
-    let last_modified = get_last_modified_time(&worktree_dir);
-
-    let has_uncommitted_changes = if worktree_exists {
-        git_service_for_path(&worktree_dir)
-            .and_then(|service| service.has_uncommitted_changes().ok())
-    } else {
-        None
-    };
-
-    let is_current = std::env::current_dir()
-        .map(|cwd| cwd.starts_with(&worktree_dir))
-        .unwrap_or(false);
-
-    Ok(SessionInfo {
-        session_id: session_id.to_string(),
-        branch: temp_branch,
-        worktree_path: worktree_dir,
-        base_branch,
-        merge_mode,
-        status,
-        last_modified,
-        commit_count: None,
-        has_uncommitted_changes,
-        is_current,
-    })
-}
-
-fn determine_session_status(
-    worktree_dir: &Path,
-    worktree_info: Option<&WorktreeInfo>,
-    _branch_info: Option<&BranchInfo>,
+fn determine_unified_session_status(
+    session_state: &crate::core::session::SessionState,
+    git_service: &GitService,
 ) -> Result<SessionStatus> {
-    if !worktree_dir.exists() {
+    // Check if worktree path exists
+    if !session_state.worktree_path.exists() {
         return Ok(SessionStatus::Missing);
     }
 
-    if worktree_info.is_none() {
+    // Check session status first
+    match session_state.status {
+        UnifiedSessionStatus::Cancelled | UnifiedSessionStatus::Completed => {
+            return Ok(SessionStatus::Archived);
+        }
+        _ => {}
+    }
+
+    // Check if worktree is registered with git
+    let worktrees = git_service.list_worktrees()?;
+    let worktree_exists = worktrees.iter()
+        .any(|w| w.path == session_state.worktree_path);
+    
+    if !worktree_exists {
         return Ok(SessionStatus::Missing);
     }
 
-    if let Some(service) = git_service_for_path(worktree_dir) {
+    // Check for uncommitted changes
+    if let Some(service) = git_service_for_path(&session_state.worktree_path) {
         if let Ok(is_clean) = service.is_clean_working_tree() {
             if !is_clean {
                 return Ok(SessionStatus::Dirty);
@@ -220,16 +188,13 @@ fn determine_session_status(
     Ok(SessionStatus::Active)
 }
 
+// Removed old determine_session_status - using unified session system
+
 fn git_service_for_path(path: &Path) -> Option<GitService> {
     GitService::discover_from(path).ok()
 }
 
-fn get_last_modified_time(worktree_dir: &Path) -> Option<DateTime<Utc>> {
-    fs::metadata(worktree_dir)
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-        .map(DateTime::<Utc>::from)
-}
+// Removed get_last_modified_time - using unified session system metadata
 
 fn extract_session_id_from_archived_branch(branch_name: &str) -> Option<String> {
     if let Some(stripped) = branch_name.strip_prefix("para/archived/") {
