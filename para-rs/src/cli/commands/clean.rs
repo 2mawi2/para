@@ -16,6 +16,7 @@ struct SessionCleaner {
     clean_backups: bool,
     sessions_discovered: Vec<SessionInfo>,
     archived_branches: Vec<String>,
+    current_directory: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -30,11 +31,13 @@ struct SessionInfo {
 
 impl SessionCleaner {
     fn new(git_service: GitService, clean_backups: bool) -> Self {
+        let current_directory = std::env::current_dir().ok();
         Self {
             git_service,
             clean_backups,
             sessions_discovered: Vec::new(),
             archived_branches: Vec::new(),
+            current_directory,
         }
     }
 
@@ -46,6 +49,9 @@ impl SessionCleaner {
             println!("No active sessions or archived branches found to clean.");
             return Ok(());
         }
+
+        // Check for current directory safety
+        self.check_current_directory_safety()?;
 
         self.show_cleanup_summary();
 
@@ -88,6 +94,25 @@ impl SessionCleaner {
             }
         }
 
+        Ok(())
+    }
+
+    fn check_current_directory_safety(&self) -> Result<()> {
+        if let Some(ref current_dir) = self.current_directory {
+            for session in &self.sessions_discovered {
+                if current_dir.starts_with(&session.worktree_path) {
+                    println!("⚠️  Warning: You are currently inside session '{}' worktree.", session.session_id);
+                    println!("   Current directory: {}", current_dir.display());
+                    println!("   Session worktree: {}", session.worktree_path.display());
+                    println!();
+                    println!("💡 Cleaning this session will remove the directory you're currently in.");
+                    println!("   Please navigate to a different directory before cleaning.");
+                    return Err(ParaError::invalid_args(
+                        "Cannot clean session while inside its worktree directory"
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -549,5 +574,67 @@ mod tests {
 
         let args = CleanArgs { backups: false };
         assert!(!args.backups);
+    }
+
+    #[test]
+    fn test_current_directory_safety_check() {
+        let (temp_dir, service) = setup_test_repo();
+        let mut cleaner = SessionCleaner::new(service, false);
+
+        let session_id = "test-session";
+        let worktree_path = temp_dir.path().join("test-worktree");
+        fs::create_dir_all(&worktree_path).expect("Failed to create worktree dir");
+
+        create_mock_session_state(
+            &temp_dir,
+            session_id,
+            "para/test-session",
+            &worktree_path.to_string_lossy(),
+        );
+
+        // Create a session info that represents being inside the worktree
+        let session_info = SessionInfo {
+            session_id: session_id.to_string(),
+            branch_name: "para/test-session".to_string(),
+            worktree_path: worktree_path.clone(),
+            state_files: vec![],
+            exists_as_worktree: true,
+            exists_as_branch: false,
+        };
+
+        cleaner.sessions_discovered.push(session_info);
+        
+        // Simulate being inside the worktree directory
+        cleaner.current_directory = Some(worktree_path.join("subdirectory"));
+
+        let result = cleaner.check_current_directory_safety();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Cannot clean session while inside its worktree directory"));
+    }
+
+    #[test]
+    fn test_current_directory_safety_check_outside_worktree() {
+        let (temp_dir, service) = setup_test_repo();
+        let mut cleaner = SessionCleaner::new(service, false);
+
+        let session_id = "test-session";
+        let worktree_path = temp_dir.path().join("test-worktree");
+
+        let session_info = SessionInfo {
+            session_id: session_id.to_string(),
+            branch_name: "para/test-session".to_string(),
+            worktree_path: worktree_path.clone(),
+            state_files: vec![],
+            exists_as_worktree: true,
+            exists_as_branch: false,
+        };
+
+        cleaner.sessions_discovered.push(session_info);
+        
+        // Simulate being outside the worktree directory
+        cleaner.current_directory = Some(temp_dir.path().join("different-directory"));
+
+        let result = cleaner.check_current_directory_safety();
+        assert!(result.is_ok());
     }
 }
