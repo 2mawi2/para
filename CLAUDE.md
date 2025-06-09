@@ -116,8 +116,28 @@ para dispatch -f ./complex-task.txt
 
 # Named session with file input
 para dispatch auth-feature --file auth-spec.md
-
 ```
+
+### Parallel Development with Multiple Agents
+Para supports dispatching multiple agents to work on different tasks simultaneously:
+
+```bash
+# Dispatch agents with task files for parallel development
+para dispatch task1-agent --file TASK_1_IMPLEMENTATION.md --d
+para dispatch task2-agent --file TASK_2_IMPLEMENTATION.md --d
+para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md --d
+```
+
+**Key Concepts**:
+- Each agent gets an isolated worktree and branch
+- Task specifications should be comprehensive markdown files
+- Use `--file` flag to pass complete task requirements to agents
+- Add `-d` to prevent IDE permission prompts during automation
+- Always prompt the agent at the end to ensure all tests are green, All linters are green, and the code is reviewed by executing a git diff on its own changes and then reviewing what it has done 
+- Try avoid conflicts in between agents. No agent should have a task that depends on another task agent being run at the same time.
+- If one task requires another task, Start those tasks only sequentially. Once the first task is integrated we can start the second one and so on. 
+- When an agent is ready it should call para finish '<commit message>' to finish the task.
+- This will bring the changes to a new branch with the agent's name. This branch needs to be integrated in the master branch, and all conflicts need to be resolved. After this is done, tests have to be run again to ensure that the integration didn't break anything 
 
 ## File Structure Notes
 
