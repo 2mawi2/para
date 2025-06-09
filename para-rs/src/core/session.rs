@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+pub mod archive;
+pub mod recovery;
+
+pub use archive::{ArchiveManager, ArchiveEntry, ArchiveStats};
+pub use recovery::{SessionRecovery, RecoveryOptions, RecoveryInfo, RecoveryResult};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub name: String,
