@@ -128,7 +128,7 @@ pub fn validate_session_config(session: &super::SessionConfig) -> Result<()> {
     Ok(())
 }
 
-fn is_valid_ide_name(name: &str) -> bool {
+pub fn is_valid_ide_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()

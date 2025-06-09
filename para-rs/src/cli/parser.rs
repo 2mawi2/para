@@ -144,6 +144,8 @@ pub enum ConfigCommands {
     Show,
     /// Edit configuration file
     Edit,
+    /// Reset configuration to defaults
+    Reset,
 }
 
 #[derive(Args, Debug)]
@@ -233,7 +235,7 @@ impl Commands {
                 "Examples:\n  para continue"
             }
             Commands::Config(_) => {
-                "Examples:\n  para config setup\n  para config auto\n  para config show"
+                "Examples:\n  para config\n  para config setup\n  para config auto\n  para config show\n  para config edit\n  para config reset"
             }
             Commands::Completion(_) => {
                 "Examples:\n  para completion bash\n  para completion zsh > ~/.zsh_completions/_para"
