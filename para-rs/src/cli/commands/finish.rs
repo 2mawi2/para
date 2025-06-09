@@ -19,15 +19,15 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
-    let (session_info, current_branch) = match &args.session {
+    let (session_info, current_branch, is_worktree_env) = match &args.session {
         Some(session_id) => {
             let session_manager = SessionManager::new(&config);
             let session_state = session_manager.load_state(session_id)?;
-            (Some(session_state), None)
+            (Some(session_state), None, false)
         }
         None => {
-            match session_env {
-                SessionEnvironment::Worktree { branch, .. } => (None, Some(branch)),
+            match &session_env {
+                SessionEnvironment::Worktree { branch, .. } => (None, Some(branch.clone()), true),
                 SessionEnvironment::MainRepository => {
                     return Err(ParaError::invalid_args(
                         "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
@@ -71,6 +71,12 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     match result {
         FinishResult::Success { final_branch } => {
+            let worktree_path = if is_worktree_env {
+                Some(current_dir.clone())
+            } else {
+                session_info.as_ref().map(|s| s.worktree_path.clone())
+            };
+
             if let Some(session_state) = session_info {
                 let session_manager = SessionManager::new(&config);
                 if config.should_preserve_on_finish() {
@@ -83,6 +89,14 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             }
 
             git_service.repository().checkout_branch(&base_branch)?;
+
+            if let Some(ref path) = worktree_path {
+                if path != &git_service.repository().root && !config.should_preserve_on_finish() {
+                    if let Err(e) = git_service.remove_worktree(path) {
+                        eprintln!("Warning: Failed to remove worktree at {}: {}", path.display(), e);
+                    }
+                }
+            }
 
             println!("✓ Session finished successfully");
             println!("  Feature branch: {}", final_branch);
