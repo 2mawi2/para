@@ -37,6 +37,9 @@ pub enum Commands {
     Config(ConfigArgs),
     /// Generate shell completion script
     Completion(CompletionArgs),
+    /// Dynamic completion (hidden)
+    #[command(hide = true)]
+    CompleteCommand(CompleteCommandArgs),
 }
 
 #[derive(Args, Debug)]
@@ -164,6 +167,25 @@ pub struct CompletionArgs {
     pub shell: Shell,
 }
 
+#[derive(Args, Debug)]
+pub struct CompleteCommandArgs {
+    /// Current command line being completed
+    #[arg(long)]
+    pub command_line: String,
+    
+    /// Current word being completed
+    #[arg(long)]
+    pub current_word: String,
+    
+    /// Previous word in command line
+    #[arg(long)]
+    pub previous_word: Option<String>,
+    
+    /// Position of current word
+    #[arg(long)]
+    pub position: usize,
+}
+
 #[derive(ValueEnum, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Shell {
@@ -258,6 +280,9 @@ impl Commands {
             }
             Commands::Completion(_) => {
                 "Examples:\n  para completion bash\n  para completion zsh > ~/.zsh_completions/_para"
+            }
+            Commands::CompleteCommand(_) => {
+                "Examples:\n  para complete-command --command-line 'para start' --current-word '' --position 2"
             }
         }
     }

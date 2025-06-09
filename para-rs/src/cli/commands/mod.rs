@@ -1,5 +1,6 @@
 pub mod cancel;
 pub mod clean;
+pub mod complete_command;
 pub mod completion;
 pub mod config;
 pub mod continue_cmd;
