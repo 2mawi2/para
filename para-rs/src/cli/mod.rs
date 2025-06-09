@@ -32,6 +32,7 @@ pub fn execute_command(cli: Cli) -> Result<()> {
         Some(Commands::Continue) => commands::continue_cmd::execute(),
         Some(Commands::Config(args)) => commands::config::execute(args),
         Some(Commands::Completion(args)) => commands::completion::execute(args),
+        Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),
         None => {
             show_usage();
             Ok(())
