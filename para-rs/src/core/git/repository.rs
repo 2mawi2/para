@@ -6,6 +6,7 @@ use std::process::Command;
 pub struct GitRepository {
     pub root: PathBuf,
     pub git_dir: PathBuf,
+    pub work_dir: PathBuf,
 }
 
 impl GitRepository {
@@ -36,8 +37,9 @@ impl GitRepository {
         let root = PathBuf::from(root);
 
         let git_dir = Self::get_git_dir(&root)?;
+        let work_dir = root.clone();
 
-        Ok(Self { root, git_dir })
+        Ok(Self { root, git_dir, work_dir })
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -157,6 +159,14 @@ impl GitRepository {
 
     pub fn reset_hard(&self, commit: &str) -> Result<()> {
         execute_git_command_with_status(self, &["reset", "--hard", commit])
+    }
+
+    pub fn get_commit_message(&self, commit: &str) -> Result<String> {
+        execute_git_command(self, &["log", "--format=%B", "-n", "1", commit])
+    }
+
+    pub fn merge_fast_forward(&self, branch: &str) -> Result<()> {
+        execute_git_command_with_status(self, &["merge", "--ff-only", branch])
     }
 
     fn get_git_dir(repo_root: &Path) -> Result<PathBuf> {
