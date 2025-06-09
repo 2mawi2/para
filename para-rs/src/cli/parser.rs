@@ -218,7 +218,7 @@ impl DispatchArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
             (None, None, None) => Err(crate::utils::ParaError::invalid_args(
-                "Must provide either a prompt, session name, or file",
+                "dispatch requires a prompt text or file path",
             )),
             _ => Ok(()),
         }
