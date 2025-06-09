@@ -99,7 +99,7 @@ pub fn execute() -> Result<()> {
         }
     } else if integration_manager.is_cherry_pick_in_progress()? {
         println!("🔄 Continuing cherry-pick operation...");
-        if let Err(e) = integration_manager.continue_rebase() {
+        if let Err(e) = integration_manager.continue_cherry_pick() {
             return Err(ParaError::git_operation(format!(
                 "Failed to continue cherry-pick: {}",
                 e
@@ -412,5 +412,181 @@ mod tests {
         
         state.step = IntegrationStep::IntegrationComplete;
         assert!(!state.is_in_conflict());
+    }
+
+    // NEW RED TESTS FOR CONTINUE COMMAND FIXES
+    #[test]
+    fn test_continue_should_fail_when_no_integration_state_exists() {
+        // This test captures the issue where continue should fail gracefully 
+        // when no integration is in progress
+        let temp_dir = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
+            .expect("Failed to set up test environment");
+
+        // Try to continue when no integration state exists
+        let result = execute();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("No integration in progress"));
+        } else {
+            panic!("Expected GitOperation error about no integration in progress");
+        }
+    }
+
+    #[test]
+    fn test_continue_should_detect_conflicts_still_exist() {
+        // This test captures the behavior when conflicts still exist
+        let temp_dir = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
+            .expect("Failed to set up test environment");
+
+        // Create integration state with conflicts
+        let conflict_files = vec![PathBuf::from("README.md")];
+        let state = create_test_integration_state().with_conflicts(conflict_files);
+
+        // Save the state
+        let state_manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
+        state_manager.save_integration_state(&state).unwrap();
+
+        // Create actual conflict markers in README.md to simulate unresolved conflicts
+        let readme_path = git_temp.path().join("README.md");
+        fs::write(&readme_path, 
+            "<<<<<<< HEAD\nOriginal content\n=======\nNew content\n>>>>>>> feature").unwrap();
+
+        // Continue should fail because conflicts still exist
+        let result = execute();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("conflicts") || message.contains("resolve"));
+        } else {
+            panic!("Expected GitOperation error about unresolved conflicts, got: {:?}", result);
+        }
+    }
+
+    #[test] 
+    fn test_continue_should_proceed_when_conflicts_are_resolved() {
+        // This test captures the expected behavior when conflicts are resolved
+        let temp_dir = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
+            .expect("Failed to set up test environment");
+
+        // Create integration state with conflicts detected
+        let conflict_files = vec![PathBuf::from("README.md")];
+        let state = create_test_integration_state().with_conflicts(conflict_files);
+
+        // Save the state
+        let state_manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
+        state_manager.save_integration_state(&state).unwrap();
+
+        // Create a clean README.md file (no conflict markers)
+        let readme_path = git_temp.path().join("README.md");
+        fs::write(&readme_path, "# Test Repository\nResolved content").unwrap();
+
+        // Stage the resolved file
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["add", "README.md"])
+            .status()
+            .expect("Failed to stage resolved file");
+
+        // Continue should proceed successfully
+        // NOTE: This test will currently fail because the continue logic needs to be fixed
+        let result = execute();
+        
+        // Expected behavior: should succeed and advance integration
+        assert!(result.is_ok(), "Continue should succeed when conflicts are resolved, got: {:?}", result);
+    }
+
+    #[test]
+    fn test_continue_should_handle_different_git_operation_states() {
+        // This test ensures continue can handle different git operation states
+        let temp_dir = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
+            .expect("Failed to set up test environment");
+
+        // Create integration state
+        let state = create_test_integration_state();
+        let state_manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
+        state_manager.save_integration_state(&state).unwrap();
+
+        // Test with cherry-pick in progress
+        // Create a commit to cherry-pick
+        fs::write(git_temp.path().join("test.txt"), "test content").unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["add", "test.txt"])
+            .status()
+            .expect("Failed to add test file");
+        
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["commit", "-m", "Add test file"])
+            .status()
+            .expect("Failed to commit test file");
+
+        // Start a cherry-pick that will create a state continue can handle
+        let output = std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["rev-parse", "HEAD"])
+            .output()
+            .expect("Failed to get HEAD commit");
+        
+        let commit_hash = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+        // Reset and try to cherry-pick (this might create conflicts)
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["reset", "--hard", "HEAD~1"])
+            .status()
+            .expect("Failed to reset");
+
+        // Modify the file to create potential conflicts
+        fs::write(git_temp.path().join("test.txt"), "different content").unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["add", "test.txt"])
+            .status()
+            .expect("Failed to add modified file");
+        
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["commit", "-m", "Add different content"])
+            .status()
+            .expect("Failed to commit modified file");
+
+        // Now try to cherry-pick the original commit (should create conflicts)
+        let cherry_pick_result = std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(&["cherry-pick", &commit_hash])
+            .status()
+            .expect("Failed to run cherry-pick");
+
+        // Continue should be able to handle this git state
+        // NOTE: This test will currently fail because continue logic needs improvement
+        let result = execute();
+        
+        // We expect either success (if no conflicts) or a meaningful error about conflicts
+        match result {
+            Ok(_) => {
+                // Success is acceptable if git state allows it
+            }
+            Err(ParaError::GitOperation { message }) => {
+                // Error is acceptable if it's about conflicts or git state
+                assert!(
+                    message.contains("conflicts") || 
+                    message.contains("No conflicts") || 
+                    message.contains("integration")
+                );
+            }
+            Err(e) => {
+                panic!("Unexpected error type: {:?}", e);
+            }
+        }
     }
 }

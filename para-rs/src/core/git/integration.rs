@@ -149,6 +149,10 @@ impl<'a> IntegrationManager<'a> {
         execute_git_command_with_status(self.repo, &["rebase", "--continue"])
     }
 
+    pub fn continue_cherry_pick(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["cherry-pick", "--continue"])
+    }
+
     pub fn abort_rebase(&self) -> Result<()> {
         execute_git_command_with_status(self.repo, &["rebase", "--abort"])
     }
@@ -161,10 +165,8 @@ impl<'a> IntegrationManager<'a> {
     }
 
     pub fn get_conflicted_files(&self) -> Result<Vec<PathBuf>> {
-        if !self.has_rebase_conflicts()? {
-            return Ok(Vec::new());
-        }
-
+        // Check for any type of git conflicts, not just rebase conflicts
+        // This includes cherry-pick, merge, and rebase conflicts
         let output = execute_git_command(self.repo, &["diff", "--name-only", "--diff-filter=U"])?;
 
         Ok(output
@@ -176,6 +178,22 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn is_rebase_in_progress(&self) -> Result<bool> {
         self.has_rebase_conflicts()
+    }
+
+    pub fn is_cherry_pick_in_progress(&self) -> Result<bool> {
+        let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
+        Ok(cherry_pick_head.exists())
+    }
+
+    pub fn is_merge_in_progress(&self) -> Result<bool> {
+        let merge_head = self.repo.git_dir.join("MERGE_HEAD");
+        Ok(merge_head.exists())
+    }
+
+    pub fn is_any_operation_in_progress(&self) -> Result<bool> {
+        Ok(self.is_rebase_in_progress()? 
+           || self.is_cherry_pick_in_progress()? 
+           || self.is_merge_in_progress()?)
     }
 
     pub fn update_base_branch(&self, branch: &str) -> Result<()> {
@@ -327,21 +345,6 @@ impl<'a> IntegrationManager<'a> {
         execute_git_command_with_status(self.repo, &["cherry-pick", "--abort"])
     }
 
-    pub fn is_merge_in_progress(&self) -> Result<bool> {
-        let merge_head = self.repo.git_dir.join("MERGE_HEAD");
-        Ok(merge_head.exists())
-    }
-
-    pub fn is_cherry_pick_in_progress(&self) -> Result<bool> {
-        let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
-        Ok(cherry_pick_head.exists())
-    }
-
-    pub fn is_any_operation_in_progress(&self) -> Result<bool> {
-        Ok(self.is_rebase_in_progress()? 
-           || self.is_merge_in_progress()? 
-           || self.is_cherry_pick_in_progress()?)
-    }
 
     pub fn safe_abort_integration(&self, backup_branch: Option<&str>, target_branch: &str) -> Result<()> {
         self.cleanup_integration_state()?;

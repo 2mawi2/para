@@ -593,4 +593,71 @@ mod tests {
         assert_eq!(loaded.feature_branch, "feature");
         assert_eq!(loaded.base_branch, "main");
     }
+
+    // NEW RED TESTS FOR CONTINUE FEATURE FIXES
+    #[test]
+    fn test_integration_state_should_transition_to_conflicts_detected_on_squash_conflicts() {
+        // This test captures the issue we found: when squash fails due to conflicts,
+        // it should set state to ConflictsDetected, not Failed
+        let temp_dir = TempDir::new().unwrap();
+        let manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
+
+        // Create integration state
+        let mut state = IntegrationState::new(
+            "test-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            IntegrationStrategy::Squash,
+            Some("Test commit".to_string()),
+        );
+
+        // Simulate conflicts being detected during squash
+        let conflict_files = vec![PathBuf::from("README.md")];
+        state = state.with_conflicts(conflict_files.clone());
+
+        // State should be ConflictsDetected, not Failed
+        assert!(state.is_in_conflict());
+        assert!(!state.is_failed());
+        assert_eq!(state.conflict_files, conflict_files);
+        
+        if let IntegrationStep::ConflictsDetected { files } = &state.step {
+            assert_eq!(*files, conflict_files);
+        } else {
+            panic!("Expected ConflictsDetected step, got: {:?}", state.step);
+        }
+    }
+
+    #[test] 
+    fn test_failed_state_should_be_separate_from_conflicts_detected() {
+        // This test ensures Failed and ConflictsDetected are distinct states
+        let temp_dir = TempDir::new().unwrap();
+        let manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
+
+        // Test Failed state
+        let mut failed_state = IntegrationState::new(
+            "failed-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            IntegrationStrategy::Squash,
+            Some("Test commit".to_string()),
+        );
+        failed_state.mark_step(IntegrationStep::Failed { 
+            error: "Some unrecoverable error".to_string() 
+        });
+
+        assert!(failed_state.is_failed());
+        assert!(!failed_state.is_in_conflict());
+
+        // Test ConflictsDetected state
+        let conflict_state = IntegrationState::new(
+            "conflict-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            IntegrationStrategy::Squash,
+            Some("Test commit".to_string()),
+        ).with_conflicts(vec![PathBuf::from("test.txt")]);
+
+        assert!(!conflict_state.is_failed());
+        assert!(conflict_state.is_in_conflict());
+    }
 }
