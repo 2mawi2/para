@@ -17,14 +17,15 @@ impl ShellCompletionGenerator {
             Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "para", &mut buf),
         }
 
-        String::from_utf8(buf)
-            .map_err(|e| ParaError::invalid_args(format!("UTF-8 error generating completion: {}", e)))
+        String::from_utf8(buf).map_err(|e| {
+            ParaError::invalid_args(format!("UTF-8 error generating completion: {}", e))
+        })
     }
 
     pub fn generate_enhanced_completion(shell: Shell) -> Result<String> {
         let basic = Self::generate_basic_completion(shell.clone())?;
         let dynamic = Self::generate_dynamic_completion(shell)?;
-        
+
         Ok(format!("{}\n\n{}", basic, dynamic))
     }
 
@@ -400,8 +401,7 @@ Register-ArgumentCompleter -Native -CommandName para -ScriptBlock {
 
     pub fn get_installation_instructions(shell: Shell) -> String {
         match shell {
-            Shell::Bash => {
-                r#"# Installation instructions for Bash completion:
+            Shell::Bash => r#"# Installation instructions for Bash completion:
 
 # Option 1: Install system-wide (requires root)
 sudo mkdir -p /etc/bash_completion.d
@@ -415,10 +415,9 @@ para completion bash > ~/.local/share/bash-completion/completions/para
 echo 'eval "$(para completion bash)"' >> ~/.bashrc
 
 # Then reload your shell:
-source ~/.bashrc"#.to_string()
-            }
-            Shell::Zsh => {
-                r#"# Installation instructions for Zsh completion:
+source ~/.bashrc"#
+                .to_string(),
+            Shell::Zsh => r#"# Installation instructions for Zsh completion:
 
 # Option 1: Install to a directory in your $fpath
 mkdir -p ~/.zsh_completions
@@ -433,10 +432,9 @@ para completion zsh | sudo tee /usr/local/share/zsh/site-functions/_para
 echo 'eval "$(para completion zsh)"' >> ~/.zshrc
 
 # Then reload your shell:
-source ~/.zshrc"#.to_string()
-            }
-            Shell::Fish => {
-                r#"# Installation instructions for Fish completion:
+source ~/.zshrc"#
+                .to_string(),
+            Shell::Fish => r#"# Installation instructions for Fish completion:
 
 # Option 1: Install for current user
 mkdir -p ~/.config/fish/completions
@@ -446,10 +444,9 @@ para completion fish > ~/.config/fish/completions/para.fish
 sudo mkdir -p /usr/share/fish/vendor_completions.d
 para completion fish | sudo tee /usr/share/fish/vendor_completions.d/para.fish
 
-# Fish will automatically load the completion on next shell start"#.to_string()
-            }
-            Shell::PowerShell => {
-                r#"# Installation instructions for PowerShell completion:
+# Fish will automatically load the completion on next shell start"#
+                .to_string(),
+            Shell::PowerShell => r#"# Installation instructions for PowerShell completion:
 
 # Option 1: Add to your PowerShell profile
 if (!(Test-Path -Path $PROFILE)) {
@@ -461,8 +458,8 @@ para completion powershell | Add-Content -Path $PROFILE
 para completion powershell | Add-Content -Path $PROFILE.AllUsersAllHosts
 
 # Then reload PowerShell or run:
-. $PROFILE"#.to_string()
-            }
+. $PROFILE"#
+                .to_string(),
         }
     }
 }

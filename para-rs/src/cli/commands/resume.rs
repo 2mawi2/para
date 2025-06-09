@@ -30,7 +30,7 @@ fn resume_specific_session(
 
     if session_manager.session_exists(session_name) {
         let session_state = session_manager.load_state(session_name)?;
-        
+
         if !session_state.worktree_path.exists() {
             return Err(ParaError::session_not_found(format!(
                 "Session '{}' exists but worktree path '{}' not found",
@@ -45,14 +45,22 @@ fn resume_specific_session(
         let worktrees = git_service.list_worktrees()?;
         let matching_worktree = worktrees
             .iter()
-            .find(|wt| wt.branch.contains(session_name) || wt.path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.contains(session_name))
-                .unwrap_or(false))
+            .find(|wt| {
+                wt.branch.contains(session_name)
+                    || wt
+                        .path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .map(|name| name.contains(session_name))
+                        .unwrap_or(false)
+            })
             .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
 
         launch_ide_for_session(config, &matching_worktree.path)?;
-        println!("✅ Resumed session at '{}'", matching_worktree.path.display());
+        println!(
+            "✅ Resumed session at '{}'",
+            matching_worktree.path.display()
+        );
     }
 
     Ok(())
@@ -64,7 +72,7 @@ fn detect_and_resume_session(
     session_manager: &SessionManager,
 ) -> Result<()> {
     let current_dir = env::current_dir()?;
-    
+
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
             println!("Current directory is a worktree for branch: {}", branch);
@@ -111,7 +119,7 @@ fn list_and_select_session(
 
     if let Ok(index) = selection {
         let session = &active_sessions[index];
-        
+
         if !session.worktree_path.exists() {
             return Err(ParaError::session_not_found(format!(
                 "Session '{}' exists but worktree path '{}' not found",

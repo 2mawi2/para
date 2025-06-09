@@ -172,15 +172,15 @@ pub struct CompleteCommandArgs {
     /// Current command line being completed
     #[arg(long)]
     pub command_line: String,
-    
+
     /// Current word being completed
     #[arg(long)]
     pub current_word: String,
-    
+
     /// Previous word in command line
     #[arg(long)]
     pub previous_word: Option<String>,
-    
+
     /// Position of current word
     #[arg(long)]
     pub position: usize,

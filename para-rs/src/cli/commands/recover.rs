@@ -14,7 +14,9 @@ pub fn execute(args: RecoverArgs) -> Result<()> {
     let session_manager = SessionManager::new(&config);
 
     match args.session {
-        Some(session_name) => recover_specific_session(&config, &git_service, &session_manager, &session_name),
+        Some(session_name) => {
+            recover_specific_session(&config, &git_service, &session_manager, &session_name)
+        }
         None => list_recoverable_sessions(&config, &git_service, &session_manager),
     }
 }
@@ -25,22 +27,33 @@ fn recover_specific_session(
     session_manager: &SessionManager,
     session_name: &str,
 ) -> Result<()> {
-    let archived_branches = git_service.branch_manager().list_archived_branches(config.get_branch_prefix())?;
-    
+    let archived_branches = git_service
+        .branch_manager()
+        .list_archived_branches(config.get_branch_prefix())?;
+
     let matching_archive = archived_branches
         .iter()
-        .find(|branch| extract_session_name_from_archive(branch, config.get_branch_prefix()) == Some(session_name))
+        .find(|branch| {
+            extract_session_name_from_archive(branch, config.get_branch_prefix())
+                == Some(session_name)
+        })
         .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
 
     println!("Found archived session: {}", matching_archive);
-    
+
     if Confirm::new()
         .with_prompt(format!("Recover session '{}'?", session_name))
         .default(true)
         .interact()
         .unwrap_or(false)
     {
-        recover_session_from_archive(config, git_service, session_manager, matching_archive, session_name)?;
+        recover_session_from_archive(
+            config,
+            git_service,
+            session_manager,
+            matching_archive,
+            session_name,
+        )?;
         println!("✅ Session '{}' recovered successfully", session_name);
     }
 
@@ -52,8 +65,10 @@ fn list_recoverable_sessions(
     git_service: &GitService,
     session_manager: &SessionManager,
 ) -> Result<()> {
-    let archived_branches = git_service.branch_manager().list_archived_branches(config.get_branch_prefix())?;
-    
+    let archived_branches = git_service
+        .branch_manager()
+        .list_archived_branches(config.get_branch_prefix())?;
+
     if archived_branches.is_empty() {
         println!("No recoverable sessions found.");
         return Ok(());
@@ -61,9 +76,11 @@ fn list_recoverable_sessions(
 
     println!("Recoverable sessions:");
     let mut session_options = Vec::new();
-    
+
     for (i, archived_branch) in archived_branches.iter().enumerate() {
-        if let Some(session_name) = extract_session_name_from_archive(archived_branch, config.get_branch_prefix()) {
+        if let Some(session_name) =
+            extract_session_name_from_archive(archived_branch, config.get_branch_prefix())
+        {
             let timestamp = extract_timestamp_from_archive(archived_branch).unwrap_or_default();
             println!("  {}: {} (archived: {})", i + 1, session_name, timestamp);
             session_options.push((session_name, archived_branch));
@@ -83,12 +100,23 @@ fn list_recoverable_sessions(
     {
         let selection = Select::new()
             .with_prompt("Select session to recover")
-            .items(&session_options.iter().map(|(name, _)| name).collect::<Vec<_>>())
+            .items(
+                &session_options
+                    .iter()
+                    .map(|(name, _)| name)
+                    .collect::<Vec<_>>(),
+            )
             .interact();
 
         if let Ok(index) = selection {
             let (session_name, archived_branch) = &session_options[index];
-            recover_session_from_archive(config, git_service, session_manager, archived_branch, session_name)?;
+            recover_session_from_archive(
+                config,
+                git_service,
+                session_manager,
+                archived_branch,
+                session_name,
+            )?;
             println!("✅ Session '{}' recovered successfully", session_name);
         }
     }
@@ -106,11 +134,14 @@ fn recover_session_from_archive(
     let branch_manager = git_service.branch_manager();
     let worktree_manager = git_service.worktree_manager();
 
-    let restored_branch = branch_manager.restore_from_archive(archived_branch, config.get_branch_prefix())?;
+    let restored_branch =
+        branch_manager.restore_from_archive(archived_branch, config.get_branch_prefix())?;
     println!("Restored branch: {}", restored_branch);
 
     let subtrees_dir = PathBuf::from(config.get_subtrees_dir());
-    let worktree_path = subtrees_dir.join(config.get_branch_prefix()).join(&restored_branch);
+    let worktree_path = subtrees_dir
+        .join(config.get_branch_prefix())
+        .join(&restored_branch);
 
     if worktree_path.exists() {
         if !Confirm::new()
@@ -137,18 +168,17 @@ fn recover_session_from_archive(
     worktree_manager.create_worktree(&restored_branch, &worktree_path)?;
     println!("Created worktree at: {}", worktree_path.display());
 
-    let session_state = SessionState::new(
-        session_name.to_string(),
-        restored_branch,
-        worktree_path,
-    );
+    let session_state = SessionState::new(session_name.to_string(), restored_branch, worktree_path);
     session_manager.save_state(&session_state)?;
     println!("Restored session state");
 
     Ok(())
 }
 
-fn extract_session_name_from_archive<'a>(archived_branch: &'a str, prefix: &str) -> Option<&'a str> {
+fn extract_session_name_from_archive<'a>(
+    archived_branch: &'a str,
+    prefix: &str,
+) -> Option<&'a str> {
     let archive_prefix = format!("{}/archived/", prefix);
     archived_branch
         .strip_prefix(&archive_prefix)?
@@ -157,9 +187,7 @@ fn extract_session_name_from_archive<'a>(archived_branch: &'a str, prefix: &str)
 }
 
 fn extract_timestamp_from_archive(archived_branch: &str) -> Option<&str> {
-    archived_branch
-        .split('/')
-        .nth(2)
+    archived_branch.split('/').nth(2)
 }
 
 fn validate_recover_args(args: &RecoverArgs) -> Result<()> {

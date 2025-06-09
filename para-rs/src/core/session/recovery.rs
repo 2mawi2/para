@@ -80,7 +80,7 @@ impl<'a> SessionRecovery<'a> {
         options: RecoveryOptions,
     ) -> Result<RecoveryResult> {
         let recoverable_sessions = self.list_recoverable_sessions()?;
-        
+
         let recovery_info = recoverable_sessions
             .iter()
             .find(|info| info.original_session_name == session_name)
@@ -120,10 +120,9 @@ impl<'a> SessionRecovery<'a> {
         };
 
         if self.session_manager.session_exists(session_name) {
-            validation.conflicts.push(format!(
-                "Session '{}' already exists",
-                session_name
-            ));
+            validation
+                .conflicts
+                .push(format!("Session '{}' already exists", session_name));
         }
 
         let target_worktree_path = self.get_target_worktree_path(session_name);
@@ -181,7 +180,7 @@ impl<'a> SessionRecovery<'a> {
         options: RecoveryOptions,
     ) -> Result<RecoveryResult> {
         let validation = self.validate_recovery(&recovery_info.original_session_name)?;
-        
+
         if !validation.can_recover && !options.force_overwrite {
             return Err(ParaError::worktree_operation(format!(
                 "Cannot recover session due to conflicts: {}",
@@ -192,8 +191,10 @@ impl<'a> SessionRecovery<'a> {
         let branch_manager = self.git_service.branch_manager();
         let worktree_manager = self.git_service.worktree_manager();
 
-        let restored_branch = branch_manager
-            .restore_from_archive(&recovery_info.archived_branch, self.config.get_branch_prefix())?;
+        let restored_branch = branch_manager.restore_from_archive(
+            &recovery_info.archived_branch,
+            self.config.get_branch_prefix(),
+        )?;
 
         let final_session_name = if options.preserve_original_name {
             recovery_info.original_session_name.clone()
@@ -242,14 +243,14 @@ impl<'a> SessionRecovery<'a> {
 
     fn parse_archived_branch(&self, archived_branch: &str) -> Result<Option<RecoveryInfo>> {
         let archive_prefix = format!("{}/archived/", self.config.get_branch_prefix());
-        
+
         if !archived_branch.starts_with(&archive_prefix) {
             return Ok(None);
         }
 
         let suffix = archived_branch.strip_prefix(&archive_prefix).unwrap();
         let parts: Vec<&str> = suffix.split('/').collect();
-        
+
         if parts.len() != 2 {
             return Ok(None);
         }
@@ -382,12 +383,17 @@ mod tests {
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
 
         let archived_branch = "test/archived/20240301-120000/my-session";
-        
+
         let branch_manager = git_service.branch_manager();
         let initial_branch = git_service.repository().get_current_branch().unwrap();
-        branch_manager.create_branch(archived_branch, &initial_branch).unwrap();
-        
-        let info = recovery.parse_archived_branch(archived_branch).unwrap().unwrap();
+        branch_manager
+            .create_branch(archived_branch, &initial_branch)
+            .unwrap();
+
+        let info = recovery
+            .parse_archived_branch(archived_branch)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(info.archived_branch, archived_branch);
         assert_eq!(info.original_session_name, "my-session");

@@ -12,12 +12,10 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
     } else {
         let current_dir = std::env::current_dir()
             .map_err(|e| ParaError::invalid_args(format!("Cannot get current directory: {}", e)))?;
-        
+
         let env = git_service.validate_session_environment(&current_dir)?;
         match env {
-            crate::core::git::SessionEnvironment::Worktree { branch, .. } => {
-                branch
-            }
+            crate::core::git::SessionEnvironment::Worktree { branch, .. } => branch,
             _ => {
                 return Err(ParaError::invalid_args(
                     "Not in a session worktree. Please specify session ID or run from session directory.".to_string()
@@ -28,7 +26,10 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
 
     let strategy_manager = git_service.strategy_manager();
     let target_branch = args.target.unwrap_or_else(|| {
-        git_service.repository().get_main_branch().unwrap_or_else(|_| "main".to_string())
+        git_service
+            .repository()
+            .get_main_branch()
+            .unwrap_or_else(|_| "main".to_string())
     });
 
     let strategy = if let Some(strategy) = args.strategy {
@@ -37,7 +38,10 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
         strategy_manager.detect_best_strategy(&current_branch, &target_branch)?
     };
 
-    println!("🔄 Integrating branch '{}' into '{}'", current_branch, target_branch);
+    println!(
+        "🔄 Integrating branch '{}' into '{}'",
+        current_branch, target_branch
+    );
     println!("📋 Using {} strategy", format_strategy(&strategy));
 
     let request = StrategyRequest {
@@ -51,7 +55,7 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
         StrategyResult::Success { final_branch } => {
             println!("✅ Integration successful!");
             println!("🌿 Final branch: {}", final_branch);
-            
+
             if !args.dry_run {
                 println!("🎯 Integration completed successfully");
             }
@@ -62,11 +66,11 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
             for file in &conflicted_files {
                 println!("   • {}", file.display());
             }
-            
+
             let conflict_manager = git_service.conflict_manager();
             let summary = conflict_manager.get_conflict_summary()?;
             println!("\n{}", summary);
-            
+
             return Err(ParaError::git_operation(
                 "Integration paused due to conflicts. Resolve conflicts and run 'para continue' to proceed.".to_string()
             ));
@@ -98,9 +102,7 @@ fn validate_integrate_args(args: &IntegrateArgs) -> Result<()> {
 
     if let Some(ref target) = args.target {
         if target.is_empty() {
-            return Err(ParaError::invalid_args(
-                "Target branch cannot be empty",
-            ));
+            return Err(ParaError::invalid_args("Target branch cannot be empty"));
         }
     }
 
@@ -122,11 +124,14 @@ pub fn execute_continue() -> Result<()> {
 
     let conflicts = conflict_manager.detect_conflicts()?;
     if !conflicts.is_empty() {
-        println!("⚠️  Cannot continue: {} conflicts remain unresolved", conflicts.len());
+        println!(
+            "⚠️  Cannot continue: {} conflicts remain unresolved",
+            conflicts.len()
+        );
         let summary = conflict_manager.get_conflict_summary()?;
         println!("{}", summary);
         return Err(ParaError::git_operation(
-            "Resolve all conflicts before continuing".to_string()
+            "Resolve all conflicts before continuing".to_string(),
         ));
     }
 
@@ -145,7 +150,7 @@ pub fn execute_continue() -> Result<()> {
             let summary = conflict_manager.get_conflict_summary()?;
             println!("\n{}", summary);
             return Err(ParaError::git_operation(
-                "New conflicts detected. Resolve them and run 'para continue' again.".to_string()
+                "New conflicts detected. Resolve them and run 'para continue' again.".to_string(),
             ));
         }
         StrategyResult::Failed { error } => {

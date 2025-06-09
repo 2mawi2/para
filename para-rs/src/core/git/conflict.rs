@@ -68,12 +68,13 @@ impl<'a> ConflictManager<'a> {
 
     pub fn analyze_conflict(&self, file_path: &Path) -> Result<ConflictInfo> {
         let full_path = self.repo.work_dir.join(file_path);
-        let content = fs::read_to_string(&full_path)
-            .map_err(|e| ParaError::file_operation(format!(
-                "Failed to read conflicted file {}: {}", 
-                file_path.display(), 
+        let content = fs::read_to_string(&full_path).map_err(|e| {
+            ParaError::file_operation(format!(
+                "Failed to read conflicted file {}: {}",
+                file_path.display(),
                 e
-            )))?;
+            ))
+        })?;
 
         let conflict_type = self.determine_conflict_type(file_path)?;
         let markers = self.parse_conflict_markers(&content)?;
@@ -92,7 +93,7 @@ impl<'a> ConflictManager<'a> {
         )?;
 
         let status_code = status_output.chars().nth(1).unwrap_or(' ');
-        
+
         match status_code {
             'U' => Ok(ConflictType::Content),
             'A' => Ok(ConflictType::AddAdd),
@@ -195,7 +196,8 @@ impl<'a> ConflictManager<'a> {
         3. Stage resolved files: git add <file>\n\
         4. Continue integration: para continue\n\
         \n\
-        Abort integration: para integrate --abort".to_string()
+        Abort integration: para integrate --abort"
+            .to_string()
     }
 
     pub fn validate_resolution(&self) -> Result<ConflictResolution> {
@@ -205,7 +207,7 @@ impl<'a> ConflictManager<'a> {
 
         for conflict in all_conflicts {
             let full_path = self.repo.work_dir.join(&conflict.file_path);
-            
+
             if let Ok(content) = fs::read_to_string(&full_path) {
                 if self.has_conflict_markers(&content) {
                     remaining_conflicts.push(conflict);
@@ -225,15 +227,15 @@ impl<'a> ConflictManager<'a> {
 
     fn has_conflict_markers(&self, content: &str) -> bool {
         content.lines().any(|line| {
-            line.starts_with("<<<<<<<") || 
-            line.starts_with("=======") || 
-            line.starts_with(">>>>>>>")
+            line.starts_with("<<<<<<<")
+                || line.starts_with("=======")
+                || line.starts_with(">>>>>>>")
         })
     }
 
     pub fn stage_resolved_files(&self) -> Result<Vec<PathBuf>> {
         let resolution = self.validate_resolution()?;
-        
+
         if !resolution.remaining_conflicts.is_empty() {
             return Err(ParaError::git_operation(format!(
                 "Cannot stage files: {} conflicts remain unresolved",
@@ -242,10 +244,7 @@ impl<'a> ConflictManager<'a> {
         }
 
         for file in &resolution.resolved_files {
-            execute_git_command(
-                self.repo,
-                &["add", &file.to_string_lossy()],
-            )?;
+            execute_git_command(self.repo, &["add", &file.to_string_lossy()])?;
         }
 
         Ok(resolution.resolved_files)
@@ -256,12 +255,13 @@ impl<'a> ConflictManager<'a> {
         let mut diff = format!("Conflict in {}:\n\n", file_path.display());
 
         for (i, marker) in conflict.markers.iter().enumerate() {
-            diff.push_str(&format!("Conflict #{} (lines {}-{}):\n", 
-                i + 1, 
-                marker.start_line + 1, 
+            diff.push_str(&format!(
+                "Conflict #{} (lines {}-{}):\n",
+                i + 1,
+                marker.start_line + 1,
                 marker.end_line + 1
             ));
-            
+
             diff.push_str("<<<<<<< HEAD (Current changes)\n");
             diff.push_str(&marker.ours_content);
             diff.push_str("\n=======\n");
@@ -294,10 +294,16 @@ impl<'a> ConflictManager<'a> {
 
     pub fn get_detailed_conflict_info(&self, file_path: &Path) -> Result<String> {
         let conflict = self.analyze_conflict(file_path)?;
-        let mut info = format!("Detailed conflict information for {}:\n\n", file_path.display());
+        let mut info = format!(
+            "Detailed conflict information for {}:\n\n",
+            file_path.display()
+        );
 
         info.push_str(&format!("Conflict type: {:?}\n", conflict.conflict_type));
-        info.push_str(&format!("Number of conflicts: {}\n\n", conflict.markers.len()));
+        info.push_str(&format!(
+            "Number of conflicts: {}\n\n",
+            conflict.markers.len()
+        ));
 
         info.push_str("Suggested resolution strategy:\n");
         info.push_str(&self.suggest_resolution_strategy(&conflict));
@@ -325,12 +331,9 @@ impl<'a> ConflictManager<'a> {
 
     fn can_auto_resolve(&self, conflict: &ConflictInfo) -> bool {
         match conflict.conflict_type {
-            ConflictType::Content => {
-                conflict.markers.iter().all(|marker| {
-                    marker.ours_content.trim().is_empty() || 
-                    marker.theirs_content.trim().is_empty()
-                })
-            }
+            ConflictType::Content => conflict.markers.iter().all(|marker| {
+                marker.ours_content.trim().is_empty() || marker.theirs_content.trim().is_empty()
+            }),
             _ => false,
         }
     }
@@ -350,7 +353,7 @@ impl<'a> ConflictManager<'a> {
                     } else {
                         &marker.ours_content
                     };
-                    
+
                     resolved_lines.push(resolution.as_str());
                     i = marker.end_line + 1;
                 } else {
@@ -369,7 +372,11 @@ impl<'a> ConflictManager<'a> {
         Ok(())
     }
 
-    fn find_marker_at_line<'b>(&self, markers: &'b [ConflictMarker], line: usize) -> Option<&'b ConflictMarker> {
+    fn find_marker_at_line<'b>(
+        &self,
+        markers: &'b [ConflictMarker],
+        line: usize,
+    ) -> Option<&'b ConflictMarker> {
         markers.iter().find(|marker| marker.start_line == line)
     }
 }
@@ -506,7 +513,7 @@ mod tests {
         let conflict_manager = ConflictManager::new(&repo);
 
         let instructions = conflict_manager.get_resolution_instructions();
-        
+
         assert!(instructions.contains("Edit each conflicted file"));
         assert!(instructions.contains("Remove conflict markers"));
         assert!(instructions.contains("git add"));

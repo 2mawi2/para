@@ -25,7 +25,7 @@ impl CompletionContext {
         };
 
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        
+
         let is_git_repository = GitService::discover().is_ok();
         let (is_para_session, current_session, current_branch) = Self::detect_session_context();
 
@@ -66,10 +66,10 @@ impl CompletionContext {
 
     pub fn is_completing_value_for_flag(&self, flag: &str) -> bool {
         self.previous_word.as_ref().is_some_and(|prev| {
-            prev == flag || 
-            prev == &format!("--{}", flag.trim_start_matches('-')) ||
-            (flag == "-f" && prev == "--file") ||
-            (flag == "--file" && prev == "-f")
+            prev == flag
+                || prev == &format!("--{}", flag.trim_start_matches('-'))
+                || (flag == "-f" && prev == "--file")
+                || (flag == "--file" && prev == "-f")
         })
     }
 
@@ -86,9 +86,7 @@ impl CompletionContext {
             Some("resume") | Some("cancel") | Some("recover") => {
                 self.position >= 2 && !self.is_completing_flag()
             }
-            Some("finish") | Some("integrate") => {
-                self.position == 3 && !self.is_completing_flag()
-            }
+            Some("finish") | Some("integrate") => self.position == 3 && !self.is_completing_flag(),
             _ => false,
         }
     }
@@ -104,17 +102,21 @@ impl CompletionContext {
 
         suggestions.retain(|suggestion| {
             suggestion.starts_with(&self.current_word)
-                || suggestion.to_lowercase().starts_with(&self.current_word.to_lowercase())
+                || suggestion
+                    .to_lowercase()
+                    .starts_with(&self.current_word.to_lowercase())
         });
     }
 
     pub fn get_file_completions(&self) -> Vec<String> {
         let mut completions = Vec::new();
-        
+
         let search_dir = if self.current_word.is_empty() {
             &self.working_directory
         } else {
-            Path::new(&self.current_word).parent().unwrap_or(&self.working_directory)
+            Path::new(&self.current_word)
+                .parent()
+                .unwrap_or(&self.working_directory)
         };
 
         if let Ok(entries) = std::fs::read_dir(search_dir) {
@@ -126,7 +128,7 @@ impl CompletionContext {
                         } else {
                             format!("{}/{}", search_dir.display(), name)
                         };
-                        
+
                         if entry.path().is_dir() {
                             completions.push(format!("{}/", path_str));
                         } else {
@@ -146,14 +148,15 @@ impl CompletionContext {
             .ok()
             .and_then(|service| service.get_current_branch().ok());
 
-        let is_para_session = current_branch.as_ref()
+        let is_para_session = current_branch
+            .as_ref()
             .map(|branch: &String| branch.starts_with("pc/"))
             .unwrap_or(false);
 
         let current_session = if is_para_session {
-            current_branch.as_ref().and_then(|branch| {
-                branch.strip_prefix("pc/").map(|s| s.to_string())
-            })
+            current_branch
+                .as_ref()
+                .and_then(|branch| branch.strip_prefix("pc/").map(|s| s.to_string()))
         } else {
             None
         };
@@ -176,9 +179,7 @@ impl CompletionContext {
     }
 
     pub fn should_show_help(&self) -> bool {
-        self.current_word == "help" || 
-        self.current_word == "--help" || 
-        self.current_word == "-h"
+        self.current_word == "help" || self.current_word == "--help" || self.current_word == "-h"
     }
 
     pub fn get_help_context(&self) -> Option<String> {
@@ -192,9 +193,16 @@ impl CompletionContext {
     pub fn needs_git_repository(&self) -> bool {
         matches!(
             self.get_subcommand(),
-            Some("start") | Some("dispatch") | Some("finish") | 
-            Some("integrate") | Some("cancel") | Some("clean") |
-            Some("list") | Some("resume") | Some("recover") | Some("continue")
+            Some("start")
+                | Some("dispatch")
+                | Some("finish")
+                | Some("integrate")
+                | Some("cancel")
+                | Some("clean")
+                | Some("list")
+                | Some("resume")
+                | Some("recover")
+                | Some("continue")
         )
     }
 
@@ -207,26 +215,33 @@ impl CompletionContext {
 
     pub fn get_environment_warnings(&self) -> Vec<String> {
         let mut warnings = Vec::new();
-        
+
         if self.needs_git_repository() && !self.is_git_repository {
             warnings.push("This command requires a Git repository".to_string());
         }
-        
-        if self.get_subcommand().is_some() && !self.can_work_outside_git() && !self.is_git_repository {
+
+        if self.get_subcommand().is_some()
+            && !self.can_work_outside_git()
+            && !self.is_git_repository
+        {
             warnings.push("Para commands work best inside a Git repository".to_string());
         }
-        
+
         warnings
     }
 
     pub fn get_repository_root(&self) -> Option<PathBuf> {
-        GitService::discover().ok().map(|service| service.repository().root.clone())
+        GitService::discover()
+            .ok()
+            .map(|service| service.repository().root.clone())
     }
 
     pub fn is_in_worktree(&self) -> bool {
         if let Ok(service) = GitService::discover() {
             let worktrees = service.list_worktrees().unwrap_or_default();
-            worktrees.iter().any(|wt| self.working_directory.starts_with(&wt.path))
+            worktrees
+                .iter()
+                .any(|wt| self.working_directory.starts_with(&wt.path))
         } else {
             false
         }
@@ -265,7 +280,11 @@ mod tests {
 
     #[test]
     fn test_completion_context_creation() {
-        let command_line = vec!["para".to_string(), "start".to_string(), "my-session".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "my-session".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.current_word, "my-session");
@@ -276,7 +295,11 @@ mod tests {
 
     #[test]
     fn test_subcommand_detection() {
-        let command_line = vec!["para".to_string(), "finish".to_string(), "message".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "finish".to_string(),
+            "message".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.get_subcommand(), Some("finish"));
@@ -285,26 +308,43 @@ mod tests {
 
     #[test]
     fn test_flag_completion_detection() {
-        let command_line = vec!["para".to_string(), "start".to_string(), "--branch".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "--branch".to_string(),
+        ];
         let context = CompletionContext::new(command_line.clone(), 2);
 
         assert!(context.is_completing_flag());
         assert!(!context.is_completing_value_for_flag("--branch"));
 
-        let command_line2 = vec!["para".to_string(), "start".to_string(), "--branch".to_string(), "feature".to_string()];
+        let command_line2 = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "--branch".to_string(),
+            "feature".to_string(),
+        ];
         let context2 = CompletionContext::new(command_line2, 3);
         assert!(context2.is_completing_value_for_flag("--branch"));
     }
 
     #[test]
     fn test_session_completion_detection() {
-        let command_line = vec!["para".to_string(), "resume".to_string(), "session".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "resume".to_string(),
+            "session".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert!(context.is_completing_session());
         assert!(!context.should_complete_archived_sessions());
 
-        let recover_command = vec!["para".to_string(), "recover".to_string(), "session".to_string()];
+        let recover_command = vec![
+            "para".to_string(),
+            "recover".to_string(),
+            "session".to_string(),
+        ];
         let recover_context = CompletionContext::new(recover_command, 2);
 
         assert!(recover_context.is_completing_session());
@@ -328,21 +368,29 @@ mod tests {
     #[test]
     fn test_completion_type_detection() {
         let flag_context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string(), "--branch".to_string()],
+            vec![
+                "para".to_string(),
+                "start".to_string(),
+                "--branch".to_string(),
+            ],
             2,
         );
         assert_eq!(flag_context.get_completion_type(), CompletionType::Flag);
 
-        let subcommand_context = CompletionContext::new(
-            vec!["para".to_string(), "sta".to_string()],
-            1,
+        let subcommand_context =
+            CompletionContext::new(vec!["para".to_string(), "sta".to_string()], 1);
+        assert_eq!(
+            subcommand_context.get_completion_type(),
+            CompletionType::Subcommand
         );
-        assert_eq!(subcommand_context.get_completion_type(), CompletionType::Subcommand);
 
         let session_context = CompletionContext::new(
             vec!["para".to_string(), "resume".to_string(), "sess".to_string()],
             2,
         );
-        assert_eq!(session_context.get_completion_type(), CompletionType::Session);
+        assert_eq!(
+            session_context.get_completion_type(),
+            CompletionType::Session
+        );
     }
 }

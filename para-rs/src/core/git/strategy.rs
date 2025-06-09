@@ -34,10 +34,8 @@ impl<'a> StrategyManager<'a> {
     }
 
     pub fn execute_strategy(&self, request: StrategyRequest) -> Result<StrategyResult> {
-        self.integration.validate_integration_preconditions(
-            &request.feature_branch,
-            &request.target_branch,
-        )?;
+        self.integration
+            .validate_integration_preconditions(&request.feature_branch, &request.target_branch)?;
 
         if request.dry_run {
             return self.preview_strategy(&request);
@@ -82,10 +80,8 @@ impl<'a> StrategyManager<'a> {
 
         self.repo.checkout_branch(&request.target_branch)?;
 
-        let commit_message = self.generate_merge_commit_message(
-            &request.feature_branch,
-            &request.target_branch,
-        )?;
+        let commit_message =
+            self.generate_merge_commit_message(&request.feature_branch, &request.target_branch)?;
 
         match self.integration.create_merge_commit(
             &request.feature_branch,
@@ -112,10 +108,9 @@ impl<'a> StrategyManager<'a> {
         self.integration
             .update_base_branch(&request.target_branch)?;
 
-        let commits = self.integration.get_commit_range(
-            &request.target_branch,
-            &request.feature_branch,
-        )?;
+        let commits = self
+            .integration
+            .get_commit_range(&request.target_branch, &request.feature_branch)?;
 
         if commits.is_empty() {
             return Ok(StrategyResult::Success {
@@ -125,17 +120,14 @@ impl<'a> StrategyManager<'a> {
 
         self.repo.checkout_branch(&request.target_branch)?;
 
-        let squash_message = self.generate_squash_commit_message(
-            &request.feature_branch,
-            &request.target_branch,
-        )?;
+        let squash_message =
+            self.generate_squash_commit_message(&request.feature_branch, &request.target_branch)?;
 
         match self.integration.cherry_pick_commits(&commits) {
             Ok(()) => {
-                let merge_base = self.repo.get_merge_base(
-                    &request.target_branch,
-                    &request.feature_branch,
-                )?;
+                let merge_base = self
+                    .repo
+                    .get_merge_base(&request.target_branch, &request.feature_branch)?;
                 self.integration.squash_commits(
                     &request.feature_branch,
                     &merge_base,
@@ -163,10 +155,10 @@ impl<'a> StrategyManager<'a> {
         self.integration
             .update_base_branch(&request.target_branch)?;
 
-        match self.integration.prepare_rebase(
-            &request.feature_branch,
-            &request.target_branch,
-        ) {
+        match self
+            .integration
+            .prepare_rebase(&request.feature_branch, &request.target_branch)
+        {
             Ok(()) => {
                 self.repo.checkout_branch(&request.target_branch)?;
 
@@ -193,15 +185,12 @@ impl<'a> StrategyManager<'a> {
     }
 
     fn preview_merge(&self, request: &StrategyRequest) -> Result<String> {
-        let commits = self.integration.get_commit_range(
-            &request.target_branch,
-            &request.feature_branch,
-        )?;
+        let commits = self
+            .integration
+            .get_commit_range(&request.target_branch, &request.feature_branch)?;
 
-        let commit_message = self.generate_merge_commit_message(
-            &request.feature_branch,
-            &request.target_branch,
-        )?;
+        let commit_message =
+            self.generate_merge_commit_message(&request.feature_branch, &request.target_branch)?;
 
         Ok(format!(
             "Merge Strategy Preview:\n\
@@ -219,15 +208,12 @@ impl<'a> StrategyManager<'a> {
     }
 
     fn preview_squash(&self, request: &StrategyRequest) -> Result<String> {
-        let commits = self.integration.get_commit_range(
-            &request.target_branch,
-            &request.feature_branch,
-        )?;
+        let commits = self
+            .integration
+            .get_commit_range(&request.target_branch, &request.feature_branch)?;
 
-        let squash_message = self.generate_squash_commit_message(
-            &request.feature_branch,
-            &request.target_branch,
-        )?;
+        let squash_message =
+            self.generate_squash_commit_message(&request.feature_branch, &request.target_branch)?;
 
         Ok(format!(
             "Squash Strategy Preview:\n\
@@ -245,10 +231,9 @@ impl<'a> StrategyManager<'a> {
     }
 
     fn preview_rebase(&self, request: &StrategyRequest) -> Result<String> {
-        let commits = self.integration.get_commit_range(
-            &request.target_branch,
-            &request.feature_branch,
-        )?;
+        let commits = self
+            .integration
+            .get_commit_range(&request.target_branch, &request.feature_branch)?;
 
         Ok(format!(
             "Rebase Strategy Preview:\n\
@@ -269,19 +254,26 @@ impl<'a> StrategyManager<'a> {
         feature_branch: &str,
         target_branch: &str,
     ) -> Result<String> {
-        let commits = self.integration.get_commit_range(target_branch, feature_branch)?;
-        
+        let commits = self
+            .integration
+            .get_commit_range(target_branch, feature_branch)?;
+
         if commits.is_empty() {
-            return Ok(format!("Merge branch '{}' into {}", feature_branch, target_branch));
+            return Ok(format!(
+                "Merge branch '{}' into {}",
+                feature_branch, target_branch
+            ));
         }
 
         let first_commit_msg = self.repo.get_commit_message(&commits[0])?;
         let summary = if commits.len() == 1 {
             first_commit_msg.lines().next().unwrap_or("").to_string()
         } else {
-            format!("{} (+{} more commits)", 
-                first_commit_msg.lines().next().unwrap_or(""), 
-                commits.len() - 1)
+            format!(
+                "{} (+{} more commits)",
+                first_commit_msg.lines().next().unwrap_or(""),
+                commits.len() - 1
+            )
         };
 
         Ok(format!("Merge branch '{}': {}", feature_branch, summary))
@@ -292,8 +284,10 @@ impl<'a> StrategyManager<'a> {
         feature_branch: &str,
         target_branch: &str,
     ) -> Result<String> {
-        let commits = self.integration.get_commit_range(target_branch, feature_branch)?;
-        
+        let commits = self
+            .integration
+            .get_commit_range(target_branch, feature_branch)?;
+
         if commits.is_empty() {
             return Ok(format!("Squash merge from {}", feature_branch));
         }
@@ -319,8 +313,10 @@ impl<'a> StrategyManager<'a> {
         feature_branch: &str,
         target_branch: &str,
     ) -> Result<IntegrationStrategy> {
-        let commits = self.integration.get_commit_range(target_branch, feature_branch)?;
-        
+        let commits = self
+            .integration
+            .get_commit_range(target_branch, feature_branch)?;
+
         if commits.is_empty() {
             return Ok(IntegrationStrategy::Merge);
         }
@@ -330,7 +326,7 @@ impl<'a> StrategyManager<'a> {
         }
 
         let divergence = self.check_branch_divergence(feature_branch, target_branch)?;
-        
+
         if divergence.ahead == 0 {
             Ok(IntegrationStrategy::Rebase)
         } else if divergence.behind > 10 {
@@ -345,8 +341,12 @@ impl<'a> StrategyManager<'a> {
         feature_branch: &str,
         target_branch: &str,
     ) -> Result<BranchDivergence> {
-        let ahead_commits = self.integration.get_commit_range(target_branch, feature_branch)?;
-        let behind_commits = self.integration.get_commit_range(feature_branch, target_branch)?;
+        let ahead_commits = self
+            .integration
+            .get_commit_range(target_branch, feature_branch)?;
+        let behind_commits = self
+            .integration
+            .get_commit_range(feature_branch, target_branch)?;
 
         Ok(BranchDivergence {
             ahead: ahead_commits.len(),
@@ -370,7 +370,7 @@ impl<'a> StrategyManager<'a> {
         }
 
         self.integration.stage_resolved_files()?;
-        
+
         match self.integration.continue_rebase() {
             Ok(()) => Ok(StrategyResult::Success {
                 final_branch: self.repo.get_current_branch()?,
@@ -569,7 +569,8 @@ mod tests {
         repo.stage_all_changes().expect("Failed to stage changes");
         repo.commit("Feature commit").expect("Failed to commit");
 
-        repo.checkout_branch(&main_branch).expect("Failed to checkout main");
+        repo.checkout_branch(&main_branch)
+            .expect("Failed to checkout main");
         fs::write(temp_dir.path().join("main.txt"), "Main change")
             .expect("Failed to write main file");
         repo.stage_all_changes().expect("Failed to stage changes");

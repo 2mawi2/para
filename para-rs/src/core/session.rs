@@ -7,8 +7,8 @@ use std::path::PathBuf;
 pub mod archive;
 pub mod recovery;
 
-pub use archive::{ArchiveManager, ArchiveEntry, ArchiveStats};
-pub use recovery::{SessionRecovery, RecoveryOptions, RecoveryInfo, RecoveryResult};
+pub use archive::{ArchiveEntry, ArchiveManager, ArchiveStats};
+pub use recovery::{RecoveryInfo, RecoveryOptions, RecoveryResult, SessionRecovery};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {

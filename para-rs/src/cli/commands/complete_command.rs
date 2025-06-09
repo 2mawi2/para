@@ -5,7 +5,8 @@ use crate::core::git::GitService;
 use crate::utils::Result;
 
 pub fn execute(args: CompleteCommandArgs) -> Result<()> {
-    let command_line: Vec<String> = args.command_line
+    let command_line: Vec<String> = args
+        .command_line
         .split_whitespace()
         .map(|s| s.to_string())
         .collect();
@@ -24,7 +25,7 @@ pub fn execute(args: CompleteCommandArgs) -> Result<()> {
 
     let config = Config::load_or_create()?;
     let completion = DynamicCompletion::new(config);
-    
+
     match completion.get_completions_for_context(&context) {
         Ok(suggestions) => {
             for suggestion in suggestions {

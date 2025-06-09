@@ -39,7 +39,11 @@ impl GitRepository {
         let git_dir = Self::get_git_dir(&root)?;
         let work_dir = root.clone();
 
-        Ok(Self { root, git_dir, work_dir })
+        Ok(Self {
+            root,
+            git_dir,
+            work_dir,
+        })
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -75,7 +79,8 @@ impl GitRepository {
     }
 
     pub fn get_main_branch(&self) -> Result<String> {
-        let default_branch = execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"]);
+        let default_branch =
+            execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"]);
         if let Ok(branch_ref) = default_branch {
             if let Some(branch_name) = branch_ref.strip_prefix("refs/remotes/origin/") {
                 return Ok(branch_name.to_string());
@@ -84,7 +89,17 @@ impl GitRepository {
 
         let branches = ["main", "master", "develop"];
         for branch in &branches {
-            if execute_git_command(self, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{}", branch)]).is_ok() {
+            if execute_git_command(
+                self,
+                &[
+                    "show-ref",
+                    "--verify",
+                    "--quiet",
+                    &format!("refs/heads/{}", branch),
+                ],
+            )
+            .is_ok()
+            {
                 return Ok(branch.to_string());
             }
         }

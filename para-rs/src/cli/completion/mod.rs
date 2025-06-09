@@ -84,8 +84,11 @@ impl CompletionResponse {
         }
 
         self.suggestions.retain(|suggestion| {
-            suggestion.text.starts_with(prefix) 
-                || suggestion.text.to_lowercase().starts_with(&prefix.to_lowercase())
+            suggestion.text.starts_with(prefix)
+                || suggestion
+                    .text
+                    .to_lowercase()
+                    .starts_with(&prefix.to_lowercase())
         });
     }
 
