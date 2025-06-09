@@ -2,6 +2,7 @@ use crate::cli::parser::DispatchArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionState};
+use crate::platform::{get_platform_manager, IdeConfig};
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,12 +52,24 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
     let session_state = SessionState::new(session_id.clone(), branch_name, session_path.clone());
     session_manager.save_state(&session_state)?;
 
-    launch_claude_code(
-        &config,
-        &session_path,
-        &prompt,
-        args.dangerously_skip_permissions,
-    )?;
+    let platform = get_platform_manager();
+    let ide_config = IdeConfig {
+        name: config.ide.name.clone(),
+        command: config.ide.command.clone(),
+        wrapper_enabled: config.ide.wrapper.enabled,
+        wrapper_name: config.ide.wrapper.name.clone(),
+        wrapper_command: config.ide.wrapper.command.clone(),
+    };
+    
+    if let Err(e) = platform.launch_ide_with_wrapper(&ide_config, &session_path, Some(&prompt)) {
+        eprintln!("Warning: Failed to launch IDE using platform manager, falling back to legacy launcher: {}", e);
+        launch_claude_code(
+            &config,
+            &session_path,
+            &prompt,
+            args.dangerously_skip_permissions,
+        )?;
+    }
 
     println!("Created session '{}' with Claude Code", session_id);
     println!("Session path: {}", session_path.display());

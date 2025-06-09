@@ -181,6 +181,12 @@ impl ParaError {
             message: message.into(),
         }
     }
+
+    pub fn platform_error(message: impl Into<String>) -> Self {
+        Self::Ide {
+            message: format!("Platform error: {}", message.into()),
+        }
+    }
 }
 
 impl From<PathBuf> for ParaError {
