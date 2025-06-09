@@ -1,6 +1,6 @@
-use std::process::Command;
 use super::PlatformManager;
 use crate::utils::Result;
+use std::process::Command;
 
 pub struct MacOSPlatform;
 
@@ -16,7 +16,7 @@ impl PlatformManager for MacOSPlatform {
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
             .join(".para_state");
         let launch_file = state_dir.join(format!("{}.launch", session_id));
-        
+
         let actual_ide = if launch_file.exists() {
             // Try to read the actual IDE used from launch file
             if let Ok(contents) = std::fs::read_to_string(&launch_file) {
@@ -44,7 +44,7 @@ impl PlatformManager for MacOSPlatform {
 
         let app_name = match actual_ide.to_lowercase().as_str() {
             "cursor" => "Cursor",
-            "code" | "vscode" => "Code", 
+            "code" | "vscode" => "Code",
             _ => return Ok(()), // Only support Cursor and VS Code
         };
 
@@ -62,7 +62,8 @@ impl PlatformManager for MacOSPlatform {
         };
 
         // Use AppleScript to close the window (matching legacy implementation exactly)
-        let script = format!(r#"
+        let script = format!(
+            r#"
 on run argv
   set appName to "{app_name}"
   set windowTitleFragment to "{search_fragment}"
@@ -106,7 +107,10 @@ on run argv
     end tell
   end tell
 end run
-        "#, app_name = app_name, search_fragment = search_fragment);
+        "#,
+            app_name = app_name,
+            search_fragment = search_fragment
+        );
 
         self.execute_applescript(&script)
     }
@@ -114,23 +118,20 @@ end run
 
 impl MacOSPlatform {
     fn execute_applescript(&self, script: &str) -> Result<()> {
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output()?;
-            
+        let output = Command::new("osascript").arg("-e").arg(script).output()?;
+
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         // Print AppleScript result for debugging
         if !stdout.trim().is_empty() {
             eprintln!("AppleScript result: {}", stdout.trim());
         }
-        
+
         if !output.status.success() {
             eprintln!("AppleScript failed: {}", stderr);
         }
-        
+
         Ok(())
     }
 }

@@ -44,7 +44,7 @@ impl<'a> IntegrationManager<'a> {
     pub fn finish_session(&self, request: FinishRequest) -> Result<FinishResult> {
         // Don't checkout the feature branch - we're likely already in the worktree with it checked out
         // This avoids the "already used by worktree" error
-        
+
         if self.repo.has_uncommitted_changes()? {
             self.repo.stage_all_changes()?;
             self.repo.commit(&request.commit_message)?;

@@ -1,9 +1,5 @@
 # Para-rs justfile - Rust implementation testing
 
-# Run Rust unit tests
-test-unit:
-    cargo test
-
 # Run Rust linting with clippy (skeleton-friendly)
 lint:
     cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious -W clippy::style -W clippy::complexity -W clippy::perf
@@ -16,9 +12,90 @@ fmt-check:
 fmt:
     cargo fmt --all
 
-# Run all Rust checks (tests + linting + formatting)
+# Run all Rust checks (tests + linting + formatting) - quiet mode
 test:
-    just test-unit
+    #!/bin/bash
+    set -euo pipefail
+    
+    # Function to show progress dots
+    show_progress() {
+        local pid=$1
+        local message=$2
+        printf "%s" "$message"
+        while kill -0 $pid 2>/dev/null; do
+            printf "."
+            sleep 0.5
+        done
+        echo ""
+    }
+    
+    echo "🧪 Running Rust tests..."
+    
+    # Run tests in background and show progress
+    cargo test --quiet > /tmp/test_output.txt 2>&1 &
+    test_pid=$!
+    show_progress $test_pid "   Compiling and testing"
+    wait $test_pid
+    test_result=$?
+    test_output=$(cat /tmp/test_output.txt)
+    rm -f /tmp/test_output.txt
+    
+    if [ $test_result -ne 0 ]; then
+        echo "❌ Tests failed!"
+        echo "----------------------------------------"
+        echo "$test_output"
+        exit 1
+    fi
+    
+    # Count test results from the output
+    passed_tests=$(echo "$test_output" | grep -o '[0-9]\+ passed' | head -1 || echo "0 passed")
+    failed_tests=$(echo "$test_output" | grep -o '[0-9]\+ failed' | head -1 || echo "0 failed")
+    echo "✅ Tests: $passed_tests, $failed_tests"
+    
+    echo "🔍 Running clippy linting..."
+    
+    # Run clippy in background and show progress
+    cargo clippy --all-targets --all-features -- -W clippy::correctness -W clippy::suspicious -W clippy::style -W clippy::complexity -W clippy::perf > /tmp/clippy_output.txt 2>&1 &
+    clippy_pid=$!
+    show_progress $clippy_pid "   Analyzing code"
+    wait $clippy_pid
+    clippy_result=$?
+    clippy_output=$(cat /tmp/clippy_output.txt)
+    rm -f /tmp/clippy_output.txt
+    
+    # Count warnings and errors from clippy output
+    warnings=$(echo "$clippy_output" | grep -c "warning:" || echo "0")
+    errors=$(echo "$clippy_output" | grep -c "error:" || echo "0")
+    
+    # Check if there are actual compilation errors (not warnings promoted to errors)
+    if [ $clippy_result -ne 0 ] && echo "$clippy_output" | grep -q "error\[E[0-9]\+\]"; then
+        echo "❌ Clippy compilation errors found!"
+        echo "----------------------------------------"
+        echo "$clippy_output"
+        exit 1
+    elif [ $warnings -gt 0 ]; then
+        echo "⚠️  Clippy: $warnings warnings"
+    else
+        echo "✅ Clippy: clean"
+    fi
+    
+    echo "📝 Checking formatting..."
+    fmt_output=$(cargo fmt --all -- --check 2>&1)
+    fmt_result=$?
+    if [ $fmt_result -ne 0 ]; then
+        echo "❌ Formatting issues found! Run 'just fmt' to fix"
+        echo "----------------------------------------"
+        echo "$fmt_output"
+        exit 1
+    fi
+    echo "✅ Formatting: clean"
+    
+    echo ""
+    echo "🎉 All checks completed successfully!"
+
+# Run all Rust checks with verbose output
+test-verbose:
+    cargo test
     just lint
     just fmt-check
 

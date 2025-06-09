@@ -11,7 +11,7 @@ pub trait PlatformManager {
 pub fn get_platform_manager() -> Box<dyn PlatformManager> {
     #[cfg(target_os = "macos")]
     return Box::new(macos::MacOSPlatform);
-    
+
     #[cfg(not(target_os = "macos"))]
     return Box::new(GenericPlatform);
 }

@@ -66,15 +66,17 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
     // Dispatch only works with Claude Code (standalone or wrapper mode)
-    if config.ide.command.to_lowercase() == "claude" || config.ide.command.to_lowercase() == "claude-code" {
+    if config.ide.command.to_lowercase() == "claude"
+        || config.ide.command.to_lowercase() == "claude-code"
+    {
         return Ok(());
     }
-    
+
     // Allow wrapper mode with Claude Code
     if config.is_wrapper_enabled() && config.ide.command.to_lowercase() == "claude" {
         return Ok(());
     }
-    
+
     Err(ParaError::invalid_config(format!(
         "Dispatch command requires Claude Code IDE. Current IDE: '{}' with command: '{}'. Run 'para config' to configure Claude Code.",
         config.ide.name, config.ide.command
@@ -144,16 +146,17 @@ fn launch_claude_in_ide(
     let state_dir = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".para_state");
-    
+
     fs::create_dir_all(&state_dir)
         .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {}", e)))?;
-    
-    let session_id = session_path.file_name()
+
+    let session_id = session_path
+        .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("unknown");
-    
+
     let launch_file = state_dir.join(format!("{}.launch", session_id));
-    
+
     if config.is_wrapper_enabled() {
         let launch_content = format!(
             "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
@@ -162,10 +165,7 @@ fn launch_claude_in_ide(
         fs::write(&launch_file, launch_content)
             .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
     } else {
-        let launch_content = format!(
-            "LAUNCH_METHOD=ide\nLAUNCH_IDE={}\n",
-            config.ide.name
-        );
+        let launch_content = format!("LAUNCH_METHOD=ide\nLAUNCH_IDE={}\n", config.ide.name);
         fs::write(&launch_file, launch_content)
             .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
     }
@@ -220,7 +220,6 @@ fn create_claude_task_json(command: &str) -> String {
         command.replace('"', "\\\"")
     )
 }
-
 
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {
@@ -408,7 +407,9 @@ mod tests {
         assert!(!is_likely_file_path("ftp://server.com"));
 
         // Text with URLs should not be file paths
-        assert!(!is_likely_file_path("Check out https://example.com for more info"));
+        assert!(!is_likely_file_path(
+            "Check out https://example.com for more info"
+        ));
         assert!(!is_likely_file_path("Visit http://test.com or see docs"));
 
         // Regular prompts should not be file paths
@@ -651,7 +652,10 @@ mod tests {
 
         let result = validate_claude_code_ide(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Dispatch command requires Claude Code IDE"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Dispatch command requires Claude Code IDE"));
     }
 
     #[test]
@@ -674,6 +678,9 @@ mod tests {
 
         let result = validate_claude_code_ide(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Dispatch command requires Claude Code IDE"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Dispatch command requires Claude Code IDE"));
     }
 }
