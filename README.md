@@ -316,4 +316,4 @@ The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and s
 
 **⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
 
-That's it! Run `para config` to get started.
+That's it! Run `para config` to get started.Different conflicting line on master
