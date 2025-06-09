@@ -65,7 +65,7 @@ pub struct DispatchArgs {
     pub file: Option<PathBuf>,
 
     /// Skip IDE permission warnings (dangerous)
-    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
+    #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
 }
 

@@ -85,16 +85,20 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 }
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
-    if config.ide.name.to_lowercase() != "claude" && config.ide.name.to_lowercase() != "claude-code"
-    {
-        return Err(ParaError::invalid_config(
-            format!(
-                "Dispatch command requires Claude Code IDE. Current IDE: '{}'. Run 'para config' to change IDE.",
-                config.ide.name
-            )
-        ));
+    // Dispatch only works with Claude Code (standalone or wrapper mode)
+    if config.ide.command.to_lowercase() == "claude" || config.ide.command.to_lowercase() == "claude-code" {
+        return Ok(());
     }
-    Ok(())
+    
+    // Allow wrapper mode with Claude Code
+    if config.is_wrapper_enabled() && config.ide.command.to_lowercase() == "claude" {
+        return Ok(());
+    }
+    
+    Err(ParaError::invalid_config(format!(
+        "Dispatch command requires Claude Code IDE. Current IDE: '{}' with command: '{}'. Run 'para config' to configure Claude Code.",
+        config.ide.name, config.ide.command
+    )))
 }
 
 fn launch_claude_code(
@@ -103,38 +107,108 @@ fn launch_claude_code(
     prompt: &str,
     skip_permissions: bool,
 ) -> Result<()> {
-    let mut cmd = Command::new(&config.ide.command);
-
-    cmd.current_dir(session_path);
-
+    // Create temporary prompt file (always, for consistency)
+    let temp_prompt_file = session_path.join(".claude_prompt_temp");
     if !prompt.is_empty() {
-        cmd.arg("--prompt").arg(prompt);
+        fs::write(&temp_prompt_file, prompt)
+            .map_err(|e| ParaError::fs_error(format!("Failed to write temp prompt file: {}", e)))?;
     }
 
+    // Always launch Claude in IDE mode
+    launch_claude_in_ide(config, session_path, &temp_prompt_file, skip_permissions)
+}
+
+fn launch_claude_in_ide(
+    config: &Config,
+    session_path: &Path,
+    temp_prompt_file: &Path,
+    skip_permissions: bool,
+) -> Result<()> {
+    // Create .vscode directory
+    let vscode_dir = session_path.join(".vscode");
+    fs::create_dir_all(&vscode_dir)
+        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
+
+    // Build Claude command for tasks.json
+    let mut base_cmd = config.ide.command.clone();
     if skip_permissions {
-        cmd.arg("--accept-terms");
+        base_cmd.push_str(" --dangerously-skip-permissions");
     }
 
-    if config.is_wrapper_enabled() {
-        cmd.env("PARA_WRAPPER_MODE", "true");
-        cmd.env("PARA_WRAPPER_IDE", &config.ide.wrapper.name);
-    }
+    let claude_task_cmd = if temp_prompt_file.exists() {
+        format!(
+            "{} \"$(cat '{}'; rm '{}')\"",
+            base_cmd,
+            temp_prompt_file.display(),
+            temp_prompt_file.display()
+        )
+    } else {
+        base_cmd
+    };
+
+    // Create tasks.json
+    let tasks_json = create_claude_task_json(&claude_task_cmd);
+    let tasks_file = vscode_dir.join("tasks.json");
+    fs::write(&tasks_file, tasks_json)
+        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
+
+    // Determine which IDE to launch
+    let (ide_command, ide_name) = if config.is_wrapper_enabled() {
+        (&config.ide.wrapper.command, &config.ide.wrapper.name)
+    } else {
+        // If no wrapper, assume we're launching the IDE directly
+        (&config.ide.command, &config.ide.name)
+    };
+
+    // Launch IDE
+    let mut cmd = Command::new(ide_command);
+    cmd.current_dir(session_path);
+    cmd.arg(session_path);
 
     match cmd.spawn() {
         Ok(mut child) => {
             if let Err(e) = child.wait() {
-                eprintln!("Warning: Claude Code process error: {}", e);
+                eprintln!("Warning: {} process error: {}", ide_name, e);
             }
         }
         Err(e) => {
             return Err(ParaError::ide_error(format!(
-                "Failed to launch Claude Code: {}. Check that '{}' is installed and accessible.",
-                e, config.ide.command
+                "Failed to launch {}: {}. Check that '{}' is installed and accessible.",
+                ide_name, e, ide_command
             )));
         }
     }
 
     Ok(())
+}
+
+fn create_claude_task_json(command: &str) -> String {
+    format!(
+        r#"{{
+  "version": "2.0.0",
+  "tasks": [
+    {{
+      "label": "Start Claude Code with Prompt",
+      "type": "shell",
+      "command": "{}",
+      "group": {{
+        "kind": "build",
+        "isDefault": true
+      }},
+      "presentation": {{
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      }},
+      "runOptions": {{
+        "runOn": "folderOpen"
+      }}
+    }}
+  ]
+}}"#,
+        command.replace('"', "\\\"")
+    )
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -496,5 +570,117 @@ mod tests {
         assert!(!is_likely_file_path("file.jpg"));
         assert!(!is_likely_file_path("file.pdf"));
         assert!(!is_likely_file_path("file.exe"));
+    }
+
+    #[test]
+    fn test_validate_claude_code_ide_accepts_claude() {
+        let config = crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "claude".to_string(),
+                command: "claude".to_string(),
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: false,
+                    name: "".to_string(),
+                    command: "".to_string(),
+                },
+            },
+            directories: crate::config::defaults::default_directory_config(),
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        };
+
+        let result = validate_claude_code_ide(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_claude_code_ide_accepts_claude_code() {
+        let config = crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "claude-code".to_string(),
+                command: "claude-code".to_string(),
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: false,
+                    name: "".to_string(),
+                    command: "".to_string(),
+                },
+            },
+            directories: crate::config::defaults::default_directory_config(),
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        };
+
+        let result = validate_claude_code_ide(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_claude_code_ide_accepts_wrapper_mode() {
+        let config = crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "cursor".to_string(),
+                command: "claude".to_string(), // Using claude command in wrapper mode
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: true,
+                    name: "cursor".to_string(),
+                    command: "cursor".to_string(),
+                },
+            },
+            directories: crate::config::defaults::default_directory_config(),
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        };
+
+        let result = validate_claude_code_ide(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_claude_code_ide_rejects_cursor_standalone() {
+        let config = crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "cursor".to_string(),
+                command: "cursor".to_string(),
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: false,
+                    name: "".to_string(),
+                    command: "".to_string(),
+                },
+            },
+            directories: crate::config::defaults::default_directory_config(),
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        };
+
+        let result = validate_claude_code_ide(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Dispatch command requires Claude Code IDE"));
+    }
+
+    #[test]
+    fn test_validate_claude_code_ide_rejects_vscode_standalone() {
+        let config = crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "code".to_string(),
+                command: "code".to_string(),
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: false,
+                    name: "".to_string(),
+                    command: "".to_string(),
+                },
+            },
+            directories: crate::config::defaults::default_directory_config(),
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        };
+
+        let result = validate_claude_code_ide(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Dispatch command requires Claude Code IDE"));
     }
 }
