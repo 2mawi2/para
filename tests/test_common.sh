@@ -135,6 +135,31 @@ run_para() {
     fi
 }
 
+# Helper function to run Rust para via wrapper in the test directory
+run_para_rust() {
+    # Use the para script directory as reference for the wrapper location
+    local para_dir="$(dirname "$PARA_SCRIPT")"
+    local wrapper_script="$para_dir/tests/para-rust-wrapper.sh"
+    local rust_binary="$para_dir/para-rs/target/debug/para"
+    
+    if [ ! -f "$wrapper_script" ]; then
+        echo "Error: Wrapper script not found at $wrapper_script" >&2
+        return 1
+    fi
+    
+    if [ ! -x "$rust_binary" ]; then
+        echo "Error: Rust binary not found or not executable at $rust_binary" >&2
+        return 1
+    fi
+    
+    if [ "$#" -eq 0 ]; then
+        # No arguments - use start command
+        cd "$TEST_REPO" && "$wrapper_script" "$rust_binary" start
+    else
+        cd "$TEST_REPO" && "$wrapper_script" "$rust_binary" "$@"
+    fi
+}
+
 # Helper function to run commands in test directory
 run_in_test_repo() {
     cd "$TEST_REPO" && "$@"
