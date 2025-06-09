@@ -1,3 +1,4 @@
+use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, IdeConfig};
 use crate::utils::{ParaError, Result};
 use std::fs;
@@ -21,14 +22,11 @@ impl IdeManager {
         let wrapper_enabled = std::env::var("IDE_WRAPPER_ENABLED")
             .map(|v| v == "true")
             .unwrap_or(self.config.wrapper.enabled);
-        
+
         if self.config.name == "claude" && wrapper_enabled {
             let wrapper_name = std::env::var("IDE_WRAPPER_NAME")
                 .unwrap_or_else(|_| self.config.wrapper.name.clone());
-            println!(
-                "▶ launching Claude Code inside {} wrapper...",
-                wrapper_name
-            );
+            println!("▶ launching Claude Code inside {} wrapper...", wrapper_name);
             return self.launch_wrapper(path, skip_permissions);
         }
 
@@ -177,9 +175,9 @@ impl IdeManager {
 
     fn launch_wrapper(&self, path: &Path, skip_permissions: bool) -> Result<()> {
         // Use environment variable first, like shell version
-        let wrapper_name = std::env::var("IDE_WRAPPER_NAME")
-            .unwrap_or_else(|_| self.config.wrapper.name.clone());
-            
+        let wrapper_name =
+            std::env::var("IDE_WRAPPER_NAME").unwrap_or_else(|_| self.config.wrapper.name.clone());
+
         match wrapper_name.as_str() {
             "cursor" => self.launch_cursor_wrapper(path, skip_permissions),
             "code" => self.launch_vscode_wrapper(path, skip_permissions),
@@ -211,8 +209,9 @@ impl IdeManager {
             let mut cmd = Command::new("sh");
             cmd.arg("-c")
                 .arg(format!("{} \"{}\"", wrapper_cmd, path.display()));
-            cmd.output()
-                .map_err(|e| ParaError::ide_error(format!("Failed to run wrapper test stub: {}", e)))?;
+            cmd.output().map_err(|e| {
+                ParaError::ide_error(format!("Failed to run wrapper test stub: {}", e))
+            })?;
             return Ok(());
         }
 
@@ -226,7 +225,7 @@ impl IdeManager {
         println!("▶ launching Cursor wrapper with Claude Code auto-start...");
         let mut cmd = Command::new(&wrapper_cmd);
         cmd.arg(path.to_string_lossy().as_ref());
-        
+
         // Launch in background like shell version ("&")
         cmd.spawn()
             .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {}", e)))?;
@@ -314,7 +313,7 @@ impl IdeManager {
         // This is a fallback when wrapper is unsupported
         // For now, just return an error since we require wrapper mode
         Err(ParaError::ide_error(
-            "Claude Code requires supported wrapper mode (cursor or code)".to_string()
+            "Claude Code requires supported wrapper mode (cursor or code)".to_string(),
         ))
     }
 }
@@ -354,6 +353,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -398,13 +398,13 @@ mod tests {
         // This is expected behavior to avoid test failures
         let config = create_test_config("nonexistent", "nonexistent-command-12345");
         let manager = IdeManager::new(&config);
-        
+
         // Clear test mode temporarily to test actual availability
         let old_ide_cmd = std::env::var("IDE_CMD").ok();
         std::env::remove_var("IDE_CMD");
-        
+
         assert!(!manager.is_available());
-        
+
         // Restore test mode if it was set
         if let Some(cmd) = old_ide_cmd {
             std::env::set_var("IDE_CMD", cmd);

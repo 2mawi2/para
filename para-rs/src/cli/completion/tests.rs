@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 use tempfile::TempDir;
 
@@ -22,6 +23,7 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
             branch_prefix: "pc".to_string(),
             auto_stage: true,
             auto_commit: false,
+            default_integration_strategy: IntegrationStrategy::Squash,
         },
         session: SessionConfig {
             default_name_format: "%Y%m%d-%H%M%S".to_string(),

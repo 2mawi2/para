@@ -1,4 +1,5 @@
 use super::{Config, ConfigError, Result};
+use crate::cli::parser::IntegrationStrategy;
 use std::path::Path;
 
 pub fn validate_config(config: &Config) -> Result<()> {
@@ -311,6 +312,7 @@ mod tests {
             branch_prefix: "pc".to_string(),
             auto_stage: true,
             auto_commit: true,
+            default_integration_strategy: IntegrationStrategy::Squash,
         };
         assert!(validate_git_config(&valid_config).is_ok());
 
@@ -318,6 +320,7 @@ mod tests {
             branch_prefix: "my branch".to_string(),
             auto_stage: true,
             auto_commit: true,
+            default_integration_strategy: IntegrationStrategy::Squash,
         };
         assert!(validate_git_config(&invalid_config).is_err());
     }

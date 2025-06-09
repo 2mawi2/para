@@ -1,4 +1,5 @@
 use super::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+use crate::cli::parser::IntegrationStrategy;
 use std::path::Path;
 
 pub fn default_config() -> Config {
@@ -36,6 +37,7 @@ pub fn default_git_config() -> GitConfig {
         branch_prefix: "pc".to_string(),
         auto_stage: true,
         auto_commit: true,
+        default_integration_strategy: IntegrationStrategy::Squash,
     }
 }
 
@@ -110,7 +112,6 @@ pub fn get_legacy_config_path() -> std::path::PathBuf {
             .join("config")
     }
 }
-
 
 #[cfg(test)]
 mod tests {

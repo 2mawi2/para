@@ -1,4 +1,4 @@
-use crate::cli::parser::CancelArgs;
+use crate::cli::parser::{CancelArgs, IntegrationStrategy};
 use crate::config::manager::ConfigManager;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::session::{SessionManager, SessionStatus};
@@ -155,6 +155,7 @@ mod tests {
                 branch_prefix: "pc".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
