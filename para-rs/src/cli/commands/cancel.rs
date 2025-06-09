@@ -2,6 +2,7 @@ use crate::cli::parser::CancelArgs;
 use crate::config::manager::ConfigManager;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::session::{SessionManager, SessionStatus};
+use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
 use std::io::{self, Write};
@@ -30,6 +31,11 @@ pub fn execute(args: CancelArgs) -> Result<()> {
     let mut updated_state = session_state;
     updated_state.update_status(SessionStatus::Cancelled);
     session_manager.save_state(&updated_state)?;
+
+    let platform = get_platform_manager();
+    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+        eprintln!("Warning: Failed to close IDE window: {}", e);
+    }
 
     println!(
         "Session '{}' has been cancelled and archived as '{}'",

@@ -3,7 +3,6 @@ use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::ide::IdeManager;
 use crate::core::session::{SessionManager, SessionState};
-use crate::platform::{get_platform_manager, IdeConfig};
 use crate::utils::{
     generate_branch_name, generate_unique_name, validate_session_name, ParaError, Result,
 };
@@ -38,20 +37,8 @@ pub fn execute(args: StartArgs) -> Result<()> {
 
     session_manager.save_state(&session_state)?;
 
-    let platform = get_platform_manager();
-    let ide_config = IdeConfig {
-        name: config.ide.name.clone(),
-        command: config.ide.command.clone(),
-        wrapper_enabled: config.ide.wrapper.enabled,
-        wrapper_name: config.ide.wrapper.name.clone(),
-        wrapper_command: config.ide.wrapper.command.clone(),
-    };
-    
-    if let Err(e) = platform.launch_ide_with_wrapper(&ide_config, &worktree_path, None) {
-        eprintln!("Warning: Failed to launch IDE using platform manager, falling back to legacy IDE manager: {}", e);
-        let ide_manager = IdeManager::new(&config);
-        ide_manager.launch(&worktree_path, args.dangerously_skip_permissions)?;
-    }
+    let ide_manager = IdeManager::new(&config);
+    ide_manager.launch(&worktree_path, args.dangerously_skip_permissions)?;
 
     println!("✅ Session '{}' started successfully", session_name);
     println!("   Branch: {}", branch_name);

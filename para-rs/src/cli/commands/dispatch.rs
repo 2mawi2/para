@@ -2,7 +2,6 @@ use crate::cli::parser::DispatchArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionState};
-use crate::platform::{get_platform_manager, IdeConfig};
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -52,24 +51,12 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
     let session_state = SessionState::new(session_id.clone(), branch_name, session_path.clone());
     session_manager.save_state(&session_state)?;
 
-    let platform = get_platform_manager();
-    let ide_config = IdeConfig {
-        name: config.ide.name.clone(),
-        command: config.ide.command.clone(),
-        wrapper_enabled: config.ide.wrapper.enabled,
-        wrapper_name: config.ide.wrapper.name.clone(),
-        wrapper_command: config.ide.wrapper.command.clone(),
-    };
-    
-    if let Err(e) = platform.launch_ide_with_wrapper(&ide_config, &session_path, Some(&prompt)) {
-        eprintln!("Warning: Failed to launch IDE using platform manager, falling back to legacy launcher: {}", e);
-        launch_claude_code(
-            &config,
-            &session_path,
-            &prompt,
-            args.dangerously_skip_permissions,
-        )?;
-    }
+    launch_claude_code(
+        &config,
+        &session_path,
+        &prompt,
+        args.dangerously_skip_permissions,
+    )?;
 
     println!("Created session '{}' with Claude Code", session_id);
     println!("Session path: {}", session_path.display());
@@ -152,6 +139,36 @@ fn launch_claude_in_ide(
         // If no wrapper, assume we're launching the IDE directly
         (&config.ide.command, &config.ide.name)
     };
+
+    // Save launch information for auto-close functionality
+    let state_dir = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(".para_state");
+    
+    fs::create_dir_all(&state_dir)
+        .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {}", e)))?;
+    
+    let session_id = session_path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown");
+    
+    let launch_file = state_dir.join(format!("{}.launch", session_id));
+    
+    if config.is_wrapper_enabled() {
+        let launch_content = format!(
+            "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
+            config.ide.wrapper.name
+        );
+        fs::write(&launch_file, launch_content)
+            .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
+    } else {
+        let launch_content = format!(
+            "LAUNCH_METHOD=ide\nLAUNCH_IDE={}\n",
+            config.ide.name
+        );
+        fs::write(&launch_file, launch_content)
+            .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
+    }
 
     // Launch IDE
     let mut cmd = Command::new(ide_command);
