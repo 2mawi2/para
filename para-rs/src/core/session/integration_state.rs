@@ -15,6 +15,10 @@ pub struct IntegrationState {
     pub commit_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub step: IntegrationStep,
+    pub original_head_commit: Option<String>,
+    pub original_working_dir: Option<PathBuf>,
+    pub backup_branch: Option<String>,
+    pub temp_branches: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +49,27 @@ impl IntegrationState {
             commit_message,
             created_at: Utc::now(),
             step: IntegrationStep::Started,
+            original_head_commit: None,
+            original_working_dir: None,
+            backup_branch: None,
+            temp_branches: Vec::new(),
         }
+    }
+
+    pub fn with_backup_info(
+        mut self,
+        original_head: String,
+        working_dir: PathBuf,
+        backup_branch: String,
+    ) -> Self {
+        self.original_head_commit = Some(original_head);
+        self.original_working_dir = Some(working_dir);
+        self.backup_branch = Some(backup_branch);
+        self
+    }
+
+    pub fn add_temp_branch(&mut self, branch_name: String) {
+        self.temp_branches.push(branch_name);
     }
 
     pub fn with_conflicts(mut self, files: Vec<PathBuf>) -> Self {

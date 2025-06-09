@@ -293,6 +293,14 @@ impl<'a> IntegrationManager<'a> {
             let _ = self.abort_rebase();
         }
 
+        if self.is_merge_in_progress()? {
+            let _ = self.abort_merge();
+        }
+
+        if self.is_cherry_pick_in_progress()? {
+            let _ = self.abort_cherry_pick();
+        }
+
         let merge_head = self.repo.git_dir.join("MERGE_HEAD");
         if merge_head.exists() {
             let _ = std::fs::remove_file(merge_head);
@@ -301,6 +309,45 @@ impl<'a> IntegrationManager<'a> {
         let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
         if cherry_pick_head.exists() {
             let _ = std::fs::remove_file(cherry_pick_head);
+        }
+
+        let revert_head = self.repo.git_dir.join("REVERT_HEAD");
+        if revert_head.exists() {
+            let _ = std::fs::remove_file(revert_head);
+        }
+
+        Ok(())
+    }
+
+    pub fn abort_merge(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["merge", "--abort"])
+    }
+
+    pub fn abort_cherry_pick(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["cherry-pick", "--abort"])
+    }
+
+    pub fn is_merge_in_progress(&self) -> Result<bool> {
+        let merge_head = self.repo.git_dir.join("MERGE_HEAD");
+        Ok(merge_head.exists())
+    }
+
+    pub fn is_cherry_pick_in_progress(&self) -> Result<bool> {
+        let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
+        Ok(cherry_pick_head.exists())
+    }
+
+    pub fn is_any_operation_in_progress(&self) -> Result<bool> {
+        Ok(self.is_rebase_in_progress()? 
+           || self.is_merge_in_progress()? 
+           || self.is_cherry_pick_in_progress()?)
+    }
+
+    pub fn safe_abort_integration(&self, backup_branch: Option<&str>, target_branch: &str) -> Result<()> {
+        self.cleanup_integration_state()?;
+
+        if let Some(backup) = backup_branch {
+            self.restore_from_backup(backup, target_branch)?;
         }
 
         Ok(())

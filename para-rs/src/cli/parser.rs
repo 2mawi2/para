@@ -105,6 +105,10 @@ pub struct IntegrateArgs {
     /// Preview integration without executing
     #[arg(long, help = "Preview integration without executing")]
     pub dry_run: bool,
+
+    /// Abort integration and restore original state
+    #[arg(long, help = "Abort integration and restore original state")]
+    pub abort: bool,
 }
 
 #[derive(Args, Debug)]

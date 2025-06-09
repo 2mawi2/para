@@ -14,6 +14,10 @@ use std::path::PathBuf;
 pub fn execute(args: IntegrateArgs) -> Result<()> {
     validate_integrate_args(&args)?;
 
+    if args.abort {
+        return execute_abort();
+    }
+
     let config = ConfigManager::load_or_create()
         .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
 
@@ -23,7 +27,7 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
 
     if state_manager.has_active_integration() {
         return Err(ParaError::git_operation(
-            "Another integration is already in progress. Use 'para continue' to resume or 'para cancel' to abort.".to_string()
+            "Another integration is already in progress. Use 'para continue' to resume or 'para integrate --abort' to abort.".to_string()
         ));
     }
 
@@ -84,13 +88,20 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
         return execute_dry_run(&git_service, &feature_branch, &target_branch, &strategy);
     }
 
+    let branch_manager = git_service.branch_manager();
+    let current_head = branch_manager.get_branch_commit(&target_branch)?;
+    let current_dir = env::current_dir()
+        .map_err(|e| ParaError::invalid_args(format!("Cannot get current directory: {}", e)))?;
+    
+    let backup_branch = format!("backup-{}-{}", target_branch, chrono::Utc::now().timestamp());
+    
     let integration_state = IntegrationState::new(
         session_id.clone(),
         feature_branch.clone(),
         target_branch.clone(),
         strategy.clone(),
         commit_message.clone(),
-    );
+    ).with_backup_info(current_head, current_dir, backup_branch);
 
     state_manager.save_integration_state(&integration_state)?;
 
@@ -287,7 +298,7 @@ fn open_ide_for_conflict_resolution(
     Ok(())
 }
 
-fn close_ide_for_session(config: &crate::config::Config, worktree_path: &PathBuf) -> Result<()> {
+fn close_ide_for_session(config: &crate::config::Config, _worktree_path: &PathBuf) -> Result<()> {
     if config.is_wrapper_enabled() {
         return Ok(());
     }
@@ -452,17 +463,51 @@ pub fn execute_abort() -> Result<()> {
         integration_state.session_id
     );
 
-    let strategy_manager = git_service.strategy_manager();
-    strategy_manager.abort_integration()?;
+    let integration_manager = git_service.integration_manager();
+    
+    println!("🔄 Cleaning up any ongoing Git operations...");
+    integration_manager.cleanup_integration_state()?;
+
+    if let Some(ref backup_branch) = integration_state.backup_branch {
+        println!("🔄 Restoring original state from backup...");
+        integration_manager.safe_abort_integration(
+            Some(backup_branch), 
+            &integration_state.base_branch
+        )?;
+        
+        println!("🧹 Cleaning up backup branch...");
+        if let Err(e) = git_service.delete_branch(backup_branch, true) {
+            println!("⚠️  Could not delete backup branch {}: {}", backup_branch, e);
+        }
+    } else {
+        integration_manager.cleanup_integration_state()?;
+    }
+
+    for temp_branch in &integration_state.temp_branches {
+        println!("🧹 Cleaning up temporary branch: {}", temp_branch);
+        if let Err(e) = git_service.delete_branch(temp_branch, true) {
+            println!("⚠️  Could not delete temporary branch {}: {}", temp_branch, e);
+        }
+    }
 
     state_manager.clear_integration_state()?;
 
     println!("✅ Integration aborted successfully");
-    println!("🌿 Repository state restored");
+    println!("🌿 Repository state restored to original condition");
     println!(
         "📋 Session '{}' remains active for further work",
         integration_state.session_id
     );
+
+    if let Some(ref original_dir) = integration_state.original_working_dir {
+        if env::current_dir().map_err(|_| ParaError::git_operation("Failed to get current dir".to_string()))?
+            != *original_dir {
+            println!(
+                "💡 You may want to return to your original working directory: {}",
+                original_dir.display()
+            );
+        }
+    }
 
     Ok(())
 }
