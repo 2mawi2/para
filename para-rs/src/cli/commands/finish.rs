@@ -64,6 +64,17 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     println!("Finishing session: {}", feature_branch);
 
+    // Close IDE window before Git operations (in case Git operations fail)
+    let session_id = session_info
+        .as_ref()
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| feature_branch.clone());
+
+    let platform = get_platform_manager();
+    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+        eprintln!("Warning: Failed to close IDE window: {}", e);
+    }
+
     if config.should_auto_stage() {
         git_service.stage_all_changes()?;
     }
@@ -77,16 +88,6 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             } else {
                 session_info.as_ref().map(|s| s.worktree_path.clone())
             };
-
-            let session_id = session_info
-                .as_ref()
-                .map(|s| s.name.clone())
-                .unwrap_or_else(|| feature_branch.clone());
-
-            let platform = get_platform_manager();
-            if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
-                eprintln!("Warning: Failed to close IDE window: {}", e);
-            }
 
             if let Some(session_state) = session_info {
                 let session_manager = SessionManager::new(&config);
