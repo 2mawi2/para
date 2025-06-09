@@ -42,7 +42,7 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
     };
 
     let branch_name = generate_branch_name(config.get_branch_prefix());
-    let session_id = session_name.clone(); // Use Docker-style names without timestamp
+    let session_id = session_name.clone();
 
     let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
     let session_path = subtrees_path.join(&session_id);
