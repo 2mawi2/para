@@ -605,7 +605,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn test_execute_no_sessions() -> Result<()> {
         let (_temp_dir, git_service) = setup_test_repo();
@@ -632,7 +631,7 @@ mod tests {
         // Test that GitService::discover fails when not in a git repo
         // This test validates the error handling without changing directories
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        
+
         // We can't easily test the execute function without changing directories
         // So we'll test that GitService::discover_from fails for non-git directories
         let result = GitService::discover_from(temp_dir.path());
