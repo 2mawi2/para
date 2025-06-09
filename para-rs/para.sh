@@ -1,3 +1,2 @@
 #!/bin/sh
-# Shim to test Rust implementation
-exec "$(pwd)/target/debug/para" "$@"
+exec "/Users/marius.wichtner/Documents/git/para/para-rs/target/debug/para" "$@"

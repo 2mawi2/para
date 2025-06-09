@@ -138,6 +138,14 @@ para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md -d
 - If one task requires another task, Start those tasks only sequentially. Once the first task is integrated we can start the second one and so on. 
 - When an agent is ready it should call para finish '<commit message>' to finish the task.
 - This will bring the changes to a new branch with the agent's name. This branch needs to be integrated in the master branch, and all conflicts need to be resolved. After this is done, tests have to be run again to ensure that the integration didn't break anything 
+- No not use you internal Agent system to process the task. Call `para dispatch` to start a new agent for the task.
+
+**Writing Tasks**:
+- Write tasks in the root directory in the format of `TASK_<number>_<description>.md`
+- Keep tasks concise but include all the information needed to complete the task.
+- Always include at the end the instructions for the agent to run the tests and linters and review the changes.
+- Ensure that the task is written is such a way that it can be completed in the git subtree on it's own.
+- Always clearly specify that the agent must call `para finish '<commit message>'` to finish the task. (this is a must for the agent)
 
 ## File Structure Notes
 
