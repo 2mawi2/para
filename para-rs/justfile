@@ -44,11 +44,18 @@ test-legacy:
         cp para.sh para.sh.bak
     fi
     
-    # Create shim that calls the Rust binary
-    echo "▶ Creating Rust binary shim..."
+    # Create shim that calls the Rust binary via wrapper
+    echo "▶ Creating Rust binary shim with legacy wrapper..."
+    WRAPPER_PATH="../tests/para-rust-wrapper.sh"
+    
+    if [ ! -f "$WRAPPER_PATH" ]; then
+        echo "❌ Legacy wrapper not found at: $WRAPPER_PATH"
+        exit 1
+    fi
+    
     cat > para.sh << EOF
     #!/bin/sh
-    exec "$RUST_BINARY_PATH" "\$@"
+    exec "$WRAPPER_PATH" "$RUST_BINARY_PATH" "\$@"
     EOF
     chmod +x para.sh
     

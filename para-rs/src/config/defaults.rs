@@ -85,13 +85,13 @@ pub fn is_command_available(command: &str) -> bool {
 }
 
 pub fn get_default_config_dir() -> std::path::PathBuf {
-    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "para") {
+    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "para-rs") {
         proj_dirs.config_dir().to_path_buf()
     } else {
         std::env::home_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(".config")
-            .join("para")
+            .join("para-rs")
     }
 }
 
