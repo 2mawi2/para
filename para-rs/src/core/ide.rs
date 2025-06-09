@@ -218,9 +218,9 @@ impl IdeManager {
 
         // Check if command exists, like shell version
         if !crate::config::defaults::is_command_available(&wrapper_cmd) {
-            return Err(ParaError::ide_error(format!(
-                "⚠️  Cursor wrapper CLI not found. Please install Cursor CLI or set IDE_WRAPPER_CMD environment variable.\n   Falling back to regular Claude Code launch..."
-            )));
+            return Err(ParaError::ide_error(
+                "⚠️  Cursor wrapper CLI not found. Please install Cursor CLI or set IDE_WRAPPER_CMD environment variable.\n   Falling back to regular Claude Code launch...".to_string()
+            ));
         }
 
         println!("▶ launching Cursor wrapper with Claude Code auto-start...");
@@ -310,7 +310,7 @@ impl IdeManager {
         )
     }
 
-    fn launch_claude_fallback(&self, path: &Path, skip_permissions: bool) -> Result<()> {
+    fn launch_claude_fallback(&self, _path: &Path, _skip_permissions: bool) -> Result<()> {
         // This is a fallback when wrapper is unsupported
         // For now, just return an error since we require wrapper mode
         Err(ParaError::ide_error(
