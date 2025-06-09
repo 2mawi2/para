@@ -5,14 +5,12 @@ use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
 pub fn run_config_wizard() -> Result<Config> {
     println!("🔧 Para Configuration Wizard");
-    println!("This wizard will help you configure para for your development environment.\n");
+    println!();
 
     let mut config = default_config();
 
-    config.ide = configure_ide()?;
-    config.directories = configure_directories(config.directories)?;
-    config.git = configure_git(config.git)?;
-    config.session = configure_session(config.session)?;
+    config.ide = configure_ide_simple()?;
+    config.directories = configure_directories_simple(config.directories)?;
 
     println!("\n📋 Configuration Summary:");
     display_config_summary(&config);
@@ -31,6 +29,84 @@ pub fn run_config_wizard() -> Result<Config> {
             "Configuration cancelled by user".to_string(),
         ));
     }
+
+    Ok(config)
+}
+
+fn configure_ide_simple() -> Result<super::IdeConfig> {
+    println!("🖥️  IDE Selection");
+
+    let ide_options = vec![
+        "cursor (Direct Cursor IDE)",
+        "code (Direct VS Code IDE)",
+        "claude (Claude Code inside another IDE)",
+    ];
+
+    let ide_selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which IDE would you like to use?")
+        .items(&ide_options)
+        .default(0)
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    let (ide_name, ide_command) = match ide_selection {
+        0 => ("cursor".to_string(), "cursor".to_string()),
+        1 => ("code".to_string(), "code".to_string()),
+        2 => ("claude".to_string(), "claude".to_string()),
+        _ => unreachable!(),
+    };
+
+    let wrapper_config = if ide_name == "claude" {
+        configure_wrapper_mode_simple()?
+    } else {
+        super::WrapperConfig {
+            enabled: false,
+            name: String::new(),
+            command: String::new(),
+        }
+    };
+
+    Ok(super::IdeConfig {
+        name: ide_name,
+        command: ide_command,
+        user_data_dir: None,
+        wrapper: wrapper_config,
+    })
+}
+
+fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
+    let wrapper_options = vec!["cursor", "code"];
+    
+    let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which IDE should wrap Claude Code?")
+        .items(&wrapper_options)
+        .default(0)
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    let wrapper_name = wrapper_options[wrapper_selection].to_string();
+    
+    Ok(super::WrapperConfig {
+        enabled: true,
+        name: wrapper_name.clone(),
+        command: wrapper_name,
+    })
+}
+
+fn configure_directories_simple(mut config: super::DirectoryConfig) -> Result<super::DirectoryConfig> {
+    println!("\n📁 Directories (optional customization)");
+
+    config.subtrees_dir = Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("Subtrees directory")
+        .default(config.subtrees_dir)
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    config.state_dir = Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("State directory")
+        .default(config.state_dir)
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
 
     Ok(config)
 }
@@ -310,80 +386,6 @@ fn configure_directories(mut config: super::DirectoryConfig) -> Result<super::Di
     Ok(config)
 }
 
-fn configure_git(mut config: super::GitConfig) -> Result<super::GitConfig> {
-    println!("\n🌿 Git Configuration");
-    println!("Configure Git-related settings for para sessions.\n");
-
-    config.branch_prefix = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("Branch prefix for para sessions")
-        .default(config.branch_prefix)
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if validation::validate_git_config(&super::GitConfig {
-                branch_prefix: input.clone(),
-                auto_stage: config.auto_stage,
-                auto_commit: config.auto_commit,
-            })
-            .is_ok()
-            {
-                Ok(())
-            } else {
-                Err("Invalid branch prefix")
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    config.auto_stage = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Automatically stage all changes when finishing sessions?")
-        .default(config.auto_stage)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    config.auto_commit = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Automatically commit staged changes when finishing sessions?")
-        .default(config.auto_commit)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    Ok(config)
-}
-
-fn configure_session(mut config: super::SessionConfig) -> Result<super::SessionConfig> {
-    println!("\n⏰ Session Configuration");
-    println!("Configure session management and cleanup settings.\n");
-
-    config.preserve_on_finish = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Preserve session data for recovery after finishing?")
-        .default(config.preserve_on_finish)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    if Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enable automatic cleanup of old sessions?")
-        .default(config.auto_cleanup_days.is_some())
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-    {
-        let days: u32 = Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Days to keep old sessions")
-            .default(config.auto_cleanup_days.unwrap_or(30))
-            .validate_with(|input: &u32| -> std::result::Result<(), &str> {
-                if *input > 0 && *input <= 365 {
-                    Ok(())
-                } else {
-                    Err("Must be between 1 and 365 days")
-                }
-            })
-            .interact()
-            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-        config.auto_cleanup_days = Some(days);
-    } else {
-        config.auto_cleanup_days = None;
-    }
-
-    Ok(config)
-}
 
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);

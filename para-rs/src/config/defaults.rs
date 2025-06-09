@@ -48,7 +48,7 @@ pub fn default_session_config() -> SessionConfig {
 }
 
 pub fn detect_ide() -> (String, String) {
-    let ides = [("claude", "claude"), ("cursor", "cursor"), ("code", "code")];
+    let ides = [("cursor", "cursor"), ("code", "code"), ("claude", "claude")];
 
     for (name, command) in &ides {
         if is_command_available(command) {
@@ -60,7 +60,7 @@ pub fn detect_ide() -> (String, String) {
 }
 
 pub fn get_available_ides() -> Vec<(String, String)> {
-    let ides = [("claude", "claude"), ("cursor", "cursor"), ("code", "code")];
+    let ides = [("cursor", "cursor"), ("code", "code"), ("claude", "claude")];
 
     ides.iter()
         .filter(|(_, command)| is_command_available(command))
