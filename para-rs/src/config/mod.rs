@@ -58,6 +58,7 @@ pub enum ConfigError {
     IoError(std::io::Error),
     JsonError(serde_json::Error),
     ValidationError(String),
+    #[allow(dead_code)]
     NotFound(String),
 }
 
@@ -87,10 +88,12 @@ impl From<serde_json::Error> for ConfigError {
 }
 
 impl Config {
+    #[allow(dead_code)]
     pub fn load_or_create() -> Result<Self> {
         ConfigManager::load_or_create()
     }
 
+    #[allow(dead_code)]
     pub fn save(&self) -> Result<()> {
         ConfigManager::save(self)
     }
@@ -99,6 +102,7 @@ impl Config {
         validation::validate_config(self)
     }
 
+    #[allow(dead_code)]
     pub fn get_ide_command(&self) -> &str {
         &self.ide.command
     }
@@ -123,10 +127,12 @@ impl Config {
         self.git.auto_stage
     }
 
+    #[allow(dead_code)]
     pub fn should_auto_commit(&self) -> bool {
         self.git.auto_commit
     }
 
+    #[allow(dead_code)]
     pub fn get_session_name_format(&self) -> &str {
         &self.session.default_name_format
     }
@@ -135,6 +141,7 @@ impl Config {
         self.session.preserve_on_finish
     }
 
+    #[allow(dead_code)]
     pub fn get_auto_cleanup_days(&self) -> Option<u32> {
         self.session.auto_cleanup_days
     }

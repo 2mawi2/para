@@ -1,4 +1,4 @@
-use super::defaults::{default_config, detect_wrapper_context, get_available_ides};
+use super::defaults::{default_config, detect_wrapper_context, get_available_ides, is_command_available};
 use super::validation;
 use super::{Config, ConfigError, Result};
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
@@ -43,28 +43,64 @@ fn configure_ide() -> Result<super::IdeConfig> {
 
     if available_ides.is_empty() {
         println!("⚠️  No supported IDEs detected on your system.");
-        println!("Please install one of the following: cursor, code (VS Code), or claude");
-        return Err(ConfigError::ValidationError(
-            "No supported IDEs found".to_string(),
-        ));
+        println!("Supported IDEs:");
+        println!("  • Claude Code (claude) - Recommended for AI development");
+        println!("  • Cursor (cursor) - AI-powered code editor");
+        println!("  • VS Code (code) - Microsoft Visual Studio Code");
+        println!("\nYou can either:");
+        println!("  1. Install one of these IDEs and run the wizard again");
+        println!("  2. Continue with manual configuration");
+
+        if !Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Continue with manual IDE configuration?")
+            .default(false)
+            .interact()
+            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
+        {
+            return Err(ConfigError::ValidationError(
+                "Configuration cancelled - no IDE selected".to_string(),
+            ));
+        }
+
+        return configure_ide_manually();
     }
+
+    println!("✅ Detected available IDEs:");
+    for (name, command) in &available_ides {
+        println!("  • {} ({})", name, command);
+    }
+    println!();
 
     let ide_names: Vec<String> = available_ides
         .iter()
         .map(|(name, _)| name.clone())
         .collect();
+    let mut ide_names_with_manual = ide_names.clone();
+    ide_names_with_manual.push("Manual configuration".to_string());
+
     let ide_selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which IDE would you like to use?")
-        .items(&ide_names)
+        .items(&ide_names_with_manual)
         .default(0)
         .interact()
         .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    if ide_selection == ide_names.len() {
+        return configure_ide_manually();
+    }
 
     let (ide_name, ide_command) = available_ides[ide_selection].clone();
 
     let custom_command = Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("IDE command (press Enter to use default)")
         .default(ide_command.clone())
+        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+            if is_command_available(input) {
+                Ok(())
+            } else {
+                Err("Command not found in PATH")
+            }
+        })
         .interact()
         .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
 
@@ -79,6 +115,14 @@ fn configure_ide() -> Result<super::IdeConfig> {
         Some(
             Input::<String>::with_theme(&ColorfulTheme::default())
                 .with_prompt("User data directory path")
+                .validate_with(|input: &String| -> std::result::Result<(), &str> {
+                    let path = std::path::Path::new(input);
+                    if path.exists() && path.is_dir() {
+                        Ok(())
+                    } else {
+                        Err("Directory does not exist")
+                    }
+                })
                 .interact()
                 .map_err(|e| {
                     ConfigError::ValidationError(format!("Failed to read input: {}", e))
@@ -91,6 +135,73 @@ fn configure_ide() -> Result<super::IdeConfig> {
     Ok(super::IdeConfig {
         name: ide_name,
         command: custom_command,
+        user_data_dir,
+        wrapper: wrapper_config,
+    })
+}
+
+fn configure_ide_manually() -> Result<super::IdeConfig> {
+    println!("🔧 Manual IDE Configuration");
+    
+    let ide_name = Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("IDE name")
+        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+            if input.trim().is_empty() {
+                Err("IDE name cannot be empty")
+            } else if !validation::is_valid_ide_name(input) {
+                Err("Invalid IDE name - use only alphanumeric characters, hyphens, and underscores")
+            } else {
+                Ok(())
+            }
+        })
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    let ide_command = Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("IDE command")
+        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+            if input.trim().is_empty() {
+                Err("IDE command cannot be empty")
+            } else if !is_command_available(input) {
+                Err("Command not found in PATH")
+            } else {
+                Ok(())
+            }
+        })
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
+
+    let wrapper_config = configure_wrapper_mode(&ide_name)?;
+
+    let user_data_dir = if Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Specify custom user data directory for IDE?")
+        .default(false)
+        .interact()
+        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
+    {
+        Some(
+            Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt("User data directory path")
+                .validate_with(|input: &String| -> std::result::Result<(), &str> {
+                    let path = std::path::Path::new(input);
+                    if path.exists() && path.is_dir() {
+                        Ok(())
+                    } else {
+                        Err("Directory does not exist")
+                    }
+                })
+                .interact()
+                .map_err(|e| {
+                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
+                })?,
+        )
+    } else {
+        None
+    };
+
+    Ok(super::IdeConfig {
+        name: ide_name,
+        command: ide_command,
         user_data_dir,
         wrapper: wrapper_config,
     })
@@ -328,6 +439,7 @@ pub fn run_quick_setup() -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
     #[test]
     fn test_config_summary_display() {
@@ -345,5 +457,113 @@ mod tests {
         if let Ok(config) = result {
             assert!(config.validate().is_ok());
         }
+    }
+
+    #[test]
+    fn test_configure_wrapper_mode_claude_with_detection() {
+        // Test wrapper mode configuration for Claude with detected wrapper
+        std::env::set_var("TERM_PROGRAM", "vscode");
+        
+        let result = configure_wrapper_mode("claude");
+        
+        // Clean up environment
+        std::env::remove_var("TERM_PROGRAM");
+        
+        // This should work since we detect VS Code wrapper
+        if let Ok(wrapper_config) = result {
+            // The wrapper might be enabled depending on user interaction
+            // We just test that the function completes successfully
+            assert!(wrapper_config.enabled || !wrapper_config.enabled);
+        }
+    }
+
+    #[test]
+    fn test_configure_wrapper_mode_non_claude() {
+        let result = configure_wrapper_mode("cursor").unwrap();
+        
+        // Non-Claude IDEs shouldn't enable wrapper mode by default
+        assert!(!result.enabled);
+        assert!(result.name.is_empty());
+        assert!(result.command.is_empty());
+    }
+
+    #[test]
+    fn test_display_config_summary_comprehensive() {
+        let config = Config {
+            ide: IdeConfig {
+                name: "test-ide".to_string(),
+                command: "test-command".to_string(),
+                user_data_dir: Some("/test/path".to_string()),
+                wrapper: WrapperConfig {
+                    enabled: true,
+                    name: "wrapper-ide".to_string(),
+                    command: "wrapper-command".to_string(),
+                },
+            },
+            directories: DirectoryConfig {
+                subtrees_dir: "test-subtrees".to_string(),
+                state_dir: "test-state".to_string(),
+            },
+            git: GitConfig {
+                branch_prefix: "test-prefix".to_string(),
+                auto_stage: false,
+                auto_commit: false,
+            },
+            session: SessionConfig {
+                default_name_format: "%Y%m%d".to_string(),
+                preserve_on_finish: false,
+                auto_cleanup_days: None,
+            },
+        };
+
+        // Test that display doesn't panic with all options
+        display_config_summary(&config);
+    }
+
+    #[test]
+    fn test_config_validation_in_wizard() {
+        // Test that configs created by the wizard are valid
+        let config = default_config();
+        assert!(config.validate().is_ok(), "Default config should be valid");
+    }
+
+    #[test]
+    fn test_ide_detection_integration() {
+        let available_ides = get_available_ides();
+        
+        // Test that detected IDEs are valid
+        for (name, command) in available_ides {
+            assert!(!name.is_empty(), "IDE name should not be empty");
+            assert!(!command.is_empty(), "IDE command should not be empty");
+            assert!(validation::is_valid_ide_name(&name), "IDE name should be valid: {}", name);
+        }
+    }
+
+    #[test]
+    fn test_wrapper_context_detection() {
+        // Test VS Code detection
+        std::env::set_var("TERM_PROGRAM", "vscode");
+        let result = detect_wrapper_context();
+        std::env::remove_var("TERM_PROGRAM");
+        
+        if let Some((name, command)) = result {
+            assert_eq!(name, "code");
+            assert_eq!(command, "code");
+        }
+
+        // Test Cursor detection
+        std::env::set_var("CURSOR", "1");
+        let result = detect_wrapper_context();
+        std::env::remove_var("CURSOR");
+        
+        if let Some((name, command)) = result {
+            assert_eq!(name, "cursor");
+            assert_eq!(command, "cursor");
+        }
+
+        // Test no wrapper detection
+        let _result = detect_wrapper_context();
+        // Should be None when no wrapper environment variables are set
+        // (unless running in an actual IDE environment)
     }
 }

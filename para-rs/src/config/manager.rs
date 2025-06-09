@@ -7,6 +7,11 @@ use std::path::Path;
 pub struct ConfigManager;
 
 impl ConfigManager {
+    pub fn get_config_path() -> Result<String> {
+        let config_path = get_config_file_path();
+        Ok(config_path.to_string_lossy().to_string())
+    }
+
     pub fn load_or_create() -> Result<Config> {
         let config_path = get_config_file_path();
 
