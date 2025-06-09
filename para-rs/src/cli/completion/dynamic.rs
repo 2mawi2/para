@@ -40,7 +40,9 @@ impl DynamicCompletion {
                 let description = match session.status {
                     SessionStatus::Active => format!("Active session on branch {}", session.branch),
                     SessionStatus::Finished => format!("Finished session ({})", session.updated_at),
-                    SessionStatus::Cancelled => format!("Cancelled session ({})", session.updated_at),
+                    SessionStatus::Cancelled => {
+                        format!("Cancelled session ({})", session.updated_at)
+                    }
                 };
 
                 suggestions.push(
@@ -195,7 +197,10 @@ impl DynamicCompletion {
             .collect()
     }
 
-    pub fn get_completions_for_context(&self, context: &CompletionContext) -> Result<Vec<CompletionSuggestion>> {
+    pub fn get_completions_for_context(
+        &self,
+        context: &CompletionContext,
+    ) -> Result<Vec<CompletionSuggestion>> {
         let mut suggestions = Vec::new();
 
         if context.is_completing_flag() {
@@ -227,7 +232,10 @@ impl DynamicCompletion {
         if !prefix.is_empty() {
             suggestions.retain(|suggestion| {
                 suggestion.text.starts_with(prefix)
-                    || suggestion.text.to_lowercase().starts_with(&prefix.to_lowercase())
+                    || suggestion
+                        .text
+                        .to_lowercase()
+                        .starts_with(&prefix.to_lowercase())
             });
         }
 
@@ -244,7 +252,10 @@ impl DynamicCompletion {
         });
     }
 
-    pub fn get_completions_timeout(&self, context: &CompletionContext) -> Vec<CompletionSuggestion> {
+    pub fn get_completions_timeout(
+        &self,
+        context: &CompletionContext,
+    ) -> Vec<CompletionSuggestion> {
         let _timeout = self.timeout;
         let context = context.clone();
         let config = self.config.clone();
@@ -296,7 +307,10 @@ impl CachedDynamicCompletion {
         timestamp.elapsed() < duration
     }
 
-    pub fn get_cached_sessions(&mut self, include_archived: bool) -> Result<Vec<CompletionSuggestion>> {
+    pub fn get_cached_sessions(
+        &mut self,
+        include_archived: bool,
+    ) -> Result<Vec<CompletionSuggestion>> {
         if let Some((timestamp, ref sessions)) = self.session_cache {
             if Self::is_cache_valid(timestamp, self.cache_duration) {
                 return Ok(sessions.clone());
@@ -410,8 +424,8 @@ mod tests {
     fn test_cached_completion() {
         let temp_dir = TempDir::new().unwrap();
         let config = create_test_config(temp_dir.path());
-        let mut cached_completion = CachedDynamicCompletion::new(config)
-            .with_cache_duration(Duration::from_millis(100));
+        let mut cached_completion =
+            CachedDynamicCompletion::new(config).with_cache_duration(Duration::from_millis(100));
 
         cached_completion.clear_cache();
 

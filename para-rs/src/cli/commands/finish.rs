@@ -1,6 +1,8 @@
 use crate::cli::parser::FinishArgs;
 use crate::config::ConfigManager;
-use crate::core::git::{FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment};
+use crate::core::git::{
+    FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
+};
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
 use std::env;
@@ -25,21 +27,19 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             let session_state = session_manager.load_state(session_id)?;
             (Some(session_state), None, false)
         }
-        None => {
-            match &session_env {
-                SessionEnvironment::Worktree { branch, .. } => (None, Some(branch.clone()), true),
-                SessionEnvironment::MainRepository => {
-                    return Err(ParaError::invalid_args(
+        None => match &session_env {
+            SessionEnvironment::Worktree { branch, .. } => (None, Some(branch.clone()), true),
+            SessionEnvironment::MainRepository => {
+                return Err(ParaError::invalid_args(
                         "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
                     ));
-                }
-                SessionEnvironment::Invalid => {
-                    return Err(ParaError::invalid_args(
+            }
+            SessionEnvironment::Invalid => {
+                return Err(ParaError::invalid_args(
                         "Cannot finish from this location. Use --session to specify a session or run from within a session worktree.",
                     ));
-                }
             }
-        }
+        },
     };
 
     let feature_branch = session_info
@@ -93,7 +93,11 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             if let Some(ref path) = worktree_path {
                 if path != &git_service.repository().root && !config.should_preserve_on_finish() {
                     if let Err(e) = git_service.remove_worktree(path) {
-                        eprintln!("Warning: Failed to remove worktree at {}: {}", path.display(), e);
+                        eprintln!(
+                            "Warning: Failed to remove worktree at {}: {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
             }
@@ -231,7 +235,7 @@ mod tests {
     #[test]
     fn test_session_environment_validation() {
         let (temp_dir, repo_path) = setup_test_repo();
-        
+
         let git_service = GitService::discover_from(&repo_path).expect("Failed to discover repo");
 
         let main_env = git_service
@@ -270,9 +274,13 @@ mod tests {
             repo_path.join("worktree"),
         );
 
-        session_manager.save_state(&session_state).expect("Failed to save state");
-        
-        let loaded_state = session_manager.load_state("test-session").expect("Failed to load state");
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save state");
+
+        let loaded_state = session_manager
+            .load_state("test-session")
+            .expect("Failed to load state");
         assert_eq!(loaded_state.name, "test-session");
         assert_eq!(loaded_state.branch, "test-branch");
     }

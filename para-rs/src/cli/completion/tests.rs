@@ -56,7 +56,7 @@ mod completion_tests {
 
         let mut response = CompletionResponse::new(suggestions, CompletionType::Subcommand);
         response.filter_by_prefix("st");
-        
+
         assert_eq!(response.suggestions.len(), 2);
         assert!(response.suggestions.iter().any(|s| s.text == "start"));
         assert!(response.suggestions.iter().any(|s| s.text == "status"));
@@ -72,7 +72,7 @@ mod completion_tests {
 
         let mut response = CompletionResponse::new(suggestions, CompletionType::Value);
         response.sort();
-        
+
         assert_eq!(response.suggestions[0].text, "alpha");
         assert_eq!(response.suggestions[1].text, "beta");
         assert_eq!(response.suggestions[2].text, "zebra");
@@ -89,7 +89,7 @@ mod completion_tests {
 
         let mut response = CompletionResponse::new(suggestions, CompletionType::Value);
         response.limit(2);
-        
+
         assert_eq!(response.suggestions.len(), 2);
     }
 }
@@ -100,7 +100,11 @@ mod context_tests {
 
     #[test]
     fn test_completion_context_creation() {
-        let command_line = vec!["para".to_string(), "start".to_string(), "my-session".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "my-session".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.current_word, "my-session");
@@ -111,13 +115,22 @@ mod context_tests {
 
     #[test]
     fn test_flag_completion_detection() {
-        let command_line = vec!["para".to_string(), "start".to_string(), "--branch".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "--branch".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert!(context.is_completing_flag());
         assert!(!context.is_completing_value_for_flag("--branch"));
 
-        let command_line2 = vec!["para".to_string(), "start".to_string(), "--branch".to_string(), "feature".to_string()];
+        let command_line2 = vec![
+            "para".to_string(),
+            "start".to_string(),
+            "--branch".to_string(),
+            "feature".to_string(),
+        ];
         let context2 = CompletionContext::new(command_line2, 3);
         assert!(context2.is_completing_value_for_flag("--branch"));
     }
@@ -139,13 +152,21 @@ mod context_tests {
 
     #[test]
     fn test_session_completion_detection() {
-        let command_line = vec!["para".to_string(), "resume".to_string(), "session".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "resume".to_string(),
+            "session".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert!(context.is_completing_session());
         assert!(!context.should_complete_archived_sessions());
 
-        let recover_command = vec!["para".to_string(), "recover".to_string(), "session".to_string()];
+        let recover_command = vec![
+            "para".to_string(),
+            "recover".to_string(),
+            "session".to_string(),
+        ];
         let recover_context = CompletionContext::new(recover_command, 2);
 
         assert!(recover_context.is_completing_session());
@@ -154,7 +175,11 @@ mod context_tests {
 
     #[test]
     fn test_subcommand_detection() {
-        let command_line = vec!["para".to_string(), "finish".to_string(), "message".to_string()];
+        let command_line = vec![
+            "para".to_string(),
+            "finish".to_string(),
+            "message".to_string(),
+        ];
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.get_subcommand(), Some("finish"));
@@ -164,36 +189,42 @@ mod context_tests {
     #[test]
     fn test_completion_type_detection() {
         let flag_context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string(), "--branch".to_string()],
+            vec![
+                "para".to_string(),
+                "start".to_string(),
+                "--branch".to_string(),
+            ],
             2,
         );
-        assert_eq!(flag_context.get_completion_type(), context::CompletionType::Flag);
-
-        let subcommand_context = CompletionContext::new(
-            vec!["para".to_string(), "sta".to_string()],
-            1,
+        assert_eq!(
+            flag_context.get_completion_type(),
+            context::CompletionType::Flag
         );
-        assert_eq!(subcommand_context.get_completion_type(), context::CompletionType::Subcommand);
+
+        let subcommand_context =
+            CompletionContext::new(vec!["para".to_string(), "sta".to_string()], 1);
+        assert_eq!(
+            subcommand_context.get_completion_type(),
+            context::CompletionType::Subcommand
+        );
 
         let session_context = CompletionContext::new(
             vec!["para".to_string(), "resume".to_string(), "sess".to_string()],
             2,
         );
-        assert_eq!(session_context.get_completion_type(), context::CompletionType::Session);
+        assert_eq!(
+            session_context.get_completion_type(),
+            context::CompletionType::Session
+        );
     }
 
     #[test]
     fn test_git_repository_requirements() {
-        let context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string()],
-            1,
-        );
+        let context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
         assert!(context.needs_git_repository());
 
-        let config_context = CompletionContext::new(
-            vec!["para".to_string(), "config".to_string()],
-            1,
-        );
+        let config_context =
+            CompletionContext::new(vec!["para".to_string(), "config".to_string()], 1);
         assert!(!config_context.needs_git_repository());
         assert!(config_context.can_work_outside_git());
     }
@@ -201,25 +232,23 @@ mod context_tests {
     #[test]
     fn test_help_detection() {
         let help_context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string(), "--help".to_string()],
+            vec![
+                "para".to_string(),
+                "start".to_string(),
+                "--help".to_string(),
+            ],
             2,
         );
         assert!(help_context.should_show_help());
         assert_eq!(help_context.get_help_context(), Some("start".to_string()));
 
-        let help_context2 = CompletionContext::new(
-            vec!["para".to_string(), "help".to_string()],
-            1,
-        );
+        let help_context2 = CompletionContext::new(vec!["para".to_string(), "help".to_string()], 1);
         assert!(help_context2.should_show_help());
     }
 
     #[test]
     fn test_environment_warnings() {
-        let mut context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string()],
-            1,
-        );
+        let mut context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
         context.is_git_repository = false;
 
         let warnings = context.get_environment_warnings();
@@ -298,7 +327,11 @@ mod dynamic_completion_tests {
         std::fs::create_dir(temp_dir.path().join("subdir")).unwrap();
 
         let context = CompletionContext {
-            command_line: vec!["para".to_string(), "dispatch".to_string(), "--file".to_string()],
+            command_line: vec![
+                "para".to_string(),
+                "dispatch".to_string(),
+                "--file".to_string(),
+            ],
             current_word: "".to_string(),
             previous_word: Some("--file".to_string()),
             position: 3,
@@ -322,10 +355,7 @@ mod dynamic_completion_tests {
         let completion = dynamic::DynamicCompletion::new(config)
             .with_timeout(std::time::Duration::from_millis(10));
 
-        let context = CompletionContext::new(
-            vec!["para".to_string(), "start".to_string()],
-            1,
-        );
+        let context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
 
         let suggestions = completion.get_completions_timeout(&context);
         // Should return some suggestions even with timeout
@@ -340,25 +370,29 @@ mod generator_tests {
 
     #[test]
     fn test_basic_completion_generation() {
-        let bash_completion = generators::ShellCompletionGenerator::generate_basic_completion(Shell::Bash);
+        let bash_completion =
+            generators::ShellCompletionGenerator::generate_basic_completion(Shell::Bash);
         assert!(bash_completion.is_ok());
         let bash_script = bash_completion.unwrap();
         assert!(bash_script.contains("para"));
         assert!(bash_script.contains("complete"));
 
-        let zsh_completion = generators::ShellCompletionGenerator::generate_basic_completion(Shell::Zsh);
+        let zsh_completion =
+            generators::ShellCompletionGenerator::generate_basic_completion(Shell::Zsh);
         assert!(zsh_completion.is_ok());
         let zsh_script = zsh_completion.unwrap();
         assert!(zsh_script.contains("para"));
         assert!(zsh_script.contains("compdef"));
 
-        let fish_completion = generators::ShellCompletionGenerator::generate_basic_completion(Shell::Fish);
+        let fish_completion =
+            generators::ShellCompletionGenerator::generate_basic_completion(Shell::Fish);
         assert!(fish_completion.is_ok());
         let fish_script = fish_completion.unwrap();
         assert!(fish_script.contains("para"));
         assert!(fish_script.contains("complete"));
 
-        let powershell_completion = generators::ShellCompletionGenerator::generate_basic_completion(Shell::PowerShell);
+        let powershell_completion =
+            generators::ShellCompletionGenerator::generate_basic_completion(Shell::PowerShell);
         assert!(powershell_completion.is_ok());
         let ps_script = powershell_completion.unwrap();
         assert!(ps_script.contains("para"));
@@ -367,14 +401,16 @@ mod generator_tests {
 
     #[test]
     fn test_enhanced_completion_generation() {
-        let enhanced_bash = generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Bash);
+        let enhanced_bash =
+            generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Bash);
         assert!(enhanced_bash.is_ok());
         let bash_script = enhanced_bash.unwrap();
         assert!(bash_script.contains("para"));
         assert!(bash_script.contains("_para_dynamic_complete"));
         assert!(bash_script.contains("complete-command"));
 
-        let enhanced_zsh = generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Zsh);
+        let enhanced_zsh =
+            generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Zsh);
         assert!(enhanced_zsh.is_ok());
         let zsh_script = enhanced_zsh.unwrap();
         assert!(zsh_script.contains("para"));
@@ -383,22 +419,26 @@ mod generator_tests {
 
     #[test]
     fn test_installation_instructions() {
-        let bash_instructions = generators::ShellCompletionGenerator::get_installation_instructions(Shell::Bash);
+        let bash_instructions =
+            generators::ShellCompletionGenerator::get_installation_instructions(Shell::Bash);
         assert!(bash_instructions.contains("Installation instructions"));
         assert!(bash_instructions.contains("bash"));
         assert!(bash_instructions.contains("~/.bashrc"));
 
-        let zsh_instructions = generators::ShellCompletionGenerator::get_installation_instructions(Shell::Zsh);
+        let zsh_instructions =
+            generators::ShellCompletionGenerator::get_installation_instructions(Shell::Zsh);
         assert!(zsh_instructions.contains("Installation instructions"));
         assert!(zsh_instructions.contains("zsh"));
         assert!(zsh_instructions.contains("~/.zshrc"));
 
-        let fish_instructions = generators::ShellCompletionGenerator::get_installation_instructions(Shell::Fish);
+        let fish_instructions =
+            generators::ShellCompletionGenerator::get_installation_instructions(Shell::Fish);
         assert!(fish_instructions.contains("Installation instructions"));
         assert!(fish_instructions.contains("fish"));
         assert!(fish_instructions.contains("completions"));
 
-        let ps_instructions = generators::ShellCompletionGenerator::get_installation_instructions(Shell::PowerShell);
+        let ps_instructions =
+            generators::ShellCompletionGenerator::get_installation_instructions(Shell::PowerShell);
         assert!(ps_instructions.contains("Installation instructions"));
         assert!(ps_instructions.contains("PowerShell"));
         assert!(ps_instructions.contains("$PROFILE"));
@@ -420,7 +460,7 @@ mod cached_completion_tests {
 
         // First call should populate cache
         let _result1 = cached_completion.get_cached_sessions(false);
-        
+
         // Second call should use cache
         let _result2 = cached_completion.get_cached_sessions(false);
 
@@ -433,10 +473,14 @@ mod cached_completion_tests {
     fn test_cache_validity() {
         let timestamp = std::time::Instant::now();
         let duration = std::time::Duration::from_millis(100);
-        
-        assert!(dynamic::CachedDynamicCompletion::is_cache_valid(timestamp, duration));
-        
+
+        assert!(dynamic::CachedDynamicCompletion::is_cache_valid(
+            timestamp, duration
+        ));
+
         std::thread::sleep(std::time::Duration::from_millis(150));
-        assert!(!dynamic::CachedDynamicCompletion::is_cache_valid(timestamp, duration));
+        assert!(!dynamic::CachedDynamicCompletion::is_cache_valid(
+            timestamp, duration
+        ));
     }
 }

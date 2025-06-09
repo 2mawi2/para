@@ -1,4 +1,6 @@
-use super::defaults::{default_config, detect_wrapper_context, get_available_ides, is_command_available};
+use super::defaults::{
+    default_config, detect_wrapper_context, get_available_ides, is_command_available,
+};
 use super::validation;
 use super::{Config, ConfigError, Result};
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
@@ -76,7 +78,7 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
 
 fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
     let wrapper_options = vec!["cursor", "code"];
-    
+
     let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which IDE should wrap Claude Code?")
         .items(&wrapper_options)
@@ -85,7 +87,7 @@ fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
         .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
 
     let wrapper_name = wrapper_options[wrapper_selection].to_string();
-    
+
     Ok(super::WrapperConfig {
         enabled: true,
         name: wrapper_name.clone(),
@@ -93,7 +95,9 @@ fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
     })
 }
 
-fn configure_directories_simple(mut config: super::DirectoryConfig) -> Result<super::DirectoryConfig> {
+fn configure_directories_simple(
+    mut config: super::DirectoryConfig,
+) -> Result<super::DirectoryConfig> {
     println!("\n📁 Directories (optional customization)");
 
     config.subtrees_dir = Input::<String>::with_theme(&ColorfulTheme::default())
@@ -218,7 +222,7 @@ fn configure_ide() -> Result<super::IdeConfig> {
 
 fn configure_ide_manually() -> Result<super::IdeConfig> {
     println!("🔧 Manual IDE Configuration");
-    
+
     let ide_name = Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("IDE name")
         .validate_with(|input: &String| -> std::result::Result<(), &str> {
@@ -386,7 +390,6 @@ fn configure_directories(mut config: super::DirectoryConfig) -> Result<super::Di
     Ok(config)
 }
 
-
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);
     if config.ide.wrapper.enabled {
@@ -465,12 +468,12 @@ mod tests {
     fn test_configure_wrapper_mode_claude_with_detection() {
         // Test wrapper mode configuration for Claude with detected wrapper
         std::env::set_var("TERM_PROGRAM", "vscode");
-        
+
         let result = configure_wrapper_mode("claude");
-        
+
         // Clean up environment
         std::env::remove_var("TERM_PROGRAM");
-        
+
         // This should work since we detect VS Code wrapper
         if let Ok(wrapper_config) = result {
             // The wrapper might be enabled depending on user interaction
@@ -482,7 +485,7 @@ mod tests {
     #[test]
     fn test_configure_wrapper_mode_non_claude() {
         let result = configure_wrapper_mode("cursor").unwrap();
-        
+
         // Non-Claude IDEs shouldn't enable wrapper mode by default
         assert!(!result.enabled);
         assert!(result.name.is_empty());
@@ -532,12 +535,16 @@ mod tests {
     #[test]
     fn test_ide_detection_integration() {
         let available_ides = get_available_ides();
-        
+
         // Test that detected IDEs are valid
         for (name, command) in available_ides {
             assert!(!name.is_empty(), "IDE name should not be empty");
             assert!(!command.is_empty(), "IDE command should not be empty");
-            assert!(validation::is_valid_ide_name(&name), "IDE name should be valid: {}", name);
+            assert!(
+                validation::is_valid_ide_name(&name),
+                "IDE name should be valid: {}",
+                name
+            );
         }
     }
 
@@ -547,7 +554,7 @@ mod tests {
         std::env::set_var("TERM_PROGRAM", "vscode");
         let result = detect_wrapper_context();
         std::env::remove_var("TERM_PROGRAM");
-        
+
         if let Some((name, command)) = result {
             assert_eq!(name, "code");
             assert_eq!(command, "code");
@@ -557,7 +564,7 @@ mod tests {
         std::env::set_var("CURSOR", "1");
         let result = detect_wrapper_context();
         std::env::remove_var("CURSOR");
-        
+
         if let Some((name, command)) = result {
             assert_eq!(name, "cursor");
             assert_eq!(command, "cursor");

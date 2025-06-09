@@ -154,7 +154,9 @@ impl<'a> ArchiveManager<'a> {
 
         for archive in archives {
             if let Ok(archived_date) = DateTime::parse_from_rfc3339(&archive.archived_at) {
-                if archived_date.with_timezone(&Utc) < cutoff_date && self.delete_archive(&archive.session_name).is_ok() {
+                if archived_date.with_timezone(&Utc) < cutoff_date
+                    && self.delete_archive(&archive.session_name).is_ok()
+                {
                     cleaned_count += 1;
                 }
             }
@@ -209,14 +211,14 @@ impl<'a> ArchiveManager<'a> {
 
     fn create_archive_entry(&self, archived_branch: &str) -> Result<Option<ArchiveEntry>> {
         let archive_prefix = format!("{}/archived/", self.config.get_branch_prefix());
-        
+
         if !archived_branch.starts_with(&archive_prefix) {
             return Ok(None);
         }
 
         let suffix = archived_branch.strip_prefix(&archive_prefix).unwrap();
         let parts: Vec<&str> = suffix.split('/').collect();
-        
+
         if parts.len() != 2 {
             return Ok(None);
         }
@@ -257,7 +259,7 @@ impl<'a> ArchiveManager<'a> {
 
     fn get_commit_message(&self, commit_hash: &str) -> Result<String> {
         use crate::core::git::repository::execute_git_command;
-        
+
         let output = execute_git_command(
             self.git_service.repository(),
             &["log", "--format=%s", "-n", "1", commit_hash],
@@ -301,7 +303,7 @@ impl<'a> ArchiveManager<'a> {
 
     fn validate_single_archive(&self, archive: &ArchiveEntry) -> Result<()> {
         let branch_manager = self.git_service.branch_manager();
-        
+
         if !branch_manager.branch_exists(&archive.archived_branch)? {
             return Err(ParaError::git_operation(
                 "Archived branch no longer exists".to_string(),
