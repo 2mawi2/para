@@ -15,6 +15,10 @@ impl IdeManager {
     }
 
     pub fn launch(&self, path: &Path, skip_permissions: bool) -> Result<()> {
+        if self.is_test_mode() {
+            return self.handle_test_mode(path);
+        }
+
         if !skip_permissions {
             self.check_permissions()?;
         }
@@ -50,6 +54,9 @@ impl IdeManager {
     }
 
     pub fn is_available(&self) -> bool {
+        if self.is_test_mode() {
+            return true;
+        }
         crate::config::defaults::is_command_available(&self.config.command)
     }
 
@@ -101,6 +108,38 @@ impl IdeManager {
 
     pub fn get_config(&self) -> &IdeConfig {
         &self.config
+    }
+
+    fn is_test_mode(&self) -> bool {
+        // Check environment variable like shell version does
+        if let Ok(ide_cmd) = std::env::var("IDE_CMD") {
+            return ide_cmd == "true" || ide_cmd.starts_with("echo ");
+        }
+        
+        // Fall back to config
+        self.config.command == "true" || self.config.command.starts_with("echo ")
+    }
+
+    fn handle_test_mode(&self, path: &Path) -> Result<()> {
+        let test_command = std::env::var("IDE_CMD").unwrap_or_else(|_| self.config.command.clone());
+        
+        if test_command == "true" {
+            println!("▶ skipping {} launch (test stub)", self.config.name);
+            println!("✅ {} (test stub) opened", self.config.name);
+            return Ok(());
+        }
+
+        if test_command.starts_with("echo ") {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c")
+                .arg(format!("{} \"{}\"", test_command, path.display()));
+            cmd.output().map_err(|e| {
+                ParaError::ide_error(format!("Failed to run test stub: {}", e))
+            })?;
+            return Ok(());
+        }
+
+        unreachable!("is_test_mode should only return true for 'true' or 'echo ' commands")
     }
 }
 
