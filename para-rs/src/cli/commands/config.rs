@@ -1,5 +1,5 @@
 use crate::cli::parser::{ConfigArgs, ConfigCommands};
-use crate::config::{self, Config, ConfigManager};
+use crate::config::{self, ConfigManager};
 use crate::utils::{ParaError, Result};
 
 pub fn execute(args: ConfigArgs) -> Result<()> {

@@ -4,9 +4,8 @@ pub mod json;
 pub mod names;
 
 pub use error::{ParaError, Result};
-pub use fs::*;
-pub use json::*;
-pub use names::*;
+// Re-export specific items instead of glob imports to reduce warnings
+pub use names::{generate_branch_name, generate_friendly_name, generate_timestamp, generate_unique_name, validate_session_name};
 
 pub type CommandResult = Result<()>;
 pub type StringResult = Result<String>;
