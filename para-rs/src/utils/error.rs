@@ -157,6 +157,30 @@ impl ParaError {
             message: format!("{} not implemented yet", feature.into()),
         }
     }
+
+    pub fn git_error(message: impl Into<String>) -> Self {
+        Self::GitOperation {
+            message: message.into(),
+        }
+    }
+
+    pub fn fs_error(message: impl Into<String>) -> Self {
+        Self::FileOperation {
+            path: message.into(),
+        }
+    }
+
+    pub fn json_error(message: impl Into<String>) -> Self {
+        Self::Config {
+            message: message.into(),
+        }
+    }
+
+    pub fn invalid_config(message: impl Into<String>) -> Self {
+        Self::Config {
+            message: message.into(),
+        }
+    }
 }
 
 impl From<PathBuf> for ParaError {
