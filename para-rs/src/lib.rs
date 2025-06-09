@@ -4,6 +4,9 @@ pub mod core;
 pub mod platform;
 pub mod utils;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub use config::Config;
 pub use core::git::GitService;
 pub use core::session::{SessionManager, SessionState, SessionStatus};

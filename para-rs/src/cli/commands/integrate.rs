@@ -323,6 +323,16 @@ fn find_session_by_branch(session_manager: &SessionManager, branch: &str) -> Res
 }
 
 fn validate_integrate_args(args: &IntegrateArgs) -> Result<()> {
+    if args.abort {
+        // When aborting, no other options should be provided
+        if args.session.is_some() || args.target.is_some() || args.strategy.is_some() || args.message.is_some() || args.dry_run {
+            return Err(ParaError::invalid_args(
+                "--abort cannot be used with other options",
+            ));
+        }
+        return Ok(());
+    }
+
     if let Some(ref session) = args.session {
         if session.is_empty() {
             return Err(ParaError::invalid_args(
@@ -518,13 +528,11 @@ mod tests {
     use crate::cli::parser::IntegrateArgs;
     use crate::config::Config;
     use crate::core::session::{IntegrationState};
+    use crate::test_utils::test_helpers::{*, TestEnvironmentGuard};
     use crate::utils::ParaError;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-    fn create_test_config() -> Config {
-        crate::config::defaults::default_config()
-    }
 
     fn create_test_integrate_args() -> IntegrateArgs {
         IntegrateArgs {
@@ -556,9 +564,14 @@ mod tests {
 
     #[test]
     fn test_validate_integrate_args_abort_with_session() {
-        let mut args = create_test_integrate_args();
-        args.abort = true;
-        args.session = Some("test-session".to_string());
+        let args = IntegrateArgs {
+            session: Some("test-session".to_string()),
+            target: None,
+            strategy: None,
+            message: None,
+            dry_run: false,
+            abort: true,
+        };
         
         let result = validate_integrate_args(&args);
         
@@ -566,15 +579,20 @@ mod tests {
         if let Err(ParaError::InvalidArgs { message }) = result {
             assert!(message.contains("--abort cannot be used with other options"));
         } else {
-            panic!("Expected InvalidArgs error");
+            panic!("Expected InvalidArgs error, got: {:?}", result);
         }
     }
 
     #[test]
     fn test_validate_integrate_args_abort_with_target_branch() {
-        let mut args = create_test_integrate_args();
-        args.abort = true;
-        args.target = Some("master".to_string());
+        let args = IntegrateArgs {
+            session: None,
+            target: Some("master".to_string()),
+            strategy: None,
+            message: None,
+            dry_run: false,
+            abort: true,
+        };
         
         let result = validate_integrate_args(&args);
         
@@ -582,14 +600,18 @@ mod tests {
         if let Err(ParaError::InvalidArgs { message }) = result {
             assert!(message.contains("--abort cannot be used with other options"));
         } else {
-            panic!("Expected InvalidArgs error");
+            panic!("Expected InvalidArgs error, got: {:?}", result);
         }
     }
 
     #[test]
     fn test_execute_abort_no_integration() {
         let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        let (git_temp, _git_service) = setup_test_repo();
+        
+        // Use guard to ensure environment cleanup
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
+            .expect("Failed to set up test environment");
         
         let result = execute_abort();
         
@@ -597,7 +619,7 @@ mod tests {
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("No integration in progress"));
         } else {
-            panic!("Expected GitOperation error");
+            panic!("Expected GitOperation error, got: {:?}", result);
         }
     }
 
