@@ -197,6 +197,7 @@
     "Grep", 
     "LS",
     "Task",
+    "List",
     "WebFetch",
     "WebSearch",
     "TodoRead",

@@ -111,23 +111,6 @@ pub fn get_legacy_config_path() -> std::path::PathBuf {
     }
 }
 
-pub fn detect_wrapper_context() -> Option<(String, String)> {
-    if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
-        if term_program.as_str() == "vscode" {
-            return Some(("code".to_string(), "code".to_string()));
-        }
-    }
-
-    if std::env::var("VSCODE_INJECTION").is_ok() {
-        return Some(("code".to_string(), "code".to_string()));
-    }
-
-    if std::env::var("CURSOR").is_ok() {
-        return Some(("cursor".to_string(), "cursor".to_string()));
-    }
-
-    None
-}
 
 #[cfg(test)]
 mod tests {

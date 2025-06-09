@@ -1,5 +1,5 @@
 use super::defaults::{
-    default_config, detect_wrapper_context, get_available_ides, is_command_available,
+    default_config, get_available_ides, is_command_available,
 };
 use super::validation;
 use super::{Config, ConfigError, Result};
@@ -289,25 +289,7 @@ fn configure_ide_manually() -> Result<super::IdeConfig> {
 
 fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
     if ide_name == "claude" {
-        if let Some((wrapper_name, wrapper_command)) = detect_wrapper_context() {
-            println!(
-                "🔍 Detected that Claude Code is running inside {}",
-                wrapper_name
-            );
-
-            if Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt("Enable wrapper mode? (Recommended for Claude Code inside other IDEs)")
-                .default(true)
-                .interact()
-                .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-            {
-                return Ok(super::WrapperConfig {
-                    enabled: true,
-                    name: wrapper_name,
-                    command: wrapper_command,
-                });
-            }
-        } else if Confirm::with_theme(&ColorfulTheme::default())
+        if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt("Configure wrapper mode? (For when Claude Code runs inside another IDE)")
             .default(false)
             .interact()
@@ -425,14 +407,6 @@ pub fn run_quick_setup() -> Result<Config> {
         println!("✅ Detected IDE: {}", ide_name);
     }
 
-    if let Some((wrapper_name, wrapper_command)) = detect_wrapper_context() {
-        config.ide.wrapper = super::WrapperConfig {
-            enabled: true,
-            name: wrapper_name.clone(),
-            command: wrapper_command,
-        };
-        println!("✅ Detected wrapper: {}", wrapper_name);
-    }
 
     config.validate()?;
     super::ConfigManager::save(&config)?;
@@ -548,31 +522,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_wrapper_context_detection() {
-        // Test VS Code detection
-        std::env::set_var("TERM_PROGRAM", "vscode");
-        let result = detect_wrapper_context();
-        std::env::remove_var("TERM_PROGRAM");
-
-        if let Some((name, command)) = result {
-            assert_eq!(name, "code");
-            assert_eq!(command, "code");
-        }
-
-        // Test Cursor detection
-        std::env::set_var("CURSOR", "1");
-        let result = detect_wrapper_context();
-        std::env::remove_var("CURSOR");
-
-        if let Some((name, command)) = result {
-            assert_eq!(name, "cursor");
-            assert_eq!(command, "cursor");
-        }
-
-        // Test no wrapper detection
-        let _result = detect_wrapper_context();
-        // Should be None when no wrapper environment variables are set
-        // (unless running in an actual IDE environment)
-    }
 }
