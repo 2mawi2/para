@@ -228,12 +228,12 @@ fn get_last_modified_time(worktree_dir: &Path) -> Option<DateTime<Utc>> {
     fs::metadata(worktree_dir)
         .ok()
         .and_then(|metadata| metadata.modified().ok())
-        .map(|time| DateTime::<Utc>::from(time))
+        .map(DateTime::<Utc>::from)
 }
 
 fn extract_session_id_from_archived_branch(branch_name: &str) -> Option<String> {
     if let Some(stripped) = branch_name.strip_prefix("para/archived/") {
-        if let Some(session_part) = stripped.split('/').last() {
+        if let Some(session_part) = stripped.split('/').next_back() {
             return Some(session_part.to_string());
         }
     }

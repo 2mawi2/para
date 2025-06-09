@@ -61,9 +61,21 @@ impl<'a> IntegrationManager<'a> {
             )?;
         }
 
+        let final_branch_name = if let Some(ref target_name) = request.target_branch_name {
+            if target_name != &request.feature_branch {
+                let branch_manager = BranchManager::new(self.repo);
+                branch_manager.rename_branch(&request.feature_branch, target_name)?;
+                target_name.clone()
+            } else {
+                request.feature_branch.clone()
+            }
+        } else {
+            request.feature_branch.clone()
+        };
+
         if request.integrate {
             match self.integrate_branch(IntegrationRequest {
-                feature_branch: request.feature_branch.clone(),
+                feature_branch: final_branch_name.clone(),
                 base_branch: request.base_branch.clone(),
                 commit_message: request.commit_message,
             })? {
@@ -76,9 +88,8 @@ impl<'a> IntegrationManager<'a> {
                 IntegrationResult::Failed { error } => Err(ParaError::git_operation(error)),
             }
         } else {
-            let target_branch = request.target_branch_name.unwrap_or(request.feature_branch);
             Ok(FinishResult::Success {
-                final_branch: target_branch,
+                final_branch: final_branch_name,
             })
         }
     }
