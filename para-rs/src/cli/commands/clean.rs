@@ -1,5 +1,5 @@
 use crate::cli::parser::CleanArgs;
-use crate::core::git::{GitService, GitOperations};
+use crate::core::git::{GitOperations, GitService};
 use crate::utils::{ParaError, Result};
 use std::fs;
 use std::io::{self, Write};
@@ -101,14 +101,19 @@ impl SessionCleaner {
         if let Some(ref current_dir) = self.current_directory {
             for session in &self.sessions_discovered {
                 if current_dir.starts_with(&session.worktree_path) {
-                    println!("⚠️  Warning: You are currently inside session '{}' worktree.", session.session_id);
+                    println!(
+                        "⚠️  Warning: You are currently inside session '{}' worktree.",
+                        session.session_id
+                    );
                     println!("   Current directory: {}", current_dir.display());
                     println!("   Session worktree: {}", session.worktree_path.display());
                     println!();
-                    println!("💡 Cleaning this session will remove the directory you're currently in.");
+                    println!(
+                        "💡 Cleaning this session will remove the directory you're currently in."
+                    );
                     println!("   Please navigate to a different directory before cleaning.");
                     return Err(ParaError::invalid_args(
-                        "Cannot clean session while inside its worktree directory"
+                        "Cannot clean session while inside its worktree directory",
                     ));
                 }
             }
@@ -118,9 +123,8 @@ impl SessionCleaner {
 
     fn parse_session_info(&self, session_id: &str, state_dir: &Path) -> Result<SessionInfo> {
         let state_file = state_dir.join(format!("{}.state", session_id));
-        let content = fs::read_to_string(&state_file).map_err(|e| {
-            ParaError::file_operation(format!("Failed to read state file: {}", e))
-        })?;
+        let content = fs::read_to_string(&state_file)
+            .map_err(|e| ParaError::file_operation(format!("Failed to read state file: {}", e)))?;
 
         let parts: Vec<&str> = content.trim().split('|').collect();
         if parts.len() < 3 {
@@ -165,7 +169,7 @@ impl SessionCleaner {
         }
 
         let branch_manager = self.git_service.branch_manager();
-        
+
         for prefix in &["para", "pc"] {
             let archived = branch_manager.list_archived_branches(prefix)?;
             self.archived_branches.extend(archived);
@@ -212,14 +216,14 @@ impl SessionCleaner {
         }
 
         print!("This action cannot be undone. Continue? [y/N]: ");
-        io::stdout().flush().map_err(|e| {
-            ParaError::file_operation(format!("Failed to flush stdout: {}", e))
-        })?;
+        io::stdout()
+            .flush()
+            .map_err(|e| ParaError::file_operation(format!("Failed to flush stdout: {}", e)))?;
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input).map_err(|e| {
-            ParaError::file_operation(format!("Failed to read input: {}", e))
-        })?;
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|e| ParaError::file_operation(format!("Failed to read input: {}", e)))?;
 
         let response = input.trim().to_lowercase();
         Ok(response == "y" || response == "yes")
@@ -231,14 +235,18 @@ impl SessionCleaner {
         for session in &self.sessions_discovered {
             if let Err(e) = self.clean_session(session, &mut cleanup_summary) {
                 eprintln!("Failed to clean session {}: {}", session.session_id, e);
-                cleanup_summary.errors.push(format!("Session {}: {}", session.session_id, e));
+                cleanup_summary
+                    .errors
+                    .push(format!("Session {}: {}", session.session_id, e));
             }
         }
 
         for archived_branch in &self.archived_branches {
             if let Err(e) = self.clean_archived_branch(archived_branch, &mut cleanup_summary) {
                 eprintln!("Failed to clean archived branch {}: {}", archived_branch, e);
-                cleanup_summary.errors.push(format!("Branch {}: {}", archived_branch, e));
+                cleanup_summary
+                    .errors
+                    .push(format!("Branch {}: {}", archived_branch, e));
             }
         }
 
@@ -251,8 +259,16 @@ impl SessionCleaner {
     fn clean_session(&self, session: &SessionInfo, summary: &mut CleanupSummary) -> Result<()> {
         if session.exists_as_worktree {
             if let Err(e) = self.git_service.remove_worktree(&session.worktree_path) {
-                eprintln!("Warning: Failed to remove worktree {}: {}", session.worktree_path.display(), e);
-                if let Err(force_err) = self.git_service.worktree_manager().force_remove_worktree(&session.worktree_path) {
+                eprintln!(
+                    "Warning: Failed to remove worktree {}: {}",
+                    session.worktree_path.display(),
+                    e
+                );
+                if let Err(force_err) = self
+                    .git_service
+                    .worktree_manager()
+                    .force_remove_worktree(&session.worktree_path)
+                {
                     return Err(ParaError::git_operation(format!(
                         "Failed to force remove worktree {}: {}",
                         session.worktree_path.display(),
@@ -323,13 +339,19 @@ impl SessionCleaner {
         println!("  Worktrees removed: {}", summary.worktrees_removed);
         println!("  Branches removed: {}", summary.branches_removed);
         println!("  State files removed: {}", summary.state_files_removed);
-        
+
         if self.clean_backups {
-            println!("  Archived branches removed: {}", summary.archived_branches_removed);
+            println!(
+                "  Archived branches removed: {}",
+                summary.archived_branches_removed
+            );
         }
-        
+
         if summary.directories_removed > 0 {
-            println!("  Empty directories removed: {}", summary.directories_removed);
+            println!(
+                "  Empty directories removed: {}",
+                summary.directories_removed
+            );
         }
 
         if !summary.errors.is_empty() {
@@ -451,7 +473,7 @@ mod tests {
         let session_id = "test-session";
         let branch_name = "para/test-session";
         let worktree_path = temp_dir.path().join("subtrees").join("test-session");
-        
+
         create_mock_session_state(
             &temp_dir,
             session_id,
@@ -494,13 +516,21 @@ mod tests {
             &temp_dir,
             "session1",
             "para/session1",
-            &temp_dir.path().join("subtrees").join("session1").to_string_lossy(),
+            &temp_dir
+                .path()
+                .join("subtrees")
+                .join("session1")
+                .to_string_lossy(),
         );
         create_mock_session_state(
             &temp_dir,
             "session2",
             "para/session2",
-            &temp_dir.path().join("subtrees").join("session2").to_string_lossy(),
+            &temp_dir
+                .path()
+                .join("subtrees")
+                .join("session2")
+                .to_string_lossy(),
         );
 
         // Test discover_sessions by modifying the cleaner to use the test repo path
@@ -511,7 +541,7 @@ mod tests {
         assert_eq!(cleaner.sessions_discovered.len(), 2);
     }
 
-    #[test]  
+    #[test]
     fn test_discover_sessions_empty_state_dir() {
         let (_temp_dir, service) = setup_test_repo();
         let mut cleaner = SessionCleaner::new(service, false);
@@ -526,14 +556,18 @@ mod tests {
     #[test]
     fn test_discover_archived_branches() {
         let (_temp_dir, service) = setup_test_repo();
-        
-        let branch_manager = service.branch_manager();
-        let base_branch = service.get_current_branch().expect("Failed to get current branch");
 
-        service.create_branch("test-branch", &base_branch)
+        let branch_manager = service.branch_manager();
+        let base_branch = service
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        service
+            .create_branch("test-branch", &base_branch)
             .expect("Failed to create branch");
-        
-        branch_manager.switch_to_branch(&base_branch)
+
+        branch_manager
+            .switch_to_branch(&base_branch)
             .expect("Failed to checkout base branch");
 
         let _archived_name = branch_manager
@@ -603,13 +637,16 @@ mod tests {
         };
 
         cleaner.sessions_discovered.push(session_info);
-        
+
         // Simulate being inside the worktree directory
         cleaner.current_directory = Some(worktree_path.join("subdirectory"));
 
         let result = cleaner.check_current_directory_safety();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Cannot clean session while inside its worktree directory"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot clean session while inside its worktree directory"));
     }
 
     #[test]
@@ -630,7 +667,7 @@ mod tests {
         };
 
         cleaner.sessions_discovered.push(session_info);
-        
+
         // Simulate being outside the worktree directory
         cleaner.current_directory = Some(temp_dir.path().join("different-directory"));
 

@@ -152,7 +152,7 @@ mod tests {
     fn test_ide_manager_creation() {
         let config = create_test_config("test-ide", "echo");
         let manager = IdeManager::new(&config);
-        
+
         assert_eq!(manager.config.name, "test-ide");
         assert_eq!(manager.config.command, "echo");
     }
@@ -188,7 +188,7 @@ mod tests {
     fn test_launch_ide_function() {
         let temp_dir = TempDir::new().unwrap();
         let config = create_test_config("echo", "echo");
-        
+
         // This should succeed because echo is available and temp_dir exists
         // echo will just print the path and exit successfully
         let result = launch_ide(&config, temp_dir.path(), true);

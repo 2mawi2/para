@@ -86,7 +86,7 @@ impl SessionManager {
         for entry in entries {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_file() && path.extension().is_some_and(|ext| ext == "state") {
                 if let Some(stem) = path.file_stem() {
                     if let Some(session_name) = stem.to_str() {
@@ -124,11 +124,7 @@ impl SessionManager {
 }
 
 impl SessionState {
-    pub fn new(
-        name: String,
-        branch: String,
-        worktree_path: PathBuf,
-    ) -> Self {
+    pub fn new(name: String, branch: String, worktree_path: PathBuf) -> Self {
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         Self {
             name,
@@ -241,7 +237,7 @@ mod tests {
 
         let sessions = manager.list_sessions().unwrap();
         assert_eq!(sessions.len(), 2);
-        
+
         let names: Vec<&String> = sessions.iter().map(|s| &s.name).collect();
         assert!(names.contains(&&"session1".to_string()));
         assert!(names.contains(&&"session2".to_string()));

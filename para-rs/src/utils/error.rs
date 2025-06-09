@@ -205,6 +205,14 @@ impl From<String> for ParaError {
     }
 }
 
+impl From<crate::config::ConfigError> for ParaError {
+    fn from(error: crate::config::ConfigError) -> Self {
+        Self::Config {
+            message: error.to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
