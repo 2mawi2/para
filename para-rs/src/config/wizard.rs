@@ -1,8 +1,7 @@
-use super::defaults::{
-    default_config, get_available_ides, is_command_available,
-};
+use super::defaults::{default_config, get_available_ides, is_command_available};
 use super::validation;
 use super::{Config, ConfigError, Result};
+use crate::cli::parser::IntegrationStrategy;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
 pub fn run_config_wizard() -> Result<Config> {
@@ -407,7 +406,6 @@ pub fn run_quick_setup() -> Result<Config> {
         println!("✅ Detected IDE: {}", ide_name);
     }
 
-
     config.validate()?;
     super::ConfigManager::save(&config)?;
     println!("✅ Configuration saved with defaults!");
@@ -487,6 +485,7 @@ mod tests {
                 branch_prefix: "test-prefix".to_string(),
                 auto_stage: false,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d".to_string(),
@@ -521,5 +520,4 @@ mod tests {
             );
         }
     }
-
 }

@@ -88,6 +88,9 @@ pub struct FinishArgs {
 
 #[derive(Args, Debug)]
 pub struct IntegrateArgs {
+    /// Commit message for integration
+    pub message: Option<String>,
+
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
 
@@ -195,7 +198,7 @@ pub enum Shell {
     PowerShell,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum IntegrationStrategy {
     /// Create merge commit preserving feature branch history
     Merge,

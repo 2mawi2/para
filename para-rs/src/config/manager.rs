@@ -1,5 +1,6 @@
 use super::defaults::{default_config, get_config_file_path};
 use super::{Config, ConfigError, Result};
+use crate::cli::parser::IntegrationStrategy;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -126,6 +127,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: super::super::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
