@@ -22,15 +22,22 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 
     let repo_root = git_service.repository().root.clone();
 
+    let session_manager = SessionManager::new(&config);
     let session_name = match session_name {
         Some(name) => {
             validate_session_name(&name)?;
+            if session_manager.session_exists(&name) {
+                return Err(ParaError::session_exists(&name));
+            }
             name
         }
         None => {
-            // TODO: Get existing session names for collision avoidance
-            // For now, use simple friendly name generation
-            generate_friendly_name()
+            let existing_sessions = session_manager
+                .list_sessions()?
+                .into_iter()
+                .map(|s| s.name)
+                .collect::<Vec<String>>();
+            generate_unique_name(&existing_sessions)
         }
     };
 
@@ -50,7 +57,6 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
         .create_worktree(&branch_name, &session_path)
         .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-    let session_manager = SessionManager::new(&config);
     let session_state = SessionState::new(session_id.clone(), branch_name, session_path.clone());
     session_manager.save_state(&session_state)?;
 
