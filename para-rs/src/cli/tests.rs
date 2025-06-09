@@ -236,4 +236,84 @@ mod tests {
         };
         assert!(args.validate().is_err());
     }
+
+    #[test]
+    fn test_completion_sessions_command() {
+        let cli = Cli::try_parse_from(&["para", "_completion_sessions"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::CompletionSessions => {}
+            _ => panic!("Expected CompletionSessions command"),
+        }
+    }
+
+    #[test]
+    fn test_completion_branches_command() {
+        let cli = Cli::try_parse_from(&["para", "_completion_branches"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::CompletionBranches => {}
+            _ => panic!("Expected CompletionBranches command"),
+        }
+    }
+
+    #[test]
+    fn test_completion_commands_are_hidden() {
+        use clap::CommandFactory;
+        let app = Cli::command();
+        
+        let completion_sessions_cmd = app.find_subcommand("_completion_sessions").unwrap();
+        assert!(completion_sessions_cmd.is_hide_set());
+        
+        let completion_branches_cmd = app.find_subcommand("_completion_branches").unwrap();
+        assert!(completion_branches_cmd.is_hide_set());
+    }
+
+    #[test]
+    fn test_complete_command_args() {
+        let cli = Cli::try_parse_from(&[
+            "para",
+            "complete-command",
+            "--command-line",
+            "para start",
+            "--current-word",
+            "my-",
+            "--position",
+            "2",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::CompleteCommand(args) => {
+                assert_eq!(args.command_line, "para start");
+                assert_eq!(args.current_word, "my-");
+                assert_eq!(args.position, 2);
+                assert!(args.previous_word.is_none());
+            }
+            _ => panic!("Expected CompleteCommand command"),
+        }
+    }
+
+    #[test]
+    fn test_complete_command_with_previous_word() {
+        let cli = Cli::try_parse_from(&[
+            "para",
+            "complete-command",
+            "--command-line",
+            "para finish my message",
+            "--current-word",
+            "message",
+            "--previous-word",
+            "my",
+            "--position",
+            "3",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::CompleteCommand(args) => {
+                assert_eq!(args.command_line, "para finish my message");
+                assert_eq!(args.current_word, "message");
+                assert_eq!(args.previous_word, Some("my".to_string()));
+                assert_eq!(args.position, 3);
+            }
+            _ => panic!("Expected CompleteCommand command"),
+        }
+    }
 }
