@@ -26,12 +26,15 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
             validate_session_name(&name)?;
             name
         }
-        None => generate_friendly_name(),
+        None => {
+            // TODO: Get existing session names for collision avoidance
+            // For now, use simple friendly name generation
+            generate_friendly_name()
+        }
     };
 
     let branch_name = generate_branch_name(config.get_branch_prefix());
-    let session_timestamp = generate_timestamp();
-    let session_id = format!("{}_{}", session_name, session_timestamp);
+    let session_id = session_name.clone(); // Use Docker-style names without timestamp
 
     let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
     let session_path = subtrees_path
