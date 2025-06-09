@@ -4,6 +4,7 @@ use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
 };
 use crate::core::session::{SessionManager, SessionStatus};
+use crate::platform::{get_platform_manager, IdeConfig};
 use crate::utils::{ParaError, Result};
 use std::env;
 
@@ -76,6 +77,24 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             } else {
                 session_info.as_ref().map(|s| s.worktree_path.clone())
             };
+
+            let session_id = session_info
+                .as_ref()
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| feature_branch.clone());
+
+            let platform = get_platform_manager();
+            let ide_config = IdeConfig {
+                name: config.ide.name.clone(),
+                command: config.ide.command.clone(),
+                wrapper_enabled: config.ide.wrapper.enabled,
+                wrapper_name: config.ide.wrapper.name.clone(),
+                wrapper_command: config.ide.wrapper.command.clone(),
+            };
+            
+            if let Err(e) = platform.close_ide_window(&session_id, &ide_config.name) {
+                eprintln!("Warning: Failed to close IDE window: {}", e);
+            }
 
             if let Some(session_state) = session_info {
                 let session_manager = SessionManager::new(&config);
