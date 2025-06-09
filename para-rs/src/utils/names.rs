@@ -278,10 +278,8 @@ pub fn validate_branch_name(name: &str) -> Result<()> {
 pub fn extract_session_name_from_branch(branch_name: &str) -> Option<String> {
     if let Some(parts) = branch_name.strip_prefix("para/") {
         Some(parts.to_string())
-    } else if let Some(parts) = branch_name.strip_prefix("pc/") {
-        Some(parts.to_string())
-    } else {
-        None
+    } else { 
+        branch_name.strip_prefix("pc/").map(|parts| parts.to_string()) 
     }
 }
 
@@ -311,17 +309,13 @@ impl SessionInfo {
     }
 
     pub fn from_branch(branch_name: &str) -> Option<Self> {
-        if let Some(session_name) = extract_session_name_from_branch(branch_name) {
-            Some(Self {
+        extract_session_name_from_branch(branch_name).map(|session_name| Self {
                 name: session_name.clone(),
                 branch: branch_name.to_string(),
                 timestamp: extract_timestamp_from_name(&session_name)
                     .unwrap_or_else(|| "unknown".to_string()),
                 friendly_name: extract_friendly_name(&session_name),
             })
-        } else {
-            None
-        }
     }
 }
 

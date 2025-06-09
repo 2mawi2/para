@@ -113,9 +113,8 @@ pub fn get_legacy_config_path() -> std::path::PathBuf {
 
 pub fn detect_wrapper_context() -> Option<(String, String)> {
     if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
-        match term_program.as_str() {
-            "vscode" => return Some(("code".to_string(), "code".to_string())),
-            _ => {}
+        if term_program.as_str() == "vscode" { 
+            return Some(("code".to_string(), "code".to_string())) 
         }
     }
 

@@ -182,9 +182,7 @@ impl ConfigManager {
             }
         }
 
-        if let Err(e) = config.validate() {
-            return Err(e);
-        }
+        config.validate()?;
 
         Ok(fixes)
     }
