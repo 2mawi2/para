@@ -381,4 +381,216 @@ mod tests {
             .expect("Failed to load state");
         assert!(loaded.is_none());
     }
+
+    #[test]
+    fn test_integration_state_with_backup_info() {
+        let (_temp_dir, manager) = setup_state_manager();
+
+        let state = IntegrationState::new(
+            "backup-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Rebase,
+            None,
+        )
+        .with_backup_info(
+            "abc123def456".to_string(),
+            PathBuf::from("/original/dir"),
+            "backup-main-123456".to_string(),
+        );
+
+        assert_eq!(state.original_head_commit, Some("abc123def456".to_string()));
+        assert_eq!(state.original_working_dir, Some(PathBuf::from("/original/dir")));
+        assert_eq!(state.backup_branch, Some("backup-main-123456".to_string()));
+        assert_eq!(state.temp_branches.len(), 0);
+
+        manager
+            .save_integration_state(&state)
+            .expect("Failed to save state");
+
+        let loaded = manager
+            .load_integration_state()
+            .expect("Failed to load state")
+            .unwrap();
+
+        assert_eq!(loaded.original_head_commit, Some("abc123def456".to_string()));
+        assert_eq!(loaded.original_working_dir, Some(PathBuf::from("/original/dir")));
+        assert_eq!(loaded.backup_branch, Some("backup-main-123456".to_string()));
+    }
+
+    #[test]
+    fn test_add_temp_branch() {
+        let mut state = IntegrationState::new(
+            "temp-branch-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Merge,
+            None,
+        );
+
+        assert_eq!(state.temp_branches.len(), 0);
+
+        state.add_temp_branch("temp-rebase-123".to_string());
+        state.add_temp_branch("temp-merge-456".to_string());
+
+        assert_eq!(state.temp_branches.len(), 2);
+        assert!(state.temp_branches.contains(&"temp-rebase-123".to_string()));
+        assert!(state.temp_branches.contains(&"temp-merge-456".to_string()));
+    }
+
+    #[test]
+    fn test_integration_step_conflict_detection() {
+        let mut state = IntegrationState::new(
+            "conflict-step-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Rebase,
+            None,
+        );
+
+        // Initially started, no conflicts
+        assert!(!state.is_in_conflict());
+        assert!(!state.is_complete());
+
+        // Add conflicts
+        state.step = IntegrationStep::ConflictsDetected {
+            files: vec![PathBuf::from("src/test.rs")],
+        };
+        assert!(state.is_in_conflict());
+        assert!(!state.is_complete());
+
+        // Resolve conflicts
+        state.step = IntegrationStep::ConflictsResolved;
+        assert!(!state.is_in_conflict());
+        assert!(!state.is_complete());
+
+        // Complete integration
+        state.step = IntegrationStep::IntegrationComplete;
+        assert!(!state.is_in_conflict());
+        assert!(state.is_complete());
+    }
+
+    #[test]
+    fn test_integration_state_serialization_with_all_fields() {
+        let (_temp_dir, manager) = setup_state_manager();
+
+        let mut state = IntegrationState::new(
+            "full-test".to_string(),
+            "feature-branch".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Squash,
+            Some("Test commit".to_string()),
+        )
+        .with_backup_info(
+            "commit123".to_string(),
+            PathBuf::from("/test/dir"),
+            "backup-main-789".to_string(),
+        );
+
+        state.add_temp_branch("temp-1".to_string());
+        state.add_temp_branch("temp-2".to_string());
+
+        state.step = IntegrationStep::ConflictsDetected {
+            files: vec![PathBuf::from("file1.rs"), PathBuf::from("file2.rs")],
+        };
+
+        manager
+            .save_integration_state(&state)
+            .expect("Failed to save state");
+
+        let loaded = manager
+            .load_integration_state()
+            .expect("Failed to load state")
+            .unwrap();
+
+        assert_eq!(loaded.session_id, "full-test");
+        assert_eq!(loaded.feature_branch, "feature-branch");
+        assert_eq!(loaded.base_branch, "main");
+        assert_eq!(loaded.commit_message, Some("Test commit".to_string()));
+        assert_eq!(loaded.original_head_commit, Some("commit123".to_string()));
+        assert_eq!(loaded.original_working_dir, Some(PathBuf::from("/test/dir")));
+        assert_eq!(loaded.backup_branch, Some("backup-main-789".to_string()));
+        assert_eq!(loaded.temp_branches.len(), 2);
+        assert!(loaded.temp_branches.contains(&"temp-1".to_string()));
+        assert!(loaded.temp_branches.contains(&"temp-2".to_string()));
+        assert!(loaded.is_in_conflict());
+    }
+
+    #[test]
+    fn test_integration_state_validation() {
+        let state = IntegrationState::new(
+            "validation-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Rebase,
+            None,
+        );
+
+        // Test required fields
+        assert!(!state.session_id.is_empty());
+        assert!(!state.feature_branch.is_empty());
+        assert!(!state.base_branch.is_empty());
+        assert!(matches!(state.strategy, IntegrationStrategy::Rebase));
+        assert!(matches!(state.step, IntegrationStep::Started));
+        
+        // Test optional fields start as None/empty
+        assert_eq!(state.original_head_commit, None);
+        assert_eq!(state.original_working_dir, None);
+        assert_eq!(state.backup_branch, None);
+        assert_eq!(state.temp_branches.len(), 0);
+    }
+
+    #[test]
+    fn test_manager_error_handling() {
+        let temp_dir = TempDir::new().unwrap();
+        // Create manager with invalid path
+        let invalid_path = temp_dir.path().join("nonexistent").join("deeply").join("nested");
+        let manager = IntegrationStateManager::new(invalid_path);
+
+        let state = IntegrationState::new(
+            "error-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Merge,
+            None,
+        );
+
+        // Should create directories as needed
+        let result = manager.save_integration_state(&state);
+        assert!(result.is_ok());
+        assert!(manager.has_active_integration());
+    }
+
+    #[test]
+    fn test_state_persistence_across_manager_instances() {
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path().join(".para_state");
+
+        // Create first manager and save state
+        let manager1 = IntegrationStateManager::new(state_dir.clone());
+        let state = IntegrationState::new(
+            "persistence-test".to_string(),
+            "feature".to_string(),
+            "main".to_string(),
+            IntegrationStrategy::Merge,
+            None,
+        );
+
+        manager1
+            .save_integration_state(&state)
+            .expect("Failed to save state");
+
+        // Create second manager with same state dir
+        let manager2 = IntegrationStateManager::new(state_dir);
+        assert!(manager2.has_active_integration());
+
+        let loaded = manager2
+            .load_integration_state()
+            .expect("Failed to load state")
+            .unwrap();
+
+        assert_eq!(loaded.session_id, "persistence-test");
+        assert_eq!(loaded.feature_branch, "feature");
+        assert_eq!(loaded.base_branch, "main");
+    }
 }

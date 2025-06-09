@@ -202,7 +202,7 @@ pub enum Shell {
     PowerShell,
 }
 
-#[derive(ValueEnum, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IntegrationStrategy {
     /// Create merge commit preserving feature branch history
     Merge,

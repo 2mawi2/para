@@ -511,3 +511,146 @@ pub fn execute_abort() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::parser::IntegrateArgs;
+    use crate::config::Config;
+    use crate::core::session::{IntegrationState};
+    use crate::utils::ParaError;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn create_test_config() -> Config {
+        crate::config::defaults::default_config()
+    }
+
+    fn create_test_integrate_args() -> IntegrateArgs {
+        IntegrateArgs {
+            session: None,
+            target: None,
+            strategy: None,
+            message: None,
+            dry_run: false,
+            abort: false,
+        }
+    }
+
+    fn create_test_integration_state() -> IntegrationState {
+        IntegrationState::new(
+            "test-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            IntegrationStrategy::Rebase,
+            Some("Test commit".to_string()),
+        )
+    }
+
+    #[test]
+    fn test_validate_integrate_args_valid() {
+        let args = create_test_integrate_args();
+        let result = validate_integrate_args(&args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_integrate_args_abort_with_session() {
+        let mut args = create_test_integrate_args();
+        args.abort = true;
+        args.session = Some("test-session".to_string());
+        
+        let result = validate_integrate_args(&args);
+        
+        assert!(result.is_err());
+        if let Err(ParaError::InvalidArgs { message }) = result {
+            assert!(message.contains("--abort cannot be used with other options"));
+        } else {
+            panic!("Expected InvalidArgs error");
+        }
+    }
+
+    #[test]
+    fn test_validate_integrate_args_abort_with_target_branch() {
+        let mut args = create_test_integrate_args();
+        args.abort = true;
+        args.target = Some("master".to_string());
+        
+        let result = validate_integrate_args(&args);
+        
+        assert!(result.is_err());
+        if let Err(ParaError::InvalidArgs { message }) = result {
+            assert!(message.contains("--abort cannot be used with other options"));
+        } else {
+            panic!("Expected InvalidArgs error");
+        }
+    }
+
+    #[test]
+    fn test_execute_abort_no_integration() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        
+        let result = execute_abort();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("No integration in progress"));
+        } else {
+            panic!("Expected GitOperation error");
+        }
+    }
+
+    #[test]
+    fn test_integration_state_creation_with_backup() {
+        let state = IntegrationState::new(
+            "test-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            IntegrationStrategy::Rebase,
+            Some("Test commit".to_string()),
+        )
+        .with_backup_info(
+            "abc123def456".to_string(),
+            PathBuf::from("/test/path"),
+            "backup-master-123456".to_string(),
+        );
+        
+        assert_eq!(state.session_id, "test-session");
+        assert_eq!(state.feature_branch, "feature-branch");
+        assert_eq!(state.base_branch, "master");
+        assert_eq!(state.original_head_commit, Some("abc123def456".to_string()));
+        assert_eq!(state.original_working_dir, Some(PathBuf::from("/test/path")));
+        assert_eq!(state.backup_branch, Some("backup-master-123456".to_string()));
+    }
+
+    #[test]
+    fn test_integrate_args_structure() {
+        let args = IntegrateArgs {
+            session: None,
+            target: None,
+            strategy: None,
+            message: None,
+            dry_run: false,
+            abort: false,
+        };
+        
+        assert_eq!(args.session, None);
+        assert_eq!(args.target, None);
+        assert_eq!(args.strategy, None);
+        assert_eq!(args.message, None);
+        assert!(!args.dry_run);
+        assert!(!args.abort);
+    }
+
+    #[test]
+    fn test_integration_strategy_enum() {
+        let rebase = IntegrationStrategy::Rebase;
+        let merge = IntegrationStrategy::Merge;
+        let squash = IntegrationStrategy::Squash;
+        
+        assert!(matches!(rebase, IntegrationStrategy::Rebase));
+        assert!(matches!(merge, IntegrationStrategy::Merge));
+        assert!(matches!(squash, IntegrationStrategy::Squash));
+    }
+}

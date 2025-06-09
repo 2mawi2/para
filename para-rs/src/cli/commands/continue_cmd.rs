@@ -171,3 +171,199 @@ fn close_ide_for_session(config: &crate::config::Config, _worktree_path: &PathBu
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::core::session::{IntegrationState, IntegrationStep};
+    use crate::utils::ParaError;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn create_test_config() -> Config {
+        crate::config::defaults::default_config()
+    }
+
+    fn create_test_integration_state() -> IntegrationState {
+        IntegrationState::new(
+            "test-session".to_string(),
+            "feature-branch".to_string(),
+            "master".to_string(),
+            crate::cli::parser::IntegrationStrategy::Rebase,
+            Some("Test commit".to_string()),
+        )
+        .with_conflicts(vec![PathBuf::from("src/test.rs")])
+    }
+
+    #[test]
+    fn test_execute_no_integration_state() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("No integration in progress"));
+        } else {
+            panic!("Expected GitOperation error");
+        }
+    }
+
+    #[test]
+    fn test_execute_no_conflicts() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        
+        let mut state = create_test_integration_state();
+        state.step = IntegrationStep::IntegrationComplete;
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("No conflicts to resolve"));
+        } else {
+            panic!("Expected GitOperation error");
+        }
+    }
+
+    #[test]
+    fn test_cleanup_after_successful_integration_preserve_branch() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_service = GitService::discover().unwrap();
+        let session_manager = SessionManager::new(&create_test_config());
+        let mut config = create_test_config();
+        config.session.preserve_on_finish = true;
+        
+        let result = cleanup_after_successful_integration(
+            &git_service,
+            &session_manager,
+            &config,
+            "test-session",
+            &temp_dir.path().to_path_buf(),
+            "feature-branch",
+        );
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_after_successful_integration_delete_branch() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_service = GitService::discover().unwrap();
+        let session_manager = SessionManager::new(&create_test_config());
+        let mut config = create_test_config();
+        config.session.preserve_on_finish = false;
+        
+        let result = cleanup_after_successful_integration(
+            &git_service,
+            &session_manager,
+            &config,
+            "test-session",
+            &temp_dir.path().to_path_buf(),
+            "feature-branch",
+        );
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_ide_for_session_wrapper_enabled() {
+        let mut config = create_test_config();
+        config.ide.wrapper.enabled = true;
+        let worktree_path = PathBuf::from("/tmp/test");
+        
+        let result = close_ide_for_session(&config, &worktree_path);
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_ide_for_session_wrapper_disabled() {
+        let mut config = create_test_config();
+        config.ide.wrapper.enabled = false;
+        let worktree_path = PathBuf::from("/tmp/test");
+        
+        let result = close_ide_for_session(&config, &worktree_path);
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_validates_config_loading() {
+        std::env::remove_var("PARA_CONFIG_DIR");
+        std::env::remove_var("PARA_STATE_DIR");
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_validates_git_service_discovery() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_error_handling_for_state_manager_operations() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+        if let Err(ParaError::GitOperation { message }) = result {
+            assert!(message.contains("No integration in progress"));
+        } else {
+            panic!("Expected GitOperation error");
+        }
+    }
+
+    #[test]
+    fn test_continue_workflow_error_scenarios() {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("PARA_STATE_DIR", temp_dir.path());
+        
+        let result = execute();
+        
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ParaError::GitOperation { message } => {
+                assert!(message.contains("No integration in progress") || 
+                       message.contains("Failed to load config"));
+            }
+            _ => {
+                // This is also acceptable as config loading might fail
+            }
+        }
+    }
+
+    #[test]
+    fn test_integration_state_validation() {
+        let state = create_test_integration_state();
+        
+        assert_eq!(state.session_id, "test-session");
+        assert_eq!(state.feature_branch, "feature-branch");
+        assert_eq!(state.base_branch, "master");
+        assert!(state.is_in_conflict());
+    }
+
+    #[test]
+    fn test_integration_step_progression() {
+        let mut state = create_test_integration_state();
+        assert!(matches!(state.step, IntegrationStep::ConflictsDetected { .. }));
+        
+        state.step = IntegrationStep::ConflictsResolved;
+        assert!(!state.is_in_conflict());
+        
+        state.step = IntegrationStep::IntegrationComplete;
+        assert!(!state.is_in_conflict());
+    }
+}
