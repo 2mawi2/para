@@ -2,15 +2,19 @@ use crate::utils::error::Result;
 use std::path::{Path, PathBuf};
 
 pub mod branch;
+pub mod conflict;
 pub mod integration;
 pub mod repository;
+pub mod strategy;
 pub mod worktree;
 
 pub use branch::{BranchInfo, BranchManager};
+pub use conflict::{ConflictInfo, ConflictManager, ConflictResolution, ConflictType};
 pub use integration::{
     FinishRequest, FinishResult, IntegrationManager, IntegrationRequest, IntegrationResult,
 };
 pub use repository::GitRepository;
+pub use strategy::{StrategyManager, StrategyRequest, StrategyResult};
 pub use worktree::{WorktreeInfo, WorktreeManager};
 
 pub trait GitOperations {
@@ -146,6 +150,14 @@ impl GitService {
 
     pub fn integration_manager(&self) -> IntegrationManager {
         IntegrationManager::new(&self.repo)
+    }
+
+    pub fn strategy_manager(&self) -> StrategyManager {
+        StrategyManager::new(&self.repo)
+    }
+
+    pub fn conflict_manager(&self) -> ConflictManager {
+        ConflictManager::new(&self.repo)
     }
 
     pub fn get_repo_info(&self) -> Result<RepoInfo> {

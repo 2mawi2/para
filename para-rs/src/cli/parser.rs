@@ -85,11 +85,20 @@ pub struct FinishArgs {
 
 #[derive(Args, Debug)]
 pub struct IntegrateArgs {
-    /// Commit message for the integration
-    pub message: String,
-
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
+
+    /// Integration strategy to use
+    #[arg(long, value_enum, help = "Choose integration strategy")]
+    pub strategy: Option<IntegrationStrategy>,
+
+    /// Target branch to integrate into
+    #[arg(long, help = "Integrate into specific target branch")]
+    pub target: Option<String>,
+
+    /// Preview integration without executing
+    #[arg(long, help = "Preview integration without executing")]
+    pub dry_run: bool,
 }
 
 #[derive(Args, Debug)]
@@ -164,6 +173,16 @@ pub enum Shell {
     PowerShell,
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+pub enum IntegrationStrategy {
+    /// Create merge commit preserving feature branch history
+    Merge,
+    /// Combine all feature branch commits into single commit
+    Squash,
+    /// Replay feature branch commits on target branch
+    Rebase,
+}
+
 impl StartArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         if let Some(ref name) = self.name {
@@ -214,7 +233,7 @@ impl Commands {
                 "Examples:\n  para finish \"Implement user auth\"\n  para finish \"Add login form\" --branch feature-login\n  para finish \"Complete auth\" --integrate"
             }
             Commands::Integrate(_) => {
-                "Examples:\n  para integrate \"Merge auth feature\"\n  para integrate \"Add user system\" session-123"
+                "Examples:\n  para integrate\n  para integrate session-123\n  para integrate --strategy merge\n  para integrate --target main --dry-run"
             }
             Commands::Cancel(_) => {
                 "Examples:\n  para cancel\n  para cancel session-123"
