@@ -41,7 +41,7 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
         let env = git_service.validate_session_environment(&current_dir)?;
         match env {
             SessionEnvironment::Worktree { branch, .. } => {
-                let session_name = extract_session_from_branch(&branch)?;
+                let session_name = find_session_by_branch(&session_manager, &branch)?;
                 let _state = session_manager.load_state(&session_name)?;
                 (session_name, branch, current_dir)
             }
@@ -297,19 +297,18 @@ fn close_ide_for_session(config: &crate::config::Config, worktree_path: &PathBuf
     Ok(())
 }
 
-fn extract_session_from_branch(branch: &str) -> Result<String> {
-    if let Some(stripped) = branch.strip_prefix("pc/") {
-        if let Some(pos) = stripped.rfind('-') {
-            Ok(stripped[pos + 1..].to_string())
-        } else {
-            Ok(stripped.to_string())
+fn find_session_by_branch(session_manager: &SessionManager, branch: &str) -> Result<String> {
+    let sessions = session_manager.list_sessions()?;
+    
+    for session in sessions {
+        if session.branch == branch {
+            return Ok(session.name);
         }
-    } else {
-        Err(ParaError::invalid_args(format!(
-            "Branch '{}' is not a valid session branch",
-            branch
-        )))
     }
+    
+    Err(ParaError::session_not_found(format!(
+        "No session found for branch '{}'", branch
+    )))
 }
 
 fn validate_integrate_args(args: &IntegrateArgs) -> Result<()> {

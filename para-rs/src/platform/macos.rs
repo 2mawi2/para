@@ -48,14 +48,18 @@ impl PlatformManager for MacOSPlatform {
             _ => return Ok(()), // Only support Cursor and VS Code
         };
 
-        // Different search strategies based on IDE (matching legacy implementation exactly)
+        // Different search strategies based on IDE (supports both Docker-style and timestamp formats)
         let search_fragment = if actual_ide == "cursor" {
-            // Cursor shows titles like "fish — session-name-20250607-123456"
-            // Extract just the session name part (before timestamp) for more flexible matching
-            // Session ID format: session-name-YYYYMMDD-HHMMSS
-            // Use sed equivalent: remove -YYYYMMDD-HHMMSS pattern
-            let re = regex::Regex::new(r"-\d{8}-\d{6}$").unwrap();
-            re.replace(session_id, "").to_string()
+            // Check if it's a timestamp-based session (legacy format)
+            let timestamp_regex = regex::Regex::new(r"-\d{8}-\d{6}$").unwrap();
+            if timestamp_regex.is_match(session_id) {
+                // Legacy format: remove timestamp for Cursor window matching
+                // Cursor shows titles like "fish — session-name-20250607-123456"
+                timestamp_regex.replace(session_id, "").to_string()
+            } else {
+                // Docker-style format: use as-is (e.g., "eager_phoenix")
+                session_id.to_string()
+            }
         } else {
             // VS Code shows full worktree directory name in title
             session_id.to_string()
