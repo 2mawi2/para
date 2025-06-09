@@ -123,9 +123,9 @@ Para supports dispatching multiple agents to work on different tasks simultaneou
 
 ```bash
 # Dispatch agents with task files for parallel development
-para dispatch task1-agent --file TASK_1_IMPLEMENTATION.md --d
-para dispatch task2-agent --file TASK_2_IMPLEMENTATION.md --d
-para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md --d
+para dispatch task1-agent --file TASK_1_IMPLEMENTATION.md -d
+para dispatch task2-agent --file TASK_2_IMPLEMENTATION.md -d
+para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md -d
 ```
 
 **Key Concepts**:
