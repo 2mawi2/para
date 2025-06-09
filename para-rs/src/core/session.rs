@@ -5,9 +5,11 @@ use std::fs;
 use std::path::PathBuf;
 
 pub mod archive;
+pub mod integration_state;
 pub mod recovery;
 
 pub use archive::{ArchiveEntry, ArchiveManager, ArchiveStats};
+pub use integration_state::{IntegrationState, IntegrationStateManager, IntegrationStep};
 pub use recovery::{RecoveryInfo, RecoveryOptions, RecoveryResult, SessionRecovery};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,6 +176,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: crate::cli::parser::IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

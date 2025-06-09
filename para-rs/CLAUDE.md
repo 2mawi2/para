@@ -91,6 +91,44 @@ src/
 - Interactive wizard using `dialoguer` for setup
 - Validation layer to ensure config integrity
 
+### Configuration File Locations
+The Rust implementation stores config in platform-specific directories:
+- **macOS:** `~/Library/Application Support/para-rs/config.json`
+- **Linux/Unix:** `~/.config/para-rs/config.json`
+- **Windows:** `%APPDATA%\para-rs\config.json`
+
+Configuration format (JSON):
+```json
+{
+  "ide": {
+    "name": "claude",
+    "command": "claude",
+    "user_data_dir": null,
+    "wrapper": {
+      "enabled": true,
+      "name": "cursor",
+      "command": "cursor"
+    }
+  },
+  "directories": {
+    "subtrees_dir": "subtrees/pc",
+    "state_dir": ".para_state"
+  },
+  "git": {
+    "branch_prefix": "pc",
+    "auto_stage": true,
+    "auto_commit": true
+  },
+  "session": {
+    "default_name_format": "%Y%m%d-%H%M%S",
+    "preserve_on_finish": true,
+    "auto_cleanup_days": 30
+  }
+}
+```
+
+**Important for dispatch command:** Only Claude Code (standalone or wrapper mode) is supported.
+
 ### IDE Integration
 - Same IDE support as shell version (Claude Code, Cursor, VS Code)
 - Environment detection and configuration

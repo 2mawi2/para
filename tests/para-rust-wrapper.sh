@@ -21,9 +21,9 @@ fi
 
 if [ -z "$CONFIG_FILE" ]; then
     if [ "$(uname)" = "Darwin" ]; then
-        CONFIG_FILE="$HOME/Library/Application Support/para/config.json"
+        CONFIG_FILE="$HOME/Library/Application Support/para-rs/config.json"
     else
-        CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/para/config.json"
+        CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/para-rs/config.json"
     fi
 fi
 

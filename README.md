@@ -140,6 +140,20 @@ para config show         # Show current settings
 para config edit         # Edit config file
 ```
 
+### Configuration File Locations
+
+Para stores configuration files in platform-specific locations:
+
+**Shell Implementation:**
+- `~/.config/para/config` (shell script format)
+
+**Rust Implementation:**
+- **macOS:** `~/Library/Application Support/para-rs/config.json`
+- **Linux:** `~/.config/para-rs/config.json`
+- **Windows:** `%APPDATA%\para-rs\config.json`
+
+The Rust implementation uses JSON format and is automatically created on first run.
+
 ## Example Workflows
 
 ### Regular Parallel Development

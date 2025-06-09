@@ -65,7 +65,7 @@ pub struct DispatchArgs {
     pub file: Option<PathBuf>,
 
     /// Skip IDE permission warnings (dangerous)
-    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
+    #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
 }
 
@@ -88,6 +88,9 @@ pub struct FinishArgs {
 
 #[derive(Args, Debug)]
 pub struct IntegrateArgs {
+    /// Commit message for integration
+    pub message: Option<String>,
+
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
 
@@ -195,7 +198,7 @@ pub enum Shell {
     PowerShell,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum IntegrationStrategy {
     /// Create merge commit preserving feature branch history
     Merge,
@@ -218,7 +221,7 @@ impl DispatchArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
             (None, None, None) => Err(crate::utils::ParaError::invalid_args(
-                "Must provide either a prompt, session name, or file",
+                "dispatch requires a prompt text or file path",
             )),
             _ => Ok(()),
         }

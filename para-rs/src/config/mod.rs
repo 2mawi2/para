@@ -1,3 +1,4 @@
+use crate::cli::parser::IntegrationStrategy;
 use serde::{Deserialize, Serialize};
 
 pub mod defaults;
@@ -42,6 +43,7 @@ pub struct GitConfig {
     pub branch_prefix: String,
     pub auto_stage: bool,
     pub auto_commit: bool,
+    pub default_integration_strategy: IntegrationStrategy,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -144,5 +146,9 @@ impl Config {
     #[allow(dead_code)]
     pub fn get_auto_cleanup_days(&self) -> Option<u32> {
         self.session.auto_cleanup_days
+    }
+
+    pub fn get_default_integration_strategy(&self) -> IntegrationStrategy {
+        self.git.default_integration_strategy.clone()
     }
 }

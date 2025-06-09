@@ -343,6 +343,7 @@ impl CachedDynamicCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use tempfile::TempDir;
 
@@ -366,6 +367,7 @@ mod tests {
                 branch_prefix: "pc".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

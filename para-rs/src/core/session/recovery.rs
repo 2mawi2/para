@@ -1,3 +1,4 @@
+use crate::cli::parser::IntegrationStrategy;
 use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::{SessionManager, SessionState};
@@ -323,6 +324,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
