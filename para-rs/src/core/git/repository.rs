@@ -72,6 +72,24 @@ impl GitRepository {
         execute_git_command(self, &["rev-parse", "--abbrev-ref", "HEAD"])
     }
 
+    pub fn get_main_branch(&self) -> Result<String> {
+        let default_branch = execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"]);
+        if let Ok(branch_ref) = default_branch {
+            if let Some(branch_name) = branch_ref.strip_prefix("refs/remotes/origin/") {
+                return Ok(branch_name.to_string());
+            }
+        }
+
+        let branches = ["main", "master", "develop"];
+        for branch in &branches {
+            if execute_git_command(self, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{}", branch)]).is_ok() {
+                return Ok(branch.to_string());
+            }
+        }
+
+        Ok("main".to_string())
+    }
+
     pub fn has_uncommitted_changes(&self) -> Result<bool> {
         let output = execute_git_command(self, &["status", "--porcelain"])?;
         Ok(!output.trim().is_empty())
