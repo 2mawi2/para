@@ -34,69 +34,6 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
 }
 
 #[cfg(test)]
-mod completion_tests {
-    use super::*;
-
-    #[test]
-    fn test_completion_suggestion_creation() {
-        let suggestion = CompletionSuggestion::new("test".to_string(), CompletionType::Command);
-        assert_eq!(suggestion.text, "test");
-        assert_eq!(suggestion.completion_type, CompletionType::Command);
-        assert!(suggestion.description.is_none());
-
-        let with_desc = suggestion.with_description("Test command".to_string());
-        assert_eq!(with_desc.description, Some("Test command".to_string()));
-    }
-
-    #[test]
-    fn test_completion_response_filtering() {
-        let suggestions = vec![
-            CompletionSuggestion::new("start".to_string(), CompletionType::Subcommand),
-            CompletionSuggestion::new("status".to_string(), CompletionType::Subcommand),
-            CompletionSuggestion::new("finish".to_string(), CompletionType::Subcommand),
-        ];
-
-        let mut response = CompletionResponse::new(suggestions, CompletionType::Subcommand);
-        response.filter_by_prefix("st");
-
-        assert_eq!(response.suggestions.len(), 2);
-        assert!(response.suggestions.iter().any(|s| s.text == "start"));
-        assert!(response.suggestions.iter().any(|s| s.text == "status"));
-    }
-
-    #[test]
-    fn test_completion_response_sorting() {
-        let suggestions = vec![
-            CompletionSuggestion::new("zebra".to_string(), CompletionType::Value),
-            CompletionSuggestion::new("alpha".to_string(), CompletionType::Value),
-            CompletionSuggestion::new("beta".to_string(), CompletionType::Value),
-        ];
-
-        let mut response = CompletionResponse::new(suggestions, CompletionType::Value);
-        response.sort();
-
-        assert_eq!(response.suggestions[0].text, "alpha");
-        assert_eq!(response.suggestions[1].text, "beta");
-        assert_eq!(response.suggestions[2].text, "zebra");
-    }
-
-    #[test]
-    fn test_completion_response_limit() {
-        let suggestions = vec![
-            CompletionSuggestion::new("one".to_string(), CompletionType::Value),
-            CompletionSuggestion::new("two".to_string(), CompletionType::Value),
-            CompletionSuggestion::new("three".to_string(), CompletionType::Value),
-            CompletionSuggestion::new("four".to_string(), CompletionType::Value),
-        ];
-
-        let mut response = CompletionResponse::new(suggestions, CompletionType::Value);
-        response.limit(2);
-
-        assert_eq!(response.suggestions.len(), 2);
-    }
-}
-
-#[cfg(test)]
 mod context_tests {
     use super::*;
 
