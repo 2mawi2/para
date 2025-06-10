@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod platform_tests {
-    use crate::platform::{get_platform_manager, PlatformManager};
+    use crate::platform::{get_platform_manager};
 
     #[test]
     fn test_platform_manager_creation() {
@@ -28,20 +28,6 @@ mod platform_tests {
 
             // Test unsupported IDE
             let result = platform.close_ide_window("test-session", "unsupported");
-            assert!(result.is_ok());
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    mod generic_tests {
-        use crate::platform::{GenericPlatform, PlatformManager};
-
-        #[test]
-        fn test_generic_platform() {
-            let platform = GenericPlatform;
-
-            // Generic platform should always succeed
-            let result = platform.close_ide_window("test-session", "cursor");
             assert!(result.is_ok());
         }
     }

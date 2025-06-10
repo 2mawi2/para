@@ -127,10 +127,6 @@ impl IdeManager {
             || std::env::var("CURSOR").is_ok()
     }
 
-    pub fn get_config(&self) -> &IdeConfig {
-        &self.config
-    }
-
     fn is_test_mode(&self) -> bool {
         // Check environment variable like shell version does
         if let Ok(ide_cmd) = std::env::var("IDE_CMD") {
@@ -317,15 +313,6 @@ impl IdeManager {
     }
 }
 
-pub fn launch_ide(config: &Config, path: &Path, skip_permissions: bool) -> Result<()> {
-    let manager = IdeManager::new(config);
-    manager.launch(path, skip_permissions)
-}
-
-pub fn validate_ide_availability(config: &Config) -> Result<()> {
-    let manager = IdeManager::new(config);
-    manager.validate_ide_availability()
-}
 
 #[cfg(test)]
 mod tests {
@@ -409,17 +396,6 @@ mod tests {
         if let Some(cmd) = old_ide_cmd {
             std::env::set_var("IDE_CMD", cmd);
         }
-    }
-
-    #[test]
-    fn test_launch_ide_function() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = create_test_config("echo", "echo");
-
-        // This should succeed because echo is available and temp_dir exists
-        // echo will just print the path and exit successfully
-        let result = launch_ide(&config, temp_dir.path(), true);
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -507,15 +483,6 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Claude Code requires supported wrapper mode (cursor or code)"));
-    }
-
-    #[test]
-    fn test_validate_ide_availability_function() {
-        let config = create_test_config("echo", "echo");
-        assert!(validate_ide_availability(&config).is_ok());
-
-        let config = create_test_config("nonexistent", "nonexistent-command-12345");
-        assert!(validate_ide_availability(&config).is_err());
     }
 
     #[test]
