@@ -12,11 +12,11 @@ pub fn execute(args: CancelArgs) -> Result<()> {
 
     let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(config.clone())?;
+    let session_manager = SessionManager::new(&config);
 
     let session_id = detect_session_id(&args, &git_service, &session_manager)?;
 
-    let session_state = session_manager.load_session(&session_id)?;
+    let session_state = session_manager.load_state(&session_id)?;
 
     let has_uncommitted = git_service.repository().has_uncommitted_changes()?;
     if has_uncommitted {
@@ -29,11 +29,10 @@ pub fn execute(args: CancelArgs) -> Result<()> {
     git_service.remove_worktree(&session_state.worktree_path)?;
 
     let mut session_manager = session_manager;  // Make mutable for update
-    let session_id = session_manager.generate_session_id(&session_state.name);
-    session_manager.update_session_status(&session_id, SessionStatus::Cancelled)?;
+    session_manager.delete_state(&session_state.name)?;
 
     let platform = get_platform_manager();
-    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+    if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
         eprintln!("Warning: Failed to close IDE window: {}", e);
     }
 
@@ -68,15 +67,10 @@ fn detect_session_id(
 
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
-            if let Ok(session) = session_manager.auto_detect_session() {
-                return Ok(session.id);
-            }
-            
-            let sessions = session_manager.list_all_sessions()?;
-            for summary in sessions {
-                let session = session_manager.load_session(&summary.id)?;
+            let sessions = session_manager.list_sessions()?;
+            for session in sessions {
                 if session.branch == branch && session.worktree_path == current_dir {
-                    return Ok(session.id);
+                    return Ok(session.name);
                 }
             }
             Err(ParaError::session_not_found(format!(

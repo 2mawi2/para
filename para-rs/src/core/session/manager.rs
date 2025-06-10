@@ -69,15 +69,15 @@ impl SessionManager {
 
         let session_state = SessionState::new(name, branch_name, worktree_path);
 
-        self.save_session(&session_state)?;
+        self.save_state(&session_state)?;
 
         Ok(session_state)
     }
 
-    pub fn load_session(&self, session_id: &str) -> Result<SessionState> {
-        let state_file = self.state_dir.join(format!("{}.json", session_id));
+    pub fn load_state(&self, session_name: &str) -> Result<SessionState> {
+        let state_file = self.state_dir.join(format!("{}.state", session_name));
         if !state_file.exists() {
-            return Err(ParaError::session_not_found(session_id));
+            return Err(ParaError::session_not_found(session_name));
         }
 
         let content = fs::read_to_string(&state_file).map_err(|e| {
@@ -99,11 +99,14 @@ impl SessionManager {
         Ok(session)
     }
 
-    pub fn save_session(&self, session: &SessionState) -> Result<()> {
-        let session_id = self.generate_session_id(&session.name);
-        let state_file = self.state_dir.join(format!("{}.json", session_id));
+    pub fn save_state(&self, session: &SessionState) -> Result<()> {
+        if let Some(parent) = self.state_dir.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::create_dir_all(&self.state_dir)?;
+
+        let state_file = self.state_dir.join(format!("{}.state", session.name));
         let json = serde_json::to_string_pretty(session)?;
-        
         fs::write(&state_file, json).map_err(|e| {
             ParaError::file_operation(format!(
                 "Failed to save session state to {}: {}",
@@ -115,8 +118,8 @@ impl SessionManager {
         Ok(())
     }
 
-    pub fn delete_session(&self, session_id: &str) -> Result<()> {
-        let state_file = self.state_dir.join(format!("{}.json", session_id));
+    pub fn delete_state(&self, session_name: &str) -> Result<()> {
+        let state_file = self.state_dir.join(format!("{}.state", session_name));
         if state_file.exists() {
             fs::remove_file(&state_file).map_err(|e| {
                 ParaError::file_operation(format!(
@@ -126,7 +129,6 @@ impl SessionManager {
                 ))
             })?;
         }
-
         Ok(())
     }
 
@@ -142,11 +144,12 @@ impl SessionManager {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "state") {
                 if let Some(stem) = path.file_stem() {
-                    if let Some(session_id) = stem.to_str() {
-                        if let Ok(session) = self.load_session(session_id) {
-                            sessions.push(session);
+                    if let Some(session_name) = stem.to_str() {
+                        match self.load_state(session_name) {
+                            Ok(state) => sessions.push(state),
+                            Err(_) => continue, // Skip corrupted state files
                         }
                     }
                 }
@@ -193,18 +196,18 @@ impl SessionManager {
         Err(ParaError::session_not_found("auto-detected"))
     }
 
-    pub fn update_session_status(&mut self, session_id: &str, status: SessionStatus) -> Result<()> {
-        let mut session = self.load_session(session_id)?;
+    pub fn update_session_status(&mut self, session_name: &str, status: SessionStatus) -> Result<()> {
+        let mut session = self.load_state(session_name)?;
         session.update_status(status);
-        self.save_session(&session)
+        self.save_state(&session)
     }
 
-    pub fn session_exists(&self, session_id: &str) -> bool {
-        let state_file = self.state_dir.join(format!("{}.json", session_id));
+    pub fn session_exists(&self, session_name: &str) -> bool {
+        let state_file = self.state_dir.join(format!("{}.state", session_name));
         state_file.exists()
     }
 
-    fn generate_session_id(&self, name: &str) -> String {
+    pub fn generate_session_id(&self, name: &str) -> String {
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
         format!("{}_{}", name, timestamp)
     }
@@ -236,6 +239,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: crate::cli::parser::IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -304,10 +308,9 @@ mod tests {
         let mut manager = SessionManager::new(config).unwrap();
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
-        let session_id = manager.generate_session_id(&session.name);
-        assert!(manager.session_exists(&session_id));
+        assert!(manager.session_exists(&session.name));
 
-        let loaded_session = manager.load_session(&session_id).unwrap();
+        let loaded_session = manager.load_state(&session.name).unwrap();
         assert_eq!(loaded_session.name, session.name);
         assert_eq!(loaded_session.branch, session.branch);
         assert_eq!(loaded_session.worktree_path, session.worktree_path);
@@ -318,8 +321,8 @@ mod tests {
         let (_temp_dir, config) = setup_test_repo();
         let mut manager = SessionManager::new(config).unwrap();
 
-        let session1 = manager.create_session("session1".to_string(), Some("main".to_string())).unwrap();
-        let session2 = manager.create_session("session2".to_string(), Some("main".to_string())).unwrap();
+        let _session1 = manager.create_session("session1".to_string(), Some("main".to_string())).unwrap();
+        let _session2 = manager.create_session("session2".to_string(), Some("main".to_string())).unwrap();
 
         let sessions = manager.list_sessions().unwrap();
         assert_eq!(sessions.len(), 2);
@@ -337,11 +340,10 @@ mod tests {
         let mut manager = SessionManager::new(config).unwrap();
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
-        let session_id = manager.generate_session_id(&session.name);
-        assert!(manager.session_exists(&session_id));
+        assert!(manager.session_exists(&session.name));
 
-        manager.delete_session(&session_id).unwrap();
-        assert!(!manager.session_exists(&session_id));
+        manager.delete_state(&session.name).unwrap();
+        assert!(!manager.session_exists(&session.name));
     }
 
     #[test]
@@ -350,11 +352,10 @@ mod tests {
         let mut manager = SessionManager::new(config).unwrap();
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
-        let session_id = manager.generate_session_id(&session.name);
         
-        manager.update_session_status(&session_id, SessionStatus::Finished).unwrap();
+        manager.update_session_status(&session.name, SessionStatus::Finished).unwrap();
         
-        let updated_session = manager.load_session(&session_id).unwrap();
+        let updated_session = manager.load_state(&session.name).unwrap();
         assert!(matches!(updated_session.status, SessionStatus::Finished));
     }
 }
