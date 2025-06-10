@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 use tempfile::TempDir;
 
@@ -22,6 +23,7 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
             branch_prefix: "pc".to_string(),
             auto_stage: true,
             auto_commit: false,
+            default_integration_strategy: IntegrationStrategy::Squash,
         },
         session: SessionConfig {
             default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -391,12 +393,6 @@ mod generator_tests {
         assert!(fish_script.contains("para"));
         assert!(fish_script.contains("complete"));
 
-        let powershell_completion =
-            generators::ShellCompletionGenerator::generate_basic_completion(Shell::PowerShell);
-        assert!(powershell_completion.is_ok());
-        let ps_script = powershell_completion.unwrap();
-        assert!(ps_script.contains("para"));
-        assert!(ps_script.contains("Register-ArgumentCompleter"));
     }
 
     #[test]
@@ -437,11 +433,6 @@ mod generator_tests {
         assert!(fish_instructions.contains("fish"));
         assert!(fish_instructions.contains("completions"));
 
-        let ps_instructions =
-            generators::ShellCompletionGenerator::get_installation_instructions(Shell::PowerShell);
-        assert!(ps_instructions.contains("Installation instructions"));
-        assert!(ps_instructions.contains("PowerShell"));
-        assert!(ps_instructions.contains("$PROFILE"));
     }
 }
 

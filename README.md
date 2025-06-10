@@ -49,7 +49,8 @@ para finish "Add new feature"
 - `para finish "message"` - Auto-stage & finish session with commit message
 - `para finish "message" --branch custom-name` - Finish with custom branch name
 - `para list` - Show all active sessions
-- `para continue` - Resume after resolving finish conflicts (auto-stages)
+- `para integrate [session]` - Integrate session into main branch (with conflict handling)
+- `para continue` - Resume after resolving integration conflicts (universal conflict detection)
 - `para cancel [session]` - Discard current or specified session
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
@@ -105,6 +106,29 @@ The `dispatch` command creates new sessions and immediately opens Claude Code wi
 
 **Note:** Dispatch command only works with Claude Code. Use `para config` to switch IDEs if needed.
 
+## Integration Strategies
+
+Para supports multiple integration strategies for different development workflows:
+
+```bash
+# Rebase strategy (default) - clean linear history
+para integrate --strategy rebase
+
+# Merge strategy - preserves feature branch history  
+para integrate --strategy merge
+
+# Squash strategy - combines all commits into one
+para integrate --strategy squash
+
+# Preview integration without executing
+para integrate --dry-run
+```
+
+### Integration Commands
+- `para integrate [session]` - Integrate session with default strategy
+- `para integrate --abort` - Abort active integration and restore original state
+- `para continue` - Resume paused integration after conflict resolution
+
 ## How It Works
 
 1. **Configure**: `para config` detects and configures your IDE (Cursor, Claude Code, VS Code, etc.)
@@ -140,6 +164,20 @@ para config show         # Show current settings
 para config edit         # Edit config file
 ```
 
+### Configuration File Locations
+
+Para stores configuration files in platform-specific locations:
+
+**Shell Implementation:**
+- `~/.config/para/config` (shell script format)
+
+**Rust Implementation:**
+- **macOS:** `~/Library/Application Support/para-rs/config.json`
+- **Linux:** `~/.config/para-rs/config.json`
+- **Windows:** `%APPDATA%\para-rs\config.json`
+
+The Rust implementation uses JSON format and is automatically created on first run.
+
 ## Example Workflows
 
 ### Regular Parallel Development
@@ -174,16 +212,39 @@ para dispatch --file auth-requirements.prompt
 para finish "Implement OAuth authentication"
 ```
 
-## When Things Conflict
+## Integration & Conflict Resolution
 
-If two sessions modify the same files, you might get merge conflicts:
+Para provides robust conflict resolution with universal conflict detection for all Git operations:
 
+### Basic Integration
 ```bash
-para finish "My changes"
-# ❌ Conflicts detected → resolve manually, then:
-para continue
-# ✅ Finished!
+# Integrate session into main branch
+para integrate my-session
+# ✅ Integration completed successfully!
+
+# Or integrate current session
+para integrate
 ```
+
+### When Conflicts Occur
+```bash
+para integrate my-session
+# ⚠️ Integration paused due to conflicts
+# 📁 Conflicted files:
+#    • README.md
+#    • src/main.rs
+
+# Resolve conflicts manually in your IDE, then:
+para continue
+# ✅ Integration completed successfully!
+```
+
+### Advanced Conflict Features
+- **Universal conflict detection**: Works with merge, rebase, and cherry-pick operations
+- **Automatic staging**: Resolved files are automatically staged
+- **Smart operation detection**: Continues the appropriate Git operation (rebase/merge/cherry-pick)
+- **State management**: Proper distinction between conflicts and failures
+- **IDE integration**: Automatically opens conflicted files for resolution
 
 ## Session Recovery
 

@@ -172,8 +172,6 @@ impl DynamicCompletion {
                         .with_description("Generate Zsh completion script".to_string()),
                     CompletionSuggestion::new("fish".to_string(), CompletionType::Value)
                         .with_description("Generate Fish completion script".to_string()),
-                    CompletionSuggestion::new("powershell".to_string(), CompletionType::Value)
-                        .with_description("Generate PowerShell completion script".to_string()),
                 ]);
             }
             _ => {}
@@ -343,6 +341,7 @@ impl CachedDynamicCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use tempfile::TempDir;
 
@@ -366,6 +365,7 @@ mod tests {
                 branch_prefix: "pc".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

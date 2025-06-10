@@ -40,6 +40,12 @@ pub enum Commands {
     /// Dynamic completion (hidden)
     #[command(hide = true)]
     CompleteCommand(CompleteCommandArgs),
+    /// Legacy completion endpoint for sessions (hidden)
+    #[command(name = "_completion_sessions", hide = true)]
+    CompletionSessions,
+    /// Legacy completion endpoint for branches (hidden)
+    #[command(name = "_completion_branches", hide = true)]
+    CompletionBranches,
 }
 
 #[derive(Args, Debug)]
@@ -65,7 +71,7 @@ pub struct DispatchArgs {
     pub file: Option<PathBuf>,
 
     /// Skip IDE permission warnings (dangerous)
-    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
+    #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
 }
 
@@ -88,6 +94,9 @@ pub struct FinishArgs {
 
 #[derive(Args, Debug)]
 pub struct IntegrateArgs {
+    /// Commit message for integration
+    pub message: Option<String>,
+
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
 
@@ -102,6 +111,10 @@ pub struct IntegrateArgs {
     /// Preview integration without executing
     #[arg(long, help = "Preview integration without executing")]
     pub dry_run: bool,
+
+    /// Abort integration and restore original state
+    #[arg(long, help = "Abort integration and restore original state")]
+    pub abort: bool,
 }
 
 #[derive(Args, Debug)]
@@ -192,10 +205,9 @@ pub enum Shell {
     Bash,
     Zsh,
     Fish,
-    PowerShell,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IntegrationStrategy {
     /// Create merge commit preserving feature branch history
     Merge,
@@ -218,7 +230,7 @@ impl DispatchArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
             (None, None, None) => Err(crate::utils::ParaError::invalid_args(
-                "Must provide either a prompt, session name, or file",
+                "dispatch requires a prompt text or file path",
             )),
             _ => Ok(()),
         }
@@ -283,6 +295,12 @@ impl Commands {
             }
             Commands::CompleteCommand(_) => {
                 "Examples:\n  para complete-command --command-line 'para start' --current-word '' --position 2"
+            }
+            Commands::CompletionSessions => {
+                "Examples:\n  para _completion_sessions"
+            }
+            Commands::CompletionBranches => {
+                "Examples:\n  para _completion_branches"
             }
         }
     }

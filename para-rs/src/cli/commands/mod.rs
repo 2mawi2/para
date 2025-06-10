@@ -2,6 +2,8 @@ pub mod cancel;
 pub mod clean;
 pub mod complete_command;
 pub mod completion;
+pub mod completion_branches;
+pub mod completion_sessions;
 pub mod config;
 pub mod continue_cmd;
 pub mod dispatch;

@@ -1,7 +1,6 @@
 use crate::utils::{ParaError, Result};
 use chrono::{DateTime, Utc};
 use rand::seq::SliceRandom;
-use rand::Rng;
 use regex::Regex;
 use std::fmt;
 
@@ -91,6 +90,10 @@ pub fn generate_friendly_name() -> String {
 }
 
 pub fn generate_session_id() -> String {
+    generate_friendly_name()
+}
+
+pub fn generate_session_id_with_timestamp() -> String {
     let timestamp = generate_timestamp();
     let friendly = generate_friendly_name();
     format!("{}_{}", friendly, timestamp)
@@ -99,6 +102,10 @@ pub fn generate_session_id() -> String {
 pub fn generate_session_id_with_name(name: &str) -> String {
     let timestamp = generate_timestamp();
     format!("{}_{}", name, timestamp)
+}
+
+pub fn generate_unique_session_id(existing_names: &[String]) -> String {
+    generate_unique_name(existing_names)
 }
 
 pub fn generate_timestamp() -> String {
@@ -113,8 +120,9 @@ pub fn generate_branch_name(prefix: &str) -> String {
 
 pub fn generate_unique_name(existing_names: &[String]) -> String {
     let mut attempts = 0;
-    let max_attempts = 100;
-
+    let max_attempts = 50; // Reduced since we have 6000+ combinations
+    
+    // First, try to find a unique name without any suffix
     loop {
         let name = generate_friendly_name();
         if !existing_names.contains(&name) {
@@ -123,11 +131,23 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
 
         attempts += 1;
         if attempts >= max_attempts {
-            let mut rng = rand::thread_rng();
-            let suffix: u32 = rng.gen_range(1000..9999);
-            return format!("{}_{}", name, suffix);
+            break;
         }
     }
+    
+    // If we can't find a unique name, try with small random suffixes
+    for suffix in 1..100 {
+        let name = generate_friendly_name();
+        let candidate = format!("{}_{}", name, suffix);
+        if !existing_names.contains(&candidate) {
+            return candidate;
+        }
+    }
+    
+    // Final fallback: use timestamp suffix
+    let name = generate_friendly_name();
+    let timestamp = generate_timestamp();
+    format!("{}_{}", name, timestamp)
 }
 
 pub fn validate_session_name(name: &str) -> Result<()> {
@@ -371,7 +391,25 @@ mod tests {
     fn test_generate_session_id() {
         let id = generate_session_id();
         assert!(id.contains('_'));
-        assert!(id.len() > 10);
+        // Should NOT contain timestamp by default (Docker-style)
+        assert!(!id.contains('-'));
+        assert!(id.len() < 30); // Should be relatively short
+        
+        let parts: Vec<&str> = id.split('_').collect();
+        assert_eq!(parts.len(), 2);
+        assert!(ADJECTIVES.contains(&parts[0]));
+        assert!(NOUNS.contains(&parts[1]));
+    }
+    
+    #[test]
+    fn test_generate_session_id_with_timestamp() {
+        let id = generate_session_id_with_timestamp();
+        assert!(id.contains('_'));
+        assert!(id.contains('-')); // Should contain timestamp
+        assert!(id.len() > 15);
+        
+        let parts: Vec<&str> = id.split('_').collect();
+        assert_eq!(parts.len(), 3); // adjective_noun_timestamp
     }
 
     #[test]
@@ -477,5 +515,67 @@ mod tests {
         let unique = generate_unique_name(&existing);
         assert!(!existing.contains(&unique));
         assert!(unique.contains('_'));
+    }
+
+    #[test]
+    fn test_generate_unique_name_no_collisions() {
+        // Test with empty list - should generate clean name
+        let existing = vec![];
+        let unique = generate_unique_name(&existing);
+        assert!(unique.contains('_'));
+        assert!(!unique.contains('-')); // Should be Docker-style without timestamp
+        
+        let parts: Vec<&str> = unique.split('_').collect();
+        assert_eq!(parts.len(), 2); // Only adjective_noun
+    }
+
+    #[test] 
+    fn test_generate_unique_name_with_collision() {
+        // Fill up most adjective/noun combinations to force suffix generation
+        let mut existing = vec![];
+        
+        // Generate a bunch of existing names
+        for i in 0..10 {
+            existing.push(format!("test_name_{}", i));
+        }
+        
+        // Add a specific collision to test
+        existing.push("eager_alpha".to_string());
+        
+        let unique = generate_unique_name(&existing);
+        assert!(!existing.contains(&unique));
+        assert!(unique.contains('_'));
+        
+        // Should either be a different adjective/noun combo or have a suffix
+        if unique.starts_with("eager_alpha") {
+            assert!(unique.len() > "eager_alpha".len()); // Must have suffix
+        }
+    }
+
+    #[test]
+    fn test_collision_avoidance_strategy() {
+        // Test the three-tier collision avoidance strategy
+        let mut existing = vec![];
+        
+        // First generate many unique names to test clean generation
+        for _ in 0..10 {
+            let name = generate_unique_name(&existing);
+            assert!(!existing.contains(&name));
+            existing.push(name);
+        }
+        
+        // All should be clean Docker-style names
+        for name in &existing {
+            let parts: Vec<&str> = name.split('_').collect();
+            assert!(parts.len() <= 2 || parts.len() == 3 && parts[2].parse::<u32>().is_ok());
+        }
+    }
+
+    #[test]
+    fn test_generate_unique_session_id() {
+        let existing = vec!["busy_session".to_string()];
+        let id = generate_unique_session_id(&existing);
+        assert!(!existing.contains(&id));
+        assert!(id.contains('_'));
     }
 }

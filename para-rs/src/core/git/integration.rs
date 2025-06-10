@@ -42,7 +42,8 @@ impl<'a> IntegrationManager<'a> {
     }
 
     pub fn finish_session(&self, request: FinishRequest) -> Result<FinishResult> {
-        self.repo.checkout_branch(&request.feature_branch)?;
+        // Don't checkout the feature branch - we're likely already in the worktree with it checked out
+        // This avoids the "already used by worktree" error
 
         if self.repo.has_uncommitted_changes()? {
             self.repo.stage_all_changes()?;
@@ -148,6 +149,10 @@ impl<'a> IntegrationManager<'a> {
         execute_git_command_with_status(self.repo, &["rebase", "--continue"])
     }
 
+    pub fn continue_cherry_pick(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["cherry-pick", "--continue"])
+    }
+
     pub fn abort_rebase(&self) -> Result<()> {
         execute_git_command_with_status(self.repo, &["rebase", "--abort"])
     }
@@ -160,10 +165,8 @@ impl<'a> IntegrationManager<'a> {
     }
 
     pub fn get_conflicted_files(&self) -> Result<Vec<PathBuf>> {
-        if !self.has_rebase_conflicts()? {
-            return Ok(Vec::new());
-        }
-
+        // Check for any type of git conflicts, not just rebase conflicts
+        // This includes cherry-pick, merge, and rebase conflicts
         let output = execute_git_command(self.repo, &["diff", "--name-only", "--diff-filter=U"])?;
 
         Ok(output
@@ -175,6 +178,22 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn is_rebase_in_progress(&self) -> Result<bool> {
         self.has_rebase_conflicts()
+    }
+
+    pub fn is_cherry_pick_in_progress(&self) -> Result<bool> {
+        let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
+        Ok(cherry_pick_head.exists())
+    }
+
+    pub fn is_merge_in_progress(&self) -> Result<bool> {
+        let merge_head = self.repo.git_dir.join("MERGE_HEAD");
+        Ok(merge_head.exists())
+    }
+
+    pub fn is_any_operation_in_progress(&self) -> Result<bool> {
+        Ok(self.is_rebase_in_progress()? 
+           || self.is_cherry_pick_in_progress()? 
+           || self.is_merge_in_progress()?)
     }
 
     pub fn update_base_branch(&self, branch: &str) -> Result<()> {
@@ -292,6 +311,14 @@ impl<'a> IntegrationManager<'a> {
             let _ = self.abort_rebase();
         }
 
+        if self.is_merge_in_progress()? {
+            let _ = self.abort_merge();
+        }
+
+        if self.is_cherry_pick_in_progress()? {
+            let _ = self.abort_cherry_pick();
+        }
+
         let merge_head = self.repo.git_dir.join("MERGE_HEAD");
         if merge_head.exists() {
             let _ = std::fs::remove_file(merge_head);
@@ -300,6 +327,30 @@ impl<'a> IntegrationManager<'a> {
         let cherry_pick_head = self.repo.git_dir.join("CHERRY_PICK_HEAD");
         if cherry_pick_head.exists() {
             let _ = std::fs::remove_file(cherry_pick_head);
+        }
+
+        let revert_head = self.repo.git_dir.join("REVERT_HEAD");
+        if revert_head.exists() {
+            let _ = std::fs::remove_file(revert_head);
+        }
+
+        Ok(())
+    }
+
+    pub fn abort_merge(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["merge", "--abort"])
+    }
+
+    pub fn abort_cherry_pick(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["cherry-pick", "--abort"])
+    }
+
+
+    pub fn safe_abort_integration(&self, backup_branch: Option<&str>, target_branch: &str) -> Result<()> {
+        self.cleanup_integration_state()?;
+
+        if let Some(backup) = backup_branch {
+            self.restore_from_backup(backup, target_branch)?;
         }
 
         Ok(())
@@ -561,5 +612,152 @@ mod tests {
         manager
             .cleanup_integration_state()
             .expect("Failed to cleanup integration state");
+    }
+
+    #[test]
+    fn test_is_rebase_in_progress_no_rebase() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.is_rebase_in_progress();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_is_merge_in_progress_no_merge() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.is_merge_in_progress();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_is_cherry_pick_in_progress_no_cherry_pick() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.is_cherry_pick_in_progress();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_is_any_operation_in_progress_clean_state() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.is_any_operation_in_progress();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_safe_abort_integration_no_backup() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
+        let result = manager.safe_abort_integration(None, &main_branch);
+        
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_safe_abort_integration_with_nonexistent_backup() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let main_branch = repo.get_current_branch().expect("Failed to get current branch");
+        let result = manager.safe_abort_integration(Some("nonexistent-backup"), &main_branch);
+        
+        // Should handle missing backup gracefully
+        assert!(result.is_err() || result.is_ok());
+    }
+
+    #[test]
+    fn test_abort_operations_no_operations() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        // These should fail gracefully since no operations are in progress
+        let rebase_result = manager.abort_rebase();
+        let merge_result = manager.abort_merge();
+        let cherry_pick_result = manager.abort_cherry_pick();
+        
+        assert!(rebase_result.is_err());
+        assert!(merge_result.is_err());
+        assert!(cherry_pick_result.is_err());
+    }
+
+    #[test]
+    fn test_continue_rebase_no_rebase() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.continue_rebase();
+        
+        // Should fail since no rebase is in progress
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stage_resolved_files_no_conflicts() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        let result = manager.stage_resolved_files();
+        
+        // Should succeed even with no conflicts to resolve
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_enhanced_cleanup_integration_state() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        // Test that cleanup can be called multiple times safely
+        assert!(manager.cleanup_integration_state().is_ok());
+        assert!(manager.cleanup_integration_state().is_ok());
+        assert!(manager.cleanup_integration_state().is_ok());
+    }
+
+    #[test]
+    fn test_operation_detection_consistency() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        // All individual operation checks should be false
+        assert!(!manager.is_rebase_in_progress().unwrap());
+        assert!(!manager.is_merge_in_progress().unwrap());
+        assert!(!manager.is_cherry_pick_in_progress().unwrap());
+        
+        // Combined check should also be false
+        assert!(!manager.is_any_operation_in_progress().unwrap());
+    }
+
+    #[test]
+    fn test_robust_error_handling() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+        
+        // Test operations that should fail but not panic
+        let operations = [
+            manager.continue_rebase(),
+            manager.abort_rebase(),
+            manager.abort_merge(),
+            manager.abort_cherry_pick(),
+        ];
+        
+        // All should return errors (since no operations are in progress)
+        for op_result in operations {
+            assert!(op_result.is_err());
+        }
+        
+        // But cleanup should always work
+        assert!(manager.cleanup_integration_state().is_ok());
     }
 }

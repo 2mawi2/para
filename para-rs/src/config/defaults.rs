@@ -1,4 +1,5 @@
 use super::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+use crate::cli::parser::IntegrationStrategy;
 use std::path::Path;
 
 pub fn default_config() -> Config {
@@ -36,6 +37,7 @@ pub fn default_git_config() -> GitConfig {
         branch_prefix: "pc".to_string(),
         auto_stage: true,
         auto_commit: true,
+        default_integration_strategy: IntegrationStrategy::Squash,
     }
 }
 
@@ -85,13 +87,13 @@ pub fn is_command_available(command: &str) -> bool {
 }
 
 pub fn get_default_config_dir() -> std::path::PathBuf {
-    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "para") {
+    if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "para-rs") {
         proj_dirs.config_dir().to_path_buf()
     } else {
         std::env::home_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(".config")
-            .join("para")
+            .join("para-rs")
     }
 }
 
@@ -110,7 +112,6 @@ pub fn get_legacy_config_path() -> std::path::PathBuf {
             .join("config")
     }
 }
-
 
 #[cfg(test)]
 mod tests {

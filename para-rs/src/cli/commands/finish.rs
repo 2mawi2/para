@@ -1,9 +1,10 @@
-use crate::cli::parser::FinishArgs;
+use crate::cli::parser::{FinishArgs, IntegrationStrategy};
 use crate::config::ConfigManager;
 use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
 };
 use crate::core::session::{SessionManager, SessionStatus};
+use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
 
@@ -70,6 +71,17 @@ pub fn execute(args: FinishArgs) -> Result<()> {
     };
 
     println!("Finishing session: {}", feature_branch);
+
+    // Close IDE window before Git operations (in case Git operations fail)
+    let session_id = session_info
+        .as_ref()
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| feature_branch.clone());
+
+    let platform = get_platform_manager();
+    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+        eprintln!("Warning: Failed to close IDE window: {}", e);
+    }
 
     if config.should_auto_stage() {
         git_service.stage_all_changes()?;
@@ -153,6 +165,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

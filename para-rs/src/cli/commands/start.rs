@@ -1,4 +1,4 @@
-use crate::cli::parser::StartArgs;
+use crate::cli::parser::{IntegrationStrategy, StartArgs};
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::ide::IdeManager;
@@ -119,6 +119,7 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
+                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
