@@ -182,35 +182,11 @@ fn is_valid_git_ref_name(name: &str) -> bool {
     true
 }
 
-pub fn suggest_ide_fix(ide_name: &str) -> String {
-    match ide_name.to_lowercase().as_str() {
-        "vscode" | "vs-code" | "visual-studio-code" => "code".to_string(),
-        "cursor-ai" | "cursor.ai" => "cursor".to_string(),
-        "claude-code" | "claude_code" => "claude".to_string(),
-        _ => format!(
-            "Check if '{}' is installed and available in your PATH",
-            ide_name
-        ),
-    }
-}
-
-pub fn suggest_directory_fix(dir_name: &str) -> String {
-    if dir_name.starts_with('/') {
-        "Use a relative path instead of an absolute path".to_string()
-    } else if dir_name.contains("..") {
-        "Remove '..' components from the path".to_string()
-    } else if dir_name.is_empty() {
-        "Provide a non-empty directory name".to_string()
-    } else {
-        "Use only alphanumeric characters, hyphens, underscores, and forward slashes".to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use crate::cli::parser::IntegrationStrategy;
+    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
     #[test]
     fn test_valid_ide_names() {

@@ -171,19 +171,19 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init", "--initial-branch=main"])
+            .args(["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .status()
             .expect("Failed to set git user name");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .status()
             .expect("Failed to set git user email");
 
@@ -192,13 +192,13 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["add", "README.md"])
+            .args(["add", "README.md"])
             .status()
             .expect("Failed to add README");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["commit", "-m", "Initial commit"])
+            .args(["commit", "-m", "Initial commit"])
             .status()
             .expect("Failed to commit README");
 
@@ -311,10 +311,10 @@ mod tests {
         // Test the function signature and basic validation logic
         // Skip actual interactive test since it requires user input
         let session_name = "test-session";
-        
+
         // Verify the function exists and has correct signature
         assert!(!session_name.is_empty());
-        
+
         // We cannot test the interactive part in automated tests
         // The function would require stdin input which we cannot provide in CI
     }

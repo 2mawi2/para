@@ -1,6 +1,5 @@
 use super::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 use crate::cli::parser::IntegrationStrategy;
-use std::path::Path;
 
 pub fn default_config() -> Config {
     Config {
@@ -99,18 +98,6 @@ pub fn get_default_config_dir() -> std::path::PathBuf {
 
 pub fn get_config_file_path() -> std::path::PathBuf {
     get_default_config_dir().join("config.json")
-}
-
-pub fn get_legacy_config_path() -> std::path::PathBuf {
-    if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME") {
-        Path::new(&xdg_config).join("para").join("config")
-    } else {
-        std::env::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".config")
-            .join("para")
-            .join("config")
-    }
 }
 
 #[cfg(test)]

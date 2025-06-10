@@ -15,7 +15,6 @@ pub struct SessionInfo {
     pub merge_mode: String,
     pub status: SessionStatus,
     pub last_modified: Option<DateTime<Utc>>,
-    pub commit_count: Option<usize>,
     pub has_uncommitted_changes: Option<bool>,
     pub is_current: bool,
 }
@@ -98,7 +97,7 @@ fn list_active_sessions(
             .map(|cwd| cwd.starts_with(&session_state.worktree_path))
             .unwrap_or(false);
 
-        let status = determine_unified_session_status(&session_state, &git_service)?;
+        let status = determine_unified_session_status(&session_state, git_service)?;
 
         let session_info = SessionInfo {
             session_id: session_state.name.clone(),
@@ -108,7 +107,6 @@ fn list_active_sessions(
             merge_mode: "squash".to_string(), // Default for now
             status,
             last_modified: Some(session_state.created_at),
-            commit_count: Some(0), // Simplified for now
             has_uncommitted_changes,
             is_current,
         };
@@ -144,7 +142,6 @@ fn list_archived_sessions(
                 merge_mode: "unknown".to_string(),
                 status: SessionStatus::Archived,
                 last_modified: None,
-                commit_count: None,
                 has_uncommitted_changes: None,
                 is_current: false,
             };
@@ -308,19 +305,19 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init", "--initial-branch=main"])
+            .args(["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .status()
             .expect("Failed to set git user name");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .status()
             .expect("Failed to set git user email");
 
@@ -329,13 +326,13 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["add", "README.md"])
+            .args(["add", "README.md"])
             .status()
             .expect("Failed to add README");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["commit", "-m", "Initial commit"])
+            .args(["commit", "-m", "Initial commit"])
             .status()
             .expect("Failed to commit README");
 
@@ -343,7 +340,6 @@ mod tests {
             .expect("Failed to discover repo");
         (temp_dir, service)
     }
-
 
     struct TestEnvironmentGuard {
         original_dir: std::path::PathBuf,
@@ -566,7 +562,6 @@ mod tests {
                     merge_mode: "unknown".to_string(),
                     status: SessionStatus::Archived,
                     last_modified: None,
-                    commit_count: None,
                     has_uncommitted_changes: None,
                     is_current: false,
                 };
@@ -640,7 +635,6 @@ mod tests {
                 merge_mode: "squash".to_string(),
                 status: SessionStatus::Active,
                 last_modified: None,
-                commit_count: None,
                 has_uncommitted_changes: Some(false),
                 is_current: false,
             },
@@ -652,7 +646,6 @@ mod tests {
                 merge_mode: "merge".to_string(),
                 status: SessionStatus::Dirty,
                 last_modified: None,
-                commit_count: None,
                 has_uncommitted_changes: Some(true),
                 is_current: true,
             },
@@ -675,7 +668,6 @@ mod tests {
             merge_mode: "squash".to_string(),
             status: SessionStatus::Active,
             last_modified: Some(Utc::now()),
-            commit_count: Some(5),
             has_uncommitted_changes: Some(false),
             is_current: true,
         }];

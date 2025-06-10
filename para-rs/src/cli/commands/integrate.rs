@@ -287,7 +287,7 @@ fn open_ide_for_conflict_resolution(
     }
 
     println!("🚀 Opening IDE for conflict resolution...");
-    let ide_manager = IdeManager::new(&config);
+    let ide_manager = IdeManager::new(config);
 
     match ide_manager.launch(worktree_path, false) {
         Ok(()) => println!("✅ IDE opened successfully"),

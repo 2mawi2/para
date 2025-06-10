@@ -394,19 +394,19 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init", "--initial-branch=main"])
+            .args(["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .status()
             .expect("Failed to set git user name");
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .status()
             .expect("Failed to set git user email");
 

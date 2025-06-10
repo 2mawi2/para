@@ -286,38 +286,33 @@ fn configure_ide_manually() -> Result<super::IdeConfig> {
 }
 
 fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
-    if ide_name == "claude" {
-        if Confirm::with_theme(&ColorfulTheme::default())
+    if ide_name == "claude"
+        && Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt("Configure wrapper mode? (For when Claude Code runs inside another IDE)")
             .default(false)
             .interact()
             .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-        {
-            let wrapper_options = vec!["cursor", "code"];
-            let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Which IDE wraps Claude Code?")
-                .items(&wrapper_options)
-                .default(0)
-                .interact()
-                .map_err(|e| {
-                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
-                })?;
+    {
+        let wrapper_options = vec!["cursor", "code"];
+        let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Which IDE wraps Claude Code?")
+            .items(&wrapper_options)
+            .default(0)
+            .interact()
+            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
 
-            let wrapper_name = wrapper_options[wrapper_selection].to_string();
-            let wrapper_command = Input::<String>::with_theme(&ColorfulTheme::default())
-                .with_prompt("Wrapper IDE command")
-                .default(wrapper_name.clone())
-                .interact()
-                .map_err(|e| {
-                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
-                })?;
+        let wrapper_name = wrapper_options[wrapper_selection].to_string();
+        let wrapper_command = Input::<String>::with_theme(&ColorfulTheme::default())
+            .with_prompt("Wrapper IDE command")
+            .default(wrapper_name.clone())
+            .interact()
+            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
 
-            return Ok(super::WrapperConfig {
-                enabled: true,
-                name: wrapper_name,
-                command: wrapper_command,
-            });
-        }
+        return Ok(super::WrapperConfig {
+            enabled: true,
+            name: wrapper_name,
+            command: wrapper_command,
+        });
     }
 
     Ok(super::WrapperConfig {
@@ -415,8 +410,8 @@ pub fn run_quick_setup() -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use crate::cli::parser::IntegrationStrategy;
+    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
     #[test]
     fn test_config_summary_display() {

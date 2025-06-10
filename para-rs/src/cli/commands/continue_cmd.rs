@@ -287,7 +287,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let (git_temp, git_service) = setup_test_repo();
         let session_manager = SessionManager::new(&create_test_config());
-        let mut config = create_test_config();
+        let mut config = crate::config::defaults::default_config();
         config.session.preserve_on_finish = false;
 
         // Create a test worktree directory in the git repo for cleanup
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_close_ide_for_session_wrapper_enabled() {
-        let mut config = create_test_config();
+        let mut config = crate::config::defaults::default_config();
         config.ide.wrapper.enabled = true;
         let worktree_path = PathBuf::from("/tmp/test");
 
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_close_ide_for_session_wrapper_disabled() {
-        let mut config = create_test_config();
+        let mut config = crate::config::defaults::default_config();
         config.ide.wrapper.enabled = false;
         let worktree_path = PathBuf::from("/tmp/test");
 

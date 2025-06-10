@@ -330,8 +330,8 @@ pub fn validate_ide_availability(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use crate::cli::parser::IntegrationStrategy;
+    use tempfile::TempDir;
 
     fn create_test_config(ide_name: &str, ide_command: &str) -> Config {
         Config {

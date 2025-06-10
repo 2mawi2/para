@@ -5,7 +5,7 @@ mod tests {
 
     #[test]
     fn test_start_command_parsing() {
-        let cli = Cli::try_parse_from(&["para", "start"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "start"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
                 assert!(args.name.is_none());
@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn test_start_command_with_name() {
-        let cli = Cli::try_parse_from(&["para", "start", "my-feature"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "start", "my-feature"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
                 assert_eq!(args.name, Some("my-feature".to_string()));
@@ -29,8 +29,7 @@ mod tests {
 
     #[test]
     fn test_start_command_with_dangerous_flag() {
-        let cli =
-            Cli::try_parse_from(&["para", "start", "--dangerously-skip-permissions"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "start", "--dangerously-skip-permissions"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
                 assert!(args.name.is_none());
@@ -42,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_command_with_prompt() {
-        let cli = Cli::try_parse_from(&["para", "dispatch", "Add user authentication"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "dispatch", "Add user authentication"]).unwrap();
         match cli.command.unwrap() {
             Commands::Dispatch(args) => {
                 assert_eq!(
@@ -58,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_command_with_file() {
-        let cli = Cli::try_parse_from(&["para", "dispatch", "--file", "prompt.txt"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "dispatch", "--file", "prompt.txt"]).unwrap();
         match cli.command.unwrap() {
             Commands::Dispatch(args) => {
                 assert!(args.name_or_prompt.is_none());
@@ -71,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_finish_command_basic() {
-        let cli = Cli::try_parse_from(&["para", "finish", "Complete feature"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "finish", "Complete feature"]).unwrap();
         match cli.command.unwrap() {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
@@ -85,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_finish_command_with_branch() {
-        let cli = Cli::try_parse_from(&[
+        let cli = Cli::try_parse_from([
             "para",
             "finish",
             "Complete feature",
@@ -106,7 +105,7 @@ mod tests {
     #[test]
     fn test_finish_command_with_integrate() {
         let cli =
-            Cli::try_parse_from(&["para", "finish", "Complete feature", "--integrate"]).unwrap();
+            Cli::try_parse_from(["para", "finish", "Complete feature", "--integrate"]).unwrap();
         match cli.command.unwrap() {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
@@ -118,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_list_command_alias() {
-        let cli = Cli::try_parse_from(&["para", "ls"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "ls"]).unwrap();
         match cli.command.unwrap() {
             Commands::List(_) => {}
             _ => panic!("Expected List command"),
@@ -127,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_list_command_with_verbose() {
-        let cli = Cli::try_parse_from(&["para", "list", "--verbose"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "list", "--verbose"]).unwrap();
         match cli.command.unwrap() {
             Commands::List(args) => {
                 assert!(args.verbose);
@@ -139,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_config_subcommands() {
-        let cli = Cli::try_parse_from(&["para", "config", "setup"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "config", "setup"]).unwrap();
         match cli.command.unwrap() {
             Commands::Config(args) => match args.command.unwrap() {
                 ConfigCommands::Setup => {}
@@ -151,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_completion_command() {
-        let cli = Cli::try_parse_from(&["para", "completion", "bash"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "completion", "bash"]).unwrap();
         match cli.command.unwrap() {
             Commands::Completion(args) => match args.shell {
                 Shell::Bash => {}
@@ -239,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_completion_sessions_command() {
-        let cli = Cli::try_parse_from(&["para", "_completion_sessions"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "_completion_sessions"]).unwrap();
         match cli.command.unwrap() {
             Commands::CompletionSessions => {}
             _ => panic!("Expected CompletionSessions command"),
@@ -248,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_completion_branches_command() {
-        let cli = Cli::try_parse_from(&["para", "_completion_branches"]).unwrap();
+        let cli = Cli::try_parse_from(["para", "_completion_branches"]).unwrap();
         match cli.command.unwrap() {
             Commands::CompletionBranches => {}
             _ => panic!("Expected CompletionBranches command"),
@@ -269,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_complete_command_args() {
-        let cli = Cli::try_parse_from(&[
+        let cli = Cli::try_parse_from([
             "para",
             "complete-command",
             "--command-line",
@@ -293,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_complete_command_with_previous_word() {
-        let cli = Cli::try_parse_from(&[
+        let cli = Cli::try_parse_from([
             "para",
             "complete-command",
             "--command-line",

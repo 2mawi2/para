@@ -103,9 +103,9 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::IntegrationStrategy;
     use std::fs;
     use tempfile::TempDir;
-    use crate::cli::parser::IntegrationStrategy;
 
     fn create_test_config() -> Config {
         Config {

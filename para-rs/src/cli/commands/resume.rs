@@ -26,7 +26,7 @@ fn resume_specific_session(
     git_service: &GitService,
     session_name: &str,
 ) -> Result<()> {
-    let session_manager = SessionManager::new(&config);
+    let session_manager = SessionManager::new(config);
 
     if session_manager.session_exists(session_name) {
         let session_state = session_manager.load_state(session_name)?;
