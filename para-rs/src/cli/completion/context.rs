@@ -138,15 +138,6 @@ impl CompletionContext {
 
         (is_para_session, current_session, current_branch)
     }
-
-
-
-
-
-
-
-
-
 }
 
 

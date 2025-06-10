@@ -21,9 +21,6 @@ pub enum ParaError {
     #[error("Invalid arguments: {message}")]
     InvalidArgs { message: String },
 
-    #[error("Repository state error: {message}")]
-    RepoState { message: String },
-
     #[error("File operation failed: {path}")]
     FileOperation { path: String },
 
@@ -38,9 +35,6 @@ pub enum ParaError {
 
     #[error("Invalid session name: {name} - {reason}")]
     InvalidSessionName { name: String, reason: String },
-
-    #[error("Invalid branch name: {name} - {reason}")]
-    InvalidBranchName { name: String, reason: String },
 
     #[error("Permission denied: {path}")]
     PermissionDenied { path: String },
@@ -100,12 +94,6 @@ impl ParaError {
         }
     }
 
-    pub fn repo_state(message: impl Into<String>) -> Self {
-        Self::RepoState {
-            message: message.into(),
-        }
-    }
-
     pub fn file_operation(path: impl Into<String>) -> Self {
         Self::FileOperation { path: path.into() }
     }
@@ -124,13 +112,6 @@ impl ParaError {
 
     pub fn invalid_session_name(name: impl Into<String>, reason: impl Into<String>) -> Self {
         Self::InvalidSessionName {
-            name: name.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub fn invalid_branch_name(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::InvalidBranchName {
             name: name.into(),
             reason: reason.into(),
         }

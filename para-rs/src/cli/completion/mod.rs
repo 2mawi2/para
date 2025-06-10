@@ -18,7 +18,6 @@ pub trait CompletionProvider {
 pub struct CompletionSuggestion {
     pub text: String,
     pub description: Option<String>,
-    pub completion_type: CompletionType,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,7 +36,6 @@ impl CompletionSuggestion {
         Self {
             text,
             description: None,
-            completion_type,
         }
     }
 

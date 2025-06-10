@@ -1,4 +1,4 @@
-use super::{CompletionContext, CompletionProvider, CompletionSuggestion, CompletionType};
+use super::{CompletionContext, CompletionSuggestion, CompletionType};
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus};
@@ -236,13 +236,6 @@ impl DynamicCompletion {
                 _ => a.text.cmp(&b.text),
             }
         });
-    }
-}
-
-impl CompletionProvider for DynamicCompletion {
-    fn get_completions(&self, context: &CompletionContext) -> Result<Vec<String>> {
-        let suggestions = self.get_completions_for_context(context)?;
-        Ok(suggestions.into_iter().map(|s| s.text).collect())
     }
 }
 

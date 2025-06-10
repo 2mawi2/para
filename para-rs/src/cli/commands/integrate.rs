@@ -574,7 +574,6 @@ mod tests {
         let (git_temp, _git_service) = setup_test_repo();
 
         // Set up test environment
-        let original_dir = std::env::current_dir().unwrap_or_default();
         std::env::set_current_dir(git_temp.path()).unwrap();
         std::env::set_var("PARA_STATE_DIR", temp_dir.path());
 

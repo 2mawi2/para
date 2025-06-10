@@ -253,58 +253,6 @@ impl FinishArgs {
     }
 }
 
-impl Commands {
-    pub fn examples(&self) -> &'static str {
-        match self {
-            Commands::Start(_) => {
-                "Examples:\n  para start\n  para start my-feature\n  para start --dangerously-skip-permissions feature-auth"
-            }
-            Commands::Dispatch(_) => {
-                "Examples:\n  para dispatch \"Add user authentication\"\n  para dispatch --file prompt.txt\n  para dispatch auth-feature --file requirements.md"
-            }
-            Commands::Finish(_) => {
-                "Examples:\n  para finish \"Implement user auth\"\n  para finish \"Add login form\" --branch feature-login\n  para finish \"Complete auth\" --integrate"
-            }
-            Commands::Integrate(_) => {
-                "Examples:\n  para integrate\n  para integrate session-123\n  para integrate --strategy merge\n  para integrate --target main --dry-run"
-            }
-            Commands::Cancel(_) => {
-                "Examples:\n  para cancel\n  para cancel session-123"
-            }
-            Commands::Clean(_) => {
-                "Examples:\n  para clean\n  para clean --backups"
-            }
-            Commands::List(_) => {
-                "Examples:\n  para list\n  para ls -v\n  para list --archived"
-            }
-            Commands::Resume(_) => {
-                "Examples:\n  para resume\n  para resume session-123"
-            }
-            Commands::Recover(_) => {
-                "Examples:\n  para recover\n  para recover old-session"
-            }
-            Commands::Continue => {
-                "Examples:\n  para continue"
-            }
-            Commands::Config(_) => {
-                "Examples:\n  para config\n  para config setup\n  para config auto\n  para config show\n  para config edit\n  para config reset"
-            }
-            Commands::Completion(_) => {
-                "Examples:\n  para completion bash\n  para completion zsh > ~/.zsh_completions/_para"
-            }
-            Commands::CompleteCommand(_) => {
-                "Examples:\n  para complete-command --command-line 'para start' --current-word '' --position 2"
-            }
-            Commands::CompletionSessions => {
-                "Examples:\n  para _completion_sessions"
-            }
-            Commands::CompletionBranches => {
-                "Examples:\n  para _completion_branches"
-            }
-        }
-    }
-}
-
 pub fn validate_session_name(name: &str) -> crate::utils::Result<()> {
     if name.is_empty() {
         return Err(crate::utils::ParaError::invalid_args(

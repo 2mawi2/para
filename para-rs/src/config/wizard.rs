@@ -159,7 +159,7 @@ mod tests {
     use super::*;
     use crate::cli::parser::IntegrationStrategy;
     use crate::config::{
-        validation, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+        DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
 
     #[test]
