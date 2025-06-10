@@ -169,6 +169,9 @@ para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md -d
 - **Comprehensive error handling** with user-friendly messages
 - **Auto-staging workflow** - users should never need manual `git add`
 - **No comments or docstrings** - try to avoid comments completely and use self-documenting code (if possible)
+- **Dead Code** - never allow dead code with `#[allow(dead_code)]`
+- **Unused Imports** - never allow unused imports with `#[allow(unused_imports)]`
+- **Disabled Tests** - never disable tests with `#[cfg(disabled_test)]`
 
 ## Testing Guidelines
 
