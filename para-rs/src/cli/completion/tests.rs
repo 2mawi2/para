@@ -393,12 +393,6 @@ mod generator_tests {
         assert!(fish_script.contains("para"));
         assert!(fish_script.contains("complete"));
 
-        let powershell_completion =
-            generators::ShellCompletionGenerator::generate_basic_completion(Shell::PowerShell);
-        assert!(powershell_completion.is_ok());
-        let ps_script = powershell_completion.unwrap();
-        assert!(ps_script.contains("para"));
-        assert!(ps_script.contains("Register-ArgumentCompleter"));
     }
 
     #[test]
@@ -439,11 +433,6 @@ mod generator_tests {
         assert!(fish_instructions.contains("fish"));
         assert!(fish_instructions.contains("completions"));
 
-        let ps_instructions =
-            generators::ShellCompletionGenerator::get_installation_instructions(Shell::PowerShell);
-        assert!(ps_instructions.contains("Installation instructions"));
-        assert!(ps_instructions.contains("PowerShell"));
-        assert!(ps_instructions.contains("$PROFILE"));
     }
 }
 

@@ -9,7 +9,6 @@ Implement comprehensive shell completion for all para commands, arguments, and c
 - `para completion bash` - Generate bash completion script
 - `para completion zsh` - Generate zsh completion script
 - `para completion fish` - Generate fish completion script
-- `para completion powershell` - Generate PowerShell completion script
 - Dynamic completion for session names, branch names, and file paths
 
 ### Core Functionality
@@ -74,11 +73,6 @@ Implement comprehensive shell completion for all para commands, arguments, and c
 - Handle dynamic completion with fish functions
 - Integrate with fish's completion framework
 
-#### PowerShell Completion
-- Generate PowerShell completion script for Windows users
-- Support PowerShell's completion parameter sets
-- Handle dynamic completion with PowerShell functions
-- Support both Windows PowerShell and PowerShell Core
 
 ### Dynamic Completion Logic
 1. **Repository Detection**: Detect if user is in para repository

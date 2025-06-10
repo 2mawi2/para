@@ -14,7 +14,6 @@ impl ShellCompletionGenerator {
             Shell::Bash => generate(shells::Bash, &mut cmd, "para", &mut buf),
             Shell::Zsh => generate(shells::Zsh, &mut cmd, "para", &mut buf),
             Shell::Fish => generate(shells::Fish, &mut cmd, "para", &mut buf),
-            Shell::PowerShell => generate(shells::PowerShell, &mut cmd, "para", &mut buf),
         }
 
         String::from_utf8(buf).map_err(|e| {
@@ -34,7 +33,6 @@ impl ShellCompletionGenerator {
             Shell::Bash => Ok(Self::generate_bash_dynamic()),
             Shell::Zsh => Ok(Self::generate_zsh_dynamic()),
             Shell::Fish => Ok(Self::generate_fish_dynamic()),
-            Shell::PowerShell => Ok(Self::generate_powershell_dynamic()),
         }
     }
 
@@ -303,101 +301,6 @@ complete -f -c para -n '__para_using_command integrate; and test (count (command
 "#.to_string()
     }
 
-    fn generate_powershell_dynamic() -> String {
-        r#"
-# Para completion for PowerShell
-
-function Get-ParaSessions {
-    try {
-        $sessions = para list --quiet 2>$null | Where-Object { $_ -match '^[a-zA-Z0-9_-]*' }
-        return $sessions
-    } catch {
-        return @()
-    }
-}
-
-function Get-ParaArchivedSessions {
-    try {
-        $sessions = para list --archived --quiet 2>$null | Where-Object { $_ -match '^[a-zA-Z0-9_-]*' }
-        return $sessions
-    } catch {
-        return @()
-    }
-}
-
-function Get-GitBranches {
-    try {
-        if (git rev-parse --git-dir 2>$null) {
-            $branches = git branch -a 2>$null | ForEach-Object { 
-                $_.TrimStart('* ').Replace('remotes/origin/', '') 
-            } | Where-Object { $_ -notmatch '^HEAD' } | Sort-Object -Unique
-            return $branches
-        }
-    } catch {
-        return @()
-    }
-}
-
-Register-ArgumentCompleter -Native -CommandName para -ScriptBlock {
-    param($commandName, $wordToComplete, $cursorPosition)
-    
-    $command = $wordToComplete
-    $words = $command.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
-    
-    if ($words.Count -le 1) {
-        # Complete main commands
-        $commands = @(
-            'start', 'dispatch', 'finish', 'integrate', 'cancel', 
-            'clean', 'list', 'resume', 'recover', 'continue', 
-            'config', 'completion'
-        )
-        $commands | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-        }
-    } elseif ($words.Count -ge 2) {
-        $subcommand = $words[1]
-        
-        switch ($subcommand) {
-            'resume' {
-                Get-ParaSessions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Session: $_")
-                }
-            }
-            'cancel' {
-                Get-ParaSessions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Session: $_")
-                }
-            }
-            'recover' {
-                Get-ParaArchivedSessions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Archived session: $_")
-                }
-            }
-            'finish' {
-                if ($words.Count -eq 4) {
-                    Get-ParaSessions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Session: $_")
-                    }
-                }
-            }
-            'integrate' {
-                if ($words.Count -eq 4) {
-                    Get-ParaSessions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Session: $_")
-                    }
-                }
-            }
-            'completion' {
-                $shells = @('bash', 'zsh', 'fish', 'powershell')
-                $shells | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-                    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', "Shell: $_")
-                }
-            }
-        }
-    }
-}
-"#.to_string()
-    }
 
     pub fn get_installation_instructions(shell: Shell) -> String {
         match shell {
@@ -445,20 +348,6 @@ sudo mkdir -p /usr/share/fish/vendor_completions.d
 para completion fish | sudo tee /usr/share/fish/vendor_completions.d/para.fish
 
 # Fish will automatically load the completion on next shell start"#
-                .to_string(),
-            Shell::PowerShell => r#"# Installation instructions for PowerShell completion:
-
-# Option 1: Add to your PowerShell profile
-if (!(Test-Path -Path $PROFILE)) {
-    New-Item -ItemType File -Path $PROFILE -Force
-}
-para completion powershell | Add-Content -Path $PROFILE
-
-# Option 2: Install for all users (requires admin)
-para completion powershell | Add-Content -Path $PROFILE.AllUsersAllHosts
-
-# Then reload PowerShell or run:
-. $PROFILE"#
                 .to_string(),
         }
     }

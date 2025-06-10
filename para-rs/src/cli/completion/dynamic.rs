@@ -172,8 +172,6 @@ impl DynamicCompletion {
                         .with_description("Generate Zsh completion script".to_string()),
                     CompletionSuggestion::new("fish".to_string(), CompletionType::Value)
                         .with_description("Generate Fish completion script".to_string()),
-                    CompletionSuggestion::new("powershell".to_string(), CompletionType::Value)
-                        .with_description("Generate PowerShell completion script".to_string()),
                 ]);
             }
             _ => {}

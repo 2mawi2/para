@@ -205,7 +205,6 @@ pub enum Shell {
     Bash,
     Zsh,
     Fish,
-    PowerShell,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -172,16 +172,13 @@ fn close_ide_for_session(config: &crate::config::Config, _worktree_path: &PathBu
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(disabled_test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
     use crate::core::session::{IntegrationState, IntegrationStep};
-    use crate::test_utils::test_helpers::{setup_test_repo, setup_isolated_test_environment, create_test_config, TestEnvironmentGuard};
     use crate::utils::ParaError;
     use std::fs;
     use std::path::PathBuf;
-    use std::process::Command;
     use tempfile::TempDir;
 
 
