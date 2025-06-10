@@ -18,3 +18,5 @@ Thumbs.db
 
 # Para test artifacts
 tests/test_*.tmp
+test_subtrees/
+subtrees/
