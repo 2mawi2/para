@@ -22,17 +22,17 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
-    let mut session_manager = SessionManager::new(config.clone())?;
+    let mut session_manager = SessionManager::new(&config);
 
     let (session_info, current_branch, is_worktree_env) = match &args.session {
         Some(session_id) => {
-            let session_state = session_manager.load_session(session_id)?;
+            let session_state = session_manager.load_state(session_id)?;
             (Some(session_state), None, false)
         }
         None => match &session_env {
             SessionEnvironment::Worktree { branch, .. } => {
                 // Try to auto-detect session by current path
-                if let Ok(session) = session_manager.auto_detect_session() {
+                if let Ok(Some(session)) = session_manager.find_session_by_path(&current_dir) {
                     (Some(session), None, true)
                 } else {
                     (None, Some(branch.clone()), true)
@@ -99,9 +99,9 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
             if let Some(session_state) = session_info {
                 if config.should_preserve_on_finish() {
-                    session_manager.update_session_status(&session_state.id, SessionStatus::Completed)?;
+                    session_manager.update_session_status(&session_state.name, SessionStatus::Finished)?;
                 } else {
-                    session_manager.delete_session(&session_state.id)?;
+                    session_manager.delete_state(&session_state.name)?;
                 }
             }
 

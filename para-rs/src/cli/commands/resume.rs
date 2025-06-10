@@ -13,7 +13,7 @@ pub fn execute(args: ResumeArgs) -> Result<()> {
 
     let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(config.clone())?;
+    let session_manager = SessionManager::new(&config);
 
     match args.session {
         Some(session_name) => resume_specific_session(&config, &git_service, &session_name),
@@ -26,7 +26,7 @@ fn resume_specific_session(
     git_service: &GitService,
     session_name: &str,
 ) -> Result<()> {
-    let session_manager = SessionManager::new(config.clone())?;
+    let session_manager = SessionManager::new(&config);
 
     if session_manager.session_exists(session_name) {
         let session_state = session_manager.load_state(session_name)?;

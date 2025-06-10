@@ -14,13 +14,13 @@ pub fn execute(args: CancelArgs) -> Result<()> {
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 
-    let session_id = detect_session_id(&args, &git_service, &session_manager)?;
+    let session_name = detect_session_name(&args, &git_service, &session_manager)?;
 
-    let session_state = session_manager.load_state(&session_id)?;
+    let session_state = session_manager.load_state(&session_name)?;
 
     let has_uncommitted = git_service.repository().has_uncommitted_changes()?;
     if has_uncommitted {
-        confirm_cancel_with_changes(&session_id)?;
+        confirm_cancel_with_changes(&session_name)?;
     }
 
     let archived_branch =
@@ -49,16 +49,16 @@ pub fn execute(args: CancelArgs) -> Result<()> {
     Ok(())
 }
 
-fn detect_session_id(
+fn detect_session_name(
     args: &CancelArgs,
     git_service: &GitService,
     session_manager: &SessionManager,
 ) -> Result<String> {
-    if let Some(ref session_id) = args.session {
-        if !session_manager.session_exists(session_id) {
-            return Err(ParaError::session_not_found(session_id));
+    if let Some(ref session_name) = args.session {
+        if !session_manager.session_exists(session_name) {
+            return Err(ParaError::session_not_found(session_name));
         }
-        return Ok(session_id.clone());
+        return Ok(session_name.clone());
     }
 
     let current_dir = env::current_dir().map_err(|e| {
@@ -67,30 +67,32 @@ fn detect_session_id(
 
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
-            let sessions = session_manager.list_sessions()?;
-            for session in sessions {
-                if session.branch == branch && session.worktree_path == current_dir {
-                    return Ok(session.name);
-                }
+            if let Some(session) = session_manager.find_session_by_path(&current_dir)? {
+                return Ok(session.name);
             }
+            
+            if let Some(session) = session_manager.find_session_by_branch(&branch)? {
+                return Ok(session.name);
+            }
+            
             Err(ParaError::session_not_found(format!(
                 "No session found for current worktree (branch: {})",
                 branch
             )))
         }
         SessionEnvironment::MainRepository => Err(ParaError::invalid_args(
-            "Cannot cancel from main repository. Use 'para cancel <session-id>' to cancel a specific session.",
+            "Cannot cancel from main repository. Use 'para cancel <session-name>' to cancel a specific session.",
         )),
         SessionEnvironment::Invalid => Err(ParaError::invalid_args(
-            "Not in a para session directory. Use 'para cancel <session-id>' to cancel a specific session.",
+            "Not in a para session directory. Use 'para cancel <session-name>' to cancel a specific session.",
         )),
     }
 }
 
-fn confirm_cancel_with_changes(session_id: &str) -> Result<()> {
+fn confirm_cancel_with_changes(session_name: &str) -> Result<()> {
     print!(
         "Session '{}' has uncommitted changes. Are you sure you want to cancel? This will archive the session but preserve your work. [y/N]: ",
-        session_id
+        session_name
     );
     io::stdout()
         .flush()
@@ -229,11 +231,11 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_session_id_explicit() {
+    fn test_detect_session_name_explicit() {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(config.clone())?;
+        let session_manager = SessionManager::new(&config);
 
         let session_state = SessionState::new(
             "test-session".to_string(),
@@ -248,56 +250,56 @@ mod tests {
             session: Some("test-session".to_string()),
         };
 
-        let result = detect_session_id(&args, &git_service, &session_manager);
+        let result = detect_session_name(&args, &git_service, &session_manager);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "test-session");
     }
 
     #[test]
-    fn test_detect_session_id_nonexistent() {
+    fn test_detect_session_name_nonexistent() {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(config.clone())?;
+        let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs {
             session: Some("nonexistent-session".to_string()),
         };
 
-        let result = detect_session_id(&args, &git_service, &session_manager);
+        let result = detect_session_name(&args, &git_service, &session_manager);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
     #[test]
-    fn test_detect_session_id_from_main_repo() {
+    fn test_detect_session_name_from_main_repo() {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(config.clone())?;
+        let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs { session: None };
 
         std::env::set_current_dir(&repo.root).expect("Failed to change to repo root");
 
-        let result = detect_session_id(&args, &git_service, &session_manager);
+        let result = detect_session_name(&args, &git_service, &session_manager);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("main repository"));
     }
 
     #[test]
-    fn test_detect_session_id_invalid_directory() {
+    fn test_detect_session_name_invalid_directory() {
         let (_temp_dir, repo, config) = setup_test_repo();
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
-        let session_manager = SessionManager::new(config.clone())?;
+        let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs { session: None };
 
         let invalid_dir = TempDir::new().expect("Failed to create invalid dir");
         std::env::set_current_dir(invalid_dir.path()).expect("Failed to change to invalid dir");
 
-        let result = detect_session_id(&args, &git_service, &session_manager);
+        let result = detect_session_name(&args, &git_service, &session_manager);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -307,10 +309,10 @@ mod tests {
 
     #[test]
     fn test_confirm_cancel_with_changes_format() {
-        let session_id = "test-session";
+        let session_name = "test-session";
 
         let output = std::panic::catch_unwind(|| {
-            let _result = confirm_cancel_with_changes(session_id);
+            let _result = confirm_cancel_with_changes(session_name);
         });
 
         assert!(output.is_err() || output.is_ok());

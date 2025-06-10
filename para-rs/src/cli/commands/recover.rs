@@ -11,7 +11,7 @@ pub fn execute(args: RecoverArgs) -> Result<()> {
 
     let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(config.clone())?;
+    let session_manager = SessionManager::new(&config);
 
     match args.session {
         Some(session_name) => {

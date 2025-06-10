@@ -14,7 +14,7 @@ pub fn execute(args: StartArgs) -> Result<()> {
     let config = ConfigManager::load_or_create()
         .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
 
-    let mut session_manager = SessionManager::new(config.clone())?;
+    let mut session_manager = SessionManager::new(&config);
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn test_determine_session_name_with_provided_name() {
         let (_temp_dir, config) = setup_test_repo();
-        let session_manager = SessionManager::new(config).unwrap();
+        let session_manager = SessionManager::new(&config);
 
         let args = StartArgs {
             name: Some("test-session".to_string()),
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn test_determine_session_name_auto_generate() {
         let (_temp_dir, config) = setup_test_repo();
-        let session_manager = SessionManager::new(config).unwrap();
+        let session_manager = SessionManager::new(&config);
 
         let args = StartArgs {
             name: None,
