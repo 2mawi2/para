@@ -158,7 +158,9 @@ pub fn run_quick_setup() -> Result<Config> {
 mod tests {
     use super::*;
     use crate::cli::parser::IntegrationStrategy;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+    use crate::config::{
+        validation, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+    };
 
     #[test]
     fn test_config_summary_display() {

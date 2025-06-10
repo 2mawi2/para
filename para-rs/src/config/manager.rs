@@ -47,7 +47,6 @@ impl ConfigManager {
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]

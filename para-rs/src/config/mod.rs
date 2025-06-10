@@ -60,8 +60,6 @@ pub enum ConfigError {
     IoError(std::io::Error),
     JsonError(serde_json::Error),
     ValidationError(String),
-    #[allow(dead_code)]
-    NotFound(String),
 }
 
 impl std::fmt::Display for ConfigError {
@@ -70,7 +68,6 @@ impl std::fmt::Display for ConfigError {
             ConfigError::IoError(e) => write!(f, "IO error: {}", e),
             ConfigError::JsonError(e) => write!(f, "JSON error: {}", e),
             ConfigError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
-            ConfigError::NotFound(item) => write!(f, "Not found: {}", item),
         }
     }
 }
@@ -90,23 +87,12 @@ impl From<serde_json::Error> for ConfigError {
 }
 
 impl Config {
-    #[allow(dead_code)]
     pub fn load_or_create() -> Result<Self> {
         ConfigManager::load_or_create()
     }
 
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
-        ConfigManager::save(self)
-    }
-
     pub fn validate(&self) -> Result<()> {
         validation::validate_config(self)
-    }
-
-    #[allow(dead_code)]
-    pub fn get_ide_command(&self) -> &str {
-        &self.ide.command
     }
 
     pub fn get_branch_prefix(&self) -> &str {
@@ -129,23 +115,8 @@ impl Config {
         self.git.auto_stage
     }
 
-    #[allow(dead_code)]
-    pub fn should_auto_commit(&self) -> bool {
-        self.git.auto_commit
-    }
-
-    #[allow(dead_code)]
-    pub fn get_session_name_format(&self) -> &str {
-        &self.session.default_name_format
-    }
-
     pub fn should_preserve_on_finish(&self) -> bool {
         self.session.preserve_on_finish
-    }
-
-    #[allow(dead_code)]
-    pub fn get_auto_cleanup_days(&self) -> Option<u32> {
-        self.session.auto_cleanup_days
     }
 
     pub fn get_default_integration_strategy(&self) -> IntegrationStrategy {

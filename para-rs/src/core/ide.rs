@@ -292,7 +292,6 @@ impl IdeManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

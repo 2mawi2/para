@@ -254,7 +254,6 @@ impl FinishArgs {
 }
 
 impl Commands {
-    #[allow(dead_code)]
     pub fn examples(&self) -> &'static str {
         match self {
             Commands::Start(_) => {
