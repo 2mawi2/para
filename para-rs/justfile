@@ -181,6 +181,49 @@ para *ARGS:
     just build
     ./target/debug/para {{ARGS}}
 
-# Alias for 'start' command, forwards all arguments to para
+# Generic recipe to run any para subcommand - usage: just run <subcommand> [args...]
+run *ARGS:
+    just para {{ARGS}}
+
+# Para subcommand aliases - these automatically forward to the para binary
 start *ARGS:
     just para start {{ARGS}}
+
+dispatch *ARGS:
+    just para dispatch {{ARGS}}
+
+finish *ARGS:
+    just para finish {{ARGS}}
+
+integrate *ARGS:
+    just para integrate {{ARGS}}
+
+cancel *ARGS:
+    just para cancel {{ARGS}}
+
+clean *ARGS:
+    just para clean {{ARGS}}
+
+list *ARGS:
+    just para list {{ARGS}}
+
+ls *ARGS:
+    just para ls {{ARGS}}
+
+resume *ARGS:
+    just para resume {{ARGS}}
+
+recover *ARGS:
+    just para recover {{ARGS}}
+
+continue *ARGS:
+    just para continue {{ARGS}}
+
+config *ARGS:
+    just para config {{ARGS}}
+
+completion *ARGS:
+    just para completion {{ARGS}}
+
+help *ARGS:
+    just para help {{ARGS}}
