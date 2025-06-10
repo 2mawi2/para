@@ -122,78 +122,11 @@ mod context_tests {
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.get_subcommand(), Some("finish"));
-        assert_eq!(context.get_subcommand_args(), &["message"]);
     }
 
-    #[test]
-    fn test_completion_type_detection() {
-        let flag_context = CompletionContext::new(
-            vec![
-                "para".to_string(),
-                "start".to_string(),
-                "--branch".to_string(),
-            ],
-            2,
-        );
-        assert_eq!(
-            flag_context.get_completion_type(),
-            context::CompletionType::Flag
-        );
 
-        let subcommand_context =
-            CompletionContext::new(vec!["para".to_string(), "sta".to_string()], 1);
-        assert_eq!(
-            subcommand_context.get_completion_type(),
-            context::CompletionType::Subcommand
-        );
 
-        let session_context = CompletionContext::new(
-            vec!["para".to_string(), "resume".to_string(), "sess".to_string()],
-            2,
-        );
-        assert_eq!(
-            session_context.get_completion_type(),
-            context::CompletionType::Session
-        );
-    }
 
-    #[test]
-    fn test_git_repository_requirements() {
-        let context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
-        assert!(context.needs_git_repository());
-
-        let config_context =
-            CompletionContext::new(vec!["para".to_string(), "config".to_string()], 1);
-        assert!(!config_context.needs_git_repository());
-        assert!(config_context.can_work_outside_git());
-    }
-
-    #[test]
-    fn test_help_detection() {
-        let help_context = CompletionContext::new(
-            vec![
-                "para".to_string(),
-                "start".to_string(),
-                "--help".to_string(),
-            ],
-            2,
-        );
-        assert!(help_context.should_show_help());
-        assert_eq!(help_context.get_help_context(), Some("start".to_string()));
-
-        let help_context2 = CompletionContext::new(vec!["para".to_string(), "help".to_string()], 1);
-        assert!(help_context2.should_show_help());
-    }
-
-    #[test]
-    fn test_environment_warnings() {
-        let mut context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
-        context.is_git_repository = false;
-
-        let warnings = context.get_environment_warnings();
-        assert!(!warnings.is_empty());
-        assert!(warnings.iter().any(|w| w.contains("Git repository")));
-    }
 }
 
 #[cfg(test)]

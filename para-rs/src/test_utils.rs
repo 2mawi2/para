@@ -1,4 +1,3 @@
-#[cfg(test)]
 pub mod test_helpers {
     use crate::config::Config;
     use crate::core::git::GitService;

@@ -133,6 +133,7 @@ impl<'a> ConflictManager<'a> {
         let mut middle_line = None;
         let mut end_line = None;
 
+        #[allow(clippy::needless_range_loop)]
         for i in (start + 1)..lines.len() {
             if lines[i].starts_with("=======") && middle_line.is_none() {
                 middle_line = Some(i);
