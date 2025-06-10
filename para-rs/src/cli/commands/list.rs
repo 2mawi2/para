@@ -310,7 +310,7 @@ mod tests {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init"])
+            .args(&["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
@@ -345,6 +345,7 @@ mod tests {
             .expect("Failed to discover repo");
         (temp_dir, service)
     }
+
 
     struct TestEnvironmentGuard {
         original_dir: std::path::PathBuf,

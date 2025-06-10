@@ -17,7 +17,7 @@ pub mod test_helpers {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init"])
+            .args(&["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
@@ -51,6 +51,7 @@ pub mod test_helpers {
         let service = GitService::discover_from(repo_path).expect("Failed to discover repo");
         (temp_dir, service)
     }
+
 
     pub fn setup_isolated_test_environment(temp_dir: &TempDir) -> (PathBuf, String) {
         // Create a test config that points to our temp state dir
