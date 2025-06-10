@@ -1,7 +1,6 @@
 use super::defaults::{default_config, get_available_ides, is_command_available};
 use super::validation;
 use super::{Config, ConfigError, Result};
-use crate::cli::parser::IntegrationStrategy;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
 pub fn run_config_wizard() -> Result<Config> {
@@ -417,6 +416,7 @@ pub fn run_quick_setup() -> Result<Config> {
 mod tests {
     use super::*;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+    use crate::cli::parser::IntegrationStrategy;
 
     #[test]
     fn test_config_summary_display() {

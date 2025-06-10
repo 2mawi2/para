@@ -1,6 +1,5 @@
 use super::defaults::{default_config, get_config_file_path};
 use super::{Config, ConfigError, Result};
-use crate::cli::parser::IntegrationStrategy;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -106,6 +105,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+    use crate::cli::parser::IntegrationStrategy;
 
     fn create_test_config() -> Config {
         Config {

@@ -1,5 +1,4 @@
 use super::{Config, ConfigError, Result};
-use crate::cli::parser::IntegrationStrategy;
 use std::path::Path;
 
 pub fn validate_config(config: &Config) -> Result<()> {
@@ -211,6 +210,7 @@ pub fn suggest_directory_fix(dir_name: &str) -> String {
 mod tests {
     use super::*;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+    use crate::cli::parser::IntegrationStrategy;
 
     #[test]
     fn test_valid_ide_names() {

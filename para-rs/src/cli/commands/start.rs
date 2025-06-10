@@ -1,10 +1,8 @@
 use crate::cli::parser::StartArgs;
-use crate::config::{Config, ConfigManager};
-use crate::core::git::{GitOperations, GitService};
+use crate::config::ConfigManager;
 use crate::core::ide::IdeManager;
 use crate::core::session::SessionManager;
 use crate::utils::{generate_unique_name, validate_session_name, ParaError, Result};
-use std::path::{Path, PathBuf};
 
 pub fn execute(args: StartArgs) -> Result<()> {
     args.validate()?;

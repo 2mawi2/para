@@ -1,4 +1,3 @@
-use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, IdeConfig};
 use crate::utils::{ParaError, Result};
 use std::fs;
@@ -332,6 +331,7 @@ pub fn validate_ide_availability(config: &Config) -> Result<()> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use crate::cli::parser::IntegrationStrategy;
 
     fn create_test_config(ide_name: &str, ide_command: &str) -> Config {
         Config {

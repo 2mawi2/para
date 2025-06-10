@@ -9,7 +9,7 @@ pub mod strategy;
 pub mod worktree;
 
 pub use branch::{BranchInfo, BranchManager};
-pub use conflict::{ConflictInfo, ConflictManager, ConflictResolution, ConflictType};
+pub use conflict::ConflictManager;
 pub use integration::{
     FinishRequest, FinishResult, IntegrationManager, IntegrationRequest, IntegrationResult,
 };

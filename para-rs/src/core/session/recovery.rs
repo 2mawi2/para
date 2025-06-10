@@ -1,4 +1,3 @@
-use crate::cli::parser::IntegrationStrategy;
 use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::{SessionManager, SessionState};
@@ -303,6 +302,7 @@ mod tests {
     use std::path::Path;
     use std::process::Command;
     use tempfile::TempDir;
+    use crate::cli::parser::IntegrationStrategy;
 
     fn create_test_config(temp_dir: &Path) -> Config {
         Config {

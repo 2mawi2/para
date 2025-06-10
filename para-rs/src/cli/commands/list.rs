@@ -1,11 +1,9 @@
 use crate::cli::parser::ListArgs;
 use crate::config::ConfigManager;
-use crate::core::git::{BranchInfo, GitOperations, GitService, WorktreeInfo};
+use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus as UnifiedSessionStatus};
 use crate::utils::{ParaError, Result};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]

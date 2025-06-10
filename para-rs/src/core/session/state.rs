@@ -37,7 +37,7 @@ impl SessionState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    
 
     #[test]
     fn test_session_state_new() {

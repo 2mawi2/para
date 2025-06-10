@@ -1,7 +1,7 @@
 use crate::cli::parser::CancelArgs;
 use crate::config::manager::ConfigManager;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
-use crate::core::session::{SessionManager, SessionStatus};
+use crate::core::session::SessionManager;
 use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
@@ -28,7 +28,7 @@ pub fn execute(args: CancelArgs) -> Result<()> {
 
     git_service.remove_worktree(&session_state.worktree_path)?;
 
-    let mut session_manager = session_manager; // Make mutable for update
+    let session_manager = session_manager; // Make mutable for update
     session_manager.delete_state(&session_state.name)?;
 
     let platform = get_platform_manager();
