@@ -137,7 +137,7 @@ impl<'a> ConflictManager<'a> {
         for i in (start + 1)..lines.len() {
             if lines[i].starts_with("=======") && middle_line.is_none() {
                 middle_line = Some(i);
-            } else if line.starts_with(">>>>>>>") {
+            } else if lines[i].starts_with(">>>>>>>") {
                 end_line = Some(i);
                 break;
             }

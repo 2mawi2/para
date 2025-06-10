@@ -463,9 +463,7 @@ mod tests {
     use crate::core::session::IntegrationState;
     use std::process::Command;
     use crate::utils::ParaError;
-    use std::fs;
     use std::path::PathBuf;
-    use std::process::Command;
     use tempfile::TempDir;
 
     fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
