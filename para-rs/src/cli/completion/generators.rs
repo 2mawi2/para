@@ -301,7 +301,6 @@ complete -f -c para -n '__para_using_command integrate; and test (count (command
 "#.to_string()
     }
 
-
     pub fn get_installation_instructions(shell: Shell) -> String {
         match shell {
             Shell::Bash => r#"# Installation instructions for Bash completion:

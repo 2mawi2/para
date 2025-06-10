@@ -63,6 +63,46 @@ src/
 - **Cross-platform**: Ensure tests work on different operating systems
 - **Test coverage**: Each implemented feature should have a test case (ideally written first)
 
+### Test Utilities for Git-Based Testing
+
+**Important**: For any tests that involve git operations or need isolated environments, use the common test utilities in `src/test_utils.rs`:
+
+```rust
+use crate::test_utils::test_helpers::*;
+use tempfile::TempDir;
+
+#[test]
+fn test_with_git_environment() {
+    let git_temp = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+    let (_git_temp, git_service) = setup_test_repo();
+    
+    let mut config = create_test_config();
+    config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+    
+    // Your test code here using the isolated git environment
+}
+```
+
+**Key Benefits:**
+- **Test Independence**: Each test gets its own isolated git repository and state directory
+- **Environment Isolation**: Tests don't interfere with each other or the host system
+- **Automatic Cleanup**: The `TestEnvironmentGuard` automatically restores the original environment
+- **Consistent Setup**: All git tests use the same standardized repository setup
+
+**Available Helper Functions:**
+- `setup_test_repo()`: Creates an isolated git repository with initial commit
+- `create_test_config()`: Creates a clean test configuration
+- `TestEnvironmentGuard::new()`: Sets up isolated environment and automatically restores on drop
+- `setup_isolated_test_environment()`: Creates isolated config and state directories
+
+**When to Use:**
+- Any test that involves git operations (commits, branches, worktrees)
+- Tests that use SessionManager or other components that modify file system state
+- Integration tests that need multiple components working together
+- Tests that need to avoid conflicts with other tests running in parallel
+
 ## Development Workflow
 
 ### Rust-First Development

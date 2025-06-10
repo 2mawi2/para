@@ -1,5 +1,5 @@
 use crate::cli::parser::ResumeArgs;
-use crate::config::Config;
+use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::ide::IdeManager;
 use crate::core::session::{SessionManager, SessionStatus};
@@ -11,7 +11,7 @@ use std::path::Path;
 pub fn execute(args: ResumeArgs) -> Result<()> {
     validate_resume_args(&args)?;
 
-    let config = Config::load_or_create()?;
+    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 
@@ -26,7 +26,7 @@ fn resume_specific_session(
     git_service: &GitService,
     session_name: &str,
 ) -> Result<()> {
-    let session_manager = SessionManager::new(config);
+    let session_manager = SessionManager::new(&config);
 
     if session_manager.session_exists(session_name) {
         let session_state = session_manager.load_state(session_name)?;

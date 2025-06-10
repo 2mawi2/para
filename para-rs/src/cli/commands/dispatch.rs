@@ -19,7 +19,6 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 
     let git_service = GitService::discover()
         .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
-
     let repo_root = git_service.repository().root.clone();
 
     let session_manager = SessionManager::new(&config);
@@ -62,13 +61,13 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
 
     launch_claude_code(
         &config,
-        &session_path,
+        &session_state.worktree_path,
         &prompt,
         args.dangerously_skip_permissions,
     )?;
 
-    println!("Created session '{}' with Claude Code", session_id);
-    println!("Session path: {}", session_path.display());
+    println!("Created session '{}' with Claude Code", session_state.name);
+    println!("Session path: {}", session_state.worktree_path.display());
 
     Ok(())
 }
@@ -546,7 +545,7 @@ mod tests {
     fn test_read_file_content_missing_file() {
         let result = read_file_content(Path::new("nonexistent.txt"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("file not found"));
+        assert!(result.unwrap_err().to_string().contains("file not found:"));
     }
 
     #[test]

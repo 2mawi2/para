@@ -22,7 +22,7 @@ pub fn execute() -> Result<()> {
             // Silent failure for completion compatibility
         }
     }
-    
+
     Ok(())
 }
 

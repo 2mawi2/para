@@ -17,7 +17,7 @@ pub mod test_helpers {
 
         Command::new("git")
             .current_dir(repo_path)
-            .args(&["init"])
+            .args(&["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 
@@ -52,22 +52,24 @@ pub mod test_helpers {
         (temp_dir, service)
     }
 
+
     pub fn setup_isolated_test_environment(temp_dir: &TempDir) -> (PathBuf, String) {
         // Create a test config that points to our temp state dir
         let config_dir = temp_dir.path().join(".config").join("para-rs");
         fs::create_dir_all(&config_dir).unwrap();
         let config_file = config_dir.join("config.json");
-        
+
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().to_string_lossy().to_string();
-        
-        let config_json = serde_json::to_string_pretty(&config).expect("Failed to serialize config");
+
+        let config_json =
+            serde_json::to_string_pretty(&config).expect("Failed to serialize config");
         fs::write(&config_file, config_json).expect("Failed to write config file");
-        
+
         // Return the config directory and original HOME for restoration
         let original_home = std::env::var("HOME").unwrap_or_default();
         std::env::set_var("HOME", temp_dir.path());
-        
+
         (config_dir, original_home)
     }
 
@@ -77,7 +79,7 @@ pub mod test_helpers {
             // If we can't restore to the original directory, try to go to a safe fallback
             let _ = std::env::set_current_dir("/tmp");
         }
-        
+
         if !original_home.is_empty() {
             std::env::set_var("HOME", original_home);
         } else {
@@ -95,13 +97,17 @@ pub mod test_helpers {
             // Try to get the original directory, but if it fails, use a fallback
             let original_dir = std::env::current_dir().unwrap_or_else(|_| {
                 // If current dir is invalid, try to use the git_temp parent as fallback
-                git_temp.path().parent().unwrap_or_else(|| std::path::Path::new("/tmp")).to_path_buf()
+                git_temp
+                    .path()
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("/tmp"))
+                    .to_path_buf()
             });
-            
+
             std::env::set_current_dir(git_temp.path())?;
-            
+
             let (_config_dir, original_home) = setup_isolated_test_environment(temp_dir);
-            
+
             Ok(TestEnvironmentGuard {
                 original_dir,
                 original_home,

@@ -1,5 +1,5 @@
 use crate::cli::parser::RecoverArgs;
-use crate::config::Config;
+use crate::config::{Config, ConfigManager};
 use crate::core::git::GitService;
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{ParaError, Result};
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 pub fn execute(args: RecoverArgs) -> Result<()> {
     validate_recover_args(&args)?;
 
-    let config = Config::load_or_create()?;
+    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 

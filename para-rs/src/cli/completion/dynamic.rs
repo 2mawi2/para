@@ -39,9 +39,9 @@ impl DynamicCompletion {
             if should_include {
                 let description = match session.status {
                     SessionStatus::Active => format!("Active session on branch {}", session.branch),
-                    SessionStatus::Finished => format!("Finished session ({})", session.updated_at),
+                    SessionStatus::Finished => format!("Finished session ({})", session.created_at),
                     SessionStatus::Cancelled => {
-                        format!("Cancelled session ({})", session.updated_at)
+                        format!("Cancelled session ({})", session.created_at)
                     }
                 };
 

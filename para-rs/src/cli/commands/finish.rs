@@ -22,14 +22,22 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
+    let mut session_manager = SessionManager::new(&config);
+
     let (session_info, current_branch, is_worktree_env) = match &args.session {
         Some(session_id) => {
-            let session_manager = SessionManager::new(&config);
             let session_state = session_manager.load_state(session_id)?;
             (Some(session_state), None, false)
         }
         None => match &session_env {
-            SessionEnvironment::Worktree { branch, .. } => (None, Some(branch.clone()), true),
+            SessionEnvironment::Worktree { branch, .. } => {
+                // Try to auto-detect session by current path
+                if let Ok(Some(session)) = session_manager.find_session_by_path(&current_dir) {
+                    (Some(session), None, true)
+                } else {
+                    (None, Some(branch.clone()), true)
+                }
+            }
             SessionEnvironment::MainRepository => {
                 return Err(ParaError::invalid_args(
                         "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
@@ -90,11 +98,9 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             };
 
             if let Some(session_state) = session_info {
-                let session_manager = SessionManager::new(&config);
                 if config.should_preserve_on_finish() {
-                    let mut updated_state = session_state;
-                    updated_state.update_status(SessionStatus::Finished);
-                    session_manager.save_state(&updated_state)?;
+                    session_manager
+                        .update_session_status(&session_state.name, SessionStatus::Finished)?;
                 } else {
                     session_manager.delete_state(&session_state.name)?;
                 }
@@ -176,7 +182,7 @@ mod tests {
 
         Command::new("git")
             .current_dir(&repo_path)
-            .args(&["init"])
+            .args(&["init", "--initial-branch=main"])
             .status()
             .expect("Failed to init git repo");
 

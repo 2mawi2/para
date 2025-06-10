@@ -65,13 +65,12 @@ pub fn execute() -> Result<()> {
             Err(e) => {
                 let conflicts = conflict_manager.detect_conflicts()?;
                 if !conflicts.is_empty() {
-                    let conflict_paths: Vec<PathBuf> = conflicts.iter()
-                        .map(|c| c.file_path.clone())
-                        .collect();
+                    let conflict_paths: Vec<PathBuf> =
+                        conflicts.iter().map(|c| c.file_path.clone()).collect();
                     state_manager.update_integration_step(IntegrationStep::ConflictsDetected {
                         files: conflict_paths,
                     })?;
-                    
+
                     println!("⚠️  New conflicts detected during rebase:");
                     for file in &conflicts {
                         println!("   • {}", file.file_path.display());
@@ -79,7 +78,8 @@ pub fn execute() -> Result<()> {
                     let summary = conflict_manager.get_conflict_summary()?;
                     println!("\n{}", summary);
                     return Err(ParaError::git_operation(
-                        "New conflicts detected. Resolve them and run 'para continue' again.".to_string(),
+                        "New conflicts detected. Resolve them and run 'para continue' again."
+                            .to_string(),
                     ));
                 } else {
                     return Err(ParaError::git_operation(format!(
@@ -91,7 +91,10 @@ pub fn execute() -> Result<()> {
         }
     } else if integration_manager.is_merge_in_progress()? {
         println!("🔄 Completing merge operation...");
-        if let Err(e) = git_service.repository().commit("Complete merge after conflict resolution") {
+        if let Err(e) = git_service
+            .repository()
+            .commit("Complete merge after conflict resolution")
+        {
             return Err(ParaError::git_operation(format!(
                 "Failed to complete merge: {}",
                 e
@@ -181,8 +184,6 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-
-
     fn create_test_integration_state() -> IntegrationState {
         IntegrationState::new(
             "test-session".to_string(),
@@ -198,9 +199,9 @@ mod tests {
     fn test_execute_no_integration_state() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_var("PARA_STATE_DIR", temp_dir.path());
-        
+
         let result = execute();
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("No integration in progress"));
@@ -212,32 +213,35 @@ mod tests {
     #[test]
     fn test_execute_no_conflicts() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Set up isolated test repository and environment
         let (git_temp, _git_service) = setup_test_repo();
-        
+
         // Use guard to ensure environment cleanup
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
             .expect("Failed to set up test environment");
-        
+
         // Create an integration state that indicates no conflicts (integration is complete)
         let mut state = create_test_integration_state();
         state.step = IntegrationStep::IntegrationComplete;
-        
+
         // Save the state so the execute function can load it
         let state_manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
         state_manager.save_integration_state(&state).unwrap();
-        
+
         let result = execute();
-        
+
         // Environment will be restored by guard when it drops
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             // The test expects "No conflicts to resolve" but if there's no integration state
             // loaded, it will return "No integration in progress". For now, let's test that
             // it fails with the expected behavior (config loading might fail)
-            assert!(message.contains("No integration in progress") || message.contains("No conflicts to resolve"));
+            assert!(
+                message.contains("No integration in progress")
+                    || message.contains("No conflicts to resolve")
+            );
         } else {
             panic!("Expected GitOperation error");
         }
@@ -250,11 +254,11 @@ mod tests {
         let session_manager = SessionManager::new(&create_test_config());
         let mut config = create_test_config();
         config.session.preserve_on_finish = true;
-        
+
         // Create a test worktree directory in the git repo for cleanup
         let worktree_path = git_temp.path().join("test-worktree");
         fs::create_dir_all(&worktree_path).unwrap();
-        
+
         let result = cleanup_after_successful_integration(
             &git_service,
             &session_manager,
@@ -263,17 +267,17 @@ mod tests {
             &worktree_path,
             "feature-branch",
         );
-        
+
         // In test environment, cleanup operations may fail due to missing worktrees/sessions
         // This is expected - we're testing that the function handles errors gracefully
         if let Err(e) = &result {
             // Expected errors: worktree not found, session state not found, etc.
             let error_msg = e.to_string().to_lowercase();
             assert!(
-                error_msg.contains("worktree") || 
-                error_msg.contains("session") ||
-                error_msg.contains("no such file") ||
-                error_msg.contains("not found")
+                error_msg.contains("worktree")
+                    || error_msg.contains("session")
+                    || error_msg.contains("no such file")
+                    || error_msg.contains("not found")
             );
         }
     }
@@ -285,11 +289,11 @@ mod tests {
         let session_manager = SessionManager::new(&create_test_config());
         let mut config = create_test_config();
         config.session.preserve_on_finish = false;
-        
+
         // Create a test worktree directory in the git repo for cleanup
         let worktree_path = git_temp.path().join("test-worktree");
         fs::create_dir_all(&worktree_path).unwrap();
-        
+
         let result = cleanup_after_successful_integration(
             &git_service,
             &session_manager,
@@ -298,17 +302,17 @@ mod tests {
             &worktree_path,
             "feature-branch",
         );
-        
+
         // In test environment, cleanup operations may fail due to missing worktrees/sessions
         // This is expected - we're testing that the function handles errors gracefully
         if let Err(e) = &result {
             // Expected errors: worktree not found, session state not found, etc.
             let error_msg = e.to_string().to_lowercase();
             assert!(
-                error_msg.contains("worktree") || 
-                error_msg.contains("session") ||
-                error_msg.contains("no such file") ||
-                error_msg.contains("not found")
+                error_msg.contains("worktree")
+                    || error_msg.contains("session")
+                    || error_msg.contains("no such file")
+                    || error_msg.contains("not found")
             );
         }
     }
@@ -318,9 +322,9 @@ mod tests {
         let mut config = create_test_config();
         config.ide.wrapper.enabled = true;
         let worktree_path = PathBuf::from("/tmp/test");
-        
+
         let result = close_ide_for_session(&config, &worktree_path);
-        
+
         assert!(result.is_ok());
     }
 
@@ -329,9 +333,9 @@ mod tests {
         let mut config = create_test_config();
         config.ide.wrapper.enabled = false;
         let worktree_path = PathBuf::from("/tmp/test");
-        
+
         let result = close_ide_for_session(&config, &worktree_path);
-        
+
         assert!(result.is_ok());
     }
 
@@ -339,9 +343,9 @@ mod tests {
     fn test_execute_validates_config_loading() {
         std::env::remove_var("PARA_CONFIG_DIR");
         std::env::remove_var("PARA_STATE_DIR");
-        
+
         let result = execute();
-        
+
         assert!(result.is_err());
     }
 
@@ -349,9 +353,9 @@ mod tests {
     fn test_execute_validates_git_service_discovery() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
-        
+
         let result = execute();
-        
+
         assert!(result.is_err());
     }
 
@@ -359,9 +363,9 @@ mod tests {
     fn test_execute_error_handling_for_state_manager_operations() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_var("PARA_STATE_DIR", temp_dir.path());
-        
+
         let result = execute();
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("No integration in progress"));
@@ -374,14 +378,16 @@ mod tests {
     fn test_continue_workflow_error_scenarios() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_var("PARA_STATE_DIR", temp_dir.path());
-        
+
         let result = execute();
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             ParaError::GitOperation { message } => {
-                assert!(message.contains("No integration in progress") || 
-                       message.contains("Failed to load config"));
+                assert!(
+                    message.contains("No integration in progress")
+                        || message.contains("Failed to load config")
+                );
             }
             _ => {
                 // This is also acceptable as config loading might fail
@@ -392,7 +398,7 @@ mod tests {
     #[test]
     fn test_integration_state_validation() {
         let state = create_test_integration_state();
-        
+
         assert_eq!(state.session_id, "test-session");
         assert_eq!(state.feature_branch, "feature-branch");
         assert_eq!(state.base_branch, "master");
@@ -402,11 +408,14 @@ mod tests {
     #[test]
     fn test_integration_step_progression() {
         let mut state = create_test_integration_state();
-        assert!(matches!(state.step, IntegrationStep::ConflictsDetected { .. }));
-        
+        assert!(matches!(
+            state.step,
+            IntegrationStep::ConflictsDetected { .. }
+        ));
+
         state.step = IntegrationStep::ConflictsResolved;
         assert!(!state.is_in_conflict());
-        
+
         state.step = IntegrationStep::IntegrationComplete;
         assert!(!state.is_in_conflict());
     }
@@ -414,7 +423,7 @@ mod tests {
     // NEW RED TESTS FOR CONTINUE COMMAND FIXES
     #[test]
     fn test_continue_should_fail_when_no_integration_state_exists() {
-        // This test captures the issue where continue should fail gracefully 
+        // This test captures the issue where continue should fail gracefully
         // when no integration is in progress
         let temp_dir = TempDir::new().unwrap();
         let (git_temp, _git_service) = setup_test_repo();
@@ -423,7 +432,7 @@ mod tests {
 
         // Try to continue when no integration state exists
         let result = execute();
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("No integration in progress"));
@@ -450,21 +459,27 @@ mod tests {
 
         // Create actual conflict markers in README.md to simulate unresolved conflicts
         let readme_path = git_temp.path().join("README.md");
-        fs::write(&readme_path, 
-            "<<<<<<< HEAD\nOriginal content\n=======\nNew content\n>>>>>>> feature").unwrap();
+        fs::write(
+            &readme_path,
+            "<<<<<<< HEAD\nOriginal content\n=======\nNew content\n>>>>>>> feature",
+        )
+        .unwrap();
 
         // Continue should fail because conflicts still exist
         let result = execute();
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("conflicts") || message.contains("resolve"));
         } else {
-            panic!("Expected GitOperation error about unresolved conflicts, got: {:?}", result);
+            panic!(
+                "Expected GitOperation error about unresolved conflicts, got: {:?}",
+                result
+            );
         }
     }
 
-    #[test] 
+    #[test]
     fn test_continue_should_proceed_when_conflicts_are_resolved() {
         // This test captures the expected behavior when conflicts are resolved
         let temp_dir = TempDir::new().unwrap();
@@ -494,9 +509,13 @@ mod tests {
         // Continue should proceed successfully
         // NOTE: This test will currently fail because the continue logic needs to be fixed
         let result = execute();
-        
+
         // Expected behavior: should succeed and advance integration
-        assert!(result.is_ok(), "Continue should succeed when conflicts are resolved, got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Continue should succeed when conflicts are resolved, got: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -520,7 +539,7 @@ mod tests {
             .args(&["add", "test.txt"])
             .status()
             .expect("Failed to add test file");
-        
+
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(&["commit", "-m", "Add test file"])
@@ -533,7 +552,7 @@ mod tests {
             .args(&["rev-parse", "HEAD"])
             .output()
             .expect("Failed to get HEAD commit");
-        
+
         let commit_hash = String::from_utf8(output.stdout).unwrap().trim().to_string();
 
         // Reset and try to cherry-pick (this might create conflicts)
@@ -550,7 +569,7 @@ mod tests {
             .args(&["add", "test.txt"])
             .status()
             .expect("Failed to add modified file");
-        
+
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(&["commit", "-m", "Add different content"])
@@ -567,7 +586,7 @@ mod tests {
         // Continue should be able to handle this git state
         // NOTE: This test will currently fail because continue logic needs improvement
         let result = execute();
-        
+
         // We expect either success (if no conflicts) or a meaningful error about conflicts
         match result {
             Ok(_) => {
@@ -576,9 +595,9 @@ mod tests {
             Err(ParaError::GitOperation { message }) => {
                 // Error is acceptable if it's about conflicts or git state
                 assert!(
-                    message.contains("conflicts") || 
-                    message.contains("No conflicts") || 
-                    message.contains("integration")
+                    message.contains("conflicts")
+                        || message.contains("No conflicts")
+                        || message.contains("integration")
                 );
             }
             Err(e) => {

@@ -400,7 +400,10 @@ mod tests {
         );
 
         assert_eq!(state.original_head_commit, Some("abc123def456".to_string()));
-        assert_eq!(state.original_working_dir, Some(PathBuf::from("/original/dir")));
+        assert_eq!(
+            state.original_working_dir,
+            Some(PathBuf::from("/original/dir"))
+        );
         assert_eq!(state.backup_branch, Some("backup-main-123456".to_string()));
         assert_eq!(state.temp_branches.len(), 0);
 
@@ -413,8 +416,14 @@ mod tests {
             .expect("Failed to load state")
             .unwrap();
 
-        assert_eq!(loaded.original_head_commit, Some("abc123def456".to_string()));
-        assert_eq!(loaded.original_working_dir, Some(PathBuf::from("/original/dir")));
+        assert_eq!(
+            loaded.original_head_commit,
+            Some("abc123def456".to_string())
+        );
+        assert_eq!(
+            loaded.original_working_dir,
+            Some(PathBuf::from("/original/dir"))
+        );
         assert_eq!(loaded.backup_branch, Some("backup-main-123456".to_string()));
     }
 
@@ -508,7 +517,10 @@ mod tests {
         assert_eq!(loaded.base_branch, "main");
         assert_eq!(loaded.commit_message, Some("Test commit".to_string()));
         assert_eq!(loaded.original_head_commit, Some("commit123".to_string()));
-        assert_eq!(loaded.original_working_dir, Some(PathBuf::from("/test/dir")));
+        assert_eq!(
+            loaded.original_working_dir,
+            Some(PathBuf::from("/test/dir"))
+        );
         assert_eq!(loaded.backup_branch, Some("backup-main-789".to_string()));
         assert_eq!(loaded.temp_branches.len(), 2);
         assert!(loaded.temp_branches.contains(&"temp-1".to_string()));
@@ -532,7 +544,7 @@ mod tests {
         assert!(!state.base_branch.is_empty());
         assert!(matches!(state.strategy, IntegrationStrategy::Rebase));
         assert!(matches!(state.step, IntegrationStep::Started));
-        
+
         // Test optional fields start as None/empty
         assert_eq!(state.original_head_commit, None);
         assert_eq!(state.original_working_dir, None);
@@ -544,7 +556,11 @@ mod tests {
     fn test_manager_error_handling() {
         let temp_dir = TempDir::new().unwrap();
         // Create manager with invalid path
-        let invalid_path = temp_dir.path().join("nonexistent").join("deeply").join("nested");
+        let invalid_path = temp_dir
+            .path()
+            .join("nonexistent")
+            .join("deeply")
+            .join("nested");
         let manager = IntegrationStateManager::new(invalid_path);
 
         let state = IntegrationState::new(
@@ -619,7 +635,7 @@ mod tests {
         assert!(state.is_in_conflict());
         assert!(!state.is_failed());
         assert_eq!(state.conflict_files, conflict_files);
-        
+
         if let IntegrationStep::ConflictsDetected { files } = &state.step {
             assert_eq!(*files, conflict_files);
         } else {
@@ -627,7 +643,7 @@ mod tests {
         }
     }
 
-    #[test] 
+    #[test]
     fn test_failed_state_should_be_separate_from_conflicts_detected() {
         // This test ensures Failed and ConflictsDetected are distinct states
         let temp_dir = TempDir::new().unwrap();
@@ -641,8 +657,8 @@ mod tests {
             IntegrationStrategy::Squash,
             Some("Test commit".to_string()),
         );
-        failed_state.mark_step(IntegrationStep::Failed { 
-            error: "Some unrecoverable error".to_string() 
+        failed_state.mark_step(IntegrationStep::Failed {
+            error: "Some unrecoverable error".to_string(),
         });
 
         assert!(failed_state.is_failed());
@@ -655,7 +671,8 @@ mod tests {
             "master".to_string(),
             IntegrationStrategy::Squash,
             Some("Test commit".to_string()),
-        ).with_conflicts(vec![PathBuf::from("test.txt")]);
+        )
+        .with_conflicts(vec![PathBuf::from("test.txt")]);
 
         assert!(!conflict_state.is_failed());
         assert!(conflict_state.is_in_conflict());

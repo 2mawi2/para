@@ -392,7 +392,6 @@ mod generator_tests {
         let fish_script = fish_completion.unwrap();
         assert!(fish_script.contains("para"));
         assert!(fish_script.contains("complete"));
-
     }
 
     #[test]
@@ -432,7 +431,6 @@ mod generator_tests {
         assert!(fish_instructions.contains("Installation instructions"));
         assert!(fish_instructions.contains("fish"));
         assert!(fish_instructions.contains("completions"));
-
     }
 }
 
