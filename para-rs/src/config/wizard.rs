@@ -220,4 +220,14 @@ mod tests {
         assert!(config.validate().is_ok(), "Default config should be valid");
     }
 
+    #[test]
+    fn test_ide_detection_integration() {
+        let available_ides = get_available_ides();
+
+        // Test that detected IDEs are valid
+        for (name, command) in available_ides {
+            assert!(!name.is_empty(), "IDE name should not be empty");
+            assert!(!command.is_empty(), "IDE command should not be empty");
+        }
+    }
 }
