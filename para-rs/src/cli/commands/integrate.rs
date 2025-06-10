@@ -92,16 +92,21 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
     let current_head = branch_manager.get_branch_commit(&target_branch)?;
     let current_dir = env::current_dir()
         .map_err(|e| ParaError::invalid_args(format!("Cannot get current directory: {}", e)))?;
-    
-    let backup_branch = format!("backup-{}-{}", target_branch, chrono::Utc::now().timestamp());
-    
+
+    let backup_branch = format!(
+        "backup-{}-{}",
+        target_branch,
+        chrono::Utc::now().timestamp()
+    );
+
     let integration_state = IntegrationState::new(
         session_id.clone(),
         feature_branch.clone(),
         target_branch.clone(),
         strategy.clone(),
         commit_message.clone(),
-    ).with_backup_info(current_head, current_dir, backup_branch);
+    )
+    .with_backup_info(current_head, current_dir, backup_branch);
 
     state_manager.save_integration_state(&integration_state)?;
 
@@ -310,22 +315,28 @@ fn close_ide_for_session(config: &crate::config::Config, _worktree_path: &PathBu
 
 fn find_session_by_branch(session_manager: &SessionManager, branch: &str) -> Result<String> {
     let sessions = session_manager.list_sessions()?;
-    
+
     for session in sessions {
         if session.branch == branch {
             return Ok(session.name);
         }
     }
-    
+
     Err(ParaError::session_not_found(format!(
-        "No session found for branch '{}'", branch
+        "No session found for branch '{}'",
+        branch
     )))
 }
 
 fn validate_integrate_args(args: &IntegrateArgs) -> Result<()> {
     if args.abort {
         // When aborting, no other options should be provided
-        if args.session.is_some() || args.target.is_some() || args.strategy.is_some() || args.message.is_some() || args.dry_run {
+        if args.session.is_some()
+            || args.target.is_some()
+            || args.strategy.is_some()
+            || args.message.is_some()
+            || args.dry_run
+        {
             return Err(ParaError::invalid_args(
                 "--abort cannot be used with other options",
             ));
@@ -474,20 +485,21 @@ pub fn execute_abort() -> Result<()> {
     );
 
     let integration_manager = git_service.integration_manager();
-    
+
     println!("🔄 Cleaning up any ongoing Git operations...");
     integration_manager.cleanup_integration_state()?;
 
     if let Some(ref backup_branch) = integration_state.backup_branch {
         println!("🔄 Restoring original state from backup...");
-        integration_manager.safe_abort_integration(
-            Some(backup_branch), 
-            &integration_state.base_branch
-        )?;
-        
+        integration_manager
+            .safe_abort_integration(Some(backup_branch), &integration_state.base_branch)?;
+
         println!("🧹 Cleaning up backup branch...");
         if let Err(e) = git_service.delete_branch(backup_branch, true) {
-            println!("⚠️  Could not delete backup branch {}: {}", backup_branch, e);
+            println!(
+                "⚠️  Could not delete backup branch {}: {}",
+                backup_branch, e
+            );
         }
     } else {
         integration_manager.cleanup_integration_state()?;
@@ -496,7 +508,10 @@ pub fn execute_abort() -> Result<()> {
     for temp_branch in &integration_state.temp_branches {
         println!("🧹 Cleaning up temporary branch: {}", temp_branch);
         if let Err(e) = git_service.delete_branch(temp_branch, true) {
-            println!("⚠️  Could not delete temporary branch {}: {}", temp_branch, e);
+            println!(
+                "⚠️  Could not delete temporary branch {}: {}",
+                temp_branch, e
+            );
         }
     }
 
@@ -510,8 +525,10 @@ pub fn execute_abort() -> Result<()> {
     );
 
     if let Some(ref original_dir) = integration_state.original_working_dir {
-        if env::current_dir().map_err(|_| ParaError::git_operation("Failed to get current dir".to_string()))?
-            != *original_dir {
+        if env::current_dir()
+            .map_err(|_| ParaError::git_operation("Failed to get current dir".to_string()))?
+            != *original_dir
+        {
             println!(
                 "💡 You may want to return to your original working directory: {}",
                 original_dir.display()
@@ -526,11 +543,10 @@ pub fn execute_abort() -> Result<()> {
 mod tests {
     use super::*;
     use crate::cli::parser::IntegrateArgs;
-    use crate::core::session::{IntegrationState};
+    use crate::core::session::IntegrationState;
     use crate::utils::ParaError;
     use std::path::PathBuf;
     use tempfile::TempDir;
-
 
     fn create_test_integrate_args() -> IntegrateArgs {
         IntegrateArgs {
@@ -570,9 +586,9 @@ mod tests {
             dry_run: false,
             abort: true,
         };
-        
+
         let result = validate_integrate_args(&args);
-        
+
         assert!(result.is_err());
         if let Err(ParaError::InvalidArgs { message }) = result {
             assert!(message.contains("--abort cannot be used with other options"));
@@ -591,9 +607,9 @@ mod tests {
             dry_run: false,
             abort: true,
         };
-        
+
         let result = validate_integrate_args(&args);
-        
+
         assert!(result.is_err());
         if let Err(ParaError::InvalidArgs { message }) = result {
             assert!(message.contains("--abort cannot be used with other options"));
@@ -606,13 +622,13 @@ mod tests {
     fn test_execute_abort_no_integration() {
         let temp_dir = TempDir::new().unwrap();
         let (git_temp, _git_service) = setup_test_repo();
-        
+
         // Use guard to ensure environment cleanup
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
             .expect("Failed to set up test environment");
-        
+
         let result = execute_abort();
-        
+
         assert!(result.is_err());
         if let Err(ParaError::GitOperation { message }) = result {
             assert!(message.contains("No integration in progress"));
@@ -635,13 +651,19 @@ mod tests {
             PathBuf::from("/test/path"),
             "backup-master-123456".to_string(),
         );
-        
+
         assert_eq!(state.session_id, "test-session");
         assert_eq!(state.feature_branch, "feature-branch");
         assert_eq!(state.base_branch, "master");
         assert_eq!(state.original_head_commit, Some("abc123def456".to_string()));
-        assert_eq!(state.original_working_dir, Some(PathBuf::from("/test/path")));
-        assert_eq!(state.backup_branch, Some("backup-master-123456".to_string()));
+        assert_eq!(
+            state.original_working_dir,
+            Some(PathBuf::from("/test/path"))
+        );
+        assert_eq!(
+            state.backup_branch,
+            Some("backup-master-123456".to_string())
+        );
     }
 
     #[test]
@@ -654,7 +676,7 @@ mod tests {
             dry_run: false,
             abort: false,
         };
-        
+
         assert_eq!(args.session, None);
         assert_eq!(args.target, None);
         assert_eq!(args.strategy, None);
@@ -668,7 +690,7 @@ mod tests {
         let rebase = IntegrationStrategy::Rebase;
         let merge = IntegrationStrategy::Merge;
         let squash = IntegrationStrategy::Squash;
-        
+
         assert!(matches!(rebase, IntegrationStrategy::Rebase));
         assert!(matches!(merge, IntegrationStrategy::Merge));
         assert!(matches!(squash, IntegrationStrategy::Squash));

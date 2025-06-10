@@ -259,10 +259,10 @@ mod tests {
     fn test_completion_commands_are_hidden() {
         use clap::CommandFactory;
         let app = Cli::command();
-        
+
         let completion_sessions_cmd = app.find_subcommand("_completion_sessions").unwrap();
         assert!(completion_sessions_cmd.is_hide_set());
-        
+
         let completion_branches_cmd = app.find_subcommand("_completion_branches").unwrap();
         assert!(completion_branches_cmd.is_hide_set());
     }

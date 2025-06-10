@@ -76,11 +76,14 @@ pub fn execute(args: ListArgs) -> Result<()> {
     Ok(())
 }
 
-fn list_active_sessions(session_manager: &SessionManager, git_service: &GitService) -> Result<Vec<SessionInfo>> {
+fn list_active_sessions(
+    session_manager: &SessionManager,
+    git_service: &GitService,
+) -> Result<Vec<SessionInfo>> {
     let session_states = session_manager.list_sessions()?;
-    
+
     let mut sessions = Vec::new();
-    
+
     for session_state in session_states {
         let has_uncommitted_changes = if session_state.worktree_path.exists() {
             // Only check for uncommitted changes if the path is a proper git repository
@@ -96,14 +99,14 @@ fn list_active_sessions(session_manager: &SessionManager, git_service: &GitServi
         let is_current = std::env::current_dir()
             .map(|cwd| cwd.starts_with(&session_state.worktree_path))
             .unwrap_or(false);
-        
+
         let status = determine_unified_session_status(&session_state, &git_service)?;
 
         let session_info = SessionInfo {
             session_id: session_state.name.clone(),
             branch: session_state.branch.clone(),
             worktree_path: session_state.worktree_path.clone(),
-            base_branch: "main".to_string(), // Simplified for now
+            base_branch: "main".to_string(),  // Simplified for now
             merge_mode: "squash".to_string(), // Default for now
             status,
             last_modified: Some(session_state.created_at),
@@ -111,7 +114,7 @@ fn list_active_sessions(session_manager: &SessionManager, git_service: &GitServi
             has_uncommitted_changes,
             is_current,
         };
-        
+
         sessions.push(session_info);
     }
 
@@ -124,7 +127,10 @@ fn list_active_sessions(session_manager: &SessionManager, git_service: &GitServi
     Ok(sessions)
 }
 
-fn list_archived_sessions(_session_manager: &SessionManager, git_service: &GitService) -> Result<Vec<SessionInfo>> {
+fn list_archived_sessions(
+    _session_manager: &SessionManager,
+    git_service: &GitService,
+) -> Result<Vec<SessionInfo>> {
     let branch_manager = git_service.branch_manager();
     let archived_branches = branch_manager.list_archived_branches("para")?;
 
@@ -170,9 +176,10 @@ fn determine_unified_session_status(
 
     // Check if worktree is registered with git
     let worktrees = git_service.list_worktrees()?;
-    let worktree_exists = worktrees.iter()
+    let worktree_exists = worktrees
+        .iter()
         .any(|w| w.path == session_state.worktree_path);
-    
+
     if !worktree_exists {
         return Ok(SessionStatus::Missing);
     }
@@ -292,11 +299,11 @@ mod tests {
     use std::fs;
     use std::process::Command;
     use tempfile::TempDir;
-    
+
     fn create_test_config() -> crate::config::Config {
         crate::config::defaults::default_config()
     }
-    
+
     fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
@@ -334,39 +341,47 @@ mod tests {
             .status()
             .expect("Failed to commit README");
 
-        let service = crate::core::git::GitService::discover_from(repo_path).expect("Failed to discover repo");
+        let service = crate::core::git::GitService::discover_from(repo_path)
+            .expect("Failed to discover repo");
         (temp_dir, service)
     }
-    
+
     struct TestEnvironmentGuard {
         original_dir: std::path::PathBuf,
         original_home: String,
     }
-    
+
     impl TestEnvironmentGuard {
-        fn new(git_temp: &TempDir, temp_dir: &TempDir) -> std::result::Result<Self, std::io::Error> {
+        fn new(
+            git_temp: &TempDir,
+            temp_dir: &TempDir,
+        ) -> std::result::Result<Self, std::io::Error> {
             let original_dir = std::env::current_dir().unwrap_or_else(|_| {
-                git_temp.path().parent().unwrap_or_else(|| std::path::Path::new("/tmp")).to_path_buf()
+                git_temp
+                    .path()
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("/tmp"))
+                    .to_path_buf()
             });
-            
+
             std::env::set_current_dir(git_temp.path())?;
-            
+
             let original_home = std::env::var("HOME").unwrap_or_default();
             std::env::set_var("HOME", temp_dir.path());
-            
+
             Ok(TestEnvironmentGuard {
                 original_dir,
                 original_home,
             })
         }
     }
-    
+
     impl Drop for TestEnvironmentGuard {
         fn drop(&mut self) {
             if let Err(_e) = std::env::set_current_dir(&self.original_dir) {
                 let _ = std::env::set_current_dir("/tmp");
             }
-            
+
             if !self.original_home.is_empty() {
                 std::env::set_var("HOME", &self.original_home);
             } else {
@@ -374,7 +389,6 @@ mod tests {
             }
         }
     }
-
 
     fn create_mock_session_state(
         state_dir: &std::path::Path,
@@ -385,7 +399,7 @@ mod tests {
         _merge_mode: &str,
     ) -> Result<()> {
         use crate::core::session::SessionState;
-        
+
         fs::create_dir_all(state_dir)?;
 
         // Create a proper SessionState and serialize it to JSON
@@ -396,8 +410,9 @@ mod tests {
         );
 
         let state_file = state_dir.join(format!("{}.state", session_id));
-        let json_content = serde_json::to_string_pretty(&session_state)
-            .map_err(|e| crate::utils::ParaError::json_error(format!("Failed to serialize session state: {}", e)))?;
+        let json_content = serde_json::to_string_pretty(&session_state).map_err(|e| {
+            crate::utils::ParaError::json_error(format!("Failed to serialize session state: {}", e))
+        })?;
         fs::write(state_file, json_content)?;
 
         Ok(())
@@ -450,10 +465,11 @@ mod tests {
 
     #[test]
     fn test_list_active_sessions_empty() -> Result<()> {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let (git_temp, git_service) = setup_test_repo();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)?;
-        
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
         // Create config that points to our test state directory
         let state_dir = temp_dir.path().join(".para_state");
         let mut config = create_test_config();
@@ -468,18 +484,21 @@ mod tests {
 
     #[test]
     fn test_list_active_sessions_with_state_files() -> Result<()> {
-        let (git_temp, git_service) = setup_test_repo();
-        
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
         let repo_root = &git_service.repository().root;
         let state_dir = repo_root.join(".para_state");
-        
+
         // Create config that points to our test state directory
         let mut config = create_test_config();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
         let session_manager = SessionManager::new(&config);
 
         // Create a simple directory for the worktree path - we just need to test listing
-        let worktree_path = git_temp.path().join("test-worktree");
+        let worktree_path = temp_dir.path().join("test-worktree");
         fs::create_dir_all(&worktree_path)?;
         let test_branch_name = "para/test-branch".to_string();
 
@@ -505,13 +524,12 @@ mod tests {
         Ok(())
     }
 
-
-
     #[test]
     fn test_list_archived_sessions() -> Result<()> {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let (git_temp, git_service) = setup_test_repo();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)?;
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
         // Create some archived branches
         let branch_manager = git_service.branch_manager();
@@ -528,16 +546,16 @@ mod tests {
         branch_manager.move_to_archive("test-branch-1", "para")?;
         branch_manager.move_to_archive("test-branch-2", "para")?;
 
-        // Create config that points to our test state directory  
+        // Create config that points to our test state directory
         let state_dir = temp_dir.path().join(".para_state");
         let mut config = create_test_config();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
         let _session_manager = SessionManager::new(&config);
-        
+
         // Test list_archived_sessions function directly using our git_service
         let branch_manager = git_service.branch_manager();
         let archived_branches = branch_manager.list_archived_branches("para")?;
-        
+
         let mut sessions = Vec::new();
         for branch_name in archived_branches {
             if let Some(session_id) = extract_session_id_from_archived_branch(&branch_name) {
@@ -556,7 +574,7 @@ mod tests {
                 sessions.push(session_info);
             }
         }
-        
+
         assert_eq!(sessions.len(), 2);
 
         let session_ids: Vec<&str> = sessions.iter().map(|s| s.session_id.as_str()).collect();
@@ -573,10 +591,11 @@ mod tests {
 
     #[test]
     fn test_execute_no_sessions() -> Result<()> {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let (git_temp, git_service) = setup_test_repo();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)?;
-        
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
         // Create config that points to our test state directory
         let state_dir = temp_dir.path().join(".para_state");
         let mut config = create_test_config();

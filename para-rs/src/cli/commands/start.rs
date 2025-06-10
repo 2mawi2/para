@@ -3,9 +3,7 @@ use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::ide::IdeManager;
 use crate::core::session::SessionManager;
-use crate::utils::{
-    generate_unique_name, validate_session_name, ParaError, Result,
-};
+use crate::utils::{generate_unique_name, validate_session_name, ParaError, Result};
 use std::path::{Path, PathBuf};
 
 pub fn execute(args: StartArgs) -> Result<()> {
@@ -21,7 +19,10 @@ pub fn execute(args: StartArgs) -> Result<()> {
     let session_state = session_manager.create_session(session_name.clone(), None)?;
 
     let ide_manager = IdeManager::new(&config);
-    ide_manager.launch(&session_state.worktree_path, args.dangerously_skip_permissions)?;
+    ide_manager.launch(
+        &session_state.worktree_path,
+        args.dangerously_skip_permissions,
+    )?;
 
     println!("✅ Session '{}' started successfully", session_name);
     println!("   Branch: {}", session_state.branch);
@@ -35,11 +36,6 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
     match &args.name {
         Some(name) => {
             validate_session_name(name)?;
-            // Generate ID to check for conflicts  
-            let session_id = crate::utils::generate_session_id(name);
-            if session_manager.session_exists(&session_id) {
-                return Err(ParaError::session_exists(name));
-            }
             Ok(name.clone())
         }
         None => {

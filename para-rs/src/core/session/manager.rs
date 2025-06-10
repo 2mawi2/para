@@ -13,18 +13,23 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new(config: &Config) -> Self {
         let state_dir = PathBuf::from(config.get_state_dir());
-        Self { 
-            state_dir, 
-            config: config.clone() 
+        Self {
+            state_dir,
+            config: config.clone(),
         }
     }
 
-    pub fn create_session(&mut self, name: String, base_branch: Option<String>) -> Result<SessionState> {
-        let git_service = GitService::discover()
-            .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
+    pub fn create_session(
+        &mut self,
+        name: String,
+        base_branch: Option<String>,
+    ) -> Result<SessionState> {
+        let git_service = GitService::discover().map_err(|e| {
+            ParaError::git_error(format!("Failed to discover git repository: {}", e))
+        })?;
 
         let repository_root = git_service.repository().root.clone();
-        
+
         let _base_branch = base_branch.unwrap_or_else(|| {
             git_service
                 .repository()
@@ -32,21 +37,18 @@ impl SessionManager {
                 .unwrap_or_else(|_| "main".to_string())
         });
 
+        let final_session_name = self.resolve_session_name(name)?;
         let branch_name = crate::utils::generate_branch_name(self.config.get_branch_prefix());
-        
+
         let subtrees_path = repository_root.join(&self.config.directories.subtrees_dir);
         let worktree_path = subtrees_path
             .join(self.config.get_branch_prefix())
-            .join(&name);
+            .join(&final_session_name);
 
         if !subtrees_path.exists() {
             fs::create_dir_all(&subtrees_path).map_err(|e| {
                 ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
             })?;
-        }
-
-        if self.session_exists(&name) {
-            return Err(ParaError::session_exists(&name));
         }
 
         if worktree_path.exists() {
@@ -58,7 +60,7 @@ impl SessionManager {
 
         git_service.create_worktree(&branch_name, &worktree_path)?;
 
-        let session_state = SessionState::new(name, branch_name, worktree_path);
+        let session_state = SessionState::new(final_session_name, branch_name, worktree_path);
 
         self.save_state(&session_state)?;
 
@@ -67,7 +69,7 @@ impl SessionManager {
 
     pub fn load_state(&self, session_name: &str) -> Result<SessionState> {
         self.ensure_state_dir_exists()?;
-        
+
         let state_file = self.state_dir.join(format!("{}.state", session_name));
         if !state_file.exists() {
             return Err(ParaError::session_not_found(session_name));
@@ -152,29 +154,33 @@ impl SessionManager {
 
     pub fn find_session_by_path(&self, path: &Path) -> Result<Option<SessionState>> {
         let sessions = self.list_sessions()?;
-        
+
         for session in sessions {
             if session.worktree_path == path || path.starts_with(&session.worktree_path) {
                 return Ok(Some(session));
             }
         }
-        
+
         Ok(None)
     }
 
     pub fn find_session_by_branch(&self, branch: &str) -> Result<Option<SessionState>> {
         let sessions = self.list_sessions()?;
-        
+
         for session in sessions {
             if session.branch == branch && matches!(session.status, SessionStatus::Active) {
                 return Ok(Some(session));
             }
         }
-        
+
         Ok(None)
     }
 
-    pub fn update_session_status(&mut self, session_name: &str, status: SessionStatus) -> Result<()> {
+    pub fn update_session_status(
+        &mut self,
+        session_name: &str,
+        status: SessionStatus,
+    ) -> Result<()> {
         let mut session = self.load_state(session_name)?;
         session.update_status(status);
         self.save_state(&session)
@@ -183,6 +189,21 @@ impl SessionManager {
     pub fn session_exists(&self, session_name: &str) -> bool {
         let state_file = self.state_dir.join(format!("{}.state", session_name));
         state_file.exists()
+    }
+
+    fn resolve_session_name(&self, requested_name: String) -> Result<String> {
+        if !self.session_exists(&requested_name) {
+            return Ok(requested_name);
+        }
+
+        let timestamp = crate::utils::names::generate_timestamp();
+        let unique_name = format!("{}_{}", requested_name, timestamp);
+
+        if self.session_exists(&unique_name) {
+            return Err(ParaError::session_exists(&unique_name));
+        }
+
+        Ok(unique_name)
     }
 
     fn ensure_state_dir_exists(&self) -> Result<()> {
@@ -208,9 +229,13 @@ mod tests {
     #[test]
     fn test_session_manager_creation() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();
 
         let manager = SessionManager::new(&config);
@@ -221,9 +246,13 @@ mod tests {
     #[test]
     fn test_session_manager_save_and_load() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();
         let manager = SessionManager::new(&config);
 
@@ -233,7 +262,7 @@ mod tests {
             "pc/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
-        
+
         // Test save and load functionality
         manager.save_state(&session).unwrap();
         assert!(manager.session_exists(&session.name));
@@ -247,9 +276,13 @@ mod tests {
     #[test]
     fn test_session_manager_list_sessions() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();
         let manager = SessionManager::new(&config);
 
@@ -275,9 +308,13 @@ mod tests {
     #[test]
     fn test_session_manager_delete() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();
         let manager = SessionManager::new(&config);
 
@@ -287,7 +324,7 @@ mod tests {
             "pc/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
-        
+
         manager.save_state(&session).unwrap();
         assert!(manager.session_exists(&session.name));
 
@@ -298,9 +335,13 @@ mod tests {
     #[test]
     fn test_session_manager_update_status() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();
         let mut manager = SessionManager::new(&config);
 
@@ -310,12 +351,61 @@ mod tests {
             "pc/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
-        
+
         manager.save_state(&session).unwrap();
-        
-        manager.update_session_status(&session.name, SessionStatus::Finished).unwrap();
-        
+
+        manager
+            .update_session_status(&session.name, SessionStatus::Finished)
+            .unwrap();
+
         let updated_session = manager.load_state(&session.name).unwrap();
         assert!(matches!(updated_session.status, SessionStatus::Finished));
+    }
+
+    #[test]
+    fn test_resolve_session_name_no_collision() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        let result = manager
+            .resolve_session_name("new-session".to_string())
+            .unwrap();
+        assert_eq!(result, "new-session");
+    }
+
+    #[test]
+    fn test_resolve_session_name_with_collision() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create existing session
+        let existing_session = SessionState::new(
+            "collision-test".to_string(),
+            "pc/test-branch".to_string(),
+            temp_dir.path().join("test-worktree"),
+        );
+        manager.save_state(&existing_session).unwrap();
+
+        // Try to resolve same name - should get timestamped version
+        let result = manager
+            .resolve_session_name("collision-test".to_string())
+            .unwrap();
+        assert_ne!(result, "collision-test");
+        assert!(result.starts_with("collision-test_"));
+        assert!(result.contains('-')); // Should contain timestamp
     }
 }

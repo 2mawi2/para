@@ -168,11 +168,7 @@ fn recover_session_from_archive(
     worktree_manager.create_worktree(&restored_branch, &worktree_path)?;
     println!("Created worktree at: {}", worktree_path.display());
 
-    let session_state = SessionState::new(
-        session_name.to_string(),
-        restored_branch,
-        worktree_path,
-    );
+    let session_state = SessionState::new(session_name.to_string(), restored_branch, worktree_path);
     session_manager.save_state(&session_state)?;
     println!("Restored session state");
 

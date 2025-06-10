@@ -438,20 +438,18 @@ mod tests {
 
     #[test]
     fn test_configure_wrapper_mode_claude_with_detection() {
-        // Test wrapper mode configuration for Claude with detected wrapper
+        // Test wrapper mode configuration logic without interactive prompts
         std::env::set_var("TERM_PROGRAM", "vscode");
 
-        let result = configure_wrapper_mode("claude");
+        // Test that non-claude IDEs don't enable wrapper mode
+        let result = configure_wrapper_mode("cursor").unwrap();
+        assert!(!result.enabled);
 
         // Clean up environment
         std::env::remove_var("TERM_PROGRAM");
 
-        // This should work since we detect VS Code wrapper
-        if let Ok(wrapper_config) = result {
-            // The wrapper might be enabled depending on user interaction
-            // We just test that the function completes successfully
-            assert!(wrapper_config.enabled || !wrapper_config.enabled);
-        }
+        // For Claude, we can only test the path selection logic without interaction
+        // The actual wrapper configuration requires user input which we skip in tests
     }
 
     #[test]

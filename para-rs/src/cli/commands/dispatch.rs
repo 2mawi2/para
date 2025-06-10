@@ -545,7 +545,7 @@ mod tests {
     fn test_read_file_content_missing_file() {
         let result = read_file_content(Path::new("nonexistent.txt"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("file not found"));
+        assert!(result.unwrap_err().to_string().contains("file not found:"));
     }
 
     #[test]

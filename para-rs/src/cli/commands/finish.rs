@@ -37,7 +37,7 @@ pub fn execute(args: FinishArgs) -> Result<()> {
                 } else {
                     (None, Some(branch.clone()), true)
                 }
-            },
+            }
             SessionEnvironment::MainRepository => {
                 return Err(ParaError::invalid_args(
                         "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
@@ -99,7 +99,8 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
             if let Some(session_state) = session_info {
                 if config.should_preserve_on_finish() {
-                    session_manager.update_session_status(&session_state.name, SessionStatus::Finished)?;
+                    session_manager
+                        .update_session_status(&session_state.name, SessionStatus::Finished)?;
                 } else {
                     session_manager.delete_state(&session_state.name)?;
                 }
