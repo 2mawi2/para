@@ -566,8 +566,9 @@ mod tests {
             .create_branch("test-branch", &base_branch)
             .expect("Failed to create branch");
 
-        branch_manager
-            .switch_to_branch(&base_branch)
+        service
+            .repository()
+            .checkout_branch(&base_branch)
             .expect("Failed to checkout base branch");
 
         let _archived_name = branch_manager

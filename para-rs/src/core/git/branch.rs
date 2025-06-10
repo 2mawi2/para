@@ -234,10 +234,6 @@ impl<'a> BranchManager<'a> {
         execute_git_command(self.repo, &["rev-parse", branch])
     }
 
-    pub fn switch_to_branch(&self, branch: &str) -> Result<()> {
-        self.validate_branch_name(branch)?;
-        execute_git_command_with_status(self.repo, &["checkout", branch])
-    }
 
     pub fn create_branch_from_commit(&self, name: &str, commit: &str) -> Result<()> {
         self.validate_branch_name(name)?;

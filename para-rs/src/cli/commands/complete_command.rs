@@ -18,9 +18,6 @@ pub fn execute(args: CompleteCommandArgs) -> Result<()> {
         position: args.position,
         working_directory: std::env::current_dir().unwrap_or_default(),
         is_git_repository: GitService::discover().is_ok(),
-        is_para_session: false, // Will be detected in context
-        current_session: None,  // Will be detected in context
-        current_branch: None,   // Will be detected in context
     };
 
     let config = Config::load_or_create()?;

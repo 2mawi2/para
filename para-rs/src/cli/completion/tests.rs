@@ -36,6 +36,25 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
 #[cfg(test)]
 mod context_tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn create_test_context(command_line: Vec<String>, position: usize) -> CompletionContext {
+        let current_word = command_line.get(position).cloned().unwrap_or_default();
+        let previous_word = if position > 0 {
+            command_line.get(position - 1).cloned()
+        } else {
+            None
+        };
+
+        CompletionContext {
+            command_line,
+            current_word,
+            previous_word,
+            position,
+            working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            is_git_repository: false,
+        }
+    }
 
     #[test]
     fn test_completion_context_creation() {
@@ -44,7 +63,7 @@ mod context_tests {
             "start".to_string(),
             "my-session".to_string(),
         ];
-        let context = CompletionContext::new(command_line, 2);
+        let context = create_test_context(command_line, 2);
 
         assert_eq!(context.current_word, "my-session");
         assert_eq!(context.previous_word, Some("start".to_string()));
@@ -59,7 +78,7 @@ mod context_tests {
             "start".to_string(),
             "--branch".to_string(),
         ];
-        let context = CompletionContext::new(command_line, 2);
+        let context = create_test_context(command_line, 2);
 
         assert!(context.is_completing_flag());
         assert!(!context.is_completing_value_for_flag("--branch"));
@@ -70,7 +89,7 @@ mod context_tests {
             "--branch".to_string(),
             "feature".to_string(),
         ];
-        let context2 = CompletionContext::new(command_line2, 3);
+        let context2 = create_test_context(command_line2, 3);
         assert!(context2.is_completing_value_for_flag("--branch"));
     }
 
@@ -82,7 +101,7 @@ mod context_tests {
             "--file".to_string(),
             "prompt.txt".to_string(),
         ];
-        let context = CompletionContext::new(command_line, 3);
+        let context = create_test_context(command_line, 3);
 
         assert!(context.is_completing_file());
         assert!(context.is_completing_value_for_flag("--file"));
@@ -96,7 +115,7 @@ mod context_tests {
             "resume".to_string(),
             "session".to_string(),
         ];
-        let context = CompletionContext::new(command_line, 2);
+        let context = create_test_context(command_line, 2);
 
         assert!(context.is_completing_session());
         assert!(!context.should_complete_archived_sessions());
@@ -106,7 +125,7 @@ mod context_tests {
             "recover".to_string(),
             "session".to_string(),
         ];
-        let recover_context = CompletionContext::new(recover_command, 2);
+        let recover_context = create_test_context(recover_command, 2);
 
         assert!(recover_context.is_completing_session());
         assert!(recover_context.should_complete_archived_sessions());
@@ -119,7 +138,7 @@ mod context_tests {
             "finish".to_string(),
             "message".to_string(),
         ];
-        let context = CompletionContext::new(command_line, 2);
+        let context = create_test_context(command_line, 2);
 
         assert_eq!(context.get_subcommand(), Some("finish"));
     }
@@ -209,9 +228,6 @@ mod dynamic_completion_tests {
             position: 3,
             working_directory: temp_dir.path().to_path_buf(),
             is_git_repository: false,
-            is_para_session: false,
-            current_session: None,
-            current_branch: None,
         };
 
         let file_suggestions = completion.get_file_completions(&context);

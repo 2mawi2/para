@@ -8,11 +8,7 @@ mod tests;
 pub use context::CompletionContext;
 pub use dynamic::DynamicCompletion;
 
-use crate::utils::Result;
 
-pub trait CompletionProvider {
-    fn get_completions(&self, context: &CompletionContext) -> Result<Vec<String>>;
-}
 
 #[derive(Debug, Clone)]
 pub struct CompletionSuggestion {
@@ -32,7 +28,7 @@ pub enum CompletionType {
 }
 
 impl CompletionSuggestion {
-    pub fn new(text: String, completion_type: CompletionType) -> Self {
+    pub fn new(text: String, _completion_type: CompletionType) -> Self {
         Self {
             text,
             description: None,
