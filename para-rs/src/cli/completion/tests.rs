@@ -349,20 +349,6 @@ mod dynamic_completion_tests {
         assert!(file_suggestions.iter().any(|s| s.text == "test.txt"));
         assert!(file_suggestions.iter().any(|s| s.text == "subdir/"));
     }
-
-    #[test]
-    fn test_completion_timeout() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = create_test_config(temp_dir.path());
-        let completion = dynamic::DynamicCompletion::new(config)
-            .with_timeout(std::time::Duration::from_millis(10));
-
-        let context = CompletionContext::new(vec!["para".to_string(), "start".to_string()], 1);
-
-        let suggestions = completion.get_completions_timeout(&context);
-        // Should return some suggestions even with timeout
-        assert!(!suggestions.is_empty());
-    }
 }
 
 #[cfg(test)]
@@ -431,45 +417,5 @@ mod generator_tests {
         assert!(fish_instructions.contains("Installation instructions"));
         assert!(fish_instructions.contains("fish"));
         assert!(fish_instructions.contains("completions"));
-    }
-}
-
-#[cfg(test)]
-mod cached_completion_tests {
-    use super::*;
-
-    #[test]
-    fn test_cached_completion_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = create_test_config(temp_dir.path());
-        let mut cached_completion = dynamic::CachedDynamicCompletion::new(config)
-            .with_cache_duration(std::time::Duration::from_millis(100));
-
-        cached_completion.clear_cache();
-
-        // First call should populate cache
-        let _result1 = cached_completion.get_cached_sessions(false);
-
-        // Second call should use cache
-        let _result2 = cached_completion.get_cached_sessions(false);
-
-        // After timeout, cache should be refreshed
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        let _result3 = cached_completion.get_cached_sessions(false);
-    }
-
-    #[test]
-    fn test_cache_validity() {
-        let timestamp = std::time::Instant::now();
-        let duration = std::time::Duration::from_millis(100);
-
-        assert!(dynamic::CachedDynamicCompletion::is_cache_valid(
-            timestamp, duration
-        ));
-
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        assert!(!dynamic::CachedDynamicCompletion::is_cache_valid(
-            timestamp, duration
-        ));
     }
 }

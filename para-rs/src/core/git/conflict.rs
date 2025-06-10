@@ -133,10 +133,10 @@ impl<'a> ConflictManager<'a> {
         let mut middle_line = None;
         let mut end_line = None;
 
-        for i in (start + 1)..lines.len() {
-            if lines[i].starts_with("=======") && middle_line.is_none() {
+        for (i, line) in lines.iter().enumerate().skip(start + 1) {
+            if line.starts_with("=======") && middle_line.is_none() {
                 middle_line = Some(i);
-            } else if lines[i].starts_with(">>>>>>>") {
+            } else if line.starts_with(">>>>>>>") {
                 end_line = Some(i);
                 break;
             }

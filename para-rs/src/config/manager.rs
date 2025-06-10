@@ -47,41 +47,6 @@ impl ConfigManager {
 
         Ok(())
     }
-
-    pub fn backup_config() -> Result<()> {
-        let config_path = get_config_file_path();
-        if !config_path.exists() {
-            return Err(ConfigError::NotFound(
-                "No config file to backup".to_string(),
-            ));
-        }
-
-        let backup_path = config_path.with_extension("json.backup");
-        fs::copy(&config_path, &backup_path)?;
-
-        Ok(())
-    }
-
-    pub fn restore_backup() -> Result<Config> {
-        let backup_path = get_config_file_path().with_extension("json.backup");
-        if !backup_path.exists() {
-            return Err(ConfigError::NotFound("No backup file found".to_string()));
-        }
-
-        let config_path = get_config_file_path();
-        fs::copy(&backup_path, &config_path)?;
-
-        Self::load_from_file(&config_path)
-    }
-
-    pub fn reset_to_defaults() -> Result<Config> {
-        Self::backup_config().ok(); // Backup if possible, but don't fail if it doesn't exist
-
-        let config = default_config();
-        Self::save(&config)?;
-        Ok(config)
-    }
-
     pub fn validate_and_fix(config: &mut Config) -> Result<Vec<String>> {
         let mut fixes = Vec::new();
 

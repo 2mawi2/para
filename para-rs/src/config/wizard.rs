@@ -1,5 +1,4 @@
-use super::defaults::{default_config, get_available_ides, is_command_available};
-use super::validation;
+use super::defaults::{default_config, get_available_ides};
 use super::{Config, ConfigError, Result};
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
@@ -113,178 +112,6 @@ fn configure_directories_simple(
     Ok(config)
 }
 
-fn configure_ide() -> Result<super::IdeConfig> {
-    println!("🖥️  IDE Configuration");
-    println!("Para can work with various IDEs. Let's configure your preferred IDE.\n");
-
-    let available_ides = get_available_ides();
-
-    if available_ides.is_empty() {
-        println!("⚠️  No supported IDEs detected on your system.");
-        println!("Supported IDEs:");
-        println!("  • Claude Code (claude) - Recommended for AI development");
-        println!("  • Cursor (cursor) - AI-powered code editor");
-        println!("  • VS Code (code) - Microsoft Visual Studio Code");
-        println!("\nYou can either:");
-        println!("  1. Install one of these IDEs and run the wizard again");
-        println!("  2. Continue with manual configuration");
-
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Continue with manual IDE configuration?")
-            .default(false)
-            .interact()
-            .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-        {
-            return Err(ConfigError::ValidationError(
-                "Configuration cancelled - no IDE selected".to_string(),
-            ));
-        }
-
-        return configure_ide_manually();
-    }
-
-    println!("✅ Detected available IDEs:");
-    for (name, command) in &available_ides {
-        println!("  • {} ({})", name, command);
-    }
-    println!();
-
-    let ide_names: Vec<String> = available_ides
-        .iter()
-        .map(|(name, _)| name.clone())
-        .collect();
-    let mut ide_names_with_manual = ide_names.clone();
-    ide_names_with_manual.push("Manual configuration".to_string());
-
-    let ide_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which IDE would you like to use?")
-        .items(&ide_names_with_manual)
-        .default(0)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    if ide_selection == ide_names.len() {
-        return configure_ide_manually();
-    }
-
-    let (ide_name, ide_command) = available_ides[ide_selection].clone();
-
-    let custom_command = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("IDE command (press Enter to use default)")
-        .default(ide_command.clone())
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if is_command_available(input) {
-                Ok(())
-            } else {
-                Err("Command not found in PATH")
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    let wrapper_config = configure_wrapper_mode(&ide_name)?;
-
-    let user_data_dir = if Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Specify custom user data directory for IDE?")
-        .default(false)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-    {
-        Some(
-            Input::<String>::with_theme(&ColorfulTheme::default())
-                .with_prompt("User data directory path")
-                .validate_with(|input: &String| -> std::result::Result<(), &str> {
-                    let path = std::path::Path::new(input);
-                    if path.exists() && path.is_dir() {
-                        Ok(())
-                    } else {
-                        Err("Directory does not exist")
-                    }
-                })
-                .interact()
-                .map_err(|e| {
-                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
-                })?,
-        )
-    } else {
-        None
-    };
-
-    Ok(super::IdeConfig {
-        name: ide_name,
-        command: custom_command,
-        user_data_dir,
-        wrapper: wrapper_config,
-    })
-}
-
-fn configure_ide_manually() -> Result<super::IdeConfig> {
-    println!("🔧 Manual IDE Configuration");
-
-    let ide_name = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("IDE name")
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if input.trim().is_empty() {
-                Err("IDE name cannot be empty")
-            } else if !validation::is_valid_ide_name(input) {
-                Err("Invalid IDE name - use only alphanumeric characters, hyphens, and underscores")
-            } else {
-                Ok(())
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    let ide_command = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("IDE command")
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if input.trim().is_empty() {
-                Err("IDE command cannot be empty")
-            } else if !is_command_available(input) {
-                Err("Command not found in PATH")
-            } else {
-                Ok(())
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    let wrapper_config = configure_wrapper_mode(&ide_name)?;
-
-    let user_data_dir = if Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Specify custom user data directory for IDE?")
-        .default(false)
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?
-    {
-        Some(
-            Input::<String>::with_theme(&ColorfulTheme::default())
-                .with_prompt("User data directory path")
-                .validate_with(|input: &String| -> std::result::Result<(), &str> {
-                    let path = std::path::Path::new(input);
-                    if path.exists() && path.is_dir() {
-                        Ok(())
-                    } else {
-                        Err("Directory does not exist")
-                    }
-                })
-                .interact()
-                .map_err(|e| {
-                    ConfigError::ValidationError(format!("Failed to read input: {}", e))
-                })?,
-        )
-    } else {
-        None
-    };
-
-    Ok(super::IdeConfig {
-        name: ide_name,
-        command: ide_command,
-        user_data_dir,
-        wrapper: wrapper_config,
-    })
-}
-
 fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
     if ide_name == "claude"
         && Confirm::with_theme(&ColorfulTheme::default())
@@ -320,49 +147,6 @@ fn configure_wrapper_mode(ide_name: &str) -> Result<super::WrapperConfig> {
         name: String::new(),
         command: String::new(),
     })
-}
-
-fn configure_directories(mut config: super::DirectoryConfig) -> Result<super::DirectoryConfig> {
-    println!("\n📁 Directory Configuration");
-    println!("Configure where para stores worktrees and session state.\n");
-
-    config.subtrees_dir = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("Subtrees directory (relative to project root)")
-        .default(config.subtrees_dir)
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if validation::validate_directory_config(&super::DirectoryConfig {
-                subtrees_dir: input.clone(),
-                state_dir: config.state_dir.clone(),
-            })
-            .is_ok()
-            {
-                Ok(())
-            } else {
-                Err("Invalid directory name")
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    config.state_dir = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("State directory (relative to project root)")
-        .default(config.state_dir)
-        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-            if validation::validate_directory_config(&super::DirectoryConfig {
-                subtrees_dir: config.subtrees_dir.clone(),
-                state_dir: input.clone(),
-            })
-            .is_ok()
-            {
-                Ok(())
-            } else {
-                Err("Invalid directory name")
-            }
-        })
-        .interact()
-        .map_err(|e| ConfigError::ValidationError(format!("Failed to read input: {}", e)))?;
-
-    Ok(config)
 }
 
 fn display_config_summary(config: &Config) {
@@ -411,7 +195,9 @@ pub fn run_quick_setup() -> Result<Config> {
 mod tests {
     use super::*;
     use crate::cli::parser::IntegrationStrategy;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+    use crate::config::{
+        validation, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+    };
 
     #[test]
     fn test_config_summary_display() {

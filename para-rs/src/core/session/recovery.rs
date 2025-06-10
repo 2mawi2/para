@@ -107,7 +107,7 @@ impl<'a> SessionRecovery<'a> {
     }
 
     pub fn validate_recovery(&self, session_name: &str) -> Result<RecoveryValidation> {
-        let recovery_info = self
+        let _recovery_info = self
             .list_recoverable_sessions()?
             .into_iter()
             .find(|info| info.original_session_name == session_name)

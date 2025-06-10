@@ -313,7 +313,6 @@ impl IdeManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,6 +469,13 @@ mod tests {
     #[test]
     fn test_unsupported_wrapper() {
         let temp_dir = TempDir::new().unwrap();
+
+        // Clear any environment variables that might interfere with this test
+        std::env::remove_var("IDE_WRAPPER_ENABLED");
+        std::env::remove_var("IDE_WRAPPER_NAME");
+        std::env::remove_var("IDE_WRAPPER_CMD");
+        std::env::remove_var("IDE_CMD");
+
         // Use a non-echo command to disable test mode, but keep it deterministic
         let mut config = create_test_config("claude", "para-test-mode-disabled");
         config.ide.wrapper.enabled = true;

@@ -4,7 +4,7 @@ use crate::utils::{ParaError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchiveEntry {
@@ -37,16 +37,13 @@ pub struct ArchiveStats {
 pub struct ArchiveManager<'a> {
     config: &'a Config,
     git_service: &'a GitService,
-    archive_dir: PathBuf,
 }
 
 impl<'a> ArchiveManager<'a> {
     pub fn new(config: &'a Config, git_service: &'a GitService) -> Self {
-        let archive_dir = PathBuf::from(config.get_state_dir()).join("archives");
         Self {
             config,
             git_service,
-            archive_dir,
         }
     }
 

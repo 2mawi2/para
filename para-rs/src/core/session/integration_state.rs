@@ -613,12 +613,6 @@ mod tests {
     // NEW RED TESTS FOR CONTINUE FEATURE FIXES
     #[test]
     fn test_integration_state_should_transition_to_conflicts_detected_on_squash_conflicts() {
-        // This test captures the issue we found: when squash fails due to conflicts,
-        // it should set state to ConflictsDetected, not Failed
-        let temp_dir = TempDir::new().unwrap();
-        let manager = IntegrationStateManager::new(temp_dir.path().to_path_buf());
-
-        // Create integration state
         let mut state = IntegrationState::new(
             "test-session".to_string(),
             "feature-branch".to_string(),

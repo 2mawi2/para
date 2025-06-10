@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod platform_tests {
-    use crate::platform::{get_platform_manager};
+    use crate::platform::get_platform_manager;
 
     #[test]
     fn test_platform_manager_creation() {

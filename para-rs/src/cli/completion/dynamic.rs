@@ -3,24 +3,14 @@ use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::Result;
-use std::time::Duration;
 
 pub struct DynamicCompletion {
     config: Config,
-    timeout: Duration,
 }
 
 impl DynamicCompletion {
     pub fn new(config: Config) -> Self {
-        Self {
-            config,
-            timeout: Duration::from_millis(1000),
-        }
-    }
-
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
+        Self { config }
     }
 
     fn get_session_completions(&self, include_archived: bool) -> Result<Vec<CompletionSuggestion>> {
@@ -207,16 +197,14 @@ impl DynamicCompletion {
             suggestions.extend(self.get_file_completions(context));
         } else if context.is_completing_branch() {
             if context.is_git_repository {
-                match self.get_branch_completions() {
-                    Ok(branches) => suggestions.extend(branches),
-                    Err(_) => {} // Ignore git errors for completion
+                if let Ok(branches) = self.get_branch_completions() {
+                    suggestions.extend(branches);
                 }
             }
         } else if context.is_completing_session() {
             let include_archived = context.should_complete_archived_sessions();
-            match self.get_session_completions(include_archived) {
-                Ok(sessions) => suggestions.extend(sessions),
-                Err(_) => {} // Ignore session errors for completion
+            if let Ok(sessions) = self.get_session_completions(include_archived) {
+                suggestions.extend(sessions);
             }
         } else if context.position == 1 {
             suggestions.extend(self.get_subcommand_completions());
@@ -249,92 +237,12 @@ impl DynamicCompletion {
             }
         });
     }
-
-    pub fn get_completions_timeout(
-        &self,
-        context: &CompletionContext,
-    ) -> Vec<CompletionSuggestion> {
-        let _timeout = self.timeout;
-        let context = context.clone();
-        let config = self.config.clone();
-
-        std::thread::scope(|s| {
-            let handle = s.spawn(move || {
-                let completion = DynamicCompletion::new(config);
-                completion.get_completions_for_context(&context)
-            });
-
-            match handle.join() {
-                Ok(Ok(suggestions)) => suggestions,
-                _ => Vec::new(), // Return empty on timeout or error
-            }
-        })
-    }
 }
 
 impl CompletionProvider for DynamicCompletion {
     fn get_completions(&self, context: &CompletionContext) -> Result<Vec<String>> {
         let suggestions = self.get_completions_for_context(context)?;
         Ok(suggestions.into_iter().map(|s| s.text).collect())
-    }
-}
-
-pub struct CachedDynamicCompletion {
-    inner: DynamicCompletion,
-    session_cache: Option<(std::time::Instant, Vec<CompletionSuggestion>)>,
-    branch_cache: Option<(std::time::Instant, Vec<CompletionSuggestion>)>,
-    cache_duration: Duration,
-}
-
-impl CachedDynamicCompletion {
-    pub fn new(config: Config) -> Self {
-        Self {
-            inner: DynamicCompletion::new(config),
-            session_cache: None,
-            branch_cache: None,
-            cache_duration: Duration::from_secs(5),
-        }
-    }
-
-    pub fn with_cache_duration(mut self, duration: Duration) -> Self {
-        self.cache_duration = duration;
-        self
-    }
-
-    pub fn is_cache_valid(timestamp: std::time::Instant, duration: Duration) -> bool {
-        timestamp.elapsed() < duration
-    }
-
-    pub fn get_cached_sessions(
-        &mut self,
-        include_archived: bool,
-    ) -> Result<Vec<CompletionSuggestion>> {
-        if let Some((timestamp, ref sessions)) = self.session_cache {
-            if Self::is_cache_valid(timestamp, self.cache_duration) {
-                return Ok(sessions.clone());
-            }
-        }
-
-        let sessions = self.inner.get_session_completions(include_archived)?;
-        self.session_cache = Some((std::time::Instant::now(), sessions.clone()));
-        Ok(sessions)
-    }
-
-    pub fn get_cached_branches(&mut self) -> Result<Vec<CompletionSuggestion>> {
-        if let Some((timestamp, ref branches)) = self.branch_cache {
-            if Self::is_cache_valid(timestamp, self.cache_duration) {
-                return Ok(branches.clone());
-            }
-        }
-
-        let branches = self.inner.get_branch_completions()?;
-        self.branch_cache = Some((std::time::Instant::now(), branches.clone()));
-        Ok(branches)
-    }
-
-    pub fn clear_cache(&mut self) {
-        self.session_cache = None;
-        self.branch_cache = None;
     }
 }
 
@@ -418,21 +326,5 @@ mod tests {
         assert_eq!(suggestions.len(), 2);
         assert_eq!(suggestions[0].text, "start");
         assert_eq!(suggestions[1].text, "status");
-    }
-
-    #[test]
-    fn test_cached_completion() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = create_test_config(temp_dir.path());
-        let mut cached_completion =
-            CachedDynamicCompletion::new(config).with_cache_duration(Duration::from_millis(100));
-
-        cached_completion.clear_cache();
-
-        let _result1 = cached_completion.get_cached_sessions(false);
-        let _result2 = cached_completion.get_cached_sessions(false);
-
-        std::thread::sleep(Duration::from_millis(150));
-        let _result3 = cached_completion.get_cached_sessions(false);
     }
 }
