@@ -1,7 +1,7 @@
 use crate::cli::parser::DispatchArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
-use crate::core::session::{SessionManager, CreateSessionParams, SessionType};
+use crate::core::session::SessionManager;
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,14 +27,7 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
         None => generate_friendly_name(),
     };
 
-    let params = CreateSessionParams {
-        name: session_name.clone(),
-        session_type: SessionType::Dispatched,
-        initial_prompt: Some(prompt.clone()),
-        base_branch: None,
-    };
-
-    let session_state = session_manager.create_session(params)?;
+    let session_state = session_manager.create_session(session_name.clone(), None)?;
 
     launch_claude_code(
         &config,
@@ -43,7 +36,7 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
         args.dangerously_skip_permissions,
     )?;
 
-    println!("Created session '{}' with Claude Code", session_state.id);
+    println!("Created session '{}' with Claude Code", session_state.name);
     println!("Session path: {}", session_state.worktree_path.display());
 
     Ok(())

@@ -28,11 +28,12 @@ pub fn execute(args: CancelArgs) -> Result<()> {
     git_service.remove_worktree(&session_state.worktree_path)?;
 
     let mut session_manager = session_manager;  // Make mutable for update
-    session_manager.update_session_status(&session_state.id, SessionStatus::Cancelled)?;
+    let session_id = session_manager.generate_session_id(&session_state.name);
+    session_manager.update_session_status(&session_id, SessionStatus::Cancelled)?;
 
     println!(
         "Session '{}' has been cancelled and archived as '{}'",
-        session_state.id, archived_branch
+        session_state.name, archived_branch
     );
     println!(
         "To recover this session later, use: para recover {}",

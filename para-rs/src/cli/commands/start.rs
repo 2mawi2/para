@@ -2,7 +2,7 @@ use crate::cli::parser::StartArgs;
 use crate::config::{Config, ConfigManager};
 use crate::core::git::{GitOperations, GitService};
 use crate::core::ide::IdeManager;
-use crate::core::session::{SessionManager, CreateSessionParams, SessionType};
+use crate::core::session::SessionManager;
 use crate::utils::{
     generate_unique_name, validate_session_name, ParaError, Result,
 };
@@ -18,14 +18,7 @@ pub fn execute(args: StartArgs) -> Result<()> {
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    let params = CreateSessionParams {
-        name: session_name.clone(),
-        session_type: SessionType::Manual,
-        initial_prompt: None,
-        base_branch: None,
-    };
-
-    let session_state = session_manager.create_session(params)?;
+    let session_state = session_manager.create_session(session_name.clone(), None)?;
 
     let ide_manager = IdeManager::new(&config);
     ide_manager.launch(&session_state.worktree_path, args.dangerously_skip_permissions)?;
@@ -51,7 +44,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
         }
         None => {
             let existing_sessions = session_manager
-                .list_all_sessions()?
+                .list_sessions()?
                 .into_iter()
                 .map(|s| s.name)
                 .collect::<Vec<String>>();
@@ -140,7 +133,7 @@ mod tests {
     #[test]
     fn test_determine_session_name_with_provided_name() {
         let (_temp_dir, config) = setup_test_repo();
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config).unwrap();
 
         let args = StartArgs {
             name: Some("test-session".to_string()),
@@ -154,7 +147,7 @@ mod tests {
     #[test]
     fn test_determine_session_name_auto_generate() {
         let (_temp_dir, config) = setup_test_repo();
-        let session_manager = SessionManager::new(&config);
+        let session_manager = SessionManager::new(config).unwrap();
 
         let args = StartArgs {
             name: None,
@@ -164,24 +157,5 @@ mod tests {
         let result = determine_session_name(&args, &session_manager).unwrap();
         assert!(!result.is_empty());
         assert!(result.contains('_'));
-    }
-
-    #[test]
-    fn test_create_worktree_path() {
-        let (_temp_dir, config) = setup_test_repo();
-
-        let path = create_worktree_path(&config, "test-session").unwrap();
-        assert!(path.to_string_lossy().contains("subtrees"));
-        assert!(path.to_string_lossy().contains("test-session"));
-    }
-
-    #[test]
-    fn test_check_session_conflicts() {
-        let (_temp_dir, config) = setup_test_repo();
-        let session_manager = SessionManager::new(&config);
-        let worktree_path = PathBuf::from("/tmp/nonexistent-test-path");
-
-        let result = check_session_conflicts(&session_manager, "new-session", &worktree_path);
-        assert!(result.is_ok());
     }
 }

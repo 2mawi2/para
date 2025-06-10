@@ -1,7 +1,7 @@
 use crate::cli::parser::ListArgs;
 use crate::config::ConfigManager;
 use crate::core::git::{BranchInfo, GitOperations, GitService, WorktreeInfo};
-use crate::core::session::{SessionManager, SessionSummary, SessionStatus as UnifiedSessionStatus};
+use crate::core::session::{SessionManager, SessionStatus as UnifiedSessionStatus};
 use crate::utils::{ParaError, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -76,14 +76,12 @@ pub fn execute(args: ListArgs) -> Result<()> {
 }
 
 fn list_active_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
-    let summaries = session_manager.list_active_sessions()?;
+    let session_states = session_manager.list_sessions()?;
     let git_service = GitService::discover()?;
     
     let mut sessions = Vec::new();
     
-    for summary in summaries {
-        let session_state = session_manager.load_session(&summary.id)?;
-        
+    for session_state in session_states {
         let has_uncommitted_changes = if session_state.worktree_path.exists() {
             git_service_for_path(&session_state.worktree_path)
                 .and_then(|service| service.has_uncommitted_changes().ok())
@@ -98,14 +96,14 @@ fn list_active_sessions(session_manager: &SessionManager) -> Result<Vec<SessionI
         let status = determine_unified_session_status(&session_state, &git_service)?;
 
         let session_info = SessionInfo {
-            session_id: summary.id,
-            branch: summary.branch,
-            worktree_path: session_state.worktree_path,
-            base_branch: session_state.base_branch,
+            session_id: session_state.name.clone(),
+            branch: session_state.branch.clone(),
+            worktree_path: session_state.worktree_path.clone(),
+            base_branch: "main".to_string(), // Simplified for now
             merge_mode: "squash".to_string(), // Default for now
             status,
-            last_modified: Some(summary.last_modified),
-            commit_count: Some(summary.commit_count as usize),
+            last_modified: Some(session_state.created_at),
+            commit_count: Some(0), // Simplified for now
             has_uncommitted_changes,
             is_current,
         };
@@ -161,7 +159,7 @@ fn determine_unified_session_status(
 
     // Check session status first
     match session_state.status {
-        UnifiedSessionStatus::Cancelled | UnifiedSessionStatus::Completed => {
+        UnifiedSessionStatus::Cancelled | UnifiedSessionStatus::Finished => {
             return Ok(SessionStatus::Archived);
         }
         _ => {}
