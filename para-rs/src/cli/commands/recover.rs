@@ -168,16 +168,12 @@ fn recover_session_from_archive(
     worktree_manager.create_worktree(&restored_branch, &worktree_path)?;
     println!("Created worktree at: {}", worktree_path.display());
 
-    let config_snapshot = crate::core::session::SessionConfig::from_config(&config);
-    let session_state = SessionState::new_recovered(
+    let session_state = SessionState::new(
         session_name.to_string(),
         restored_branch,
-        "main".to_string(), // TODO: should detect base branch properly
         worktree_path,
-        git_service.repository().root.clone(),
-        config_snapshot,
     );
-    session_manager.save_session(&session_state)?;
+    session_manager.save_state(&session_state)?;
     println!("Restored session state");
 
     Ok(())

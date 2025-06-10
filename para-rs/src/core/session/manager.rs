@@ -11,20 +11,12 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-    pub fn new(config: Config) -> Result<Self> {
-        let state_dir = PathBuf::from(config.get_state_dir()).join("sessions");
-        
-        if !state_dir.exists() {
-            fs::create_dir_all(&state_dir).map_err(|e| {
-                ParaError::fs_error(format!(
-                    "Failed to create sessions state directory {}: {}",
-                    state_dir.display(),
-                    e
-                ))
-            })?;
+    pub fn new(config: &Config) -> Self {
+        let state_dir = PathBuf::from(config.get_state_dir());
+        Self { 
+            state_dir, 
+            config: config.clone() 
         }
-
-        Ok(Self { state_dir, config })
     }
 
     pub fn create_session(&mut self, name: String, base_branch: Option<String>) -> Result<SessionState> {
@@ -298,14 +290,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config = create_test_config(temp_dir.path());
 
-        let manager = SessionManager::new(config).unwrap();
+        let manager = SessionManager::new(&config);
         assert!(manager.state_dir.exists());
     }
 
     #[test]
     fn test_session_manager_save_and_load() {
         let (_temp_dir, config) = setup_test_repo();
-        let mut manager = SessionManager::new(config).unwrap();
+        let mut manager = SessionManager::new(&config);
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
         assert!(manager.session_exists(&session.name));
@@ -319,7 +311,7 @@ mod tests {
     #[test]
     fn test_session_manager_list_sessions() {
         let (_temp_dir, config) = setup_test_repo();
-        let mut manager = SessionManager::new(config).unwrap();
+        let mut manager = SessionManager::new(&config);
 
         let _session1 = manager.create_session("session1".to_string(), Some("main".to_string())).unwrap();
         let _session2 = manager.create_session("session2".to_string(), Some("main".to_string())).unwrap();
@@ -337,7 +329,7 @@ mod tests {
     #[test]
     fn test_session_manager_delete() {
         let (_temp_dir, config) = setup_test_repo();
-        let mut manager = SessionManager::new(config).unwrap();
+        let mut manager = SessionManager::new(&config);
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
         assert!(manager.session_exists(&session.name));
@@ -349,7 +341,7 @@ mod tests {
     #[test]
     fn test_session_manager_update_status() {
         let (_temp_dir, config) = setup_test_repo();
-        let mut manager = SessionManager::new(config).unwrap();
+        let mut manager = SessionManager::new(&config);
 
         let session = manager.create_session("test-session".to_string(), Some("main".to_string())).unwrap();
         
