@@ -28,7 +28,6 @@ pub fn execute(args: CancelArgs) -> Result<()> {
 
     git_service.remove_worktree(&session_state.worktree_path)?;
 
-    let session_manager = session_manager; // Make mutable for update
     session_manager.delete_state(&session_state.name)?;
 
     let platform = get_platform_manager();

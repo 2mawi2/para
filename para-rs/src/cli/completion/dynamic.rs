@@ -207,16 +207,16 @@ impl DynamicCompletion {
             suggestions.extend(self.get_file_completions(context));
         } else if context.is_completing_branch() {
             if context.is_git_repository {
-                match self.get_branch_completions() {
-                    Ok(branches) => suggestions.extend(branches),
-                    Err(_) => {} // Ignore git errors for completion
+                // Ignore git errors for completion
+                if let Ok(branches) = self.get_branch_completions() {
+                    suggestions.extend(branches);
                 }
             }
         } else if context.is_completing_session() {
             let include_archived = context.should_complete_archived_sessions();
-            match self.get_session_completions(include_archived) {
-                Ok(sessions) => suggestions.extend(sessions),
-                Err(_) => {} // Ignore session errors for completion
+            // Ignore session errors for completion
+            if let Ok(sessions) = self.get_session_completions(include_archived) {
+                suggestions.extend(sessions);
             }
         } else if context.position == 1 {
             suggestions.extend(self.get_subcommand_completions());

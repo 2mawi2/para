@@ -1,5 +1,4 @@
 use crate::core::git::{GitOperations, GitService};
-use crate::utils::Result;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -42,23 +41,11 @@ impl CompletionContext {
         }
     }
 
-    pub fn from_env() -> Result<Self> {
-        let args: Vec<String> = std::env::args().collect();
-        let position = args.len().saturating_sub(1);
-        Ok(Self::new(args, position))
-    }
 
     pub fn get_subcommand(&self) -> Option<&str> {
         self.command_line.get(1).map(|s| s.as_str())
     }
 
-    pub fn get_subcommand_args(&self) -> &[String] {
-        if self.command_line.len() > 2 {
-            &self.command_line[2..]
-        } else {
-            &[]
-        }
-    }
 
     pub fn is_completing_flag(&self) -> bool {
         self.current_word.starts_with('-')
@@ -95,18 +82,6 @@ impl CompletionContext {
         matches!(self.get_subcommand(), Some("recover"))
     }
 
-    pub fn filter_prefix(&self, suggestions: &mut Vec<String>) {
-        if self.current_word.is_empty() {
-            return;
-        }
-
-        suggestions.retain(|suggestion| {
-            suggestion.starts_with(&self.current_word)
-                || suggestion
-                    .to_lowercase()
-                    .starts_with(&self.current_word.to_lowercase())
-        });
-    }
 
     pub fn get_file_completions(&self) -> Vec<String> {
         let mut completions = Vec::new();
@@ -164,115 +139,16 @@ impl CompletionContext {
         (is_para_session, current_session, current_branch)
     }
 
-    pub fn get_session_from_worktree(&self) -> Option<String> {
-        if let Ok(service) = GitService::discover() {
-            let worktrees = service.list_worktrees().unwrap_or_default();
-            for worktree in worktrees {
-                if self.working_directory.starts_with(&worktree.path) {
-                    if let Some(session) = worktree.branch.strip_prefix("pc/") {
-                        return Some(session.to_string());
-                    }
-                }
-            }
-        }
-        None
-    }
 
-    pub fn should_show_help(&self) -> bool {
-        self.current_word == "help" || self.current_word == "--help" || self.current_word == "-h"
-    }
 
-    pub fn get_help_context(&self) -> Option<String> {
-        if self.should_show_help() {
-            self.get_subcommand().map(|s| s.to_string())
-        } else {
-            None
-        }
-    }
 
-    pub fn needs_git_repository(&self) -> bool {
-        matches!(
-            self.get_subcommand(),
-            Some("start")
-                | Some("dispatch")
-                | Some("finish")
-                | Some("integrate")
-                | Some("cancel")
-                | Some("clean")
-                | Some("list")
-                | Some("resume")
-                | Some("recover")
-                | Some("continue")
-        )
-    }
 
-    pub fn can_work_outside_git(&self) -> bool {
-        matches!(
-            self.get_subcommand(),
-            Some("config") | Some("completion") | Some("help") | None
-        )
-    }
 
-    pub fn get_environment_warnings(&self) -> Vec<String> {
-        let mut warnings = Vec::new();
 
-        if self.needs_git_repository() && !self.is_git_repository {
-            warnings.push("This command requires a Git repository".to_string());
-        }
 
-        if self.get_subcommand().is_some()
-            && !self.can_work_outside_git()
-            && !self.is_git_repository
-        {
-            warnings.push("Para commands work best inside a Git repository".to_string());
-        }
 
-        warnings
-    }
-
-    pub fn get_repository_root(&self) -> Option<PathBuf> {
-        GitService::discover()
-            .ok()
-            .map(|service| service.repository().root.clone())
-    }
-
-    pub fn is_in_worktree(&self) -> bool {
-        if let Ok(service) = GitService::discover() {
-            let worktrees = service.list_worktrees().unwrap_or_default();
-            worktrees
-                .iter()
-                .any(|wt| self.working_directory.starts_with(&wt.path))
-        } else {
-            false
-        }
-    }
-
-    pub fn get_completion_type(&self) -> CompletionType {
-        if self.is_completing_flag() {
-            CompletionType::Flag
-        } else if self.is_completing_file() {
-            CompletionType::File
-        } else if self.is_completing_branch() {
-            CompletionType::Branch
-        } else if self.is_completing_session() {
-            CompletionType::Session
-        } else if self.position == 1 {
-            CompletionType::Subcommand
-        } else {
-            CompletionType::Argument
-        }
-    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum CompletionType {
-    Subcommand,
-    Flag,
-    File,
-    Branch,
-    Session,
-    Argument,
-}
 
 #[cfg(test)]
 mod tests {
@@ -303,7 +179,6 @@ mod tests {
         let context = CompletionContext::new(command_line, 2);
 
         assert_eq!(context.get_subcommand(), Some("finish"));
-        assert_eq!(context.get_subcommand_args(), &["message"]);
     }
 
     #[test]
@@ -365,32 +240,4 @@ mod tests {
         assert!(context.is_completing_value_for_flag("--file"));
     }
 
-    #[test]
-    fn test_completion_type_detection() {
-        let flag_context = CompletionContext::new(
-            vec![
-                "para".to_string(),
-                "start".to_string(),
-                "--branch".to_string(),
-            ],
-            2,
-        );
-        assert_eq!(flag_context.get_completion_type(), CompletionType::Flag);
-
-        let subcommand_context =
-            CompletionContext::new(vec!["para".to_string(), "sta".to_string()], 1);
-        assert_eq!(
-            subcommand_context.get_completion_type(),
-            CompletionType::Subcommand
-        );
-
-        let session_context = CompletionContext::new(
-            vec!["para".to_string(), "resume".to_string(), "sess".to_string()],
-            2,
-        );
-        assert_eq!(
-            session_context.get_completion_type(),
-            CompletionType::Session
-        );
-    }
 }

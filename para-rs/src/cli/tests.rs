@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod cli_tests {
     use crate::cli::parser::*;
     use clap::Parser;
 
