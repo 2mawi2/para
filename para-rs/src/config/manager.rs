@@ -1,5 +1,5 @@
 use super::defaults::{default_config, get_config_file_path};
-use super::{Config, ConfigError, Result};
+use super::{Config, Result};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -48,56 +48,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub fn backup_config() -> Result<()> {
-        let config_path = get_config_file_path();
-        if !config_path.exists() {
-            return Err(ConfigError::NotFound(
-                "No config file to backup".to_string(),
-            ));
-        }
-
-        let backup_path = config_path.with_extension("json.backup");
-        fs::copy(&config_path, &backup_path)?;
-
-        Ok(())
-    }
-
-    pub fn restore_backup() -> Result<Config> {
-        let backup_path = get_config_file_path().with_extension("json.backup");
-        if !backup_path.exists() {
-            return Err(ConfigError::NotFound("No backup file found".to_string()));
-        }
-
-        let config_path = get_config_file_path();
-        fs::copy(&backup_path, &config_path)?;
-
-        Self::load_from_file(&config_path)
-    }
-
-    pub fn reset_to_defaults() -> Result<Config> {
-        Self::backup_config().ok(); // Backup if possible, but don't fail if it doesn't exist
-
-        let config = default_config();
-        Self::save(&config)?;
-        Ok(config)
-    }
-
-    pub fn validate_and_fix(config: &mut Config) -> Result<Vec<String>> {
-        let mut fixes = Vec::new();
-
-        if !super::defaults::is_command_available(&config.ide.command) {
-            let (detected_name, detected_command) = super::defaults::detect_ide();
-            if super::defaults::is_command_available(&detected_command) {
-                config.ide.name = detected_name;
-                config.ide.command = detected_command.clone();
-                fixes.push(format!("Fixed IDE command to '{}'", detected_command));
-            }
-        }
-
-        config.validate()?;
-
-        Ok(fixes)
-    }
 }
 
 #[cfg(test)]
@@ -157,13 +107,122 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_validate_and_fix() {
-        let mut config = create_test_config();
-        config.ide.command = "nonexistent_command".to_string();
 
-        let fixes = ConfigManager::validate_and_fix(&mut config).unwrap();
-        assert!(!fixes.is_empty());
-        assert_ne!(config.ide.command, "nonexistent_command");
+    #[test]
+    fn test_load_from_nonexistent_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("nonexistent.json");
+
+        let result = ConfigManager::load_from_file(&config_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_from_invalid_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("invalid.json");
+        fs::write(&config_path, "invalid json content").unwrap();
+
+        let result = ConfigManager::load_from_file(&config_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_creates_parent_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let original_home = std::env::var("HOME").ok();
+        let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+        
+        std::env::set_var("HOME", temp_dir.path());
+        std::env::set_var("XDG_CONFIG_HOME", temp_dir.path().join(".config"));
+        
+        let config = create_test_config();
+        let result = ConfigManager::save(&config);
+        assert!(result.is_ok());
+        
+        // Restore original environment
+        match original_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_xdg {
+            Some(x) => std::env::set_var("XDG_CONFIG_HOME", x),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
+
+    #[test]
+    fn test_get_config_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let original_home = std::env::var("HOME").ok();
+        let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+        
+        std::env::set_var("HOME", temp_dir.path());
+        std::env::set_var("XDG_CONFIG_HOME", temp_dir.path().join(".config"));
+        
+        let path = ConfigManager::get_config_path().unwrap();
+        assert!(path.contains("para-rs"));
+        assert!(path.ends_with("config.json"));
+        
+        // Restore original environment
+        match original_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_xdg {
+            Some(x) => std::env::set_var("XDG_CONFIG_HOME", x),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
+
+    #[test]
+    fn test_load_or_create_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        
+        // Create an existing config file
+        let original_config = create_test_config();
+        let json = serde_json::to_string_pretty(&original_config).unwrap();
+        fs::write(&config_path, json).unwrap();
+        
+        // Load the existing config
+        let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
+        assert!(loaded_config.validate().is_ok());
+        assert_eq!(loaded_config.ide.name, original_config.ide.name);
+    }
+
+    #[test]
+    fn test_load_or_create_functionality() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        
+        // Test loading from existing file
+        let original_config = create_test_config();
+        let json = serde_json::to_string_pretty(&original_config).unwrap();
+        fs::write(&config_path, json).unwrap();
+        
+        let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
+        assert!(loaded_config.validate().is_ok());
+        assert_eq!(loaded_config.ide.name, original_config.ide.name);
+    }
+
+
+    #[test]
+    fn test_config_persistence() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        
+        let mut original_config = create_test_config();
+        original_config.ide.name = "custom-ide".to_string();
+        original_config.git.branch_prefix = "custom-prefix".to_string();
+        
+        // Save to temporary file
+        let json = serde_json::to_string_pretty(&original_config).unwrap();
+        fs::write(&config_path, json).unwrap();
+        
+        // Load from the same file
+        let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
+        assert_eq!(loaded_config.ide.name, "custom-ide");
+        assert_eq!(loaded_config.git.branch_prefix, "custom-prefix");
     }
 }
