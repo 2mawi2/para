@@ -494,26 +494,19 @@ mod tests {
     #[test]
     fn test_unsupported_wrapper() {
         let temp_dir = TempDir::new().unwrap();
-        let mut config = create_test_config("claude", "claude");
+        // Use a non-echo command to disable test mode, but keep it deterministic
+        let mut config = create_test_config("claude", "para-test-mode-disabled");
         config.ide.wrapper.enabled = true;
         config.ide.wrapper.name = "unsupported-ide".to_string();
         config.ide.wrapper.command = "unsupported-cmd".to_string();
 
         let manager = IdeManager::new(&config);
 
-        // Temporarily disable test mode to test actual unsupported wrapper detection
-        let old_ide_cmd = std::env::var("IDE_CMD").ok();
-        std::env::remove_var("IDE_CMD");
-
+        // Test the wrapper launching logic directly without environment manipulation
         let result = manager.launch(temp_dir.path(), true);
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Claude Code requires supported wrapper mode"));
-
-        // Restore test mode if it was set
-        if let Some(cmd) = old_ide_cmd {
-            std::env::set_var("IDE_CMD", cmd);
-        }
+        assert!(error_msg.contains("Claude Code requires supported wrapper mode (cursor or code)"));
     }
 
     #[test]
