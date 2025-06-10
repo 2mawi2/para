@@ -1,5 +1,7 @@
 # Para-rs justfile - Rust implementation testing
 
+
+
 # Run Rust linting with clippy (skeleton-friendly)
 lint:
     cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious -W clippy::style -W clippy::complexity -W clippy::perf
@@ -169,3 +171,16 @@ test-legacy:
     
     # Exit with the test result if there was one
     exit ${test_result:-0}
+
+# Build the Rust binary
+build:
+    cargo build
+
+# Run the para binary with any arguments, ensuring it's built first
+para *ARGS:
+    just build
+    ./target/debug/para {{ARGS}}
+
+# Alias for 'start' command, forwards all arguments to para
+start *ARGS:
+    just para start {{ARGS}}
