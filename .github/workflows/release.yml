@@ -203,7 +203,7 @@ jobs:
             git push
           fi
 
-  increment-version:
+  merge-to-main:
     needs: [extract-version, create-release, update-homebrew]
     runs-on: ubuntu-latest
     if: always() && needs.create-release.result == 'success' && needs.update-homebrew.result == 'success'
@@ -214,44 +214,10 @@ jobs:
           fetch-depth: 0
           ref: release
 
-      - name: Increment version
-        run: |
-          CURRENT_VERSION="${{ needs.extract-version.outputs.version }}"
-          echo "Current version: $CURRENT_VERSION"
-          
-          # Parse version components (assuming semver format)
-          if [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            MAJOR=${BASH_REMATCH[1]}
-            MINOR=${BASH_REMATCH[2]}
-            PATCH=${BASH_REMATCH[3]}
-            
-            # Increment patch version
-            NEW_PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          else
-            echo "Error: Cannot parse version $CURRENT_VERSION"
-            exit 1
-          fi
-          
-          echo "New version: $NEW_VERSION"
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          
-          # Update Cargo.toml
-          sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
-          
-          # Verify the change
-          grep "^version = " Cargo.toml
-
-      - name: Commit version increment
+      - name: Merge to main
         run: |
           git config user.name "GitHub Action"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml
-          git commit -m "Increment version to $NEW_VERSION after release"
-          git push origin release
-
-      - name: Merge to main
-        run: |
           git checkout main
-          git merge release --no-ff -m "Merge release branch with version increment"
+          git merge release --no-ff -m "Merge release branch v${{ needs.extract-version.outputs.version }}"
           git push origin main
