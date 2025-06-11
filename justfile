@@ -16,12 +16,19 @@ build:
 build-release:
     cargo build --release
 
-# Install Rust binary locally
+# Install Rust binaries locally (CLI + MCP server)
 install: build-release
-    @echo "🚀 Installing Para binary..."
+    @echo "🚀 Installing Para binaries..."
     @mkdir -p ~/.local/bin
     @cp target/release/para ~/.local/bin/para
-    @echo "✅ Para binary installed to ~/.local/bin/para"
+    @cp target/release/para-mcp-server ~/.local/bin/para-mcp-server
+    @echo "✅ Para CLI binary installed to ~/.local/bin/para"
+    @echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"
+    @echo ""
+    @echo "🔧 MCP Setup Instructions:"
+    @echo "   Claude Code: claude mcp add para-server para-mcp-server"
+    @echo "   VSCode/Cursor: Add to .cursor/mcp.json:"
+    @echo '   {"mcpServers": {"para": {"command": "para-mcp-server"}}}'
 
 # Uninstall para globally  
 uninstall:
@@ -32,15 +39,51 @@ uninstall:
     # Define paths
     INSTALL_BIN_DIR="$HOME/.local/bin"
     PARA_BIN="$INSTALL_BIN_DIR/para"
+    PARA_MCP_BIN="$INSTALL_BIN_DIR/para-mcp-server"
     
-    # Remove the binary
+    # Remove the binaries
     if [ -f "$PARA_BIN" ]; then
-        echo "🗑️  Removing para binary: $PARA_BIN"
+        echo "🗑️  Removing para CLI binary: $PARA_BIN"
         rm -f "$PARA_BIN"
-        echo "✅ Para uninstalled successfully!"
     else
-        echo "ℹ️  Para binary not found at $PARA_BIN"
+        echo "ℹ️  Para CLI binary not found at $PARA_BIN"
     fi
+    
+    if [ -f "$PARA_MCP_BIN" ]; then
+        echo "🗑️  Removing para MCP server: $PARA_MCP_BIN"
+        rm -f "$PARA_MCP_BIN"
+    else
+        echo "ℹ️  Para MCP server not found at $PARA_MCP_BIN"
+    fi
+    
+    echo "✅ Para uninstalled successfully!"
+
+# Setup MCP integration for popular editors
+mcp-setup: install
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔧 Setting up Para MCP integration..."
+    echo ""
+    
+    # Check if Claude Code is available
+    if command -v claude >/dev/null 2>&1; then
+        echo "📦 Setting up Claude Code integration..."
+        claude mcp add para-server para-mcp-server || echo "   ⚠️  Failed to add MCP server (may already exist)"
+        echo "   ✅ Claude Code: para-server configured"
+    else
+        echo "   ℹ️  Claude Code not found - manual setup required:"
+        echo "      claude mcp add para-server para-mcp-server"
+    fi
+    
+    echo ""
+    echo "📋 Manual setup for other editors:"
+    echo ""
+    echo "📝 VSCode/Cursor (.cursor/mcp.json or .vscode/mcp.json):"
+    echo '{"mcpServers": {"para": {"command": "para-mcp-server"}}}'
+    echo ""
+    echo "📝 Roo Code: Auto-detected via MCP settings panel"
+    echo ""
+    echo "✅ MCP setup complete!"
 
 # Run comprehensive Rust tests (formatting + tests + linting)
 test *FILTER:
@@ -154,8 +197,10 @@ status:
     @[ -f .git/hooks/pre-push ] && echo "  ✅ pre-push" || echo "  ❌ pre-push"
     @echo ""
     @echo "Binary status:"
-    @[ -f target/debug/para ] && echo "  ✅ debug binary built" || echo "  ❌ debug binary not found"
-    @[ -f target/release/para ] && echo "  ✅ release binary built" || echo "  ❌ release binary not found"
+    @[ -f target/debug/para ] && echo "  ✅ debug CLI binary built" || echo "  ❌ debug CLI binary not found"
+    @[ -f target/release/para ] && echo "  ✅ release CLI binary built" || echo "  ❌ release CLI binary not found"
+    @[ -f target/debug/para-mcp-server ] && echo "  ✅ debug MCP server built" || echo "  ❌ debug MCP server not found"
+    @[ -f target/release/para-mcp-server ] && echo "  ✅ release MCP server built" || echo "  ❌ release MCP server not found"
 
 # Development workflow setup
 dev-setup: setup-hooks test
@@ -170,6 +215,7 @@ dev-setup: setup-hooks test
     @echo "   just fmt            - Format code"
     @echo "   just run [args]     - Run para with arguments"
     @echo "   just install        - Install para globally"
+    @echo "   just mcp-setup      - Setup MCP integration"
 
 # Create a release - triggers GitHub Actions to build and publish
 release BUMP="patch":

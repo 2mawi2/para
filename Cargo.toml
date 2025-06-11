@@ -10,6 +10,10 @@ name = "para"
 path = "src/lib.rs"
 doctest = false
 
+[[bin]]
+name = "para-mcp-server"
+path = "src/mcp_server.rs"
+
 [dependencies]
 clap = { version = "4.5.39", features = ["derive", "color", "suggestions"] }
 clap_complete = "4.5"
@@ -22,6 +26,7 @@ anyhow = "1.0"
 regex = "1.10"
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
 
 [lints.rust]
 warnings = "deny"
