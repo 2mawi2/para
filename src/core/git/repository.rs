@@ -79,31 +79,46 @@ impl GitRepository {
     }
 
     pub fn get_main_branch(&self) -> Result<String> {
-        let default_branch =
-            execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"]);
-        if let Ok(branch_ref) = default_branch {
+        // Always prefer a local 'main' branch if it exists to encourage modern default.
+        if execute_git_command(
+            self,
+            &["show-ref", "--verify", "--quiet", "refs/heads/main"],
+        )
+        .is_ok()
+        {
+            return Ok("main".to_string());
+        }
+
+        // Fallback to remote HEAD reference (could be master or something else).
+        if let Ok(branch_ref) =
+            execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"])
+        {
             if let Some(branch_name) = branch_ref.strip_prefix("refs/remotes/origin/") {
                 return Ok(branch_name.to_string());
             }
         }
 
-        let branches = ["main", "develop"];
-        for branch in &branches {
-            if execute_git_command(
-                self,
-                &[
-                    "show-ref",
-                    "--verify",
-                    "--quiet",
-                    &format!("refs/heads/{}", branch),
-                ],
-            )
-            .is_ok()
-            {
-                return Ok(branch.to_string());
-            }
+        // Legacy repositories might use 'master'. Detect it explicitly.
+        if execute_git_command(
+            self,
+            &["show-ref", "--verify", "--quiet", "refs/heads/master"],
+        )
+        .is_ok()
+        {
+            return Ok("master".to_string());
         }
 
+        // As another common pattern, check for 'develop'.
+        if execute_git_command(
+            self,
+            &["show-ref", "--verify", "--quiet", "refs/heads/develop"],
+        )
+        .is_ok()
+        {
+            return Ok("develop".to_string());
+        }
+
+        // Default backstop.
         Ok("main".to_string())
     }
 

@@ -10,6 +10,7 @@ pub struct StrategyRequest {
     pub target_branch: String,
     pub strategy: IntegrationStrategy,
     pub dry_run: bool,
+    pub commit_message: Option<String>,
 }
 
 #[derive(Debug)]
@@ -344,11 +345,11 @@ impl<'a> StrategyManager<'a> {
     /// Handle integration from worktree using change extraction
     fn execute_worktree_strategy(&self, request: &StrategyRequest) -> Result<StrategyResult> {
         println!("🔄 Integrating from worktree using change extraction...");
-        
+
         match self.integration.integrate_from_worktree(
             &request.feature_branch,
             &request.target_branch,
-            None, // TODO: Get proper commit message from request
+            request.commit_message.as_deref(),
         ) {
             Ok(()) => {
                 println!("✅ Successfully integrated changes to main repository");
@@ -358,7 +359,9 @@ impl<'a> StrategyManager<'a> {
             }
             Err(e) => {
                 // Check if it's a conflict error from git am
-                if e.to_string().contains("patch does not apply") || e.to_string().contains("Failed to apply patches") {
+                if e.to_string().contains("patch does not apply")
+                    || e.to_string().contains("Failed to apply patches")
+                {
                     println!("⚠️  Integration conflicts detected");
                     Ok(StrategyResult::ConflictsPending {
                         conflicted_files: vec![], // TODO: Extract actual conflicted files from git am output
@@ -446,6 +449,7 @@ mod tests {
             target_branch: main_branch.clone(),
             strategy: IntegrationStrategy::Merge,
             dry_run: true,
+            commit_message: None,
         };
 
         let result = strategy_manager
@@ -490,6 +494,7 @@ mod tests {
             target_branch: main_branch.clone(),
             strategy: IntegrationStrategy::Squash,
             dry_run: true,
+            commit_message: None,
         };
 
         let result = strategy_manager
