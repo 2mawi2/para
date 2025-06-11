@@ -269,15 +269,24 @@ mod generator_tests {
         assert!(enhanced_bash.is_ok());
         let bash_script = enhanced_bash.unwrap();
         assert!(bash_script.contains("para"));
-        assert!(bash_script.contains("_para_dynamic_complete"));
-        assert!(bash_script.contains("complete-command"));
+        assert!(bash_script.contains("_para_complete_sessions"));
+        assert!(bash_script.contains("_para_complete_integration_strategies"));
 
         let enhanced_zsh =
             generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Zsh);
         assert!(enhanced_zsh.is_ok());
         let zsh_script = enhanced_zsh.unwrap();
         assert!(zsh_script.contains("para"));
-        assert!(zsh_script.contains("_para"));
+        assert!(zsh_script.contains("_para_sessions"));
+        assert!(zsh_script.contains("_para_integration_strategies"));
+
+        let enhanced_fish =
+            generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Fish);
+        assert!(enhanced_fish.is_ok());
+        let fish_script = enhanced_fish.unwrap();
+        assert!(fish_script.contains("para"));
+        assert!(fish_script.contains("__para_sessions"));
+        assert!(fish_script.contains("__para_task_files"));
     }
 
     #[test]
