@@ -5,6 +5,9 @@
 ### Prerequisites
 
 ```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 # Install Just command runner (if not already installed)
 brew install just  # macOS
 # or curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
@@ -13,18 +16,23 @@ brew install just  # macOS
 ### Setup Development Environment
 
 ```bash
-# Complete development setup
-just dev-setup
+# Build the project
+cargo build
+
+# Run tests  
+just test
 ```
 
 ### Available Commands
 
 ```bash
-just install        # Install para globally
-just run [ARGS]     # Run local para.sh with arguments
-just test           # Run bats test suite (auto-installs dependencies)
-just lint           # Run shellcheck + shfmt linting
-just fmt            # Auto-fix shell script formatting
+just build          # Build debug binary
+just build-release  # Build optimized release binary
+just install        # Install Rust para binary globally
+just test           # Run comprehensive Rust tests (formatting + tests + linting)
+just test [filter]  # Run specific tests (e.g., just test finish)
+just lint           # Run clippy linting
+just fmt            # Auto-fix Rust formatting
 just setup-hooks    # Configure git pre-commit/pre-push hooks
 just status         # Show project status and dependencies
 just clean          # Clean up development artifacts
@@ -35,14 +43,15 @@ just clean          # Clean up development artifacts
 - **Pre-push**: Runs linting before pushes
 
 ### Testing
-- Uses [bats-core](https://github.com/bats-core/bats-core) for shell script testing
-- Tests in `tests/test_para.bats`
-- Run with `just test` or `bats tests/`
+- Uses Rust's built-in test framework with `cargo test`
+- Comprehensive unit and integration tests
+- Git-isolated test environments using `src/test_utils.rs`
+- Run with `just test` or `cargo test`
 
 ### Linting
-- **shellcheck** for static analysis
-- **shfmt** for consistent formatting
-- Run with `just lint` or individually
+- **clippy** for Rust static analysis
+- **rustfmt** for consistent formatting  
+- Run with `just lint` and `just fmt`
 
 ## 🏗️ Architecture
 

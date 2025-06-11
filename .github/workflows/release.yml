@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - 'release'
   workflow_dispatch:
     inputs:
       force_release:
@@ -15,60 +15,11 @@ on:
 permissions:
   contents: write
 
-jobs:
-  check-tests:
-    runs-on: macos-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.force_release != 'true'
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        
-      - name: Configure Git and Environment
-        run: |
-          # Configure git properly for CI environment
-          git config --global user.email "test@example.com"
-          git config --global user.name "GitHub Actions"
-          git config --global init.defaultBranch main
-          git config --global core.autocrlf false
-          git config --global core.filemode false
-          git config --global advice.detachedHead false
-          
-          # Set environment variables for para
-          echo "IDE_NAME=cursor" >> $GITHUB_ENV
-          echo "IDE_CMD=echo" >> $GITHUB_ENV
-          echo "CURSOR_CMD=echo" >> $GITHUB_ENV
-          echo "PARA_NON_INTERACTIVE=true" >> $GITHUB_ENV
-        
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck bats
-        
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install shellcheck bats-core shfmt
-      
-      - name: Run tests
-        env:
-          IDE_NAME: cursor
-          IDE_CMD: echo
-          CURSOR_CMD: echo
-          PARA_NON_INTERACTIVE: true
-        run: |
-          echo "🧪 Running all para tests before release..."
-          shellcheck -e SC1091,SC2086 para.sh install-para.sh lib/*.sh
-          # Only run shfmt on macOS since it's not available in Ubuntu act environment
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            shfmt -d -i 2 para.sh install-para.sh lib/*.sh
-          fi
-          bats tests/test_para_units.bats
-          bats tests/test_para_prompt_features.bats
-          bats tests/test_para_argument_parsing.bats
-          bats tests/test_friendly_names.bats
-          bats tests/test_para_integration.bats
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
+jobs:
   extract-version:
     name: Extract Version
     runs-on: ubuntu-latest
@@ -79,51 +30,74 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         
-      - name: Extract version from tag
+      - name: Extract current version
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # For manual dispatch, use current date/time as version
-            VERSION=$(date +%Y.%m.%d-%H%M%S)
-            TAG="v$VERSION"
-          else
-            # Extract from git tag
-            TAG=${GITHUB_REF#refs/tags/}
-            VERSION=${TAG#v}
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "Current version: $VERSION"
-          echo "Tag: $TAG"
+          # Extract current version from Cargo.toml
+          CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
 
-  build-artifacts:
-    name: Build Release Artifacts
-    needs: [check-tests, extract-version]
-    if: always() && (needs.check-tests.result == 'skipped' || needs.check-tests.result == 'success')
-    runs-on: macos-latest
+  test:
+    name: Test Build
+    needs: [extract-version]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.force_release != 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Create release tarball
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1.12.0
+        with:
+          toolchain: stable
+          cache: true
+          components: clippy, rustfmt
+    
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+    
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+    
+      - name: Test build
+        run: cargo build --release
+      
+      - name: Run tests
+        run: cargo test --verbose --all-features
+
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: [test, extract-version]
+    if: always() && (needs.test.result == 'skipped' || needs.test.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create source tarball
         run: |
           mkdir -p artifacts
           tar -czf artifacts/para-${{ needs.extract-version.outputs.version }}.tar.gz \
             --exclude='.git*' \
             --exclude='subtrees' \
             --exclude='.para_*' \
-            --exclude='tests/test_*.tmp' \
+            --exclude='target' \
+            --exclude='*.tmp' \
             --exclude='.bats_tmp*' \
-            para.sh install-para.sh lib/ docs/ README.md justfile
+            .
 
       - name: Create checksums
         shell: bash
         run: |
           cd artifacts
-          shasum -a 256 * > checksums.txt
+          sha256sum * > checksums.txt
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -186,24 +160,30 @@ jobs:
             url "https://github.com/2mawi2/para/archive/refs/tags/${{ needs.extract-version.outputs.tag }}.tar.gz"
             sha256 "${SHA256}"
             license "MIT"
-            version "${{ needs.extract-version.outputs.version }}"
+          
+            depends_on "rust" => :build
           
             def install
-              # Install the para script and libraries
-              libexec.install "para.sh"
-              libexec.install "lib"
-              
-              # Create wrapper script
-              (bin/"para").write <<~EOS
-                #!/usr/bin/env sh
-                exec "#{libexec}/para.sh" "\$@"
+              system "cargo", "install", *std_cargo_args
+            end
+          
+            def caveats
+              <<~EOS
+                To enable shell completion, add this to your shell config:
+                
+                For bash:
+                  echo 'eval "\$(para completion bash)"' >> ~/.bashrc
+                
+                For zsh:
+                  echo 'eval "\$(para completion zsh)"' >> ~/.zshrc
+                
+                For fish:
+                  para completion fish | source
               EOS
-              
-              # Make wrapper executable
-              chmod 0755, bin/"para"
             end
           
             test do
+              assert_match "para", shell_output("#{bin}/para --version")
               system "#{bin}/para", "--help"
             end
           end
@@ -222,3 +202,56 @@ jobs:
             git commit -m "Update para to ${{ needs.extract-version.outputs.version }}"
             git push
           fi
+
+  increment-version:
+    needs: [extract-version, create-release, update-homebrew]
+    runs-on: ubuntu-latest
+    if: always() && needs.create-release.result == 'success' && needs.update-homebrew.result == 'success'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: release
+
+      - name: Increment version
+        run: |
+          CURRENT_VERSION="${{ needs.extract-version.outputs.version }}"
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Parse version components (assuming semver format)
+          if [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+            
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          else
+            echo "Error: Cannot parse version $CURRENT_VERSION"
+            exit 1
+          fi
+          
+          echo "New version: $NEW_VERSION"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          
+          # Update Cargo.toml
+          sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+          
+          # Verify the change
+          grep "^version = " Cargo.toml
+
+      - name: Commit version increment
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml
+          git commit -m "Increment version to $NEW_VERSION after release"
+          git push origin release
+
+      - name: Merge to main
+        run: |
+          git checkout main
+          git merge release --no-ff -m "Merge release branch with version increment"
+          git push origin main

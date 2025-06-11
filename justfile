@@ -1,4 +1,4 @@
-# Justfile for para project
+# Justfile for Para - Rust implementation
 # https://github.com/casey/just
 
 # Set shell to use for command execution
@@ -8,14 +8,20 @@ set shell := ["bash", "-c"]
 default:
     @just --list
 
-# Variables
-BATS_VERSION := "v1.10.0"
-SHELLCHECK_DISABLE := "SC1091,SC2086"
+# Build debug binary
+build:
+    cargo build
 
-# Install the project globally
-install:
-    @echo "🚀 Installing para globally..."
-    ./install-para.sh
+# Build optimized release binary
+build-release:
+    cargo build --release
+
+# Install Rust binary locally
+install: build-release
+    @echo "🚀 Installing Para binary..."
+    @mkdir -p ~/.local/bin
+    @cp target/release/para ~/.local/bin/para
+    @echo "✅ Para binary installed to ~/.local/bin/para"
 
 # Uninstall para globally  
 uninstall:
@@ -25,296 +31,164 @@ uninstall:
     
     # Define paths
     INSTALL_BIN_DIR="$HOME/.local/bin"
-    INSTALL_BASE_DIR="$HOME/.local/lib/para"
-    TEMPLATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/para"
     PARA_BIN="$INSTALL_BIN_DIR/para"
     
     # Remove the binary
     if [ -f "$PARA_BIN" ]; then
         echo "🗑️  Removing para binary: $PARA_BIN"
         rm -f "$PARA_BIN"
+        echo "✅ Para uninstalled successfully!"
     else
         echo "ℹ️  Para binary not found at $PARA_BIN"
     fi
-    
-    # Remove the installation directory
-    if [ -d "$INSTALL_BASE_DIR" ]; then
-        echo "🗑️  Removing para installation: $INSTALL_BASE_DIR"
-        rm -rf "$INSTALL_BASE_DIR"
-    else
-        echo "ℹ️  Para installation directory not found at $INSTALL_BASE_DIR"
-    fi
-    
-    # Remove the template and user data directories
-    if [ -d "$TEMPLATE_DIR" ]; then
-        echo "🗑️  Removing para data directory: $TEMPLATE_DIR"
-        echo "   (includes template and global user data)"
-        rm -rf "$TEMPLATE_DIR"
-    else
-        echo "ℹ️  Para data directory not found at $TEMPLATE_DIR"
-    fi
-    
-    # Check for PATH entries in shell configs (informational only)
-    echo "⚠️  Note: You may want to manually remove para PATH entries from your shell config:"
-    echo "   - ~/.bashrc (bash)"
-    echo "   - ~/.zshrc (zsh)" 
-    echo "   - ~/.config/fish/config.fish (fish)"
-    echo "   - ~/.profile (generic)"
-    echo "   Look for lines containing '$INSTALL_BIN_DIR'"
-    
-    echo "✅ Para uninstalled successfully!"
 
-# Run the current local para.sh
-run *ARGS:
-    @echo "🏃 Running local para.sh..."
-    ./para.sh {{ARGS}}
-
-# Install development dependencies
-install-dev:
-    #!/usr/bin/env bash
+# Run comprehensive Rust tests (formatting + tests + linting)
+test *FILTER:
+    #!/bin/bash
     set -euo pipefail
-    echo "📦 Installing development dependencies..."
     
-    # Install bats-core for testing
-    if ! command -v bats &> /dev/null; then
-        echo "Installing bats-core..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            if command -v brew &> /dev/null; then
-                brew install bats-core
-            else
-                echo "Please install Homebrew to automatically install bats-core"
-                echo "Or install bats-core manually: https://github.com/bats-core/bats-core"
-                exit 1
-            fi
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            # Try package managers for Linux
-            if command -v apt-get &> /dev/null; then
-                sudo apt-get update && sudo apt-get install -y bats
-            elif command -v yum &> /dev/null; then
-                sudo yum install -y bats
-            elif command -v dnf &> /dev/null; then
-                sudo dnf install -y bats
-            else
-                echo "Please install bats-core manually: https://github.com/bats-core/bats-core"
-                exit 1
-            fi
-        else
-            echo "Please install bats-core manually: https://github.com/bats-core/bats-core"
-            exit 1
-        fi
+    # Check if filter is provided
+    if [ "{{FILTER}}" != "" ]; then
+        echo "🧪 Running Rust tests for: {{FILTER}}"
+        cargo test {{FILTER}}
+        exit 0
+    fi
+    
+    echo "🧪 Running all Rust checks..."
+    
+    # Format first
+    printf "   Format: "
+    if cargo fmt --all --quiet 2>/dev/null; then
+        echo "✅ formatted"
     else
-        echo "✅ bats-core already installed"
-    fi
-    
-    # Install shellcheck
-    if ! command -v shellcheck &> /dev/null; then
-        echo "Installing shellcheck..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            if command -v brew &> /dev/null; then
-                brew install shellcheck
-            else
-                echo "Please install Homebrew to automatically install shellcheck"
-                exit 1
-            fi
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            if command -v apt-get &> /dev/null; then
-                sudo apt-get update && sudo apt-get install -y shellcheck
-            elif command -v yum &> /dev/null; then
-                sudo yum install -y ShellCheck
-            elif command -v dnf &> /dev/null; then
-                sudo dnf install -y ShellCheck
-            else
-                echo "Please install shellcheck manually"
-                exit 1
-            fi
-        else
-            echo "Please install shellcheck manually"
-            exit 1
-        fi
-    else
-        echo "✅ shellcheck already installed"
-    fi
-    
-    # Install shfmt
-    if ! command -v shfmt &> /dev/null; then
-        echo "Installing shfmt..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            if command -v brew &> /dev/null; then
-                brew install shfmt
-            else
-                echo "Please install Homebrew to automatically install shfmt"
-                exit 1
-            fi
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            # Install shfmt via go or download binary
-            if command -v go &> /dev/null; then
-                go install mvdan.cc/sh/v3/cmd/shfmt@latest
-            else
-                echo "Installing shfmt binary..."
-                curl -L -o /tmp/shfmt https://github.com/mvdan/sh/releases/latest/download/shfmt_v3.7.0_linux_amd64
-                chmod +x /tmp/shfmt
-                sudo mv /tmp/shfmt /usr/local/bin/shfmt
-            fi
-        else
-            echo "Please install shfmt manually: https://github.com/mvdan/sh"
-            exit 1
-        fi
-    else
-        echo "✅ shfmt already installed"
-    fi
-    
-    echo "✅ Development dependencies installed"
-
-# Run tests using bats
-test FILE="": install-dev lint
-    @echo "🧪 Running tests..."
-    @if [ ! -d "tests" ]; then \
-        echo "Creating tests directory..."; \
-        mkdir -p tests; \
-    fi
-    @if [ "{{FILE}}" != "" ]; then \
-        echo "Running specific test file: {{FILE}}"; \
-        bats "{{FILE}}"; \
-    else \
-        echo "Running all tests (99 total)..."; \
-        echo "Running unit tests..."; \
-        bats tests/test_para_units.bats || true; \
-        echo "Running prompt feature tests..."; \
-        bats tests/test_para_prompt_features.bats || true; \
-        echo "Running argument parsing tests..."; \
-        bats tests/test_para_argument_parsing.bats || true; \
-        echo "Running friendly names tests..."; \
-        bats tests/test_friendly_names.bats || true; \
-        echo "Running integration tests..."; \
-        bats tests/test_para_integration.bats || true; \
-    fi
-
-# Run only integration tests
-test-integration: install-dev
-    @echo "🧪 Running integration tests..."
-    @bats tests/test_para_integration.bats
-
-# Run only unit tests  
-test-unit: install-dev
-    @echo "🧪 Running unit tests..."
-    @bats tests/test_para_units.bats
-
-# Run only friendly names tests
-test-friendly: install-dev
-    @echo "🧪 Running friendly names tests..."
-    @bats tests/test_friendly_names.bats
-
-# Run only prompt feature tests
-test-prompts: install-dev
-    @echo "🧪 Running prompt feature tests..."
-    @bats tests/test_para_prompt_features.bats
-
-# Run only argument parsing tests  
-test-args: install-dev
-    @echo "🧪 Running argument parsing tests..."
-    @bats tests/test_para_argument_parsing.bats
-
-# Run performance benchmarks
-benchmark:
-    #!/usr/bin/env bash
-    set -e
-    
-    echo "⚡ Running para performance benchmarks..."
-    
-    # Check if we're in a git repository
-    if ! git rev-parse --git-dir >/dev/null 2>&1; then
-        echo "❌ Not in a Git repository. Performance benchmarks require a Git repository."
-        echo "💡 Navigate to a Git repository or run: git init"
+        echo "❌ formatting failed"
         exit 1
     fi
     
-    # Check if benchmark script exists and is executable
-    if [ ! -f "scripts/benchmark-performance.sh" ]; then
-        echo "❌ Benchmark script not found at scripts/benchmark-performance.sh"
+    # Tests
+    printf "   Tests: "
+    if test_output=$(cargo test --message-format=short 2>&1); then
+        if echo "$test_output" | grep -q "test result:"; then
+            summary=$(echo "$test_output" | grep "test result:" | tail -1 | sed 's/test result: //')
+            echo "✅ $summary"
+        else
+            echo "✅ passed"
+        fi
+    else
+        echo "❌ FAILED"
+        echo "$test_output" | grep -E "(test .* \.\.\. FAILED|assertion.*failed|panicked at)" | head -25
         exit 1
     fi
     
-    if [ ! -x "scripts/benchmark-performance.sh" ]; then
-        echo "🔧 Making benchmark script executable..."
-        chmod +x scripts/benchmark-performance.sh
+    # Clippy linting
+    printf "   Linting: "
+    if cargo clippy --all-targets --all-features -- -W clippy::all >/dev/null 2>&1; then
+        echo "✅ clean"
+    else
+        echo "❌ FAILED"
+        cargo clippy --all-targets --all-features -- -W clippy::all
+        exit 1
     fi
     
-    # Run the benchmark
-    ./scripts/benchmark-performance.sh
+    echo "🎉 All Rust checks passed!"
 
-# Run linting with shellcheck and shfmt
-lint: install-dev
-    @echo "🔍 Running linting checks..."
-    @echo "Running shellcheck..."
-    shellcheck -e {{SHELLCHECK_DISABLE}} para.sh install-para.sh lib/*.sh || true
-    @echo "Running shfmt check..."
-    shfmt -d -i 2 para.sh install-para.sh lib/*.sh || true
+# Run only Rust tests (no formatting/linting)
+test-only *FILTER:
+    #!/bin/bash
+    if [ "{{FILTER}}" != "" ]; then
+        cargo test {{FILTER}}
+    else
+        cargo test
+    fi
 
-# Fix formatting with shfmt
-fmt: install-dev
-    @echo "🎨 Fixing shell script formatting..."
-    shfmt -w -i 2 para.sh install-para.sh lib/*.sh
+# Run Rust linting with clippy
+lint:
+    @echo "🔍 Running Rust linting checks..."
+    cargo clippy --all-targets --all-features -- -W clippy::all
 
-# Setup git hooks
+# Format Rust code
+fmt:
+    @echo "🎨 Formatting Rust code..."
+    cargo fmt --all
+
+# Check Rust formatting
+fmt-check:
+    @echo "🔍 Checking Rust formatting..."
+    cargo fmt --all -- --check
+
+# Run the para binary with arguments
+run *ARGS: build
+    ./target/debug/para {{ARGS}}
+
+# Setup git hooks for Rust development
 setup-hooks:
-    @echo "🪝 Setting up git hooks..."
+    @echo "🪝 Setting up git hooks for Rust development..."
     @mkdir -p .git/hooks
-    @cp scripts/pre-commit .git/hooks/pre-commit
-    @chmod +x .git/hooks/pre-commit
-    @cp scripts/pre-push .git/hooks/pre-push
-    @chmod +x .git/hooks/pre-push
+    @echo '#!/bin/bash\nset -e\njust test' > .git/hooks/pre-commit
+    @echo '#!/bin/bash\nset -e\njust lint' > .git/hooks/pre-push
+    @chmod +x .git/hooks/pre-commit .git/hooks/pre-push
     @echo "✅ Git hooks configured:"
-    @echo "   • pre-commit: runs tests"
+    @echo "   • pre-commit: runs comprehensive tests"
     @echo "   • pre-push: runs linting"
 
-# Clean up development artifacts
+# Clean up Rust build artifacts
 clean:
-    @echo "🧹 Cleaning up..."
-    @rm -rf tests/test_*.tmp
-    @rm -rf .bats_tmp*
+    @echo "🧹 Cleaning up Rust build artifacts..."
+    cargo clean
     @echo "✅ Cleaned up development artifacts"
 
 # Show project status
 status:
-    @echo "📊 Project Status"
-    @echo "=================="
-    @echo "Shell scripts:"
-    @find . -name "*.sh" -not -path "./subtrees/*" -not -path "./.git/*" | wc -l | sed 's/^/  /'
+    @echo "📊 Para Project Status"
+    @echo "======================"
+    @echo "Rust toolchain:"
+    @rustc --version || echo "  ❌ rustc not found"
+    @cargo --version || echo "  ❌ cargo not found"
     @echo ""
-    @echo "Dependencies:"
-    @command -v bats >/dev/null 2>&1 && echo "  ✅ bats" || echo "  ❌ bats"
-    @command -v shellcheck >/dev/null 2>&1 && echo "  ✅ shellcheck" || echo "  ❌ shellcheck"
-    @command -v shfmt >/dev/null 2>&1 && echo "  ✅ shfmt" || echo "  ❌ shfmt"
+    @echo "Development tools:"
+    @command -v git >/dev/null 2>&1 && echo "  ✅ git" || echo "  ❌ git"
+    @command -v just >/dev/null 2>&1 && echo "  ✅ just" || echo "  ❌ just"
     @echo ""
     @echo "Git hooks:"
     @[ -f .git/hooks/pre-commit ] && echo "  ✅ pre-commit" || echo "  ❌ pre-commit"
     @[ -f .git/hooks/pre-push ] && echo "  ✅ pre-push" || echo "  ❌ pre-push"
+    @echo ""
+    @echo "Binary status:"
+    @[ -f target/debug/para ] && echo "  ✅ debug binary built" || echo "  ❌ debug binary not found"
+    @[ -f target/release/para ] && echo "  ✅ release binary built" || echo "  ❌ release binary not found"
 
-# Development workflow: install deps, setup hooks, run tests and lint
-dev-setup: install-dev setup-hooks test lint
-    @echo "🎉 Development environment ready!"
+# Development workflow setup
+dev-setup: setup-hooks test
+    @echo "🎉 Rust development environment ready!"
     @echo ""
     @echo "💡 Available development commands:"
-    @echo "   just test           - Run all tests"
-    @echo "   just lint           - Run linting checks"
-    @echo "   just fmt            - Fix formatting"
-    @echo "   just benchmark      - Run performance benchmarks"
-    @echo "   just status         - Show project status"
+    @echo "   just build          - Build debug binary"
+    @echo "   just build-release  - Build release binary"
+    @echo "   just test           - Run comprehensive tests"
+    @echo "   just test [filter]  - Run specific tests"
+    @echo "   just lint           - Run clippy linting"
+    @echo "   just fmt            - Format code"
+    @echo "   just run [args]     - Run para with arguments"
+    @echo "   just install        - Install para globally"
 
 # Create a release - triggers GitHub Actions to build and publish
 release BUMP="patch":
     #!/usr/bin/env bash
     set -e
     
-    # Check if we're on master branch
+    # Check if we're on main branch
     current_branch=$(git branch --show-current)
-    if [ "$current_branch" != "master" ]; then
-        echo "Error: Must be on master branch to create a release"
+    if [ "$current_branch" != "main" ]; then
+        echo "Error: Must be on main branch to create a release"
         exit 1
     fi
     
+    # Ensure tests pass before release
+    echo "🧪 Running tests before release..."
+    just test
+    
     # Pull latest changes and check no staged changes exist
-    git pull origin master
+    git pull origin main
     if [ -n "$(git diff --cached --name-only)" ]; then
         echo "Error: Staged changes detected. Commit or unstage changes first."
         exit 1
@@ -363,4 +237,4 @@ release BUMP="patch":
     git tag "$new_version"
     git push origin "$new_version"
     
-    echo "✅ Release $new_version triggered! Monitor at: https://github.com/2mawi2/para/actions" 
+    echo "✅ Release $new_version triggered! Monitor at: https://github.com/2mawi2/para/actions"

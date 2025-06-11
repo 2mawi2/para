@@ -1,0 +1,79 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ "main", "release" ]
+  pull_request:
+    branches: [ "main" ]
+  pull_request_target:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    if: |
+      (github.event_name == 'push') ||
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]')
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.2.2
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1.12.0
+      with:
+        toolchain: stable
+        cache: true
+        components: clippy, rustfmt
+    
+    - name: Install system dependencies
+      run: |
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          echo "macOS runner setup complete"
+        elif [ "$RUNNER_OS" = "Linux" ]; then
+          echo "Ubuntu runner setup complete"
+        fi
+
+    - name: Check Rust formatting
+      run: cargo fmt --all -- --check
+
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Run Tests
+      run: |
+        # Set environment variables for consistent testing across platforms
+        export RUST_BACKTRACE=1
+        export CARGO_TERM_COLOR=always
+        
+        # Run tests with timeout to prevent hanging
+        timeout 600 cargo test --verbose --all-features || (
+          echo "Tests failed or timed out. Retrying with reduced parallelism..."
+          timeout 600 cargo test --verbose --all-features --jobs=1
+        )
+
+    - name: Test Binary Functionality
+      run: |
+        # Build and test basic functionality
+        cargo build --release
+        ./target/release/para --help
+        ./target/release/para --version
