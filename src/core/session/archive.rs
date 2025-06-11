@@ -378,7 +378,7 @@ mod tests {
             )
             .unwrap();
 
-        // The archived branch should now be in correct format: pc/archived/TIMESTAMP/SESSION-NAME
+        // The archived branch should now be in correct format: para/archived/TIMESTAMP/SESSION-NAME
         println!("Archived branch: {}", archived_branch);
 
         // Now this should work with the new session-name-based archiving

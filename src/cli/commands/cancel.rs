@@ -165,7 +165,7 @@ mod tests {
                 state_dir: temp_dir.join(".para_state").to_string_lossy().to_string(),
             },
             git: GitConfig {
-                branch_prefix: "pc".to_string(),
+                branch_prefix: "para".to_string(),
                 auto_stage: true,
                 auto_commit: false,
                 default_integration_strategy: crate::cli::parser::IntegrationStrategy::Squash,

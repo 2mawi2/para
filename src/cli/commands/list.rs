@@ -126,16 +126,19 @@ fn list_active_sessions(
 }
 
 fn list_archived_sessions(
-    _session_manager: &SessionManager,
+    session_manager: &SessionManager,
     git_service: &GitService,
 ) -> Result<Vec<SessionInfo>> {
     let branch_manager = git_service.branch_manager();
-    let archived_branches = branch_manager.list_archived_branches("para")?;
+    let branch_prefix = &session_manager.config().git.branch_prefix;
+    let archived_branches = branch_manager.list_archived_branches(branch_prefix)?;
 
     let mut sessions = Vec::new();
 
     for branch_name in archived_branches {
-        if let Some(session_id) = extract_session_id_from_archived_branch(&branch_name) {
+        if let Some(session_id) =
+            extract_session_id_from_archived_branch(&branch_name, branch_prefix)
+        {
             let session_info = SessionInfo {
                 session_id: session_id.clone(),
                 branch: branch_name.clone(),
@@ -201,8 +204,12 @@ fn git_service_for_path(path: &Path) -> Option<GitService> {
 
 // Removed get_last_modified_time - using unified session system metadata
 
-fn extract_session_id_from_archived_branch(branch_name: &str) -> Option<String> {
-    if let Some(stripped) = branch_name.strip_prefix("para/archived/") {
+fn extract_session_id_from_archived_branch(
+    branch_name: &str,
+    branch_prefix: &str,
+) -> Option<String> {
+    let archive_prefix = format!("{}/archived/", branch_prefix);
+    if let Some(stripped) = branch_name.strip_prefix(&archive_prefix) {
         if let Some(session_part) = stripped.split('/').next_back() {
             return Some(session_part.to_string());
         }
@@ -452,22 +459,28 @@ mod tests {
     #[test]
     fn test_extract_session_id_from_archived_branch() {
         assert_eq!(
-            extract_session_id_from_archived_branch("para/archived/20250609-143052/feature-auth"),
+            extract_session_id_from_archived_branch(
+                "para/archived/20250609-143052/feature-auth",
+                "para"
+            ),
             Some("feature-auth".to_string())
         );
 
         assert_eq!(
-            extract_session_id_from_archived_branch("para/archived/20250609-143052/simple-session"),
+            extract_session_id_from_archived_branch(
+                "para/archived/20250609-143052/simple-session",
+                "para"
+            ),
             Some("simple-session".to_string())
         );
 
         assert_eq!(
-            extract_session_id_from_archived_branch("regular-branch"),
+            extract_session_id_from_archived_branch("regular-branch", "para"),
             None
         );
 
         assert_eq!(
-            extract_session_id_from_archived_branch("para/regular-branch"),
+            extract_session_id_from_archived_branch("para/regular-branch", "para"),
             None
         );
     }
@@ -540,6 +553,12 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
 
+        // Create config that points to our test state directory
+        let state_dir = temp_dir.path().join(".para_state");
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let session_manager = SessionManager::new(&config);
+
         // Create some archived branches
         let branch_manager = git_service.branch_manager();
 
@@ -551,23 +570,21 @@ mod tests {
         // Switch back to main branch before archiving
         git_service.repository().checkout_branch(&current_branch)?;
 
-        // Archive the branches
-        branch_manager.move_to_archive("test-branch-1", "para")?;
-        branch_manager.move_to_archive("test-branch-2", "para")?;
-
-        // Create config that points to our test state directory
-        let state_dir = temp_dir.path().join(".para_state");
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
-        let _session_manager = SessionManager::new(&config);
+        // Archive the branches using the configured prefix
+        let branch_prefix = &session_manager.config().git.branch_prefix;
+        branch_manager.move_to_archive("test-branch-1", branch_prefix)?;
+        branch_manager.move_to_archive("test-branch-2", branch_prefix)?;
 
         // Test list_archived_sessions function directly using our git_service
         let branch_manager = git_service.branch_manager();
-        let archived_branches = branch_manager.list_archived_branches("para")?;
+        let branch_prefix = &session_manager.config().git.branch_prefix;
+        let archived_branches = branch_manager.list_archived_branches(branch_prefix)?;
 
         let mut sessions = Vec::new();
         for branch_name in archived_branches {
-            if let Some(session_id) = extract_session_id_from_archived_branch(&branch_name) {
+            if let Some(session_id) =
+                extract_session_id_from_archived_branch(&branch_name, branch_prefix)
+            {
                 let session_info = SessionInfo {
                     session_id: session_id.clone(),
                     branch: branch_name.to_string(),

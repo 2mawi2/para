@@ -144,7 +144,7 @@ para integrate --dry-run
 ```
 your-repo/
 ├── .git/                    # Your main repo
-├── subtrees/pc/             # Para sessions live here
+├── subtrees/para/             # Para sessions live here
 │   ├── feature-auth-*/      # Session 1: authentication work
 │   ├── feature-ui-*/        # Session 2: UI updates  
 │   └── bugfix-login-*/      # Session 3: bug fix

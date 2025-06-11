@@ -132,7 +132,7 @@ Add new commands by extending the `handle_command` function in `para.sh` and imp
 **Basic Test:**
 ```bash
 ./para.sh start                     # Create session
-cd subtrees/pc/*/                    # Enter worktree
+cd subtrees/para/*/                    # Enter worktree
 echo 'test change' >> test-file.py   # Make changes
 ./para.sh finish "test commit"      # Auto-stage & finish
 ```
@@ -140,7 +140,7 @@ echo 'test change' >> test-file.py   # Make changes
 **Conflict Test:**
 ```bash
 ./para.sh start && ./para.sh start  # Create 2 sessions
-cd subtrees/pc/20*/                  # Session 1: modify same file
+cd subtrees/para/20*/                  # Session 1: modify same file
 echo 'change A' >> test-file.py && ../../../para.sh finish "A"
 cd ../20*/                           # Session 2: conflicting change
 echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!

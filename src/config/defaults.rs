@@ -26,14 +26,14 @@ pub fn default_ide_config() -> IdeConfig {
 
 pub fn default_directory_config() -> DirectoryConfig {
     DirectoryConfig {
-        subtrees_dir: "subtrees/pc".to_string(),
+        subtrees_dir: "subtrees/para".to_string(),
         state_dir: ".para_state".to_string(),
     }
 }
 
 pub fn default_git_config() -> GitConfig {
     GitConfig {
-        branch_prefix: "pc".to_string(),
+        branch_prefix: "para".to_string(),
         auto_stage: true,
         auto_commit: true,
         default_integration_strategy: IntegrationStrategy::Squash,
@@ -107,8 +107,8 @@ mod tests {
     #[test]
     fn test_default_config_creation() {
         let config = default_config();
-        assert_eq!(config.git.branch_prefix, "pc");
-        assert_eq!(config.directories.subtrees_dir, "subtrees/pc");
+        assert_eq!(config.git.branch_prefix, "para");
+        assert_eq!(config.directories.subtrees_dir, "subtrees/para");
         assert!(config.git.auto_stage);
         assert!(config.session.preserve_on_finish);
     }
