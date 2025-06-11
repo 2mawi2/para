@@ -92,7 +92,7 @@ Configuration format (JSON):
     }
   },
   "directories": {
-    "subtrees_dir": "subtrees/pc",
+    "subtrees_dir": "subtrees/para",
     "state_dir": ".para_state"
   },
   "git": {

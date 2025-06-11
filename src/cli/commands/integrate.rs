@@ -85,7 +85,13 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
     println!("📋 Using {} strategy", format_strategy(&strategy));
 
     if args.dry_run {
-        return execute_dry_run(&git_service, &feature_branch, &target_branch, &strategy);
+        return execute_dry_run(
+            &git_service,
+            &feature_branch,
+            &target_branch,
+            &strategy,
+            commit_message.clone(),
+        );
     }
 
     let branch_manager = git_service.branch_manager();
@@ -120,6 +126,7 @@ pub fn execute(args: IntegrateArgs) -> Result<()> {
         strategy: &strategy,
         session_id: &session_id,
         worktree_path: &worktree_path,
+        commit_message: commit_message.clone(),
     };
 
     match execute_integration(context) {
@@ -140,6 +147,7 @@ fn execute_dry_run(
     feature_branch: &str,
     target_branch: &str,
     strategy: &IntegrationStrategy,
+    commit_message: Option<String>,
 ) -> Result<()> {
     let strategy_manager = git_service.strategy_manager();
 
@@ -148,6 +156,7 @@ fn execute_dry_run(
         target_branch: target_branch.to_string(),
         strategy: strategy.clone(),
         dry_run: true,
+        commit_message,
     };
 
     match strategy_manager.execute_strategy(request)? {
@@ -173,6 +182,7 @@ struct IntegrationContext<'a> {
     strategy: &'a IntegrationStrategy,
     session_id: &'a str,
     worktree_path: &'a Path,
+    commit_message: Option<String>,
 }
 
 fn execute_integration(context: IntegrationContext) -> Result<()> {
@@ -189,6 +199,7 @@ fn execute_integration(context: IntegrationContext) -> Result<()> {
         target_branch: context.target_branch.to_string(),
         strategy: context.strategy.clone(),
         dry_run: false,
+        commit_message: context.commit_message.clone(),
     };
 
     match strategy_manager.execute_strategy(request)? {

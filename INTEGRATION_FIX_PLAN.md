@@ -14,7 +14,7 @@ Para's integration logic fails with the error: `fatal: 'main' is already used by
 
 ### Current Broken Workflow
 ```bash
-# From session worktree: /subtrees/pc/session1 (on branch pc/session1-timestamp)
+# From session worktree: /subtrees/para/session1 (on branch para/session1-timestamp)
 para integrate "message"
   ↓
 git checkout main        # ❌ FAILS - main locked by main repo

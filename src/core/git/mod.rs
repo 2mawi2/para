@@ -169,8 +169,27 @@ impl GitService {
     pub fn validate_session_environment(&self, session_path: &Path) -> Result<SessionEnvironment> {
         let worktree_manager = self.worktree_manager();
 
+        // Determine actual git repository root for the provided path first
+        let repo_root = match GitRepository::discover_from(session_path) {
+            Ok(repo) => repo.root,
+            Err(_) => return Ok(SessionEnvironment::Invalid),
+        };
+
+        // If the .git entry is a *file*, we are in a linked worktree (Git creates a file
+        // that points back to the main repo). If it is a directory, we are in the main
+        // repository root.
+        let git_entry = repo_root.join(".git");
+        let is_linked_worktree_root = git_entry.is_file();
+
+        if is_linked_worktree_root {
+            // We are inside a worktree managed by the main repository.
+            let branch = worktree_manager.get_worktree_branch(&repo_root)?;
+            return Ok(SessionEnvironment::Worktree { branch });
+        }
+
+        // Fallback to previous detection logic for non-root sub-directories and legacy cases
         let is_worktree = worktree_manager.is_worktree_path(session_path);
-        let is_main_repo = session_path == self.repo.root;
+        let is_main_repo = repo_root == self.repo.root;
 
         if !is_worktree && !is_main_repo {
             return Ok(SessionEnvironment::Invalid);
