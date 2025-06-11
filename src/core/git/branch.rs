@@ -359,10 +359,10 @@ mod tests {
             .expect("Failed to checkout initial branch");
 
         let archived_name = manager
-            .move_to_archive("feature-branch", "pc")
+            .move_to_archive("feature-branch", "para")
             .expect("Failed to archive branch");
 
-        assert!(archived_name.starts_with("pc/archived/"));
+        assert!(archived_name.starts_with("para/archived/"));
         assert!(archived_name.ends_with("feature-branch"));
         assert!(!manager
             .branch_exists("feature-branch")
@@ -372,7 +372,7 @@ mod tests {
             .expect("Failed to check archived branch"));
 
         let restored_name = manager
-            .restore_from_archive(&archived_name, "pc")
+            .restore_from_archive(&archived_name, "para")
             .expect("Failed to restore branch");
 
         assert_eq!(restored_name, "feature-branch");
@@ -404,17 +404,19 @@ mod tests {
             .expect("Failed to checkout initial branch");
 
         manager
-            .move_to_archive("test1", "pc")
+            .move_to_archive("test1", "para")
             .expect("Failed to archive test1");
         manager
-            .move_to_archive("test2", "pc")
+            .move_to_archive("test2", "para")
             .expect("Failed to archive test2");
 
         let archived = manager
-            .list_archived_branches("pc")
+            .list_archived_branches("para")
             .expect("Failed to list archived branches");
         assert_eq!(archived.len(), 2);
-        assert!(archived.iter().all(|name| name.starts_with("pc/archived/")));
+        assert!(archived
+            .iter()
+            .all(|name| name.starts_with("para/archived/")));
         assert!(archived.iter().any(|name| name.ends_with("test1")));
         assert!(archived.iter().any(|name| name.ends_with("test2")));
     }

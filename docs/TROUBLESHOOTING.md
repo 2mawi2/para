@@ -82,7 +82,7 @@ rm -rf subtrees/
 rm -rf .para_state/
 
 # Remove any remaining branches (be careful!)
-git branch | grep "pc/" | xargs git branch -D
+git branch | grep "para/" | xargs git branch -D
 ```
 
 ### Check Git Worktree Status

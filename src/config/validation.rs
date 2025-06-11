@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_valid_git_ref_names() {
-        assert!(is_valid_git_ref_name("pc"));
+        assert!(is_valid_git_ref_name("para"));
         assert!(is_valid_git_ref_name("feature"));
         assert!(is_valid_git_ref_name("my-branch"));
         assert!(is_valid_git_ref_name("v1.0"));
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn test_git_config_validation() {
         let valid_config = GitConfig {
-            branch_prefix: "pc".to_string(),
+            branch_prefix: "para".to_string(),
             auto_stage: true,
             auto_commit: true,
             default_integration_strategy: IntegrationStrategy::Squash,

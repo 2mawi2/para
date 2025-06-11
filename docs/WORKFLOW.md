@@ -84,8 +84,8 @@ sequenceDiagram
     participant IDE
     
     User->>Para: para start feature-auth
-    Para->>Git: Create worktree subtrees/pc/feature-auth
-    Para->>Git: Create branch pc/20250608-175855
+    Para->>Git: Create worktree subtrees/para/feature-auth
+    Para->>Git: Create branch para/20250608-175855
     Para->>Git: Switch to new branch
     Para->>IDE: Launch IDE in session directory
     

@@ -19,6 +19,10 @@ impl SessionManager {
         }
     }
 
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     pub fn create_session(
         &mut self,
         name: String,
@@ -259,7 +263,7 @@ mod tests {
         // Create session manually without git operations
         let session = SessionState::new(
             "test-session-save".to_string(),
-            "pc/test-branch".to_string(),
+            "para/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
 
@@ -321,7 +325,7 @@ mod tests {
         // Create session manually without git operations
         let session = SessionState::new(
             "test-session-delete".to_string(),
-            "pc/test-branch".to_string(),
+            "para/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
 
@@ -348,7 +352,7 @@ mod tests {
         // Create session manually without git operations
         let session = SessionState::new(
             "test-session-update".to_string(),
-            "pc/test-branch".to_string(),
+            "para/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
 
@@ -395,7 +399,7 @@ mod tests {
         // Create existing session
         let existing_session = SessionState::new(
             "collision-test".to_string(),
-            "pc/test-branch".to_string(),
+            "para/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
         manager.save_state(&existing_session).unwrap();

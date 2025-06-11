@@ -96,7 +96,7 @@ Configuration format (JSON):
     "state_dir": ".para_state"
   },
   "git": {
-    "branch_prefix": "pc",
+    "branch_prefix": "para",
     "auto_stage": true,
     "auto_commit": true
   },
@@ -130,8 +130,8 @@ para config edit   # Open config file in editor
 ## Session Management Pattern
 
 Para creates timestamped sessions with complete isolation:
-- **Branch**: `pc/YYYYMMDD-HHMMSS` format
-- **Worktree**: Created in `subtrees/pc/` directory  
+- **Branch**: `para/YYYYMMDD-HHMMSS` format
+- **Worktree**: Created in `subtrees/para/` directory  
 - **State**: Tracked in `.para_state/` directory
 - **Recovery**: Sessions preserved for later recovery
 
