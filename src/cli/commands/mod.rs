@@ -10,6 +10,7 @@ pub mod dispatch;
 pub mod finish;
 pub mod integrate;
 pub mod list;
+pub mod mcp;
 pub mod recover;
 pub mod resume;
 pub mod start;

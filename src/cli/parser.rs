@@ -37,6 +37,8 @@ pub enum Commands {
     Config(ConfigArgs),
     /// Generate shell completion script
     Completion(CompletionArgs),
+    /// Setup Model Context Protocol (MCP) integration
+    Mcp(crate::cli::commands::mcp::McpCommand),
     /// Dynamic completion (hidden)
     #[command(hide = true)]
     CompleteCommand(CompleteCommandArgs),
