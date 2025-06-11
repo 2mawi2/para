@@ -12,11 +12,59 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub fn new(config: &Config) -> Self {
-        let state_dir = PathBuf::from(config.get_state_dir());
+        let state_dir = Self::resolve_state_dir(config);
         Self {
             state_dir,
             config: config.clone(),
         }
+    }
+
+    /// Resolve state directory relative to main repository root, not current working directory
+    fn resolve_state_dir(config: &Config) -> PathBuf {
+        let state_dir_path = config.get_state_dir();
+
+        // If it's already an absolute path, use it as-is (important for tests)
+        if Path::new(state_dir_path).is_absolute() {
+            return PathBuf::from(state_dir_path);
+        }
+
+        // Try to resolve relative to main repository root, but be very conservative
+        // Don't let git discovery failures break anything
+        if let Ok(git_service) = GitService::discover() {
+            let repo_root = git_service.repository().root.clone();
+            let main_repo_root = Self::get_main_repo_root(&repo_root);
+            main_repo_root.join(state_dir_path)
+        } else {
+            // Git discovery failed - just use the path as-is for backward compatibility
+            // This ensures tests and edge cases continue to work
+            PathBuf::from(state_dir_path)
+        }
+    }
+
+    /// Get the main repository root, handling worktree case
+    fn get_main_repo_root(current_repo_root: &Path) -> PathBuf {
+        let git_path = current_repo_root.join(".git");
+
+        // If .git is a file (worktree), extract main repo path
+        if git_path.is_file() {
+            if let Ok(git_content) = fs::read_to_string(&git_path) {
+                if let Some(git_dir) = git_content.strip_prefix("gitdir: ") {
+                    let git_dir = git_dir.trim();
+                    let git_path = PathBuf::from(git_dir);
+                    if let Some(main_repo_root) = git_path
+                        .parent() // .git/worktrees
+                        .and_then(|p| p.parent()) // .git
+                        .and_then(|p| p.parent())
+                    // main repo root
+                    {
+                        return main_repo_root.to_path_buf();
+                    }
+                }
+            }
+        }
+
+        // If .git is a directory or we can't parse the worktree info, assume we're in main repo
+        current_repo_root.to_path_buf()
     }
 
     pub fn config(&self) -> &Config {
