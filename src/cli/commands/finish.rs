@@ -106,7 +106,8 @@ pub fn execute(args: FinishArgs) -> Result<()> {
                 }
             }
 
-            git_service.repository().checkout_branch(&base_branch)?;
+            // Note: Don't checkout base_branch here - this causes "already used by worktree" errors
+            // The integration logic handles branch management properly
 
             if let Some(ref path) = worktree_path {
                 if path != &git_service.repository().root && !config.should_preserve_on_finish() {

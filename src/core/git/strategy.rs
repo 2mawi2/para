@@ -41,6 +41,12 @@ impl<'a> StrategyManager<'a> {
             return self.preview_strategy(&request);
         }
 
+        // Handle worktree integration differently to avoid checkout conflicts
+        if self.integration.is_in_worktree()? {
+            return self.execute_worktree_strategy(&request);
+        }
+
+        // Original main repo integration logic
         let backup_name = self.integration.create_backup_branch(
             &request.target_branch,
             &format!("pre-integration-{}", chrono::Utc::now().timestamp()),
@@ -332,6 +338,37 @@ impl<'a> StrategyManager<'a> {
             Err(e) => Ok(StrategyResult::Failed {
                 error: format!("Failed to continue integration: {}", e),
             }),
+        }
+    }
+
+    /// Handle integration from worktree using change extraction
+    fn execute_worktree_strategy(&self, request: &StrategyRequest) -> Result<StrategyResult> {
+        println!("🔄 Integrating from worktree using change extraction...");
+        
+        match self.integration.integrate_from_worktree(
+            &request.feature_branch,
+            &request.target_branch,
+            None, // TODO: Get proper commit message from request
+        ) {
+            Ok(()) => {
+                println!("✅ Successfully integrated changes to main repository");
+                Ok(StrategyResult::Success {
+                    final_branch: request.target_branch.clone(),
+                })
+            }
+            Err(e) => {
+                // Check if it's a conflict error from git am
+                if e.to_string().contains("patch does not apply") || e.to_string().contains("Failed to apply patches") {
+                    println!("⚠️  Integration conflicts detected");
+                    Ok(StrategyResult::ConflictsPending {
+                        conflicted_files: vec![], // TODO: Extract actual conflicted files from git am output
+                    })
+                } else {
+                    Ok(StrategyResult::Failed {
+                        error: format!("Worktree integration failed: {}", e),
+                    })
+                }
+            }
         }
     }
 }

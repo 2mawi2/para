@@ -488,6 +488,141 @@ impl<'a> IntegrationManager<'a> {
 
         Ok(())
     }
+
+    /// Check if current repository is a worktree (not main repo)
+    pub fn is_in_worktree(&self) -> Result<bool> {
+        let git_path = self.repo.root.join(".git");
+        Ok(git_path.is_file()) // Worktrees have .git file, main repo has .git directory
+    }
+
+    /// Get path to main repository from worktree
+    pub fn get_main_repo_path(&self) -> Result<PathBuf> {
+        if !self.is_in_worktree()? {
+            return Ok(self.repo.root.clone());
+        }
+
+        // Read .git file to find main repo path
+        let git_file = self.repo.root.join(".git");
+        let git_content = std::fs::read_to_string(git_file).map_err(|e| {
+            ParaError::git_operation(format!("Failed to read .git file: {}", e))
+        })?;
+
+        // Format: "gitdir: /path/to/main/repo/.git/worktrees/session-name"
+        let git_dir = git_content
+            .strip_prefix("gitdir: ")
+            .ok_or_else(|| ParaError::git_operation("Invalid .git file format".to_string()))?
+            .trim();
+
+        // Extract main repo path: /path/to/main/repo/.git/worktrees/session -> /path/to/main/repo
+        let git_path = PathBuf::from(git_dir);
+        let main_git_dir = git_path
+            .parent() // .git/worktrees
+            .and_then(|p| p.parent()) // .git  
+            .and_then(|p| p.parent()) // main repo root
+            .ok_or_else(|| {
+                ParaError::git_operation("Cannot determine main repo path".to_string())
+            })?;
+
+        Ok(main_git_dir.to_path_buf())
+    }
+
+    /// Extract changes from worktree and apply to main repo using format-patch + git am
+    pub fn integrate_from_worktree(
+        &self,
+        _feature_branch: &str,
+        target_branch: &str,
+        commit_message: Option<&str>,
+    ) -> Result<()> {
+        let main_repo_path = self.get_main_repo_path()?;
+        let main_git_dir = main_repo_path.join(".git");
+
+        // Create patches for all commits since branching from target_branch
+        let patch_output = execute_git_command(
+            self.repo,
+            &[
+                "format-patch",
+                &format!("{}..HEAD", target_branch),
+                "--stdout",
+            ],
+        )?;
+
+        if patch_output.trim().is_empty() {
+            // No commits to apply, but we might have uncommitted changes
+            if self.repo.has_uncommitted_changes()? {
+                if let Some(msg) = commit_message {
+                    self.repo.stage_all_changes()?;
+                    self.repo.commit(msg)?;
+                    // Retry patch generation after committing
+                    let new_patch_output = execute_git_command(
+                        self.repo,
+                        &[
+                            "format-patch",
+                            &format!("{}..HEAD", target_branch),
+                            "--stdout",
+                        ],
+                    )?;
+                    if new_patch_output.trim().is_empty() {
+                        return Ok(()); // Still no changes
+                    }
+                    return self.apply_patches_to_main_repo(new_patch_output, &main_git_dir, &main_repo_path, target_branch);
+                }
+            }
+            return Ok(());
+        }
+
+        self.apply_patches_to_main_repo(patch_output, &main_git_dir, &main_repo_path, target_branch)
+    }
+
+    fn apply_patches_to_main_repo(
+        &self,
+        patch_output: String,
+        main_git_dir: &PathBuf,
+        main_repo_path: &PathBuf,
+        target_branch: &str,
+    ) -> Result<()> {
+        // Write patch to temporary file
+        let temp_patch = format!("/tmp/para-integration-{}.patch", generate_timestamp());
+        std::fs::write(&temp_patch, patch_output).map_err(|e| {
+            ParaError::git_operation(format!("Failed to write patch file: {}", e))
+        })?;
+
+        // First, checkout target branch in main repo
+        execute_git_command_with_status(
+            self.repo,
+            &[
+                "--git-dir",
+                &main_git_dir.to_string_lossy(),
+                "--work-tree", 
+                &main_repo_path.to_string_lossy(),
+                "checkout",
+                target_branch,
+            ],
+        )?;
+
+        // Apply patches using git am
+        let result = execute_git_command_with_status(
+            self.repo,
+            &[
+                "--git-dir",
+                &main_git_dir.to_string_lossy(),
+                "--work-tree",
+                &main_repo_path.to_string_lossy(),
+                "am",
+                &temp_patch,
+            ],
+        );
+
+        // Cleanup temp file
+        let _ = std::fs::remove_file(&temp_patch);
+
+        result.map_err(|e| {
+            ParaError::git_operation(format!(
+                "Failed to apply patches to main repository: {}. \
+                You may need to resolve conflicts manually in the main repository.",
+                e
+            ))
+        })
+    }
 }
 
 #[cfg(test)]
