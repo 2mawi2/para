@@ -567,11 +567,15 @@ mod tests {
 
     fn create_test_server() -> Result<ParaMcpServer> {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut config = default_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
         config.directories.subtrees_dir = "test_subtrees".to_string();
-        
+
         Ok(ParaMcpServer {
             config: config.clone(),
             session_manager: SessionManager::new(&config),
@@ -582,7 +586,7 @@ mod tests {
     #[test]
     fn test_mcp_server_initialize() {
         let mut server = create_test_server().unwrap();
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "initialize".to_string(),
@@ -595,11 +599,11 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
         assert!(server.initialized);
-        
+
         let result = response.result.unwrap();
         assert_eq!(result["protocol_version"], "2024-11-05");
         assert_eq!(result["server_info"]["name"], "para-mcp-server");
@@ -611,7 +615,7 @@ mod tests {
     fn test_mcp_server_tools_list() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/list".to_string(),
@@ -620,19 +624,20 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
-        
+
         let result = response.result.unwrap();
         let tools = result["tools"].as_array().unwrap();
-        
+
         assert_eq!(tools.len(), 6);
-        
-        let tool_names: Vec<String> = tools.iter()
+
+        let tool_names: Vec<String> = tools
+            .iter()
             .map(|t| t["name"].as_str().unwrap().to_string())
             .collect();
-        
+
         assert!(tool_names.contains(&"para_start".to_string()));
         assert!(tool_names.contains(&"para_finish".to_string()));
         assert!(tool_names.contains(&"para_dispatch".to_string()));
@@ -645,7 +650,7 @@ mod tests {
     fn test_mcp_server_resources_list() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "resources/list".to_string(),
@@ -654,19 +659,20 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
-        
+
         let result = response.result.unwrap();
         let resources = result["resources"].as_array().unwrap();
-        
+
         assert_eq!(resources.len(), 3);
-        
-        let resource_uris: Vec<String> = resources.iter()
+
+        let resource_uris: Vec<String> = resources
+            .iter()
             .map(|r| r["uri"].as_str().unwrap().to_string())
             .collect();
-        
+
         assert!(resource_uris.contains(&"para://current-session".to_string()));
         assert!(resource_uris.contains(&"para://available-sessions".to_string()));
         assert!(resource_uris.contains(&"para://config".to_string()));
@@ -676,7 +682,7 @@ mod tests {
     fn test_mcp_server_config_resource() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "resources/read".to_string(),
@@ -685,18 +691,18 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
-        
+
         let result = response.result.unwrap();
         let contents = result["contents"].as_array().unwrap();
         assert_eq!(contents.len(), 1);
-        
+
         let content = &contents[0];
         assert_eq!(content["uri"], "para://config");
         assert_eq!(content["mime_type"], "application/json");
-        
+
         let config_text = content["text"].as_str().unwrap();
         let parsed_config: serde_json::Value = serde_json::from_str(config_text).unwrap();
         assert!(parsed_config["ide"].is_object());
@@ -707,7 +713,7 @@ mod tests {
     fn test_mcp_server_para_list_tool() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/call".to_string(),
@@ -719,10 +725,10 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
-        
+
         let result = response.result.unwrap();
         let content = &result["content"][0];
         assert_eq!(content["type"], "text");
@@ -733,7 +739,7 @@ mod tests {
     fn test_mcp_server_para_config_show_tool() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/call".to_string(),
@@ -745,14 +751,14 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.error.is_none());
-        
+
         let result = response.result.unwrap();
         let content = &result["content"][0];
         assert_eq!(content["type"], "text");
-        
+
         let config_text = content["text"].as_str().unwrap();
         let parsed_config: serde_json::Value = serde_json::from_str(config_text).unwrap();
         assert!(parsed_config["ide"].is_object());
@@ -762,7 +768,7 @@ mod tests {
     fn test_mcp_server_not_initialized_error() {
         let mut server = create_test_server().unwrap();
         // Don't initialize the server
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/list".to_string(),
@@ -771,11 +777,11 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.result.is_none());
         assert!(response.error.is_some());
-        
+
         let error = response.error.unwrap();
         assert_eq!(error.code, -32002);
         assert_eq!(error.message, "Server not initialized");
@@ -785,7 +791,7 @@ mod tests {
     fn test_mcp_server_unknown_method() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "unknown/method".to_string(),
@@ -794,11 +800,11 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.result.is_none());
         assert!(response.error.is_some());
-        
+
         let error = response.error.unwrap();
         assert_eq!(error.code, -32601);
         assert!(error.message.contains("Method not found"));
@@ -808,7 +814,7 @@ mod tests {
     fn test_mcp_server_unknown_tool() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/call".to_string(),
@@ -820,11 +826,11 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.result.is_none());
         assert!(response.error.is_some());
-        
+
         let error = response.error.unwrap();
         assert_eq!(error.code, -32603);
         assert!(error.message.contains("Unknown tool"));
@@ -834,7 +840,7 @@ mod tests {
     fn test_mcp_server_unknown_resource() {
         let mut server = create_test_server().unwrap();
         server.initialized = true;
-        
+
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "resources/read".to_string(),
@@ -843,11 +849,11 @@ mod tests {
         };
 
         let response = server.handle_request(request);
-        
+
         assert_eq!(response.jsonrpc, "2.0");
         assert!(response.result.is_none());
         assert!(response.error.is_some());
-        
+
         let error = response.error.unwrap();
         assert_eq!(error.code, -32602);
         assert!(error.message.contains("Unknown resource URI"));

@@ -4,47 +4,68 @@ Para now supports Model Context Protocol (MCP) integration, allowing AI agents t
 
 ## Quick Setup
 
-### Automatic Setup (Recommended)
+### Simple Setup (Recommended)
 ```bash
-brew install para  # Installs both CLI and MCP server
-just mcp-setup     # Auto-configures MCP integration
+# Install Para CLI and MCP server
+brew install para
+
+# Configure MCP integration
+para mcp init
 ```
 
-### Manual Installation
+This will:
+1. Create `.mcp.json` for your project (commit this to share with team)
+2. Ask which IDE you want to configure
+3. Set up Para tools for your chosen IDE
+
+**That's it!** Restart your editor and Para tools will be available.
+
+### Non-Interactive Setup
+```bash
+# Setup for specific IDEs
+para mcp init --claude-code    # Claude Code
+para mcp init --cursor         # Cursor
+para mcp init --vscode         # VS Code with Roo Code
+```
+
+### Manual Installation (Development)
 ```bash
 # Build from source
 just install        # Installs para + para-mcp-server to ~/.local/bin/
-just mcp-setup      # Configure MCP integration
+para mcp init       # Configure MCP integration
 ```
 
 ## Editor Integration
 
-### Claude Code
-```bash
-# Automatic setup (if Claude Code is installed)
-claude mcp add para-server para-mcp-server
+### What Gets Created
 
-# Manual verification
-claude mcp list
-```
-
-### VSCode/Cursor
-Create `.cursor/mcp.json` in your project or workspace:
+The `para mcp init` command creates a `.mcp.json` file in your project:
 ```json
 {
   "mcpServers": {
     "para": {
+      "type": "stdio",
       "command": "para-mcp-server"
     }
   }
 }
 ```
 
-### Roo Code (VSCode Extension)
-1. Open Roo Code settings
-2. Navigate to MCP settings panel
-3. Para server should be auto-detected
-4. Enable if not already active
+**Commit this file** to automatically provide Para tools to your entire team.
+
+### IDE-Specific Configuration
+
+#### Claude Code
+- ✅ **Project config**: `.mcp.json` (automatic discovery)
+- Additional setup via `para mcp init --claude-code` adds user-scoped config for better integration
+
+#### VS Code with Roo Code
+- ✅ **Project config**: `.mcp.json` (automatic discovery)
+- No additional setup required
+
+#### Cursor
+- ✅ **Project config**: `.mcp.json` (automatic discovery)
+- No additional setup required
 
 ## Available MCP Tools
 

@@ -25,10 +25,8 @@ install: build-release
     @echo "✅ Para CLI binary installed to ~/.local/bin/para"
     @echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"
     @echo ""
-    @echo "🔧 MCP Setup Instructions:"
-    @echo "   Claude Code: claude mcp add para-server para-mcp-server"
-    @echo "   VSCode/Cursor: Add to .cursor/mcp.json:"
-    @echo '   {"mcpServers": {"para": {"command": "para-mcp-server"}}}'
+    @echo "🔧 Next steps:"
+    @echo "   Run 'para mcp init' to configure MCP integration for your IDE"
 
 # Uninstall para globally  
 uninstall:
@@ -58,32 +56,16 @@ uninstall:
     
     echo "✅ Para uninstalled successfully!"
 
-# Setup MCP integration for popular editors
+# Legacy MCP setup (use 'para mcp init' instead)
 mcp-setup: install
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "🔧 Setting up Para MCP integration..."
-    echo ""
-    
-    # Check if Claude Code is available
-    if command -v claude >/dev/null 2>&1; then
-        echo "📦 Setting up Claude Code integration..."
-        claude mcp add para-server para-mcp-server || echo "   ⚠️  Failed to add MCP server (may already exist)"
-        echo "   ✅ Claude Code: para-server configured"
-    else
-        echo "   ℹ️  Claude Code not found - manual setup required:"
-        echo "      claude mcp add para-server para-mcp-server"
-    fi
-    
-    echo ""
-    echo "📋 Manual setup for other editors:"
-    echo ""
-    echo "📝 VSCode/Cursor (.cursor/mcp.json or .vscode/mcp.json):"
-    echo '{"mcpServers": {"para": {"command": "para-mcp-server"}}}'
-    echo ""
-    echo "📝 Roo Code: Auto-detected via MCP settings panel"
-    echo ""
-    echo "✅ MCP setup complete!"
+    @echo "⚠️  'just mcp-setup' is deprecated"
+    @echo "💡 Use 'para mcp init' instead for simplified setup"
+    @echo ""
+    @echo "Example usage:"
+    @echo "  para mcp init                # Interactive setup"
+    @echo "  para mcp init --claude-code  # Setup for Claude Code"
+    @echo "  para mcp init --cursor       # Setup for Cursor"
+    @echo "  para mcp init --vscode       # Setup for VS Code"
 
 # Run comprehensive Rust tests (formatting + tests + linting)
 test *FILTER:
@@ -215,7 +197,7 @@ dev-setup: setup-hooks test
     @echo "   just fmt            - Format code"
     @echo "   just run [args]     - Run para with arguments"
     @echo "   just install        - Install para globally"
-    @echo "   just mcp-setup      - Setup MCP integration"
+    @echo "   para mcp init       - Setup MCP integration (after install)"
 
 # Create a release - triggers GitHub Actions to build and publish
 release BUMP="patch":

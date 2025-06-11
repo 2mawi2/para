@@ -57,6 +57,7 @@ pub fn execute_command_with_config(
         Some(Commands::Continue) => commands::continue_cmd::execute(config.unwrap()),
         Some(Commands::Config(args)) => commands::config::execute(args),
         Some(Commands::Completion(args)) => commands::completion::execute(args),
+        Some(Commands::Mcp(args)) => commands::mcp::handle_mcp_command(args),
         Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
@@ -86,6 +87,7 @@ fn show_usage() {
     println!("  recover     Recover cancelled session");
     println!("  continue    Complete merge after resolving conflicts");
     println!("  config      Setup configuration");
+    println!("  mcp         Setup Model Context Protocol integration");
     println!("  completion  Generate shell completion script");
     println!("  help        Print this message or the help of the given subcommand(s)");
     println!();
