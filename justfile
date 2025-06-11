@@ -224,14 +224,14 @@ release BUMP="patch":
     new_version="$major.$minor.$patch"
     echo "Bumping {{BUMP}} version: $current_version → $new_version"
     
-    # Update Cargo.toml with new version
-    sed -i.bak "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
-    rm Cargo.toml.bak
-    
-    # Create and switch to release branch
+    # Create and switch to release branch first
     echo "📦 Creating release branch..."
     git checkout -b release 2>/dev/null || git checkout release
     git pull origin main --no-edit
+    
+    # Update Cargo.toml with new version on release branch
+    sed -i.bak "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
+    rm Cargo.toml.bak
     
     # Commit version bump to release branch
     git add Cargo.toml
