@@ -194,47 +194,55 @@ release BUMP="patch":
         exit 1
     fi
     
-    # Get the latest version tag
-    latest_tag=$(git tag -l "v*" | sort -V | tail -1)
+    # Get current version from Cargo.toml
+    current_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    echo "Current version: $current_version"
     
-    if [ -z "$latest_tag" ]; then
-        # No existing tags, start with v1.0.0
-        new_version="v1.0.0"
-        echo "No existing version tags found. Starting with $new_version"
-    else
-        echo "Latest version: $latest_tag"
-        
-        # Remove 'v' prefix and split version into parts
-        current_version=${latest_tag#v}
-        IFS='.' read -r major minor patch <<< "$current_version"
-        
-        # Increment based on bump type
-        case "{{BUMP}}" in
-            major)
-                major=$((major + 1))
-                minor=0
-                patch=0
-                ;;
-            minor)
-                minor=$((minor + 1))
-                patch=0
-                ;;
-            patch)
-                patch=$((patch + 1))
-                ;;
-            *)
-                echo "Error: Invalid bump type '{{BUMP}}'. Use 'major', 'minor', or 'patch'"
-                exit 1
-                ;;
-        esac
-        
-        new_version="v$major.$minor.$patch"
-        echo "Bumping {{BUMP}} version: $latest_tag → $new_version"
-    fi
+    # Split version into parts
+    IFS='.' read -r major minor patch <<< "$current_version"
     
-    # Create and push tag to trigger release workflow
-    echo "Creating release tag: $new_version"
-    git tag "$new_version"
-    git push origin "$new_version"
+    # Increment based on bump type
+    case "{{BUMP}}" in
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        patch)
+            patch=$((patch + 1))
+            ;;
+        *)
+            echo "Error: Invalid bump type '{{BUMP}}'. Use 'major', 'minor', or 'patch'"
+            exit 1
+            ;;
+    esac
+    
+    new_version="$major.$minor.$patch"
+    echo "Bumping {{BUMP}} version: $current_version → $new_version"
+    
+    # Update Cargo.toml with new version
+    sed -i.bak "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
+    rm Cargo.toml.bak
+    
+    # Create and switch to release branch
+    echo "📦 Creating release branch..."
+    git checkout -b release 2>/dev/null || git checkout release
+    git pull origin main --no-edit
+    
+    # Commit version bump to release branch
+    git add Cargo.toml
+    git commit -m "Bump version to $new_version for release"
+    
+    # Push release branch to trigger GitHub Actions
+    echo "🚀 Pushing to release branch to trigger GitHub Actions..."
+    git push origin release
+    
+    # Switch back to main
+    git checkout main
     
     echo "✅ Release $new_version triggered! Monitor at: https://github.com/2mawi2/para/actions"
+    echo "💡 The release workflow will automatically merge back to main when complete"
