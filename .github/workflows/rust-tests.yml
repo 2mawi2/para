@@ -65,11 +65,26 @@ jobs:
         export RUST_BACKTRACE=1
         export CARGO_TERM_COLOR=always
         
-        # Run tests with timeout to prevent hanging
-        timeout 600 cargo test --verbose --all-features || (
-          echo "Tests failed or timed out. Retrying with reduced parallelism..."
-          timeout 600 cargo test --verbose --all-features --jobs=1
-        )
+        # Run tests with proper timeout handling per platform
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          timeout 600 cargo test --verbose --all-features || (
+            echo "Tests failed or timed out. Retrying with reduced parallelism..."
+            timeout 600 cargo test --verbose --all-features --jobs=1
+          )
+        else
+          # macOS doesn't have timeout, use gtimeout if available or just run normally
+          if command -v gtimeout >/dev/null 2>&1; then
+            gtimeout 600 cargo test --verbose --all-features || (
+              echo "Tests failed or timed out. Retrying with reduced parallelism..."
+              gtimeout 600 cargo test --verbose --all-features --jobs=1
+            )
+          else
+            cargo test --verbose --all-features || (
+              echo "Tests failed. Retrying with reduced parallelism..."
+              cargo test --verbose --all-features --jobs=1
+            )
+          fi
+        fi
 
     - name: Test Binary Functionality
       run: |
