@@ -26,8 +26,8 @@ pub fn default_ide_config() -> IdeConfig {
 
 pub fn default_directory_config() -> DirectoryConfig {
     DirectoryConfig {
-        subtrees_dir: "subtrees/para".to_string(),
-        state_dir: ".para_state".to_string(),
+        subtrees_dir: ".para/worktrees".to_string(),
+        state_dir: ".para/state".to_string(),
     }
 }
 
@@ -108,7 +108,8 @@ mod tests {
     fn test_default_config_creation() {
         let config = default_config();
         assert_eq!(config.git.branch_prefix, "para");
-        assert_eq!(config.directories.subtrees_dir, "subtrees/para");
+        assert_eq!(config.directories.subtrees_dir, ".para/worktrees");
+        assert_eq!(config.directories.state_dir, ".para/state");
         assert!(config.git.auto_stage);
         assert!(config.session.preserve_on_finish);
     }

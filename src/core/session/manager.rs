@@ -93,14 +93,17 @@ impl SessionManager {
         let branch_name = crate::utils::generate_branch_name(self.config.get_branch_prefix());
 
         let subtrees_path = repository_root.join(&self.config.directories.subtrees_dir);
-        let worktree_path = subtrees_path
-            .join(self.config.get_branch_prefix())
-            .join(&final_session_name);
+        let worktree_path = subtrees_path.join(&final_session_name);
 
         if !subtrees_path.exists() {
             fs::create_dir_all(&subtrees_path).map_err(|e| {
                 ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
             })?;
+
+            // Create .para/.gitignore if we're using the new consolidated structure
+            if let Some(para_dir) = self.get_para_directory_from_subtrees(&subtrees_path) {
+                self.ensure_para_gitignore_exists(&para_dir)?;
+            }
         }
 
         if worktree_path.exists() {
@@ -267,6 +270,57 @@ impl SessionManager {
                     e
                 ))
             })?;
+
+            // Create .para/.gitignore if we're using the new consolidated structure
+            if let Some(para_dir) = self.get_para_directory() {
+                self.ensure_para_gitignore_exists(&para_dir)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Get the .para directory if state_dir is under .para structure
+    fn get_para_directory(&self) -> Option<PathBuf> {
+        let state_path = &self.state_dir;
+
+        // Check if state_dir ends with ".para/state"
+        if state_path.file_name()?.to_str()? == "state" {
+            if let Some(parent) = state_path.parent() {
+                if parent.file_name()?.to_str()? == ".para" {
+                    return Some(parent.to_path_buf());
+                }
+            }
+        }
+        None
+    }
+
+    /// Get the .para directory if subtrees_path is under .para structure
+    fn get_para_directory_from_subtrees(&self, subtrees_path: &Path) -> Option<PathBuf> {
+        // Check if subtrees_path ends with ".para/worktrees"
+        if subtrees_path.file_name()?.to_str()? == "worktrees" {
+            if let Some(parent) = subtrees_path.parent() {
+                if parent.file_name()?.to_str()? == ".para" {
+                    return Some(parent.to_path_buf());
+                }
+            }
+        }
+        None
+    }
+
+    /// Ensure .para/.gitignore exists with appropriate content
+    fn ensure_para_gitignore_exists(&self, para_dir: &Path) -> Result<()> {
+        let gitignore_path = para_dir.join(".gitignore");
+
+        if !gitignore_path.exists() {
+            let gitignore_content =
+                "# Ignore all para contents except configuration\n*\n!.gitignore\n";
+            fs::write(&gitignore_path, gitignore_content).map_err(|e| {
+                ParaError::fs_error(format!(
+                    "Failed to create .para/.gitignore file {}: {}",
+                    gitignore_path.display(),
+                    e
+                ))
+            })?;
         }
         Ok(())
     }
@@ -285,14 +339,87 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para/state")
             .to_string_lossy()
             .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
 
         let manager = SessionManager::new(&config);
         // State directory is created on demand
         assert!(!manager.state_dir.exists());
+    }
+
+    #[test]
+    fn test_consolidated_directory_structure() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
+
+        let manager = SessionManager::new(&config);
+
+        // Trigger state directory creation
+        manager.ensure_state_dir_exists().unwrap();
+
+        // Verify .para directory structure is created
+        let para_dir = temp_dir.path().join(".para");
+        assert!(para_dir.exists());
+        assert!(para_dir.join("state").exists());
+
+        // Verify .para/.gitignore is created
+        let gitignore_path = para_dir.join(".gitignore");
+        assert!(gitignore_path.exists());
+
+        // Verify gitignore content
+        let gitignore_content = std::fs::read_to_string(&gitignore_path).unwrap();
+        assert!(gitignore_content.contains("*"));
+        assert!(gitignore_content.contains("!.gitignore"));
+    }
+
+    #[test]
+    fn test_worktree_path_simplified() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
+
+        let _manager = SessionManager::new(&config);
+
+        // Create a session manually to test path structure
+        let session_name = "test-session".to_string();
+
+        // Verify expected worktree path (simplified without brand prefix)
+        let expected_worktree_path = temp_dir.path().join(".para/worktrees").join(&session_name);
+
+        // The worktree path should be directly under .para/worktrees/ without brand prefix
+        assert!(expected_worktree_path
+            .to_string_lossy()
+            .contains(".para/worktrees/test-session"));
+        assert!(!expected_worktree_path
+            .to_string_lossy()
+            .contains("/para/para/"));
     }
 
     #[test]
@@ -302,10 +429,14 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para/state")
             .to_string_lossy()
             .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
         let manager = SessionManager::new(&config);
 
         // Create session manually without git operations
@@ -332,10 +463,14 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para/state")
             .to_string_lossy()
             .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
         let manager = SessionManager::new(&config);
 
         // Create sessions without using git operations to avoid directory issues
@@ -364,10 +499,14 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para/state")
             .to_string_lossy()
             .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
         let manager = SessionManager::new(&config);
 
         // Create session manually without git operations
@@ -391,10 +530,14 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para/state")
             .to_string_lossy()
             .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
         let mut manager = SessionManager::new(&config);
 
         // Create session manually without git operations

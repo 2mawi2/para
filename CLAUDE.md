@@ -92,8 +92,8 @@ Configuration format (JSON):
     }
   },
   "directories": {
-    "subtrees_dir": "subtrees/para",
-    "state_dir": ".para_state"
+    "subtrees_dir": ".para/worktrees",
+    "state_dir": ".para/state"
   },
   "git": {
     "branch_prefix": "para",
@@ -131,9 +131,10 @@ para config edit   # Open config file in editor
 
 Para creates timestamped sessions with complete isolation:
 - **Branch**: `para/YYYYMMDD-HHMMSS` format
-- **Worktree**: Created in `subtrees/para/` directory  
-- **State**: Tracked in `.para_state/` directory
+- **Worktree**: Created in `.para/worktrees/` directory  
+- **State**: Tracked in `.para/state/` directory
 - **Recovery**: Sessions preserved for later recovery
+- **Gitignore**: Automatic `.para/.gitignore` prevents tracking Para files
 
 ### Typical Workflow
 ```bash
