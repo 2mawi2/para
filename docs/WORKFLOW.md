@@ -23,7 +23,7 @@ stateDiagram-v2
     Canceling --> Cancelled: session deleted
     Pausing --> Paused: session preserved
     
-    Committed --> Idle: back to master branch
+    Committed --> Idle: back to main branch
     Cancelled --> Idle: session removed
     Paused --> Recovering: para recover <session-name>
     
@@ -56,7 +56,7 @@ flowchart TD
     
     F --> F1[Auto-stage all changes]
     F1 --> F2[Create commit]
-    F2 --> F3[Switch to master]
+    F2 --> F3[Switch to main]
     F3 --> F4[Clean up worktree]
     F4 --> K[Session Complete]
     
@@ -94,7 +94,7 @@ sequenceDiagram
     User->>Para: para finish "Implement OAuth"
     Para->>Git: Stage all changes (git add .)
     Para->>Git: Commit with message
-    Para->>Git: Switch back to master
+    Para->>Git: Switch back to main
     Para->>Git: Remove worktree
     Para->>User: Session complete
 ```
