@@ -144,11 +144,13 @@ para integrate --dry-run
 ```
 your-repo/
 ├── .git/                    # Your main repo
-├── subtrees/para/             # Para sessions live here
-│   ├── feature-auth-*/      # Session 1: authentication work
-│   ├── feature-ui-*/        # Session 2: UI updates  
-│   └── bugfix-login-*/      # Session 3: bug fix
-└── .para_state/             # Para tracking (auto-managed)
+└── .para/                   # Para directory (auto-managed)
+    ├── .gitignore           # Prevents tracking Para files  
+    ├── state/               # Session state files
+    └── worktrees/           # Para sessions live here
+        ├── feature-auth-*/  # Session 1: authentication work
+        ├── feature-ui-*/    # Session 2: UI updates  
+        └── bugfix-login-*/  # Session 3: bug fix
 ```
 
 ## IDE Setup
@@ -266,7 +268,7 @@ para recover
 para recover my-session
 # ✅ recovered cancelled session my-session
 # ↳ branch: para/my-session-20240531-184623
-# ↳ worktree: subtrees/para/my-session-20240531-184623
+# ↳ worktree: .para/worktrees/my-session-20240531-184623
 # ↳ resume: para resume my-session
 ```
 
