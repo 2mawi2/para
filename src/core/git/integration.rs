@@ -2,7 +2,7 @@ use super::branch::BranchManager;
 use super::repository::{execute_git_command, execute_git_command_with_status, GitRepository};
 use crate::utils::error::{ParaError, Result};
 use crate::utils::names::generate_timestamp;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct FinishRequest {
@@ -564,8 +564,8 @@ impl<'a> IntegrationManager<'a> {
     fn apply_patches_to_main_repo(
         &self,
         patch_output: String,
-        main_git_dir: &PathBuf,
-        main_repo_path: &PathBuf,
+        main_git_dir: &Path,
+        main_repo_path: &Path,
         target_branch: &str,
     ) -> Result<()> {
         // Write patch to temporary file

@@ -40,23 +40,21 @@ fn resume_specific_session(
             {
                 session_state.worktree_path = wt.path.clone();
                 session_manager.save_state(&session_state)?;
+            } else if let Some(wt) = git_service.list_worktrees()?.into_iter().find(|w| {
+                w.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with(session_name))
+                    .unwrap_or(false)
+            }) {
+                session_state.worktree_path = wt.path.clone();
+                session_manager.save_state(&session_state)?;
             } else {
-                if let Some(wt) = git_service.list_worktrees()?.into_iter().find(|w| {
-                    w.path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .map(|n| n.starts_with(session_name))
-                        .unwrap_or(false)
-                }) {
-                    session_state.worktree_path = wt.path.clone();
-                    session_manager.save_state(&session_state)?;
-                } else {
-                    return Err(ParaError::session_not_found(format!(
-                        "Session '{}' exists but worktree path '{}' not found",
-                        session_name,
-                        session_state.worktree_path.display()
-                    )));
-                }
+                return Err(ParaError::session_not_found(format!(
+                    "Session '{}' exists but worktree path '{}' not found",
+                    session_name,
+                    session_state.worktree_path.display()
+                )));
             }
         }
 
