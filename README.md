@@ -315,50 +315,62 @@ Para also auto-detects CI environments by checking for `CI` or `GITHUB_ACTIONS` 
 
 ## Shell Completion
 
-Para supports tab completion for faster command-line usage. Enable it for your shell:
+Para provides intelligent tab completion for all commands, options, and dynamic data. The completion system is context-aware and helps with sessions, branches, files, and more.
 
-### Bash
+### Quick Setup
+
+**Bash:**
 ```bash
-# Save completion script to standard location
-para completion generate bash > ~/.local/share/bash-completion/completions/para
-
-# Or on some systems:
-para completion generate bash > /usr/local/etc/bash_completion.d/para
-
-# Restart your shell or source the completion
-source ~/.local/share/bash-completion/completions/para
+mkdir -p ~/.local/share/bash-completion/completions
+para completion bash > ~/.local/share/bash-completion/completions/para
+# Restart shell or run: source ~/.local/share/bash-completion/completions/para
 ```
 
-### Zsh
+**Zsh:**
 ```bash
-# Add to your fpath (create directory if needed)
 mkdir -p ~/.local/share/zsh/site-functions
-para completion generate zsh > ~/.local/share/zsh/site-functions/_para
-
-# Add to your .zshrc if not already there:
+para completion zsh > ~/.local/share/zsh/site-functions/_para
 echo 'fpath=(~/.local/share/zsh/site-functions $fpath)' >> ~/.zshrc
 echo 'autoload -U compinit && compinit' >> ~/.zshrc
-
-# Restart your shell
+# Restart shell
 ```
 
-### Fish
+**Fish:**
 ```bash
-# Save to fish completions directory (create if needed)
-mkdir -p ~/.config/fish/completions
-para completion generate fish > ~/.config/fish/completions/para.fish
-
-# Restart your shell or reload completions
-fish_update_completions
+mkdir -p ~/.config/fish/completions  
+para completion fish > ~/.config/fish/completions/para.fish
+# Restart shell or run: fish_update_completions
 ```
 
-### What Gets Completed
+### Smart Completions
 
-Shell completion will help you with:
-- **Commands**: `para [TAB]` shows all available commands
-- **Session names**: `para cancel [TAB]` or `para resume [TAB]` shows active sessions
-- **Branch names**: `para finish "msg" --branch [TAB]` shows local branches
-- **File paths**: `para dispatch --file [TAB]` completes file paths
+The completion system provides intelligent suggestions:
+
+**📁 Session Management:**
+- `para resume <TAB>` → Shows active sessions
+- `para cancel <TAB>` → Shows active sessions  
+- `para recover <TAB>` → Shows archived sessions
+
+**🌿 Branch & Integration:**
+- `para integrate --target <TAB>` → Shows git branches
+- `para integrate --strategy <TAB>` → Shows: `merge`, `squash`, `rebase`
+- `para finish --branch <TAB>` → Shows git branches
+
+**📄 File & Task Completion:**
+- `para dispatch --file <TAB>` → Prioritizes TASK_*.md files and .md files
+- Smart file filtering for task-based workflows
+
+**⚙️ Configuration:**
+- `para config <TAB>` → Shows: `setup`, `auto`, `show`, `edit`, `reset`
+- `para completion <TAB>` → Shows: `bash`, `zsh`, `fish`
+
+**🎯 Flag Completion:**
+- `para clean --<TAB>` → Shows: `--force`, `--dry-run`, `--backups`
+- `para list --<TAB>` → Shows: `--verbose`, `--archived`, `--quiet`
+
+### Homebrew Users
+
+If you installed para via Homebrew, completions are automatically available! The formula includes completion caveats that guide you through the setup.
 
 ## Security Notes
 
