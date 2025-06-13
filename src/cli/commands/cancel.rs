@@ -1,5 +1,5 @@
 use crate::cli::parser::CancelArgs;
-use crate::config::manager::ConfigManager;
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::session::SessionManager;
 use crate::platform::get_platform_manager;
@@ -7,10 +7,9 @@ use crate::utils::{ParaError, Result};
 use std::env;
 use std::io::{self, Write};
 
-pub fn execute(args: CancelArgs) -> Result<()> {
+pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     validate_cancel_args(&args)?;
 
-    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 
@@ -44,8 +43,7 @@ pub fn execute(args: CancelArgs) -> Result<()> {
         }
     }
 
-    // Skip IDE window closing in test mode or when using mock IDEs
-    if !cfg!(test) && config.ide.command != "echo" {
+    if config.is_real_ide_environment() {
         let platform = get_platform_manager();
         if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
             eprintln!("Warning: Failed to close IDE window: {}", e);

@@ -1,15 +1,13 @@
 use crate::cli::parser::CleanArgs;
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
-use crate::utils::{ParaError, Result};
+use crate::utils::Result;
 use dialoguer::Confirm;
 use std::fs;
 use std::path::PathBuf;
 
-pub fn execute(args: CleanArgs) -> Result<()> {
+pub fn execute(config: Config, args: CleanArgs) -> Result<()> {
     let git_service = GitService::discover()?;
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
 
     let cleaner = SessionCleaner::new(git_service, config);
     cleaner.execute_clean(args)

@@ -13,14 +13,21 @@ impl ConfigManager {
     }
 
     pub fn load_or_create() -> Result<Config> {
-        let config_path = get_config_file_path();
+        Self::load_or_create_with_path(None)
+    }
+
+    pub fn load_or_create_with_path(config_path: Option<&Path>) -> Result<Config> {
+        let config_path = match config_path {
+            Some(path) => path.to_path_buf(),
+            None => get_config_file_path(),
+        };
 
         if config_path.exists() {
             Self::load_from_file(&config_path)
         } else {
             let config = default_config();
             config.validate()?;
-            Self::save(&config)?;
+            Self::save_to_path(&config, &config_path)?;
             Ok(config)
         }
     }
@@ -33,15 +40,18 @@ impl ConfigManager {
     }
 
     pub fn save(config: &Config) -> Result<()> {
+        Self::save_to_path(config, &get_config_file_path())
+    }
+
+    pub fn save_to_path(config: &Config, path: &Path) -> Result<()> {
         config.validate()?;
 
-        let config_path = get_config_file_path();
-        if let Some(parent) = config_path.parent() {
+        if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
 
         let json = serde_json::to_string_pretty(config)?;
-        let mut file = fs::File::create(&config_path)?;
+        let mut file = fs::File::create(path)?;
         file.write_all(json.as_bytes())?;
         file.sync_all()?;
 
@@ -128,25 +138,14 @@ mod tests {
     #[test]
     fn test_save_creates_parent_directories() {
         let temp_dir = TempDir::new().unwrap();
-        let original_home = std::env::var("HOME").ok();
-        let original_xdg = std::env::var("XDG_CONFIG_HOME").ok();
-
-        std::env::set_var("HOME", temp_dir.path());
-        std::env::set_var("XDG_CONFIG_HOME", temp_dir.path().join(".config"));
+        let test_config_path = temp_dir.path().join("nested/dir/config.json");
 
         let config = create_test_config();
-        let result = ConfigManager::save(&config);
+        let result = ConfigManager::save_to_path(&config, &test_config_path);
         assert!(result.is_ok());
 
-        // Restore original environment
-        match original_home {
-            Some(h) => std::env::set_var("HOME", h),
-            None => std::env::remove_var("HOME"),
-        }
-        match original_xdg {
-            Some(x) => std::env::set_var("XDG_CONFIG_HOME", x),
-            None => std::env::remove_var("XDG_CONFIG_HOME"),
-        }
+        // Verify the file was created
+        assert!(test_config_path.exists());
     }
 
     #[test]
@@ -159,8 +158,8 @@ mod tests {
         std::env::set_var("XDG_CONFIG_HOME", temp_dir.path().join(".config"));
 
         let path = ConfigManager::get_config_path().unwrap();
-        assert!(path.contains("para"));
         assert!(path.ends_with("config.json"));
+        assert!(path.contains("para"));
 
         // Restore original environment
         match original_home {

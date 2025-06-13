@@ -7,29 +7,54 @@ mod tests;
 
 pub use parser::{Cli, Commands};
 
-use crate::utils::Result;
+use crate::config::ConfigManager;
+use crate::utils::{ParaError, Result};
 
 pub fn execute_command(cli: Cli) -> Result<()> {
+    execute_command_with_config(cli, None)
+}
+
+pub fn execute_command_with_config(
+    cli: Cli,
+    test_config: Option<crate::config::Config>,
+) -> Result<()> {
+    // Load config once for all commands that need it
+    let config =
+        match cli.command {
+            Some(Commands::Config(_))
+            | Some(Commands::Completion(_))
+            | Some(Commands::CompleteCommand(_))
+            | Some(Commands::CompletionSessions)
+            | Some(Commands::CompletionBranches)
+            | None => None,
+            _ => match test_config {
+                Some(cfg) => Some(cfg),
+                None => Some(ConfigManager::load_or_create().map_err(|e| {
+                    ParaError::config_error(format!("Failed to load config: {}", e))
+                })?),
+            },
+        };
+
     match cli.command {
         Some(Commands::Start(args)) => {
             args.validate()?;
-            commands::start::execute(args)
+            commands::start::execute(config.unwrap(), args)
         }
         Some(Commands::Dispatch(args)) => {
             args.validate()?;
-            commands::dispatch::execute(args)
+            commands::dispatch::execute(config.unwrap(), args)
         }
         Some(Commands::Finish(args)) => {
             args.validate()?;
-            commands::finish::execute(args)
+            commands::finish::execute(config.unwrap(), args)
         }
-        Some(Commands::Integrate(args)) => commands::integrate::execute(args),
-        Some(Commands::Cancel(args)) => commands::cancel::execute(args),
-        Some(Commands::Clean(args)) => commands::clean::execute(args),
-        Some(Commands::List(args)) => commands::list::execute(args),
-        Some(Commands::Resume(args)) => commands::resume::execute(args),
-        Some(Commands::Recover(args)) => commands::recover::execute(args),
-        Some(Commands::Continue) => commands::continue_cmd::execute(),
+        Some(Commands::Integrate(args)) => commands::integrate::execute(config.unwrap(), args),
+        Some(Commands::Cancel(args)) => commands::cancel::execute(config.unwrap(), args),
+        Some(Commands::Clean(args)) => commands::clean::execute(config.unwrap(), args),
+        Some(Commands::List(args)) => commands::list::execute(config.unwrap(), args),
+        Some(Commands::Resume(args)) => commands::resume::execute(config.unwrap(), args),
+        Some(Commands::Recover(args)) => commands::recover::execute(config.unwrap(), args),
+        Some(Commands::Continue) => commands::continue_cmd::execute(config.unwrap()),
         Some(Commands::Config(args)) => commands::config::execute(args),
         Some(Commands::Completion(args)) => commands::completion::execute(args),
         Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),

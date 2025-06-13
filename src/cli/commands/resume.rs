@@ -1,5 +1,5 @@
 use crate::cli::parser::ResumeArgs;
-use crate::config::{Config, ConfigManager};
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::ide::IdeManager;
 use crate::core::session::{SessionManager, SessionStatus};
@@ -8,10 +8,9 @@ use dialoguer::Select;
 use std::env;
 use std::path::Path;
 
-pub fn execute(args: ResumeArgs) -> Result<()> {
+pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
     validate_resume_args(&args)?;
 
-    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 

@@ -1,5 +1,5 @@
 use crate::cli::parser::FinishArgs;
-use crate::config::{Config, ConfigManager};
+use crate::config::Config;
 use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
 };
@@ -131,11 +131,8 @@ fn handle_finish_integration_failure(
 /// Initialize and validate the environment for finish operation
 fn initialize_finish_environment(
     args: &FinishArgs,
-) -> Result<(Config, GitService, std::path::PathBuf, SessionEnvironment)> {
+) -> Result<(GitService, std::path::PathBuf, SessionEnvironment)> {
     args.validate()?;
-
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
 
     let git_service = GitService::discover()
         .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
@@ -145,7 +142,7 @@ fn initialize_finish_environment(
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
-    Ok((config, git_service, current_dir, session_env))
+    Ok((git_service, current_dir, session_env))
 }
 
 /// Resolve session information from args and environment
@@ -217,8 +214,7 @@ fn perform_pre_finish_operations(
         .map(|s| s.name.clone())
         .unwrap_or_else(|| feature_branch.to_string());
 
-    // Skip IDE window closing in test mode or when using mock IDEs
-    if !cfg!(test) && config.ide.command != "echo" {
+    if config.is_real_ide_environment() {
         let platform = get_platform_manager();
         if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
             eprintln!("Warning: Failed to close IDE window: {}", e);
@@ -238,9 +234,9 @@ fn perform_pre_finish_operations(
     Ok(())
 }
 
-pub fn execute(args: FinishArgs) -> Result<()> {
+pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
     // Initialize environment and validate
-    let (config, git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
+    let (git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
     let mut session_manager = SessionManager::new(&config);
 
     // Resolve session information

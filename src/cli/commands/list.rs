@@ -1,8 +1,8 @@
 use crate::cli::parser::ListArgs;
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus as UnifiedSessionStatus};
-use crate::utils::{ParaError, Result};
+use crate::utils::Result;
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
@@ -47,10 +47,7 @@ impl SessionStatus {
     }
 }
 
-pub fn execute(args: ListArgs) -> Result<()> {
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
-
+pub fn execute(config: Config, args: ListArgs) -> Result<()> {
     let session_manager = SessionManager::new(&config);
 
     let git_service = GitService::discover()?;
