@@ -88,6 +88,7 @@ pub mod test_helpers {
     pub struct TestEnvironmentGuard {
         original_dir: PathBuf,
         original_home: String,
+        test_dir: PathBuf,
     }
 
     impl TestEnvironmentGuard {
@@ -109,12 +110,47 @@ pub mod test_helpers {
             Ok(TestEnvironmentGuard {
                 original_dir,
                 original_home,
+                test_dir: git_temp.path().to_path_buf(),
             })
         }
     }
 
     impl Drop for TestEnvironmentGuard {
         fn drop(&mut self) {
+            // Clean up test artifacts that could interfere with git operations
+            // Only clean up in the test directory we created, not wherever we might be now
+            if let Ok(entries) = fs::read_dir(&self.test_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.join(".git").exists() {
+                        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                        // Check if this looks like a test artifact
+                        // More restrictive patterns to avoid false positives
+                        if name.starts_with("test-")
+                            || name == "temp"
+                            || name.ends_with("-test")
+                            || name.contains("-validation")
+                            || name.starts_with("test_")
+                        {
+                            eprintln!("TestEnvironmentGuard: Cleaning up test artifact with nested git: {}", path.display());
+                            if let Err(e) = fs::remove_dir_all(&path) {
+                                eprintln!(
+                                    "TestEnvironmentGuard: Failed to clean up {}: {}",
+                                    path.display(),
+                                    e
+                                );
+                            } else {
+                                eprintln!(
+                                    "TestEnvironmentGuard: Successfully cleaned up {}",
+                                    path.display()
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             restore_environment(self.original_dir.clone(), self.original_home.clone());
         }
     }

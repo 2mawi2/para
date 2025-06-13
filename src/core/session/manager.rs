@@ -92,8 +92,7 @@ impl SessionManager {
                 .unwrap_or_else(|_| "main".to_string())
         });
 
-        let final_session_name = self.resolve_session_name(name.clone())?;
-        // Use final session name for branch to ensure consistency
+        let final_session_name = self.resolve_session_name(name)?;
         let branch_name = crate::utils::generate_friendly_branch_name(
             self.config.get_branch_prefix(),
             &final_session_name,
@@ -216,9 +215,19 @@ impl SessionManager {
 
     pub fn find_session_by_path(&self, path: &Path) -> Result<Option<SessionState>> {
         let sessions = self.list_sessions()?;
+        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         for session in sessions {
-            if session.worktree_path == path || path.starts_with(&session.worktree_path) {
+            let session_canonical = session
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| session.worktree_path.clone());
+
+            // Check exact match or if we're inside the worktree
+            if canonical_path == session_canonical
+                || canonical_path.starts_with(&session_canonical)
+                || session_canonical.starts_with(&canonical_path)
+            {
                 return Ok(Some(session));
             }
         }
