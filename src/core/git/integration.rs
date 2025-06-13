@@ -573,8 +573,9 @@ impl<'a> IntegrationManager<'a> {
         // Extract main repo path: /path/to/main/repo/.git/worktrees/session -> /path/to/main/repo
         let git_path = PathBuf::from(git_dir);
         let main_repo = git_path
-            .parent() // .git/worktrees
-            .and_then(|p| p.parent()) // .git
+            .parent() // removes "session-name" -> /path/to/main/repo/.git/worktrees
+            .and_then(|p| p.parent()) // removes "worktrees" -> /path/to/main/repo/.git
+            .and_then(|p| p.parent()) // removes ".git" -> /path/to/main/repo
             .ok_or_else(|| {
                 ParaError::git_operation("Cannot determine main repo path".to_string())
             })?;
@@ -590,6 +591,9 @@ impl<'a> IntegrationManager<'a> {
         commit_message: Option<&str>,
     ) -> Result<()> {
         let main_repo_path = self.get_main_repo_path()?;
+
+        // For main repository, git directory is always at main_repo_path/.git
+        // This is different from worktree where git_dir points to .git/worktrees/session-name
         let main_git_dir = main_repo_path.join(".git");
 
         // Ensure any uncommitted changes are committed so they appear in the patch stream.
@@ -1505,6 +1509,55 @@ mod tests {
 
         // Should fail but not panic
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_main_repo_path_parsing() {
+        // Test that get_main_repo_path correctly extracts main repo path
+        // from worktree .git file content
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        // Create a mock worktree directory structure
+        let worktree_path = temp_dir.path().join("session-worktree");
+        fs::create_dir(&worktree_path).expect("Failed to create worktree dir");
+
+        // Create a mock .git file that points to main repo worktree directory
+        let git_file = worktree_path.join(".git");
+        let main_repo_path = temp_dir.path().join("main-repo");
+        let worktree_git_dir = format!(
+            "{}/main-repo/.git/worktrees/session",
+            temp_dir.path().to_string_lossy()
+        );
+        fs::write(&git_file, format!("gitdir: {}", worktree_git_dir))
+            .expect("Failed to write .git file");
+
+        // Create minimal git structure for main repo
+        let main_git_dir = main_repo_path.join(".git");
+        fs::create_dir_all(&main_git_dir).expect("Failed to create main .git dir");
+
+        // Create GitRepository structure pointing to worktree
+        let repo = GitRepository {
+            root: worktree_path.clone(),
+            git_dir: PathBuf::from(&worktree_git_dir), // Points to worktree git dir
+            work_dir: worktree_path.clone(),
+        };
+
+        let manager = IntegrationManager::new(&repo);
+
+        // Test that get_main_repo_path correctly extracts the main repo path
+        let result = manager.get_main_repo_path();
+        assert!(result.is_ok());
+
+        let extracted_main_path = result.unwrap();
+        assert_eq!(extracted_main_path, main_repo_path);
+
+        // Verify that when we join ".git" to this path, we get the correct main git directory
+        let computed_main_git_dir = extracted_main_path.join(".git");
+        assert_eq!(computed_main_git_dir, main_git_dir);
+
+        // This test specifically verifies the fix for the double .git/.git issue
+        // Before the fix: extracted_main_path would be /path/to/main/.git
+        // After the fix: extracted_main_path is correctly /path/to/main
     }
 
     #[test]
