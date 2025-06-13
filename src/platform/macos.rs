@@ -6,6 +6,17 @@ pub struct MacOSPlatform;
 
 impl PlatformManager for MacOSPlatform {
     fn close_ide_window(&self, session_id: &str, ide_name: &str) -> Result<()> {
+        // Runtime check: This method should NEVER be called from tests
+        // Tests should use mock IDE commands or cfg!(test) guards to prevent reaching this code
+        if cfg!(test) {
+            panic!(
+                "CRITICAL: close_ide_window called from test environment! \
+                 This indicates a test isolation failure. \
+                 Session: {}, IDE: {}",
+                session_id, ide_name
+            );
+        }
+
         // Only works on macOS with osascript
         if Command::new("osascript").arg("--version").output().is_err() {
             return Ok(());
