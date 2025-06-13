@@ -182,8 +182,23 @@ fn launch_claude_in_ide(
 
     match cmd.spawn() {
         Ok(mut child) => {
-            if let Err(e) = child.wait() {
-                eprintln!("Warning: {} process error: {}", ide_name, e);
+            // Don't wait for the IDE process to complete - it should run independently
+            // Instead, just check if it started successfully by giving it a moment
+            std::thread::sleep(std::time::Duration::from_millis(500));
+
+            // Check if process is still running (not crashed immediately)
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        eprintln!("Warning: {} exited with status: {}", ide_name, status);
+                    }
+                }
+                Ok(None) => {
+                    // Process is still running, which is what we want
+                }
+                Err(e) => {
+                    eprintln!("Warning: {} process check error: {}", ide_name, e);
+                }
             }
         }
         Err(e) => {

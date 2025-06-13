@@ -1,4 +1,4 @@
-use crate::utils::{ParaError, Result};
+use crate::utils::{gitignore::GitignoreManager, ParaError, Result};
 use clap::{Args, Subcommand};
 use dialoguer::Select;
 use std::fs;
@@ -50,7 +50,11 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
 
     // Always create .mcp.json first
     create_mcp_json()?;
-    println!("Created .mcp.json (add to .gitignore - contains local paths)");
+    println!("Created .mcp.json");
+
+    // Automatically add .mcp.json to .gitignore if it's not already there
+    add_to_gitignore(".mcp.json")?;
+    println!("Added .mcp.json to .gitignore (contains user-specific paths)");
     println!();
 
     // Determine IDE choice
@@ -147,15 +151,20 @@ fn find_mcp_server() -> Result<McpServerConfig> {
         }
     }
 
-    // No MCP server found
+    // No MCP server found - provide detailed guidance
     Err(ParaError::invalid_args(
-        "No para MCP server found. Install options:\n\n\
-        For development:\n  \
+        "No para MCP server found. Claude Code won't be able to connect to Para tools.\n\n\
+        📋 Install options (choose one):\n\n\
+        🔧 For development in this repo:\n  \
         cd mcp-server-ts && npm install && npm run build\n\n\
-        For production:\n  \
-        brew install para  # (includes MCP server)\n  \
-        # or\n  \
-        just install       # (builds from source)"
+        🏠 For production use:\n  \
+        brew install 2mawi2/tap/para  # (includes MCP server)\n\n\
+        🛠️  Manual installation:\n  \
+        just install  # (builds and installs to ~/.local/bin)\n\n\
+        ⚡ Quick check:\n  \
+        Run 'which para-mcp-server' to see if it's in your PATH\n  \
+        Check 'node mcp-server-ts/build/para-mcp-server.js --help' for TypeScript server\n\n\
+        💡 After installing, run 'para mcp init --claude-code' again to update the configuration."
             .to_string(),
     ))
 }
@@ -214,31 +223,47 @@ fn prompt_for_ide() -> Result<&'static str> {
 fn configure_claude_code() -> Result<()> {
     // Check if Claude Code is available
     match Command::new("claude").arg("--version").output() {
-        Ok(_) => {
+        Ok(output) => {
+            let version_output = String::from_utf8_lossy(&output.stdout);
             println!("🔧 Configuring Claude Code user settings...");
+            println!("   Found Claude Code: {}", version_output.trim());
 
             // Use the server discovery logic
             match find_mcp_server() {
                 Ok(server_config) => {
                     println!("✅ Found MCP server: {}", server_config.description);
                     println!("✅ Claude Code will use project-scoped .mcp.json");
-                    println!("💡 Verify with: claude mcp list");
+                    println!();
+                    println!("🔍 Verification steps:");
+                    println!("   1. Restart Claude Code completely");
+                    println!("   2. Run: claude mcp list");
+                    println!("   3. Look for 'para' server in the list");
+                    println!("   4. Open this project in Claude Code");
+                    println!("   5. Para tools should appear in the tool panel");
                 }
                 Err(e) => {
-                    println!("⚠️  {}", e);
-                    println!("💡 Build the TypeScript server for development:");
-                    println!("   cd mcp-server-ts && npm install && npm run build");
-                    println!("💡 Or install para globally:");
-                    println!("   just install");
+                    println!("❌ MCP server setup incomplete:");
+                    println!("   {}", e);
+                    return Err(e);
                 }
             }
         }
         Err(_) => {
-            println!("ℹ️  Claude Code not found");
-            println!("   Install Claude Code and the .mcp.json will work automatically");
+            println!("⚠️  Claude Code not found in PATH");
+            println!("   📥 Install Claude Code from: https://claude.ai/download");
+            println!("   🔄 After installation, run 'para mcp init --claude-code' again");
+            println!("   ✅ The .mcp.json configuration will work automatically once Claude Code is installed");
         }
     }
 
+    Ok(())
+}
+
+fn add_to_gitignore(entry: &str) -> Result<()> {
+    let gitignore_manager = GitignoreManager::new(".");
+    gitignore_manager
+        .add_entry(entry)
+        .map_err(|e| ParaError::file_operation(format!("Failed to update .gitignore: {}", e)))?;
     Ok(())
 }
 
@@ -346,5 +371,27 @@ mod tests {
         let json_args = serde_json::to_string(&config.args).unwrap();
         assert!(json_args.contains("arg1"));
         assert!(json_args.contains("arg2"));
+    }
+
+    #[test]
+    fn test_add_to_gitignore() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let old_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        // Test adding to new gitignore
+        add_to_gitignore(".mcp.json").unwrap();
+        let content = fs::read_to_string(".gitignore").unwrap();
+        assert!(content.contains(".mcp.json"));
+
+        // Test adding duplicate entry (should not duplicate)
+        add_to_gitignore(".mcp.json").unwrap();
+        let content = fs::read_to_string(".gitignore").unwrap();
+        assert_eq!(content.matches(".mcp.json").count(), 1);
+
+        std::env::set_current_dir(old_dir).unwrap();
     }
 }
