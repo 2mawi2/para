@@ -251,9 +251,15 @@ fn test_with_git_environment() {
 
 **Available Helper Functions:**
 - `setup_test_repo()`: Creates an isolated git repository with initial commit
-- `create_test_config()`: Creates a clean test configuration
+- `create_test_config()`: Creates a clean test configuration with mock IDE commands
+- `create_test_config_with_dir()`: Creates test config with custom state directory
 - `TestEnvironmentGuard::new()`: Sets up isolated environment and automatically restores on drop
 - `setup_isolated_test_environment()`: Creates isolated config and state directories
+
+**Important for Test Setup:**
+- Always pre-create `.para` and state directories in test repos to avoid race conditions
+- Use the test utilities instead of creating custom test setups
+- Tests run in parallel, so ensure proper isolation using the provided utilities
 
 **When to Use:**
 - Any test that involves git operations (commits, branches, worktrees)
