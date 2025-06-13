@@ -93,9 +93,8 @@ pub fn generate_timestamp() -> String {
     now.format("%Y%m%d-%H%M%S").to_string()
 }
 
-pub fn generate_branch_name(prefix: &str) -> String {
-    let timestamp = generate_timestamp();
-    format!("{}/{}", prefix, timestamp)
+pub fn generate_friendly_branch_name(prefix: &str, session_name: &str) -> String {
+    format!("{}/{}", prefix, session_name)
 }
 
 pub fn generate_unique_name(existing_names: &[String]) -> String {
@@ -207,6 +206,15 @@ mod tests {
         let timestamp = generate_timestamp();
         assert_eq!(timestamp.len(), 15); // YYYYMMDD-HHMMSS
         assert!(timestamp.contains('-'));
+    }
+
+    #[test]
+    fn test_generate_friendly_branch_name() {
+        let branch_name = generate_friendly_branch_name("para", "epic_titanium");
+        assert_eq!(branch_name, "para/epic_titanium");
+
+        let branch_name2 = generate_friendly_branch_name("feature", "awesome_robot");
+        assert_eq!(branch_name2, "feature/awesome_robot");
     }
 
     #[test]

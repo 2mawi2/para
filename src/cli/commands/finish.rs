@@ -1,14 +1,137 @@
 use crate::cli::parser::FinishArgs;
-use crate::config::ConfigManager;
+use crate::config::{Config, ConfigManager};
 use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
 };
-use crate::core::session::{SessionManager, SessionStatus};
+use crate::core::session::{SessionManager, SessionState, SessionStatus};
 use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
 
-pub fn execute(args: FinishArgs) -> Result<()> {
+struct FinishContext<'a> {
+    session_info: Option<SessionState>,
+    is_worktree_env: bool,
+    current_dir: &'a std::path::Path,
+    feature_branch: &'a str,
+    base_branch: &'a str,
+    session_manager: &'a mut SessionManager,
+    git_service: &'a GitService,
+    config: &'a Config,
+    args: &'a FinishArgs,
+}
+
+fn cleanup_session_state(
+    session_manager: &mut SessionManager,
+    session_info: Option<SessionState>,
+    feature_branch: &str,
+    config: &Config,
+) -> Result<()> {
+    if let Some(session_state) = session_info {
+        if config.should_preserve_on_finish() {
+            session_manager.update_session_status(&session_state.name, SessionStatus::Finished)?;
+        } else {
+            session_manager.delete_state(&session_state.name)?;
+        }
+    } else if let Ok(sessions) = session_manager.list_sessions() {
+        for session in sessions {
+            if session.branch == feature_branch {
+                if config.should_preserve_on_finish() {
+                    let _ = session_manager
+                        .update_session_status(&session.name, SessionStatus::Finished);
+                } else {
+                    let _ = session_manager.delete_state(&session.name);
+                }
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Result<()> {
+    let worktree_path = if ctx.is_worktree_env {
+        Some(ctx.current_dir.to_path_buf())
+    } else {
+        ctx.session_info.as_ref().map(|s| s.worktree_path.clone())
+    };
+
+    cleanup_session_state(
+        ctx.session_manager,
+        ctx.session_info.clone(),
+        ctx.feature_branch,
+        ctx.config,
+    )?;
+
+    if let Some(ref path) = worktree_path {
+        if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
+            if let Err(e) = ctx.git_service.remove_worktree(path) {
+                eprintln!(
+                    "Warning: Failed to remove worktree at {}: {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    println!("✓ Session finished successfully");
+    println!("  Feature branch: {}", final_branch);
+    if ctx.args.integrate {
+        println!("  Integrated into: {}", ctx.base_branch);
+    }
+    println!("  Commit message: {}", ctx.args.message);
+
+    Ok(())
+}
+
+/// Handle finish result with integration failure - clean up session, show warning message
+fn handle_finish_integration_failure(
+    final_branch: String,
+    error: String,
+    ctx: &mut FinishContext,
+) -> Result<()> {
+    let worktree_path = if ctx.is_worktree_env {
+        Some(ctx.current_dir.to_path_buf())
+    } else {
+        ctx.session_info.as_ref().map(|s| s.worktree_path.clone())
+    };
+
+    cleanup_session_state(
+        ctx.session_manager,
+        ctx.session_info.clone(),
+        ctx.feature_branch,
+        ctx.config,
+    )?;
+
+    if let Some(ref path) = worktree_path {
+        if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
+            if let Err(e) = ctx.git_service.remove_worktree(path) {
+                eprintln!(
+                    "Warning: Failed to remove worktree at {}: {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    println!("⚠ Session finished with integration failure");
+    println!("  Feature branch: {}", final_branch);
+    println!("  Changes preserved on branch with your commit message");
+    println!("  Integration error: {}", error);
+    println!(
+        "  💡 Manually resolve conflicts and integrate the branch, or use 'para integrate {}'",
+        final_branch
+    );
+    println!("  Commit message: {}", ctx.args.message);
+
+    Ok(())
+}
+
+/// Initialize and validate the environment for finish operation
+fn initialize_finish_environment(
+    args: &FinishArgs,
+) -> Result<(Config, GitService, std::path::PathBuf, SessionEnvironment)> {
     args.validate()?;
 
     let config = ConfigManager::load_or_create()
@@ -22,46 +145,116 @@ pub fn execute(args: FinishArgs) -> Result<()> {
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
-    let mut session_manager = SessionManager::new(&config);
+    Ok((config, git_service, current_dir, session_env))
+}
 
-    let (session_info, current_branch, is_worktree_env) = match &args.session {
+/// Resolve session information from args and environment
+fn resolve_session_info(
+    args: &FinishArgs,
+    session_env: &SessionEnvironment,
+    session_manager: &mut SessionManager,
+    current_dir: &std::path::Path,
+) -> Result<(Option<SessionState>, bool)> {
+    let (session_info, is_worktree_env) = match &args.session {
         Some(session_id) => {
             let session_state = session_manager.load_state(session_id)?;
-            (Some(session_state), None, false)
+            (Some(session_state), false)
         }
-        None => match &session_env {
-            SessionEnvironment::Worktree { branch, .. } => {
+        None => match session_env {
+            SessionEnvironment::Worktree { branch: _, .. } => {
                 // Try to auto-detect session by current path
-                if let Ok(Some(session)) = session_manager.find_session_by_path(&current_dir) {
-                    (Some(session), None, true)
+                if let Ok(Some(session)) = session_manager.find_session_by_path(current_dir) {
+                    (Some(session), true)
                 } else {
-                    (None, Some(branch.clone()), true)
+                    (None, true)
                 }
             }
             SessionEnvironment::MainRepository => {
                 return Err(ParaError::invalid_args(
-                        "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
-                    ));
+                    "Cannot finish from main repository. Use --session to specify a session or run from within a session worktree.",
+                ));
             }
             SessionEnvironment::Invalid => {
                 return Err(ParaError::invalid_args(
-                        "Cannot finish from this location. Use --session to specify a session or run from within a session worktree.",
-                    ));
+                    "Cannot finish from this location. Use --session to specify a session or run from within a session worktree.",
+                ));
             }
         },
     };
 
-    let feature_branch = session_info
-        .as_ref()
-        .map(|s| s.branch.clone())
-        .or(current_branch)
-        .ok_or_else(|| ParaError::invalid_args("Unable to determine feature branch"))?;
+    Ok((session_info, is_worktree_env))
+}
 
+/// Determine the feature branch name from session info or environment
+fn determine_feature_branch(
+    session_info: &Option<SessionState>,
+    session_env: &SessionEnvironment,
+) -> Result<String> {
+    if let Some(session) = session_info {
+        return Ok(session.branch.clone());
+    }
+
+    match session_env {
+        SessionEnvironment::Worktree { branch, .. } => Ok(branch.clone()),
+        _ => Err(ParaError::invalid_args(
+            "Unable to determine feature branch",
+        )),
+    }
+}
+
+/// Perform pre-finish operations (IDE closing, staging)
+fn perform_pre_finish_operations(
+    session_info: &Option<SessionState>,
+    feature_branch: &str,
+    config: &Config,
+    git_service: &GitService,
+) -> Result<()> {
+    println!("Finishing session: {}", feature_branch);
+
+    // Close IDE window before Git operations (in case Git operations fail)
+    let session_id = session_info
+        .as_ref()
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| feature_branch.to_string());
+
+    let platform = get_platform_manager();
+    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+        eprintln!("Warning: Failed to close IDE window: {}", e);
+    }
+
+    if config.should_auto_stage() {
+        if let Err(e) = git_service.stage_all_changes() {
+            eprintln!(
+                "Warning: Auto-staging failed: {}. Please stage changes manually.",
+                e
+            );
+            return Err(e);
+        }
+    }
+
+    Ok(())
+}
+
+pub fn execute(args: FinishArgs) -> Result<()> {
+    // Initialize environment and validate
+    let (config, git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
+    let mut session_manager = SessionManager::new(&config);
+
+    // Resolve session information
+    let (session_info, is_worktree_env) =
+        resolve_session_info(&args, &session_env, &mut session_manager, &current_dir)?;
+
+    // Determine feature and base branches
+    let feature_branch = determine_feature_branch(&session_info, &session_env)?;
     let base_branch = git_service
         .repository()
         .get_main_branch()
         .unwrap_or_else(|_| "main".to_string());
 
+    // Perform pre-finish operations
+    perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
+
+    // Execute the finish operation
     let finish_request = FinishRequest {
         feature_branch: feature_branch.clone(),
         base_branch: base_branch.clone(),
@@ -70,101 +263,30 @@ pub fn execute(args: FinishArgs) -> Result<()> {
         integrate: args.integrate,
     };
 
-    println!("Finishing session: {}", feature_branch);
-
-    // Close IDE window before Git operations (in case Git operations fail)
-    let session_id = session_info
-        .as_ref()
-        .map(|s| s.name.clone())
-        .unwrap_or_else(|| feature_branch.clone());
-
-    let platform = get_platform_manager();
-    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
-        eprintln!("Warning: Failed to close IDE window: {}", e);
-    }
-
-    if config.should_auto_stage() {
-        git_service.stage_all_changes()?;
-    }
-
     let result = git_service.finish_session(finish_request)?;
+
+    // Handle the result
+    let mut ctx = FinishContext {
+        session_info,
+        is_worktree_env,
+        current_dir: &current_dir,
+        feature_branch: &feature_branch,
+        base_branch: &base_branch,
+        session_manager: &mut session_manager,
+        git_service: &git_service,
+        config: &config,
+        args: &args,
+    };
 
     match result {
         FinishResult::Success { final_branch } => {
-            let worktree_path = if is_worktree_env {
-                Some(current_dir.clone())
-            } else {
-                session_info.as_ref().map(|s| s.worktree_path.clone())
-            };
-
-            if let Some(session_state) = session_info {
-                if config.should_preserve_on_finish() {
-                    session_manager
-                        .update_session_status(&session_state.name, SessionStatus::Finished)?;
-                } else {
-                    session_manager.delete_state(&session_state.name)?;
-                }
-            }
-
-            // Note: Don't checkout base_branch here - this causes "already used by worktree" errors
-            // The integration logic handles branch management properly
-
-            if let Some(ref path) = worktree_path {
-                if path != &git_service.repository().root && !config.should_preserve_on_finish() {
-                    if let Err(e) = git_service.remove_worktree(path) {
-                        eprintln!(
-                            "Warning: Failed to remove worktree at {}: {}",
-                            path.display(),
-                            e
-                        );
-                    }
-                }
-            }
-
-            println!("✓ Session finished successfully");
-            println!("  Feature branch: {}", final_branch);
-            if args.integrate {
-                println!("  Integrated into: {}", base_branch);
-            }
-            println!("  Commit message: {}", args.message);
+            handle_finish_success(final_branch, &mut ctx)?;
         }
         FinishResult::SuccessWithIntegrationFailure {
             final_branch,
             error,
         } => {
-            let worktree_path = if is_worktree_env {
-                Some(current_dir.clone())
-            } else {
-                session_info.as_ref().map(|s| s.worktree_path.clone())
-            };
-
-            if let Some(session_state) = session_info {
-                if config.should_preserve_on_finish() {
-                    session_manager
-                        .update_session_status(&session_state.name, SessionStatus::Finished)?;
-                } else {
-                    session_manager.delete_state(&session_state.name)?;
-                }
-            }
-
-            if let Some(ref path) = worktree_path {
-                if path != &git_service.repository().root && !config.should_preserve_on_finish() {
-                    if let Err(e) = git_service.remove_worktree(path) {
-                        eprintln!(
-                            "Warning: Failed to remove worktree at {}: {}",
-                            path.display(),
-                            e
-                        );
-                    }
-                }
-            }
-
-            println!("⚠ Session finished with integration failure");
-            println!("  Feature branch: {}", final_branch);
-            println!("  Changes preserved on branch with your commit message");
-            println!("  Integration error: {}", error);
-            println!("  💡 Manually resolve conflicts and integrate the branch, or use 'para integrate {}'", final_branch);
-            println!("  Commit message: {}", args.message);
+            handle_finish_integration_failure(final_branch, error, &mut ctx)?;
         }
     }
 
@@ -337,5 +459,105 @@ mod tests {
             .expect("Failed to load state");
         assert_eq!(loaded_state.name, "test-session");
         assert_eq!(loaded_state.branch, "test-branch");
+    }
+
+    #[test]
+    fn test_cleanup_session_state_fallback() {
+        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+        let config = create_test_config(temp_dir.path());
+        let mut session_manager = SessionManager::new(&config);
+
+        // Create a session state that would normally be found by path
+        let session_state = SessionState::new(
+            "fallback-test-session".to_string(),
+            "test/fallback-branch".to_string(),
+            temp_dir.path().join("some-worktree"),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Verify session exists before cleanup
+        assert!(session_manager.session_exists("fallback-test-session"));
+
+        // Test Case 1: Primary path with session_info present
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state.clone()),
+            "test/fallback-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+        // Session should be deleted (preserve_on_finish = false in test config)
+        assert!(!session_manager.session_exists("fallback-test-session"));
+
+        // Test Case 2: Fallback path - session_info is None but session exists with matching branch
+        // Re-create the session for fallback test
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+        assert!(session_manager.session_exists("fallback-test-session"));
+
+        // Call cleanup with session_info = None (simulating session detection failure)
+        let result = cleanup_session_state(
+            &mut session_manager,
+            None,                   // No session_info - triggers fallback
+            "test/fallback-branch", // This should match the branch name
+            &config,
+        );
+        assert!(result.is_ok());
+        // Session should be deleted via fallback lookup
+        assert!(!session_manager.session_exists("fallback-test-session"));
+
+        // Test Case 3: Fallback with non-matching branch name
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+        assert!(session_manager.session_exists("fallback-test-session"));
+
+        let result = cleanup_session_state(
+            &mut session_manager,
+            None,                    // No session_info - triggers fallback
+            "different/branch-name", // This won't match
+            &config,
+        );
+        assert!(result.is_ok());
+        // Session should still exist because branch name didn't match
+        assert!(session_manager.session_exists("fallback-test-session"));
+    }
+
+    #[test]
+    fn test_cleanup_session_state_preserve_mode() {
+        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+        let mut config = create_test_config(temp_dir.path());
+        config.session.preserve_on_finish = true; // Enable preserve mode
+        let mut session_manager = SessionManager::new(&config);
+
+        let session_state = SessionState::new(
+            "preserve-test-session".to_string(),
+            "test/preserve-branch".to_string(),
+            temp_dir.path().join("some-worktree"),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Test fallback in preserve mode
+        let result = cleanup_session_state(
+            &mut session_manager,
+            None, // Triggers fallback
+            "test/preserve-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Session should still exist but be marked as finished
+        assert!(session_manager.session_exists("preserve-test-session"));
+        let updated_session = session_manager
+            .load_state("preserve-test-session")
+            .expect("Session should still exist");
+        assert!(matches!(updated_session.status, SessionStatus::Finished));
     }
 }
