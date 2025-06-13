@@ -1,14 +1,11 @@
 use crate::cli::parser::StartArgs;
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::ide::IdeManager;
 use crate::core::session::SessionManager;
-use crate::utils::{generate_unique_name, validate_session_name, ParaError, Result};
+use crate::utils::{generate_unique_name, validate_session_name, Result};
 
-pub fn execute(args: StartArgs) -> Result<()> {
+pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     args.validate()?;
-
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load configuration: {}", e)))?;
 
     let mut session_manager = SessionManager::new(&config);
 

@@ -118,4 +118,26 @@ impl Config {
     pub fn get_default_integration_strategy(&self) -> IntegrationStrategy {
         self.git.default_integration_strategy.clone()
     }
+
+    pub fn is_real_ide_environment(&self) -> bool {
+        !cfg!(test) && self.ide.command != "echo"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_real_ide_environment() {
+        let mut config = defaults::default_config();
+
+        // Mock IDE should return false
+        config.ide.command = "echo".to_string();
+        assert!(!config.is_real_ide_environment());
+
+        // Real IDE in test mode still returns false due to cfg!(test)
+        config.ide.command = "cursor".to_string();
+        assert!(!config.is_real_ide_environment());
+    }
 }
