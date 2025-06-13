@@ -29,7 +29,7 @@ function findParaBinary(): string {
     "/home/linuxbrew/.linuxbrew/bin/para",          // Linux Homebrew
     "para"                                           // System PATH
   ];
-  
+
   for (const location of locations) {
     try {
       execSync(`command -v ${location}`, { stdio: 'ignore' });
@@ -38,7 +38,7 @@ function findParaBinary(): string {
       // Continue to next location
     }
   }
-  
+
   // Fallback to 'para' in PATH
   return "para";
 }
@@ -58,7 +58,17 @@ const server = new Server({
 // Helper function to execute para commands
 async function runParaCommand(args: string[]): Promise<string> {
   try {
-    const { stdout, stderr } = await execAsync(`${PARA_BINARY} ${args.join(' ')}`);
+    // Properly quote arguments that contain spaces
+    const quotedArgs = args.map(arg => {
+      // If the argument contains spaces and isn't already quoted, wrap it in quotes
+      if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+      }
+      return arg;
+    });
+
+    const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
+    const { stdout, stderr } = await execAsync(command);
     if (stderr && !stderr.includes('warning')) {
       console.error(`Para command warning: ${stderr}`);
     }
@@ -74,27 +84,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "para_start",
-        description: "Start a new isolated para session in separate Git worktree. Creates clean workspace for development with automatic branching.",
+        description: "Start manual development session in isolated Git worktree. For complex tasks where YOU (orchestrator) work WITH the user, not for dispatching agents. Creates .para/worktrees/session-name directory. Use when user needs direct involvement or task is too complex for agents.",
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name for the new session"
+              description: "Name for the new session (optional, generates friendly name if not provided)"
+            },
+            dangerously_skip_permissions: {
+              type: "boolean",
+              description: "Skip IDE permission warnings (dangerous)"
             }
           },
-          required: ["session_name"]
+          required: []
         }
       },
       {
         name: "para_finish",
-        description: "Complete current para session and return to main branch. Auto-commits all changes with provided message.",
+        description: "Rarely used by orchestrator. Creates branch without integration. Agents use CLI 'para finish/integrate' commands instead. Only use if you started a manual session with para_start and want to save work without integrating.",
         inputSchema: {
           type: "object",
           properties: {
             commit_message: {
               type: "string",
-              description: "Commit message for the changes"
+              description: "Commit message describing the changes made"
+            },
+            session: {
+              type: "string",
+              description: "Session ID (optional, auto-detects if not provided)"
+            },
+            branch: {
+              type: "string",
+              description: "Custom branch name instead of default para/session-name"
+            },
+            integrate: {
+              type: "boolean",
+              description: "Automatically integrate into main branch (default: false for manual review)"
             }
           },
           required: ["commit_message"]
@@ -102,28 +128,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "para_dispatch",
-        description: "Start new para session with AI agent dispatch for parallel development.",
+        description: "PRIMARY TOOL: Dispatch AI agents for parallel development. Each agent works in isolated Git worktree.\n\nPARALLELIZATION:\n- SEQUENTIAL: API spec first → then implementations\n- PARALLEL: Frontend + Backend (using same API)\n- AVOID: Same files = conflicts\n\nTASK COMPLEXITY:\n- SIMPLE: Use inline task_description\n- COMPLEX: Create .md file in 'tasks/' directory (default)\n\nTASK WRITING:\n- Keep simple, avoid overengineering\n- State WHAT not HOW\n- Let agents choose implementation\n- End with: 'When done: para integrate \"<msg>\"'\n\nWORKFLOW:\n1. Create tasks/TASK_1_feature.md files\n2. Dispatch agents (they'll integrate automatically)\n3. Continue with user on next tasks\n4. Conflicts? para_integrate creates branch for manual fix\n\nEXAMPLE TASK:\n```\nImplement user authentication with email/password.\nStore users in database.\nReturn JWT tokens.\n\nWhen done: para integrate \"Add user authentication\"\n```",
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name for the new session"
+              description: "Unique name for this agent/session (e.g., 'auth-api', 'frontend-ui')"
             },
             task_description: {
               type: "string",
-              description: "Task description for the AI agent"
+              description: "Inline task description. Must end with workflow instruction: 'When complete, run: para integrate \"<commit msg>\"' or 'para finish \"<commit msg>\"'"
+            },
+            file: {
+              type: "string",
+              description: "Path to task file (e.g., tasks/TASK_1_auth.md). Default directory: tasks/"
+            },
+            dangerously_skip_permissions: {
+              type: "boolean",
+              description: "Skip IDE permission warnings (dangerous)"
             }
           },
-          required: ["session_name", "task_description"]
+          required: ["session_name"]
         }
       },
       {
         name: "para_list",
-        description: "List all active para sessions with their status and branch information.",
+        description: "Check status if needed. Shows sessions/agents. Not required - focus on dispatching agents and working with user. Agents handle their own integration.",
         inputSchema: {
           type: "object",
-          properties: {},
+          properties: {
+            verbose: {
+              type: "boolean",
+              description: "Show detailed session information including paths and timestamps"
+            },
+            archived: {
+              type: "boolean",
+              description: "Include finished/archived sessions in the list"
+            },
+            quiet: {
+              type: "boolean",
+              description: "Minimal output for scripts"
+            }
+          },
           additionalProperties: false
         }
       },
@@ -135,10 +182,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             session_name: {
               type: "string",
-              description: "Name of the session to recover"
+              description: "Name of the session to recover (optional, shows list if not provided)"
             }
           },
-          required: ["session_name"]
+          required: []
         }
       },
       {
@@ -151,17 +198,44 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: "para_integrate",
+        description: "Integrate finished work into main branch. Automatically rebases changes. If conflicts occur, creates branch for manual resolution with user. Usually not needed - agents auto-integrate. Use if reviewing finished branches or manual integration needed.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              description: "Commit message for the integration"
+            },
+            session: {
+              type: "string",
+              description: "Session name to integrate (optional, auto-detects from current directory)"
+            },
+            strategy: {
+              type: "string",
+              enum: ["merge", "squash", "rebase"],
+              description: "Integration strategy: squash (default), merge, or rebase"
+            },
+            target: {
+              type: "string",
+              description: "Target branch (default: main)"
+            }
+          },
+          required: []
+        }
+      },
+      {
         name: "para_cancel",
-        description: "Cancel and delete a para session, removing its worktree and branch.",
+        description: "DESTRUCTIVE: Permanently delete a para session, removing its worktree and branch. All uncommitted work will be lost. WARNING: Never use this on your current session - it will delete all your work! Use para_finish or para_recover instead. Only use this to clean up abandoned sessions.",
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name of the session to cancel"
+              description: "Name of the session to cancel (optional, auto-detects current session - DANGEROUS!)"
             }
           },
-          required: ["session_name"]
+          required: []
         }
       }
     ]
@@ -177,33 +251,113 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case "para_start":
-        result = await runParaCommand(["start", (args as any).session_name]);
+        {
+          const cmdArgs = ["start"];
+          if ((args as any).session_name) {
+            cmdArgs.push((args as any).session_name);
+          }
+          if ((args as any).dangerously_skip_permissions) {
+            cmdArgs.push("--dangerously-skip-permissions");
+          }
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
       case "para_finish":
-        result = await runParaCommand(["finish", (args as any).commit_message]);
+        {
+          const cmdArgs = ["finish"];
+          cmdArgs.push((args as any).commit_message);
+          if ((args as any).session) {
+            cmdArgs.push((args as any).session);
+          }
+          if ((args as any).branch) {
+            cmdArgs.push("--branch", (args as any).branch);
+          }
+          if ((args as any).integrate) {
+            cmdArgs.push("--integrate");
+          }
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
       case "para_dispatch":
-        result = await runParaCommand(["dispatch", (args as any).session_name, (args as any).task_description]);
+        {
+          const cmdArgs = ["dispatch"];
+          cmdArgs.push((args as any).session_name);
+
+          if ((args as any).file) {
+            cmdArgs.push("--file", (args as any).file);
+          } else if ((args as any).task_description) {
+            cmdArgs.push((args as any).task_description);
+          }
+
+          if ((args as any).dangerously_skip_permissions) {
+            cmdArgs.push("--dangerously-skip-permissions");
+          }
+
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
       case "para_list":
-        result = await runParaCommand(["list"]);
+        {
+          const cmdArgs = ["list"];
+          if ((args as any).verbose) {
+            cmdArgs.push("--verbose");
+          }
+          if ((args as any).archived) {
+            cmdArgs.push("--archived");
+          }
+          if ((args as any).quiet) {
+            cmdArgs.push("--quiet");
+          }
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
       case "para_recover":
-        result = await runParaCommand(["recover", (args as any).session_name]);
+        {
+          const cmdArgs = ["recover"];
+          if ((args as any).session_name) {
+            cmdArgs.push((args as any).session_name);
+          }
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
       case "para_config_show":
         result = await runParaCommand(["config", "show"]);
         break;
-      
-      case "para_cancel":
-        result = await runParaCommand(["cancel", (args as any).session_name]);
+
+      case "para_integrate":
+        {
+          const cmdArgs = ["integrate"];
+          if ((args as any).message) {
+            cmdArgs.push((args as any).message);
+          }
+          if ((args as any).session) {
+            cmdArgs.push((args as any).session);
+          }
+          if ((args as any).strategy) {
+            cmdArgs.push("--strategy", (args as any).strategy);
+          }
+          if ((args as any).target) {
+            cmdArgs.push("--target", (args as any).target);
+          }
+          result = await runParaCommand(cmdArgs);
+        }
         break;
-      
+
+      case "para_cancel":
+        {
+          const cmdArgs = ["cancel"];
+          if ((args as any).session_name) {
+            cmdArgs.push((args as any).session_name);
+          }
+          result = await runParaCommand(cmdArgs);
+        }
+        break;
+
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
@@ -252,11 +406,11 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       case "para://current-session":
         content = await runParaCommand(["list", "--current"]);
         break;
-      
+
       case "para://config":
         content = await runParaCommand(["config", "show"]);
         break;
-      
+
       default:
         throw new McpError(ErrorCode.InvalidRequest, `Unknown resource: ${uri}`);
     }
