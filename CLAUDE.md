@@ -267,6 +267,18 @@ fn test_with_git_environment() {
 - No task is ever done if not all tests ('just test') pass, every other reward hacking is a ethically wrong lie to the user!
 - Ensure no lint issues exist, if they do, fix them. (Otherwise the pipeline will fail)
 
+### Test Isolation Requirements
+**CRITICAL**: Tests must NEVER interact with the user's real configuration or system:
+- **Config Isolation**: The `TestEnvironmentGuard` automatically sets `PARA_CONFIG_PATH` to a test-specific config with mock IDE commands
+- **Mock IDE Commands**: Test configs always use `"echo"` as the IDE command - NEVER real commands like `"cursor"`, `"claude"`, or `"code"`
+- **Environment Safety**: Tests that call `execute()` functions will use the isolated test config, preventing them from launching or killing real IDEs
+- **No Host Interaction**: Tests must not access:
+  - Real user config at `~/Library/Application Support/para/config.json`
+  - Real IDE processes
+  - User's home directory settings
+  - Any system-wide para installations
+- **Verification**: Run `just test test_safety` to verify test isolation is working correctly
+
 ## Code Reviews
 
 - Stay critical, focus on functionality, not style.
