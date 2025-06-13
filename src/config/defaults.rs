@@ -43,7 +43,7 @@ pub fn default_git_config() -> GitConfig {
 pub fn default_session_config() -> SessionConfig {
     SessionConfig {
         default_name_format: "%Y%m%d-%H%M%S".to_string(),
-        preserve_on_finish: true,
+        preserve_on_finish: false,
         auto_cleanup_days: Some(30),
     }
 }
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(config.directories.subtrees_dir, ".para/worktrees");
         assert_eq!(config.directories.state_dir, ".para/state");
         assert!(config.git.auto_stage);
-        assert!(config.session.preserve_on_finish);
+        assert!(!config.session.preserve_on_finish);
     }
 
     #[test]

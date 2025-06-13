@@ -52,7 +52,9 @@ impl<'a> IntegrationManager<'a> {
         // Don't checkout the feature branch - we're likely already in the worktree with it checked out
         // This avoids the "already used by worktree" error
 
-        if self.repo.has_uncommitted_changes()? {
+        let has_changes = self.repo.has_uncommitted_changes()?;
+
+        if has_changes {
             self.repo.stage_all_changes()?;
             self.repo.commit(&request.commit_message)?;
         }
@@ -537,13 +539,16 @@ impl<'a> IntegrationManager<'a> {
 
     /// Get path to main repository from worktree
     pub fn get_main_repo_path(&self) -> Result<PathBuf> {
-        if !self.is_in_worktree()? {
+        let git_path = self.repo.root.join(".git");
+
+        // Check if we're in a worktree (has .git file instead of directory)
+        if !git_path.is_file() {
+            // Not in worktree, already in main repo
             return Ok(self.repo.root.clone());
         }
 
         // Read .git file to find main repo path
-        let git_file = self.repo.root.join(".git");
-        let git_content = std::fs::read_to_string(git_file)
+        let git_content = std::fs::read_to_string(&git_path)
             .map_err(|e| ParaError::git_operation(format!("Failed to read .git file: {}", e)))?;
 
         // Format: "gitdir: /path/to/main/repo/.git/worktrees/session-name"
@@ -554,15 +559,14 @@ impl<'a> IntegrationManager<'a> {
 
         // Extract main repo path: /path/to/main/repo/.git/worktrees/session -> /path/to/main/repo
         let git_path = PathBuf::from(git_dir);
-        let main_git_dir = git_path
+        let main_repo = git_path
             .parent() // .git/worktrees
             .and_then(|p| p.parent()) // .git
-            .and_then(|p| p.parent()) // main repo root
             .ok_or_else(|| {
                 ParaError::git_operation("Cannot determine main repo path".to_string())
             })?;
 
-        Ok(main_git_dir.to_path_buf())
+        Ok(main_repo.to_path_buf())
     }
 
     /// Extract changes from worktree and apply to main repo using format-patch + git am

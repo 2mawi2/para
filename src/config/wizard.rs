@@ -10,6 +10,7 @@ pub fn run_config_wizard() -> Result<Config> {
 
     config.ide = configure_ide_simple()?;
     config.directories = configure_directories_simple(config.directories)?;
+    config.session = configure_session_simple(config.session)?;
 
     println!("\n📋 Configuration Summary:");
     display_config_summary(&config);
@@ -108,6 +109,34 @@ fn configure_directories_simple(
         .default(config.state_dir)
         .interact()
         .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+
+    Ok(config)
+}
+
+fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::SessionConfig> {
+    println!("\n🗂️  Session Management (optional customization)");
+
+    config.preserve_on_finish = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Preserve worktrees after finishing sessions?")
+        .default(config.preserve_on_finish)
+        .interact()
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+
+    if let Some(days) = config.auto_cleanup_days {
+        let cleanup_days = Input::<u32>::with_theme(&ColorfulTheme::default())
+            .with_prompt("Auto-cleanup preserved sessions after (days)")
+            .default(days)
+            .validate_with(|input: &u32| {
+                if *input > 0 && *input <= 365 {
+                    Ok(())
+                } else {
+                    Err("Please enter a value between 1 and 365 days")
+                }
+            })
+            .interact()
+            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        config.auto_cleanup_days = Some(cleanup_days);
+    }
 
     Ok(config)
 }
@@ -244,7 +273,7 @@ mod tests {
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: true,
+                preserve_on_finish: false,
                 auto_cleanup_days: Some(30),
             },
         };
