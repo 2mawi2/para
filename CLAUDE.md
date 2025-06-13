@@ -135,6 +135,15 @@ para config show   # Display current configuration
 para config edit   # Open config file in editor
 ```
 
+### Session Management Commands
+```bash
+para start <name>       # Start new session with given name
+para list              # List all active sessions
+para finish <message>  # Finish current session with commit message
+para recover <name>    # Recover/resume a previous session
+para cancel <name>     # Cancel and delete session (destructive operation)
+```
+
 ## Session Management Pattern
 
 Para creates timestamped sessions with complete isolation:
@@ -148,8 +157,10 @@ Para creates timestamped sessions with complete isolation:
 ```bash
 para start feature-auth           # Creates worktree + branch + opens IDE
 # Work in the session...
+para list                         # List all active sessions
 para finish "Implement OAuth"     # Auto-stages, commits, switches back
 para recover feature-auth         # Restore if needed later
+para cancel feature-auth          # Cancel and delete session (destructive)
 ```
 
 ### AI-Powered Development with Claude Code
@@ -185,7 +196,38 @@ para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md -d
 - If one task requires another task, Start those tasks only sequentially. Once the first task is integrated we can start the second one and so on. 
 - When an agent is ready it should call para finish '<commit message>' to finish the task.
 - This will bring the changes to a new branch with the agent's name. This branch needs to be integrated in the main branch, and all conflicts need to be resolved. After this is done, tests have to be run again to ensure that the integration didn't break anything 
-- No not use you internal Agent system to process the task. Call `para dispatch` to start a new agent for the task.
+- Do not use your internal Agent system to process the task. Call `para dispatch` to start a new agent for the task.
+
+### Integration Workflow
+After agents complete their tasks with `para finish`, follow this integration process:
+
+```bash
+# 1. List completed sessions to see finished branches
+para list
+
+# 2. Switch to main branch and pull latest changes
+git checkout main
+git pull origin main
+
+# 3. Merge the agent's branch (use squash for clean history)
+git merge --squash para/agent-branch-name
+git commit -m "Integrate: agent task description"
+
+# 4. Run full test suite to ensure integration didn't break anything  
+just test
+
+# 5. If tests pass, push to main
+git push origin main
+
+# 6. Clean up the integrated branch
+git branch -D para/agent-branch-name
+```
+
+**Important Integration Notes:**
+- Always run `just test` after integration to catch any merge conflicts or integration issues
+- Use squash merges to maintain clean commit history on main branch
+- Delete agent branches after successful integration to keep repository clean
+- If integration tests fail, fix issues before pushing to main
 
 **Writing Tasks**:
 - Write tasks in the root directory in the format of `TASK_<number>_<description>.md`
@@ -199,7 +241,7 @@ para dispatch task3-agent --file TASK_3_IMPLEMENTATION.md -d
 
 ### Important Locations
 - **Config**: Platform-specific config directories (see Configuration System above)
-- **State**: `.para_state/` directory for session tracking
+- **State**: `.para/state/` directory for session tracking
 - **Documentation**: `docs/` directory with detailed guides
 
 ### Development Files

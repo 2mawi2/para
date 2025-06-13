@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "para": {
+      "type": "stdio",
+      "command": "DETECTED_AUTOMATICALLY",
+      "args": ["DETECTED_AUTOMATICALLY"]
+    }
+  }
+}

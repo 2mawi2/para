@@ -26,3 +26,6 @@ subtrees/
 
 # Rust build artifacts
 target/
+
+# MCP configuration (contains user-specific paths)
+.mcp.json
