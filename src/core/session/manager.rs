@@ -90,7 +90,10 @@ impl SessionManager {
         });
 
         let final_session_name = self.resolve_session_name(name)?;
-        let branch_name = crate::utils::generate_branch_name(self.config.get_branch_prefix());
+        let branch_name = crate::utils::generate_friendly_branch_name(
+            self.config.get_branch_prefix(),
+            &final_session_name,
+        );
 
         let subtrees_path = repository_root.join(&self.config.directories.subtrees_dir);
         let worktree_path = subtrees_path.join(&final_session_name);
@@ -209,9 +212,19 @@ impl SessionManager {
 
     pub fn find_session_by_path(&self, path: &Path) -> Result<Option<SessionState>> {
         let sessions = self.list_sessions()?;
+        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         for session in sessions {
-            if session.worktree_path == path || path.starts_with(&session.worktree_path) {
+            let session_canonical = session
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| session.worktree_path.clone());
+
+            // Check exact match or if we're inside the worktree
+            if canonical_path == session_canonical
+                || canonical_path.starts_with(&session_canonical)
+                || session_canonical.starts_with(&canonical_path)
+            {
                 return Ok(Some(session));
             }
         }
@@ -602,5 +615,20 @@ mod tests {
         assert_ne!(result, "collision-test");
         assert!(result.starts_with("collision-test_"));
         assert!(result.contains('-')); // Should contain timestamp
+    }
+
+    #[test]
+    fn test_friendly_branch_naming_logic() {
+        // Test the friendly branch naming function directly
+        let branch_name = crate::utils::generate_friendly_branch_name("para", "epic_feature");
+        assert_eq!(branch_name, "para/epic_feature");
+
+        // Verify it doesn't contain timestamp patterns
+        assert!(!branch_name.contains('-')); // No timestamp separators
+        assert!(!branch_name.chars().any(|c| c.is_ascii_digit())); // No timestamp digits
+
+        // Test with different prefix
+        let branch_name2 = crate::utils::generate_friendly_branch_name("feature", "awesome_robot");
+        assert_eq!(branch_name2, "feature/awesome_robot");
     }
 }

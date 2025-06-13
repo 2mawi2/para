@@ -40,7 +40,7 @@ pub fn execute(args: DispatchArgs) -> Result<()> {
         }
     };
 
-    let branch_name = generate_branch_name(config.get_branch_prefix());
+    let branch_name = generate_friendly_branch_name(config.get_branch_prefix(), &session_name);
     let session_id = session_name.clone();
 
     let subtrees_path = repo_root.join(&config.directories.subtrees_dir);

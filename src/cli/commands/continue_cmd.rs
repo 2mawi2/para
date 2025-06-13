@@ -428,11 +428,15 @@ mod tests {
     #[test]
     fn test_execute_validates_git_service_discovery() {
         let temp_dir = TempDir::new().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
         let result = execute();
 
         assert!(result.is_err());
+
+        // Restore original directory
+        let _ = std::env::set_current_dir(original_dir);
     }
 
     #[test]

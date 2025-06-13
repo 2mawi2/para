@@ -161,7 +161,30 @@ impl GitRepository {
     }
 
     pub fn stage_all_changes(&self) -> Result<()> {
-        execute_git_command_with_status(self, &["add", "."])
+        execute_git_command_with_status(self, &["add", "."]).map_err(|e| {
+            let error_str = e.to_string();
+            if error_str.contains("embedded repository")
+                || error_str.contains("adding an embedded repository")
+                || error_str.contains("does not have a commit checked out")
+                || error_str.contains("adding files failed")
+            {
+                ParaError::git_operation(format!(
+                    "Cannot stage files due to nested git repositories in worktree.\n\n\
+                    This usually indicates:\n\
+                    1. Test artifacts weren't cleaned up properly\n\
+                    2. Nested git repositories in your worktree\n\n\
+                    Solutions:\n\
+                    • Run 'git status' to see problematic directories\n\
+                    • Remove unwanted nested repositories manually\n\
+                    • Add them to .gitignore if they should be ignored\n\n\
+                    Note: Para doesn't support worktrees with nested git repositories.\n\
+                    Original error: {}",
+                    error_str
+                ))
+            } else {
+                e
+            }
+        })
     }
 
     pub fn commit(&self, message: &str) -> Result<()> {
@@ -354,5 +377,64 @@ mod tests {
         assert!(repo
             .has_uncommitted_changes()
             .expect("Failed to check changes"));
+    }
+
+    #[test]
+    fn test_stage_all_changes_with_nested_repo() {
+        let (temp_dir, repo) = setup_test_repo();
+
+        // Create a normal file
+        fs::write(temp_dir.path().join("normal.txt"), "normal content")
+            .expect("Failed to write normal file");
+
+        // Create a nested git repository (test artifact)
+        let nested_repo_path = temp_dir.path().join("test-nested-repo");
+        fs::create_dir_all(&nested_repo_path).expect("Failed to create nested dir");
+
+        Command::new("git")
+            .current_dir(&nested_repo_path)
+            .args(["init"])
+            .status()
+            .expect("Failed to init nested repo");
+
+        // Try to stage all changes - should fail with clear error
+        let result = repo.stage_all_changes();
+        assert!(result.is_err());
+
+        let error_message = result.unwrap_err().to_string();
+        eprintln!("Error message: {}", error_message);
+
+        // Check for either the git error or our custom message
+        assert!(
+            error_message.contains("nested git repositories")
+                || error_message.contains("embedded repository")
+                || error_message.contains("Git command failed"),
+            "Expected error about nested repositories, got: {}",
+            error_message
+        );
+
+        // Clean up the nested repo
+        fs::remove_dir_all(&nested_repo_path).expect("Failed to remove nested repo");
+
+        // Now staging should work
+        assert!(repo.stage_all_changes().is_ok());
+    }
+
+    #[test]
+    fn test_stage_all_changes_normal_operation() {
+        let (temp_dir, repo) = setup_test_repo();
+
+        // Create some normal files
+        fs::write(temp_dir.path().join("file1.txt"), "content1").expect("Failed to write file1");
+        fs::write(temp_dir.path().join("file2.txt"), "content2").expect("Failed to write file2");
+
+        // Staging should work normally
+        assert!(repo.stage_all_changes().is_ok());
+
+        // Verify files are staged
+        let status =
+            execute_git_command(&repo, &["status", "--porcelain"]).expect("Failed to get status");
+        assert!(status.contains("A  file1.txt"));
+        assert!(status.contains("A  file2.txt"));
     }
 }
