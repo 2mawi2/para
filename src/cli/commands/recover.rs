@@ -1,5 +1,5 @@
 use crate::cli::parser::RecoverArgs;
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::archive::ArchiveManager;
 use crate::core::session::recovery::{RecoveryOptions, SessionRecovery};
@@ -7,10 +7,9 @@ use crate::core::session::SessionManager;
 use crate::utils::{ParaError, Result};
 use dialoguer::{Confirm, Select};
 
-pub fn execute(args: RecoverArgs) -> Result<()> {
+pub fn execute(config: Config, args: RecoverArgs) -> Result<()> {
     validate_recover_args(&args)?;
 
-    let config = ConfigManager::load_or_create()?;
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 

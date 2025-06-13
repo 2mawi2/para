@@ -1,5 +1,5 @@
 use crate::cli::parser::DispatchArgs;
-use crate::config::{Config, ConfigManager};
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{names::*, ParaError, Result};
@@ -7,13 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub fn execute(args: DispatchArgs) -> Result<()> {
+pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     args.validate()?;
 
     let (session_name, prompt) = args.resolve_prompt_and_session()?;
-
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
 
     validate_claude_code_ide(&config)?;
 

@@ -8,20 +8,23 @@ pub mod test_helpers {
     use crate::config::Config;
     use crate::core::git::GitService;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
     use tempfile::TempDir;
 
     pub fn create_test_config() -> Config {
-        crate::config::defaults::default_config()
-    }
-
-    pub fn create_test_config_with_mock_ide() -> Config {
         let mut config = crate::config::defaults::default_config();
         // Always use mock IDE commands in tests
         config.ide.name = "test-ide".to_string();
         config.ide.command = "echo".to_string();
         config.ide.wrapper.command = "echo".to_string();
+        config
+    }
+
+    /// Creates a test config with custom state directory
+    pub fn create_test_config_with_dir(state_dir: &Path) -> Config {
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
         config
     }
 
@@ -103,8 +106,8 @@ pub mod test_helpers {
     pub struct TestEnvironmentGuard {
         original_dir: PathBuf,
         original_home: String,
-        original_config_path: Option<String>,
         test_dir: PathBuf,
+        test_config_path: PathBuf,
     }
 
     impl TestEnvironmentGuard {
@@ -119,30 +122,34 @@ pub mod test_helpers {
                     .to_path_buf()
             });
 
-            // Save original config path if set
-            let original_config_path = std::env::var("PARA_CONFIG_PATH").ok();
-
             std::env::set_current_dir(git_temp.path())?;
 
             let (_config_dir, original_home) = setup_isolated_test_environment(temp_dir);
 
-            // Set test config path to prevent accessing real user config
+            // Create test config file
             let test_config_path = temp_dir.path().join("test-config.json");
-            let test_config = create_test_config_with_mock_ide();
+            let test_config = create_test_config();
             let config_json = serde_json::to_string_pretty(&test_config)
                 .expect("Failed to serialize test config");
             fs::write(&test_config_path, config_json)?;
-            std::env::set_var(
-                "PARA_CONFIG_PATH",
-                test_config_path.to_string_lossy().as_ref(),
-            );
 
             Ok(TestEnvironmentGuard {
                 original_dir,
                 original_home,
-                original_config_path,
                 test_dir: git_temp.path().to_path_buf(),
+                test_config_path,
             })
+        }
+
+        pub fn config_path(&self) -> &Path {
+            &self.test_config_path
+        }
+
+        pub fn load_config(&self) -> Result<Config, std::io::Error> {
+            let content = fs::read_to_string(&self.test_config_path)?;
+            let config: Config = serde_json::from_str(&content)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            Ok(config)
         }
     }
 
@@ -180,12 +187,6 @@ pub mod test_helpers {
                         }
                     }
                 }
-            }
-
-            // Restore original config path
-            match &self.original_config_path {
-                Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-                None => std::env::remove_var("PARA_CONFIG_PATH"),
             }
 
             restore_environment(self.original_dir.clone(), self.original_home.clone());

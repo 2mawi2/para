@@ -97,11 +97,6 @@ pub fn get_default_config_dir() -> std::path::PathBuf {
 }
 
 pub fn get_config_file_path() -> std::path::PathBuf {
-    // Check for environment variable override (primarily for testing)
-    if let Ok(override_path) = std::env::var("PARA_CONFIG_PATH") {
-        return std::path::PathBuf::from(override_path);
-    }
-
     get_default_config_dir().join("config.json")
 }
 
@@ -126,24 +121,6 @@ mod tests {
 
         assert!(config_file.ends_with("config.json"));
         assert!(config_file.starts_with(&config_dir));
-    }
-
-    #[test]
-    fn test_config_path_environment_override() {
-        // Save original value
-        let original = std::env::var("PARA_CONFIG_PATH").ok();
-
-        // Test with override
-        let test_path = "/tmp/test-config.json";
-        std::env::set_var("PARA_CONFIG_PATH", test_path);
-        let config_path = get_config_file_path();
-        assert_eq!(config_path.to_string_lossy(), test_path);
-
-        // Restore original
-        match original {
-            Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-            None => std::env::remove_var("PARA_CONFIG_PATH"),
-        }
     }
 
     #[test]

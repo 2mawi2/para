@@ -1,13 +1,10 @@
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, StrategyResult};
 use crate::core::session::{IntegrationStateManager, IntegrationStep, SessionManager};
 use crate::utils::{ParaError, Result};
 use std::path::{Path, PathBuf};
 
-pub fn execute() -> Result<()> {
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
-
+pub fn execute(config: Config) -> Result<()> {
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
     let state_manager = IntegrationStateManager::new(PathBuf::from(config.get_state_dir()));
@@ -142,8 +139,7 @@ fn close_ide_for_session(config: &crate::config::Config, worktree_path: &Path) -
 
     // Extract session name from worktree path
     if let Some(session_name) = worktree_path.file_name().and_then(|n| n.to_str()) {
-        // Skip IDE window closing in test mode or when using mock IDEs
-        if !cfg!(test) && config.ide.command != "echo" {
+        if config.is_real_ide_environment() {
             let platform = crate::platform::get_platform_manager();
             if let Err(e) = platform.close_ide_window(session_name, &config.ide.name) {
                 eprintln!("Warning: Failed to close IDE window: {}", e);
@@ -287,7 +283,8 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
             .expect("Failed to set up test environment");
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Accept any error result since test environment can vary
         match result {
@@ -317,7 +314,8 @@ mod tests {
         let state_manager = IntegrationStateManager::new(_temp_dir.path().to_path_buf());
         state_manager.save_integration_state(&state).unwrap();
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Restore environment
         std::env::set_current_dir(&_guard.original_dir).ok();
@@ -429,7 +427,8 @@ mod tests {
         std::env::remove_var("PARA_CONFIG_DIR");
         std::env::remove_var("PARA_STATE_DIR");
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         assert!(result.is_err());
     }
@@ -440,7 +439,8 @@ mod tests {
         let original_dir = std::env::current_dir().ok();
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         assert!(result.is_err());
 
@@ -457,7 +457,8 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
             .expect("Failed to set up test environment");
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Accept any error result since test environment can vary
         match result {
@@ -475,7 +476,8 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir)
             .expect("Failed to set up test environment");
 
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Restore environment
         std::env::set_current_dir(&_guard.original_dir).ok();
@@ -532,7 +534,8 @@ mod tests {
             let (_git_temp, _git_service) = setup_test_repo();
 
             // Try to continue when no integration state exists
-            execute()
+            let config = create_test_config();
+            execute(config)
         });
 
         match result {
@@ -599,7 +602,8 @@ mod tests {
         .unwrap();
 
         // Continue should fail because conflicts still exist
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Restore environment
         std::env::set_current_dir(&_guard.original_dir).ok();
@@ -644,7 +648,8 @@ mod tests {
             .expect("Failed to stage resolved file");
 
         // Continue should proceed or give a reasonable error about integration state
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Accept any outcome in this complex test scenario
         match result {
@@ -724,7 +729,8 @@ mod tests {
             .expect("Failed to run cherry-pick");
 
         // Continue should be able to handle this git state
-        let result = execute();
+        let config = create_test_config();
+        let result = execute(config);
 
         // Restore environment
         std::env::set_current_dir(&_guard.original_dir).ok();
@@ -762,7 +768,8 @@ mod tests {
         state_manager.save_integration_state(&state).unwrap();
 
         // The execute function will fail in test environment, but that's expected
-        let _ = execute();
+        let config = create_test_config();
+        let _ = execute(config);
 
         // The important thing is that the code structure ensures IDE is only closed on success
         // This is verified by code inspection of the execute() function
