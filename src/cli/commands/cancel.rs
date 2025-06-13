@@ -183,9 +183,6 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
 
-        // Create .para directory to ensure gitignore can be created
-        fs::create_dir_all(repo_path.join(".para")).expect("Failed to create .para directory");
-
         Command::new("git")
             .current_dir(repo_path)
             .args(["init", "--initial-branch=main"])
@@ -222,6 +219,11 @@ mod tests {
         let repo = GitRepository::discover_from(repo_path).expect("Failed to discover repo");
         let config = create_test_config(temp_dir.path());
 
+        // Pre-create directories that SessionManager might need
+        fs::create_dir_all(repo_path.join(".para")).expect("Failed to create .para directory");
+        fs::create_dir_all(&config.directories.state_dir)
+            .expect("Failed to create state directory");
+
         (temp_dir, repo, config)
     }
 
@@ -249,9 +251,6 @@ mod tests {
     #[test]
     fn test_detect_session_name_explicit() {
         let (_temp_dir, repo, config) = setup_test_repo();
-
-        // Ensure state directory exists
-        fs::create_dir_all(&config.directories.state_dir).expect("Failed to create state dir");
 
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
