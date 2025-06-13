@@ -1,0 +1,247 @@
+2025-05-31 12:31:14 +0200,54706f2,initial commit,Marius Wichtner
+2025-05-31 12:35:16 +0200,2225c0e,Add automatic gitignore setup for pursor directories,Marius Wichtner
+2025-05-31 12:36:09 +0200,4170fe0,Add .gitignore with pursor entries,Marius Wichtner
+2025-05-31 12:37:46 +0200,c89561e,Make gitignore setup non-intrusive using .git/info/exclude,Marius Wichtner
+2025-05-31 12:39:10 +0200,d5ff310,Remove subtrees directory from git tracking - now properly ignored,Marius Wichtner
+2025-05-31 12:40:03 +0200,77845ba,remove .gitignore,Marius Wichtner
+2025-05-31 12:40:42 +0200,2ff8e83,test if subtrees ignored,Marius Wichtner
+2025-05-31 12:45:12 +0200,b243d5d,Major usability improvements: allow dirty working trees, named sessions, resume command,Marius Wichtner
+2025-05-31 12:49:46 +0200,b8f85ac,Add proper --help and -h flag support,Marius Wichtner
+2025-05-31 13:02:26 +0200,2fc532a,add installation support for more shells,Marius Wichtner
+2025-05-31 13:03:11 +0200,d81e835,remove install-pursor.fish,Marius Wichtner
+2025-05-31 14:07:04 +0200,5497e38,fix some syntax issue,Marius Wichtner
+2025-05-31 14:08:29 +0200,7c33685,add user message when merging or cancelling,Marius Wichtner
+2025-05-31 14:15:07 +0200,fa9e865,cleanup cursor history for subtrees,Marius Wichtner
+2025-05-31 14:17:41 +0200,6a39c50,Test default rebase strategy,Marius Wichtner
+2025-05-31 14:18:05 +0200,c49fc5f,First commit for squash,Marius Wichtner
+2025-05-31 14:18:09 +0200,8c71944,Second commit for squash,Marius Wichtner
+2025-05-31 14:22:23 +0200,7d9b67c,Test auto-detection with custom named session,Marius Wichtner
+2025-05-31 14:23:34 +0200,ef3eccd,fix custom naming merge,Marius Wichtner
+2025-05-31 14:24:34 +0200,5e38f6b,Revert "cleanup cursor history for subtrees",Marius Wichtner
+2025-05-31 14:36:03 +0200,6d12046,Refactor pursor into modular architecture for better maintainability and extensibility,Marius Wichtner
+2025-05-31 18:15:36 +0200,31a8182,add justfile and first test,Marius Wichtner
+2025-05-31 18:33:26 +0200,1639bd9,Add comprehensive integration tests - Implement IT-1: Happy path, IT-2: Cancel session, IT-3: Conflict resolution, IT-4: Clean all sessions - Mock Cursor IDE with CURSOR_CMD=true - Fix stdout/stderr redirection and session cleanup,Test User
+2025-05-31 18:45:12 +0200,a94078a,Fix auto-detection bug and add comprehensive auto-detection tests,Test User
+2025-05-31 18:48:50 +0200,a0a510b,add unit tests,Test User
+2025-05-31 18:52:05 +0200,862cf4d,Fix integration tests: disable git hooks in test repos - prevents test pollution during merge,Test User
+2025-05-31 18:52:46 +0200,9694e67,allow executing unit tests seperately,Test User
+2025-05-31 18:54:53 +0200,e6a6613,Merge: resolve justfile conflict - keep flexible test command with unit tests,Test User
+2025-05-31 18:56:02 +0200,2351384,Fix integration test isolation and worktree pre-commit handling - prevents test interference during merges,Test User
+2025-05-31 18:56:14 +0200,6cce781,Test: verify merge works without integration test interference,Test User
+2025-05-31 18:59:39 +0200,6e42e99,Fix critical integration test isolation issue - prevent worktree destruction during merges,Test User
+2025-05-31 18:59:48 +0200,00cf6a9,Test: verify integration tests no longer interfere with merges,Test User
+2025-05-31 19:02:39 +0200,b405b1a,Fix integration tests completely - all tests now pass with proper isolation,Test User
+2025-05-31 19:07:31 +0200,f715490,cleanup,Test User
+2025-05-31 19:09:16 +0200,2030fee,allow executing unit tests seperately,Test User
+2025-05-31 19:19:11 +0200,f9c6024,fix merge issues,Test User
+2025-05-31 19:19:24 +0200,c1aa354,fix merge conflicts,Test User
+2025-05-31 19:31:51 +0200,f3bff18,fix tests,Test User
+2025-05-31 19:52:35 +0200,f53b4b9,squash changes by default when using pursor merge,Test User
+2025-05-31 20:24:38 +0200,7e1a36f,Add uninstall functionality for pursor and enhance README with cursor isolation feature,Test User
+2025-05-31 22:01:29 +0200,fa5a2d1,Fix integration tests hanging - skip IDE launch in test mode,Test User
+2025-05-31 21:57:55 +0200,3a92e02,rename merge -> rebase; fix integration tests,Test User
+2025-05-31 22:07:12 +0200,ec1f03e,Session changes with uncommitted in main,Test User
+2025-05-31 22:10:58 +0200,74015aa,Session modification to same file,Test User
+2025-05-31 22:36:19 +0200,939d80f,rename to para,Test User
+2025-05-31 22:36:41 +0200,eb481fa,cleanup,Test User
+2025-05-31 23:52:45 +0200,884926c,allow friendly names for generated sessions,Test User
+2025-06-01 00:29:04 +0200,2d4524e,add basic other ide support,Test User
+2025-05-31 23:56:42 +0200,fbbe7de,Demo Claude complete,Test User
+2025-06-01 00:29:41 +0200,0177d9f,switch start and finish flow,Test User
+2025-06-01 00:36:45 +0200,d76cad3,Revert "Demo Claude complete",Test User
+2025-06-01 00:45:15 +0200,6019ce7,Fix Claude Code launch to open in new terminal - resolves setRawMode EIO errors by launching in new terminal window instead of background process,Test User
+2025-06-01 00:47:12 +0200,1b49f10,Improve Claude Code launch using osascript for reliable terminal execution,Test User
+2025-06-01 00:58:26 +0200,d2ab6df,change default userdata dir,Test User
+2025-06-01 01:36:08 +0200,d641455,add proper config option for user,Test User
+2025-06-01 01:47:24 +0200,8074861,fix: reload config after saving to fix configuration persistence bug - add load_config calls after save_config in config functions - fixes issue where config changes saved to file but not loaded into memory - resolves para config show displaying old values after setting new ones,Test User
+2025-06-01 01:52:17 +0200,9442f0d,fix config,Test User
+2025-06-01 02:04:41 +0200,706ec1c,add more tests, and fix terminal issue,Test User
+2025-06-01 02:24:05 +0200,149b839,allow user to configure shell for claude,Test User
+2025-06-01 09:24:46 +0200,8806195,fix all linting issues,Test User
+2025-06-01 10:49:50 +0200,452a727,Test recovery session,Test User
+2025-06-01 10:52:50 +0200,0b33cfc,Test recovery with multiple change types,Test User
+2025-06-01 10:54:54 +0200,cc90218,implement recovery mechanism with tarballing,Test User
+2025-06-01 10:55:19 +0200,dc4b0ae,Revert "Test recovery with multiple change types",Test User
+2025-06-01 10:55:38 +0200,829dde8,Revert "Test recovery session",Test User
+2025-06-01 11:03:05 +0200,e9c3d35,change retention period to 7 days,Test User
+2025-06-01 11:04:44 +0200,9baf7ab,fix lint issues,Test User
+2025-06-01 11:49:38 +0200,50619ef,allow the user to configure opening claude in an ide,Test User
+2025-06-01 11:52:58 +0200,0606d29,fix linting issue,Test User
+2025-06-01 12:08:41 +0200,85e6eb5,simplify docs,Test User
+2025-06-01 13:19:07 +0200,08a78d9,update rules,Test User
+2025-06-01 14:41:47 +0200,ed57f14,allow dispatching commands to claude code,Test User
+2025-06-01 16:49:45 +0200,50f4c66,add pipeline,2mawi2
+2025-06-01 17:02:57 +0200,8525869,Fix CI hanging issue with non-interactive mode - Add PARA_NON_INTERACTIVE environment variable to skip interactive prompts - Auto-detect CI environments (CI, GITHUB_ACTIONS variables) - Update all test workflows to use non-interactive mode - Resolves issue where para.sh would hang waiting for user input in CI,2mawi2
+2025-06-01 17:03:20 +0200,25d58b5,Add documentation for non-interactive mode and environment variables,2mawi2
+2025-06-01 17:08:24 +0200,a523838,Clean up and fix CI workflows - Consolidate test-local.yml and test.yml into working test.yml - Add platform-specific dependency installation (macOS/Ubuntu) - Fix release.yml to use PARA_NON_INTERACTIVE mode - Remove redundant test-local.yml workflow - All core tests now pass in CI environments,2mawi2
+2025-06-01 17:09:53 +0200,9116d25,Fix shfmt formatting issues - Remove trailing whitespace from para.sh - Ensures shfmt checks pass in CI,2mawi2
+2025-06-01 17:13:24 +0200,7b05da6,Fix integration test branch name issue - Replace hardcoded 'master' with dynamic base branch detection - Fixes IT-9 test failure when repository uses 'main' as default branch - All integration tests now pass,2mawi2
+2025-06-01 17:16:26 +0200,c6afd81,add just release,2mawi2
+2025-06-01 17:20:34 +0200,1ad9f41,iterate version automatically,2mawi2
+2025-06-01 17:23:34 +0200,77a0565,Fix release workflow platform compatibility - Add platform-specific dependency installation for Ubuntu/macOS - Make shfmt conditional for macOS only - Ensures release workflow works in both act and GitHub Actions,2mawi2
+2025-06-01 17:26:30 +0200,f61ffe5,remove test-homebrew,2mawi2
+2025-06-01 17:27:46 +0200,df05726,Add Homebrew installation instructions - Add installation section at the top of README - Homebrew as recommended installation method - Clean up Quick Start section,2mawi2
+2025-06-03 08:34:01 +0200,b2cb6c1,User dedicated branch instead of rebase for finishing,2mawi2
+2025-06-03 10:50:18 +0200,14e4416,Use branches for the finish workflow,2mawi2
+2025-06-03 11:01:06 +0200,7eb16b2,fix lint issues,2mawi2
+2025-06-03 11:14:03 +0200,6ac73ea,fix inconsistent test setup,2mawi2
+2025-06-03 11:24:40 +0200,e409800,Fix tests,2mawi2
+2025-06-04 09:02:14 +0200,8871e4f,Remove, preserve, argument, fix, tests,2mawi2
+2025-06-04 09:04:57 +0200,60f55fe,fix lint issues,2mawi2
+2025-06-04 12:45:43 +0200,d703f3c,use para as prefix,2mawi2
+2025-06-05 09:50:17 +0200,545d6eb,add benchmarks,2mawi2
+2025-06-06 01:30:51 +0200,022cd87,allow multiple tool calls,2mawi2
+2025-06-06 01:44:01 +0200,596fe86,fix parallel execution,2mawi2
+2025-06-06 01:58:19 +0200,81f77d2,allow opening with rapper,2mawi2
+2025-06-06 02:07:28 +0200,8e418e7,update docs,2mawi2
+2025-06-06 02:33:20 +0200,b532262,fix finish and starting,2mawi2
+2025-06-06 09:00:55 +0200,0b22f2d,allow skipping permissions,2mawi2
+2025-06-06 09:01:26 +0200,7f64c1d,Merge branch 'para/multi-20250606-020252-1-20250606-020252',2mawi2
+2025-06-06 09:21:44 +0200,cce49a5,fix tests,2mawi2
+2025-06-06 09:25:15 +0200,8674911,add docs,2mawi2
+2025-06-06 09:37:26 +0200,59fed77,refactor logic into libs,2mawi2
+2025-06-06 12:11:46 +0200,d9bcc84,fix lint issues,2mawi2
+2025-06-07 11:54:13 +0200,9bbba30,allow passing files,2mawi2
+2025-06-07 12:01:38 +0200,c182f63,fix lint issues,2mawi2
+2025-06-07 12:21:33 +0200,0dd9fa9,improve error message for empty files in dispatch commands,2mawi2
+2025-06-07 12:28:38 +0200,5105f50,fix CLAUDE.md,2mawi2
+2025-06-07 12:47:28 +0200,54fcc13,fix CLAUDE.md,2mawi2
+2025-06-07 12:50:08 +0200,fe4662e,handle complex special chars for files,2mawi2
+2025-06-07 12:50:28 +0200,3df4218,Merge branch 'para/neat_alpha_20250607-121937',2mawi2
+2025-06-07 13:05:20 +0200,59b1417,implement version,2mawi2
+2025-06-07 14:48:58 +0200,1242277,Fix special character handling for file and prompt based dispatch,2mawi2
+2025-06-07 14:50:15 +0200,93b26e5,fix lint issues,2mawi2
+2025-06-07 14:59:07 +0200,a4f1789,fix lint issues,2mawi2
+2025-06-07 15:31:12 +0200,ca9a975,refactor para-ide,2mawi2
+2025-06-07 15:35:19 +0200,2fd9613,add completions,2mawi2
+2025-06-07 15:35:29 +0200,fc9f934,Merge branch 'para/ready_amber_20250607-150459',2mawi2
+2025-06-07 22:01:01 +0200,85f7e55,Remove terminal support and implement auto closing,2mawi2
+2025-06-07 22:19:36 +0200,7239d18,remove duplication,2mawi2
+2025-06-07 22:20:41 +0200,38fac09,include lintint in just test,2mawi2
+2025-06-07 22:36:36 +0200,b41291a,Merge branch 'para/crisp_jade_20250607-221446',2mawi2
+2025-06-07 22:44:56 +0200,6a95265,allow -d to skip permissions,2mawi2
+2025-06-07 22:46:44 +0200,c801c5e,add more tests,2mawi2
+2025-06-07 22:46:58 +0200,00f3481,Merge branch 'para/swift_blaze_20250607-224038',2mawi2
+2025-06-07 23:04:58 +0200,0577095,implement integrate,2mawi2
+2025-06-07 23:08:18 +0200,5a43d6f,fix lint issues,2mawi2
+2025-06-07 23:49:25 +0200,eec1a13,add unit tests,2mawi2
+2025-06-07 23:49:26 +0200,c9a7ce2,Merge: add unit tests,2mawi2
+2025-06-08 00:12:12 +0200,8e8800a,make rebase the default integration,2mawi2
+2025-06-08 01:39:43 +0200,7f101bf,add backup functionality with tests and documentation,2mawi2
+2025-06-08 01:42:09 +0200,cb991a1,Merge: read backup system,2mawi2
+2025-06-08 10:10:21 +0200,5decf48,add para chancel rule,2mawi2
+2025-06-08 10:40:54 +0200,2347db0,add claude permissions,2mawi2
+2025-06-08 10:55:40 +0200,1f3a287,add integrate shortcut,2mawi2
+2025-06-08 11:03:37 +0200,38c591f,update justfile to check for staged changes instead of a clean working directory before pulling latest changes,2mawi2
+2025-06-08 17:45:15 +0200,2d2bb01,fix repository integrity check,2mawi2
+2025-06-08 17:59:54 +0200,1d9977b,add workflow documentation with mermaid diagrams,2mawi2
+2025-06-08 18:11:41 +0200,1c64f20,fix dispatch URL detection in prompts,2mawi2
+2025-06-08 18:43:50 +0200,f75887d,break down completion script generation into shell-specific helpers,2mawi2
+2025-06-08 18:44:45 +0200,e4a373d,extract common argument parsing logic into helper function,2mawi2
+2025-06-08 18:45:52 +0200,c718bef,extract git operation helpers for consistency and error handling,2mawi2
+2025-06-08 18:46:01 +0200,0cd14c0,deduplicate session state operations,2mawi2
+2025-06-08 18:52:19 +0200,1ff43db,standardize error handling patterns with consistent error codes,2mawi2
+2025-06-08 18:59:20 +0200,f72bc31,merge task 1: extract argument parsing logic,2mawi2
+2025-06-08 18:59:26 +0200,30ccea9,merge task 2: deduplicate session state operations,2mawi2
+2025-06-08 18:59:27 +0200,2e167e7,merge task 3: extract git operation helpers,2mawi2
+2025-06-08 19:11:24 +0200,fd9752c,resolve merge conflicts from task integration,2mawi2
+2025-06-08 19:13:03 +0200,1f4db78,merge task 5: break down completion generation,2mawi2
+2025-06-08 21:54:29 +0200,cbd7644,remove untracked containers,2mawi2
+2025-06-08 22:03:08 +0200,04d309f,fix backup cleanup to use cancellation timestamp instead of file modification time,2mawi2
+2025-06-08 22:04:33 +0200,333017b,Remove dispatch-multi feature and all related functionality,2mawi2
+2025-06-08 22:19:43 +0200,540aa69,fxi linters,2mawi2
+2025-06-08 23:11:07 +0200,68b0bb2,simplify backup mechanism,2mawi2
+2025-06-08 23:28:50 +0200,826c223,remove wip,2mawi2
+2025-06-11 11:00:53 +0200,916310f,Rewrite application in Rust,2mawi2
+2025-06-11 11:07:17 +0200,2114529,Remove legacy shell scripts and workflows,2mawi2
+2025-06-11 11:13:29 +0200,70cf8e0,Fix release workflow and clean up justfile,2mawi2
+2025-06-11 11:18:16 +0200,f889ddb,Fix CI: Replace timeout with cross-platform approach for macOS runners,2mawi2
+2025-06-11 11:20:51 +0200,f45a93f,Bump version to 1.1.1 for release,2mawi2
+2025-06-11 09:22:29 +0000,cb6b959,Increment version to 1.1.2 after release,GitHub Action
+2025-06-11 09:22:29 +0000,f06f3b6,Merge release branch with version increment,GitHub Action
+2025-06-11 11:49:31 +0200,4683238,Enhance shell completions for all shells with smart context-aware suggestions,2mawi2
+2025-06-11 11:50:41 +0200,fd17283,Bump version to 1.1.3 for enhanced completions release,2mawi2
+2025-06-11 11:50:59 +0200,dd6b375,Merge enhanced completions into release - resolve Cargo.lock conflict,2mawi2
+2025-06-11 09:52:32 +0000,4270ecd,Increment version to 1.1.3 after release,GitHub Action
+2025-06-11 09:52:32 +0000,8ab157d,Merge release branch with version increment,GitHub Action
+2025-06-11 13:54:09 +0200,9bca705,Change default branch prefix from 'pc' to 'para',2mawi2
+2025-06-11 13:10:00 +0200,b1a0302,Add simplified Docker container implementation task,2mawi2
+2025-06-11 13:38:57 +0200,297d31a,Fix worktree integration - implement change extraction approach,2mawi2
+2025-06-11 14:47:13 +0200,641e305,Fix session detection from worktrees - add state directory resolution,2mawi2
+2025-06-11 15:33:59 +0200,d29a43a,fix resume and integrate,2mawi2
+2025-06-11 15:50:53 +0200,4000fb5,Update Cargo.lock for version 1.1.3,2mawi2
+2025-06-11 15:56:05 +0200,f24f9e6,Fix clippy lint issues,2mawi2
+2025-06-11 15:57:38 +0200,cc960e8,Bump version to 1.1.5 for release,2mawi2
+2025-06-11 13:59:07 +0000,aa3807c,Increment version to 1.1.6 after release,GitHub Action
+2025-06-11 13:59:07 +0000,1ce8b7f,Merge release branch with version increment,GitHub Action
+2025-06-11 16:01:05 +0200,1f822f0,Fix release script - switch to release branch before modifying Cargo.toml,2mawi2
+2025-06-11 16:01:22 +0200,1bc83d8,Bump version to 1.1.7 for release,2mawi2
+2025-06-11 14:03:02 +0000,edb73d3,Increment version to 1.1.8 after release,GitHub Action
+2025-06-11 14:03:03 +0000,93c6818,Merge release branch with version increment,GitHub Action
+2025-06-11 16:03:45 +0200,c9e1d8b,Update Cargo.lock for version 1.1.8,2mawi2
+2025-06-11 16:04:33 +0200,74a1399,Bump version to 1.1.9 for release,2mawi2
+2025-06-11 16:05:42 +0200,8c4fd0c,Fix double version bump - remove auto-increment from GitHub Actions,2mawi2
+2025-06-11 14:06:02 +0000,7f23e4f,Increment version to 1.1.10 after release,GitHub Action
+2025-06-11 14:06:03 +0000,a3d1e58,Merge release branch with version increment,GitHub Action
+2025-06-11 17:24:57 +0200,ca1703c,Bump version to 1.1.11 for release,2mawi2
+2025-06-11 15:26:19 +0000,7e7bba3,Merge release branch v1.1.11,GitHub Action
+2025-06-11 17:24:25 +0200,ca3ca04,Consolidate directories under .para with gitignore,2mawi2
+2025-06-12 00:13:39 +0200,da1c01e,Apply uncommitted changes from worktree session,2mawi2
+2025-06-13 08:32:27 +0200,16f23e8,fix integrate commit message,2mawi2
+2025-06-13 08:45:17 +0200,b5b0d5b,Bump version to 1.1.12 for release,2mawi2
+2025-06-13 06:46:45 +0000,756065d,Merge release branch v1.1.12,GitHub Action
+2025-06-13 08:35:54 +0200,4f020ec,Update Cargo.lock,2mawi2
+2025-06-12 00:13:39 +0200,22be503,Apply uncommitted changes from worktree session,2mawi2
+2025-06-13 09:06:51 +0200,b4c713c,fix friendly names,2mawi2
+2025-06-13 09:14:44 +0200,a8a296e,add bugfixes,2mawi2
+2025-06-13 09:18:37 +0200,4ca37b1,Fix friendly naming for branch names,2mawi2
+2025-06-13 09:33:24 +0200,cb0482f,fix friendly name branch creation,2mawi2
+2025-06-13 10:06:11 +0200,3728e36,Add automatic .gitignore management for .para directories,2mawi2
+2025-06-13 10:12:02 +0200,b83818b,Fix release process to update Cargo.lock with version bump,2mawi2
+2025-06-13 10:13:49 +0200,b016ca3,Bump version to 1.1.13 for release,2mawi2
+2025-06-13 08:15:13 +0000,ac80a5f,Merge release branch v1.1.13,GitHub Action
+2025-06-13 10:41:11 +0200,0e30550,Fix para finish bugs with proper test cleanup and clear error messages,2mawi2
+2025-06-13 10:45:12 +0200,1c277c4,Merge branch 'para/20250613-071835' into main,2mawi2
+2025-06-13 11:11:45 +0200,b7d2c2a,Document IDE closing behavior and add tests for para continue,2mawi2
+2025-06-13 11:12:48 +0200,19c58f3,Merge remote-tracking branch 'origin/main',2mawi2
+2025-06-13 11:14:19 +0200,6b24c70,Fix test that could fail with invalid current directory,2mawi2
+2025-06-13 11:14:36 +0200,3a93672,Bump version to 1.1.14 for release,2mawi2
+2025-06-13 11:20:30 +0200,db45689,Fix failing tests that needed proper git repository setup,2mawi2
+2025-06-13 12:39:54 +0200,0f7cf98,Fix test isolation to prevent IDE termination during releases,2mawi2
+2025-06-13 11:20:30 +0200,2807d28,Fix failing tests that needed proper git repository setup,2mawi2
+2025-06-13 12:39:54 +0200,651722a,Fix test isolation to prevent IDE termination during releases,2mawi2
+2025-06-13 10:41:49 +0000,f5c9720,Merge release branch v1.1.14,GitHub Action
+2025-06-13 12:43:17 +0200,6b97552,Bump version to 1.1.15 for release,2mawi2
+2025-06-13 12:51:53 +0200,23d2101,Fix cancel test isolation issue,2mawi2
+2025-06-13 13:17:56 +0200,2149c13,add further security measurements to prevent ide close,2mawi2
+2025-06-13 14:32:50 +0200,2bef0e2,inject config stateless,2mawi2
+2025-06-13 12:51:53 +0200,b26889b,Fix cancel test isolation issue,2mawi2
+2025-06-13 13:17:56 +0200,ca2dde0,add further security measurements to prevent ide close,2mawi2
+2025-06-13 14:32:50 +0200,57506dd,inject config stateless,2mawi2
+2025-06-13 12:40:15 +0000,6f955c4,Merge release branch v1.1.15,GitHub Action
+2025-06-13 15:49:39 +0200,5706e55,Fix para finish command and add configurable preserve_on_finish,2mawi2
+2025-06-13 15:53:02 +0200,38dbc63,Fix flaky test in cancel command,2mawi2
+2025-06-13 15:58:02 +0200,d84cb11,Improve test isolation to prevent race conditions,2mawi2
+2025-06-13 16:04:11 +0200,751040c,Update CLAUDE.md with test utilities best practices,2mawi2
+2025-06-13 15:49:51 +0200,b58f166,Bump version to 1.1.16 for release,2mawi2
+2025-06-13 14:14:21 +0000,624de3d,Merge release branch v1.1.16,GitHub Action
+2025-06-13 16:47:11 +0200,af2854a,Bump version to 1.1.17 for release,2mawi2
+2025-06-13 14:48:46 +0000,9396ff2,Merge release branch v1.1.17,GitHub Action
+2025-06-13 16:44:12 +0200,df94c88,fix am state,2mawi2
+2025-06-11 13:15:45 +0200,32a2095,Add MCP server implementation,2mawi2
+2025-06-12 00:24:37 +0200,e5ee789,Implement MCP integration with para mcp init command,2mawi2
+2025-06-13 19:27:52 +0200,fb1b34a,Implement MCP integration with para mcp init command,2mawi2
+2025-06-13 19:31:25 +0200,10fc415,Fix Node.js setup in release workflow - remove npm cache dependency,2mawi2
+2025-06-13 19:35:32 +0200,f1deded,Bump version to 1.1.19 for release,2mawi2
+2025-06-13 19:39:54 +0200,8d88bcc,Fix MCP pipeline by tracking package-lock.json,2mawi2
+2025-06-13 19:41:34 +0200,bccad9d,Bump version to 1.1.20 for release,2mawi2
+2025-06-13 17:43:28 +0000,eab76bb,Merge release branch v1.1.20,GitHub Action
+2025-06-13 19:48:26 +0200,130835c,move tasks,2mawi2
+2025-06-13 19:48:09 +0200,83d5272,Add MCP commands to CLI autocomplete,2mawi2
+2025-06-13 19:50:24 +0200,5530a92,Bump version to 1.1.21 for release,2mawi2
+2025-06-13 17:52:04 +0000,f5ea246,Merge release branch v1.1.21,GitHub Action
+2025-06-13 19:55:38 +0200,db13f04,Add MCP commands to CLI autocomplete,2mawi2
+2025-06-13 21:12:50 +0200,fb375cc,adjust prompting,2mawi2
+2025-06-13 21:13:23 +0200,1dcb848,Bump version to 1.1.22 for release,2mawi2
+2025-06-13 19:15:03 +0000,59f3754,Merge release branch v1.1.22,GitHub Action
+2025-06-13 21:20:24 +0200,8f0c9ee,Fix brew formula to handle existing para-mcp-server symlink on upgrade,2mawi2
