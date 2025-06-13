@@ -1,0 +1,49 @@
+Para Watch TUI Demo - What the UI looks like:
+
+┌─ Para Watch ─────────────────────────────────────────────────────────────────┐
+│ 💻 IDE Quick Switcher                                      [q]uit [r]efresh   │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│      WORKING ─────▶ AI REVIEW ─────▶ HUMAN REVIEW                            │
+│        (4)            (2)              (1)                                    │
+│                                                                               │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│ WORKING (4) ──────────────────────────────────────────────────────────────   │
+│                                                                               │
+│   [1] auth-flow      👤 alice     ✓    "OAuth2 authentication flow"          │
+│   [2] payment-api    👤 bob       ✓    "Stripe payment integration"          │
+│   [3] email-svc      👤 charlie   ✗    "Email notification service"          │
+│   [4] search         👤 dave      ✓    "Elasticsearch integration"           │
+│                                                                               │
+│ AI REVIEW (2) ────────────────────────────────────────────────────────────   │
+│                                                                               │
+│   [5] ui-components  👤 eve       ⏱️ 15m   "React dashboard components"       │
+│   [6] api-tests      👤 frank     ⏱️ 8m    "API integration test suite"       │
+│                                                                               │
+│ HUMAN REVIEW (1) ─────────────────────────────────────────────────────────   │
+│                                                                               │
+│   [7] backend-api                 📝      "REST API implementation"          │
+│                                                                               │
+│ Today: ✅ 12 Merged | ❌ 3 Cancelled | 🔄 7 Active                            │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+Features implemented:
+- ✅ Ratatui TUI framework integration
+- ✅ Crossterm terminal backend 
+- ✅ Color-coded session states (Blue/Yellow/Magenta)
+- ✅ Visual workflow diagram showing state progression
+- ✅ Keyboard navigation (q to quit, r to refresh, 1-9 for IDE shortcuts)
+- ✅ Mock data with realistic session information
+- ✅ Clean layout with proper borders and spacing
+- ✅ Statistics footer showing daily activity
+- ✅ Time tracking for AI review sessions
+- ✅ IDE status indicators (✓/✗)
+- ✅ Agent assignment display
+- ✅ Task descriptions with proper truncation
+
+Controls:
+- Press 'q' to quit
+- Press 'r' to refresh (mock)
+- Press 1-9 to "open IDE" for that task number
+- Arrow keys for navigation

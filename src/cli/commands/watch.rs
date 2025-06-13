@@ -8,10 +8,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    text::{Line, Span, Text},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
 use std::io;
@@ -36,9 +36,18 @@ pub enum SessionState {
 impl SessionState {
     fn color(&self) -> Color {
         match self {
-            SessionState::Working => Color::Blue,
-            SessionState::AIReview => Color::Yellow,
-            SessionState::HumanReview => Color::Magenta,
+            SessionState::Working => Color::Rgb(99, 102, 241), // Modern indigo
+            SessionState::AIReview => Color::Rgb(245, 158, 11), // Warm amber
+            SessionState::HumanReview => Color::Rgb(236, 72, 153), // Pink
+        }
+    }
+
+    #[allow(dead_code)]
+    fn bg_color(&self) -> Color {
+        match self {
+            SessionState::Working => Color::Rgb(30, 30, 80), // Dark indigo bg
+            SessionState::AIReview => Color::Rgb(80, 60, 30), // Dark amber bg
+            SessionState::HumanReview => Color::Rgb(80, 30, 60), // Dark pink bg
         }
     }
 
@@ -55,6 +64,8 @@ pub struct App {
     sessions: Vec<SessionInfo>,
     selected_index: usize,
     should_quit: bool,
+    table_state: TableState,
+    current_section: usize, // 0=working, 1=ai_review, 2=human_review
 }
 
 impl Default for App {
@@ -65,10 +76,14 @@ impl Default for App {
 
 impl App {
     pub fn new() -> Self {
+        let mut table_state = TableState::default();
+        table_state.select(Some(0));
         Self {
             sessions: create_mock_sessions(),
             selected_index: 0,
             should_quit: false,
+            table_state,
+            current_section: 0,
         }
     }
 
@@ -108,26 +123,80 @@ impl App {
 
     fn handle_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Char('r') => println!("Refreshing..."),
+            KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
+            KeyCode::Char('r') => {
+                // Refresh functionality - could reload session data
+            }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let num = c.to_digit(10).unwrap() as usize;
                 if num > 0 && num <= self.sessions.len() {
-                    let session = &self.sessions[num - 1];
-                    println!("Opening IDE for task: {}", session.task_name);
+                    let _session = &self.sessions[num - 1];
+                    // In real implementation, this would open the IDE
                 }
             }
-            KeyCode::Up => {
-                if self.selected_index > 0 {
-                    self.selected_index -= 1;
-                }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.previous_item();
             }
-            KeyCode::Down => {
-                if self.selected_index < self.sessions.len().saturating_sub(1) {
-                    self.selected_index += 1;
-                }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.next_item();
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                self.activate_selected();
+            }
+            KeyCode::Tab => {
+                self.next_section();
+            }
+            KeyCode::BackTab => {
+                self.previous_section();
             }
             _ => {}
+        }
+    }
+
+    fn previous_item(&mut self) {
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+            self.table_state.select(Some(self.selected_index));
+        }
+    }
+
+    fn next_item(&mut self) {
+        if self.selected_index < self.sessions.len().saturating_sub(1) {
+            self.selected_index += 1;
+            self.table_state.select(Some(self.selected_index));
+        }
+    }
+
+    fn activate_selected(&mut self) {
+        if let Some(_session) = self.sessions.get(self.selected_index) {
+            // In real implementation, this would open the IDE or show details
+        }
+    }
+
+    fn next_section(&mut self) {
+        self.current_section = (self.current_section + 1) % 3;
+        self.jump_to_section();
+    }
+
+    fn previous_section(&mut self) {
+        self.current_section = if self.current_section == 0 {
+            2
+        } else {
+            self.current_section - 1
+        };
+        self.jump_to_section();
+    }
+
+    fn jump_to_section(&mut self) {
+        let target_state = match self.current_section {
+            0 => SessionState::Working,
+            1 => SessionState::AIReview,
+            _ => SessionState::HumanReview,
+        };
+
+        if let Some(index) = self.sessions.iter().position(|s| s.state == target_state) {
+            self.selected_index = index;
+            self.table_state.select(Some(index));
         }
     }
 
@@ -135,46 +204,86 @@ impl App {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(5), // Flow diagram
-                Constraint::Min(10),   // Task lists
-                Constraint::Length(3), // Statistics
+                Constraint::Length(4), // Header with help
+                Constraint::Length(6), // Flow diagram
+                Constraint::Min(15),   // Main table
+                Constraint::Length(4), // Statistics and controls
             ])
+            .margin(1)
             .split(f.area());
 
         self.render_header(f, main_layout[0]);
         self.render_flow_diagram(f, main_layout[1]);
-        self.render_task_lists(f, main_layout[2]);
-        self.render_statistics(f, main_layout[3]);
+        self.render_modern_table(f, main_layout[2]);
+        self.render_footer(f, main_layout[3]);
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
-        let header = Paragraph::new("💻 IDE Quick Switcher")
-            .style(
+        let title_line = Line::from(vec![
+            Span::styled("⚡ ", Style::default().fg(Color::Rgb(245, 158, 11))),
+            Span::styled(
+                "Para Watch",
                 Style::default()
-                    .fg(Color::White)
+                    .fg(Color::Rgb(255, 255, 255))
                     .add_modifier(Modifier::BOLD),
-            )
-            .alignment(Alignment::Left)
+            ),
+            Span::styled(
+                " - Development Session Monitor",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+        ]);
+
+        let help_line = Line::from(vec![
+            Span::styled(
+                "Navigation: ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "↑↓/jk",
+                Style::default()
+                    .fg(Color::Rgb(99, 102, 241))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" • ", Style::default().fg(Color::Rgb(75, 85, 99))),
+            Span::styled(
+                "Tab",
+                Style::default()
+                    .fg(Color::Rgb(99, 102, 241))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " sections • ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "Enter",
+                Style::default()
+                    .fg(Color::Rgb(99, 102, 241))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " activate • ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "q",
+                Style::default()
+                    .fg(Color::Rgb(239, 68, 68))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" quit", Style::default().fg(Color::Rgb(156, 163, 175))),
+        ]);
+
+        let header = Paragraph::new(vec![title_line, help_line])
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Para Watch")
-                    .title_alignment(Alignment::Left)
-                    .border_style(Style::default().fg(Color::Blue)),
-            );
-
-        let controls = Paragraph::new("[q]uit [r]efresh")
-            .style(Style::default().fg(Color::Gray))
-            .alignment(Alignment::Right);
-
-        let header_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
-            .split(area.inner(Margin::new(1, 0)));
+                    .border_style(Style::default().fg(Color::Rgb(75, 85, 99)))
+                    .title_style(Style::default().fg(Color::Rgb(156, 163, 175))),
+            )
+            .alignment(Alignment::Left);
 
         f.render_widget(header, area);
-        f.render_widget(controls, header_layout[1]);
     }
 
     fn render_flow_diagram(&self, f: &mut Frame, area: Rect) {
@@ -194,46 +303,61 @@ impl App {
             .filter(|s| s.state == SessionState::HumanReview)
             .count();
 
+        let current_highlight = match self.current_section {
+            0 => SessionState::Working,
+            1 => SessionState::AIReview,
+            _ => SessionState::HumanReview,
+        };
+
+        let working_style = if current_highlight == SessionState::Working {
+            Style::default()
+                .fg(SessionState::Working.color())
+                .bg(Color::Rgb(30, 30, 80))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(SessionState::Working.color())
+                .add_modifier(Modifier::BOLD)
+        };
+
+        let ai_style = if current_highlight == SessionState::AIReview {
+            Style::default()
+                .fg(SessionState::AIReview.color())
+                .bg(Color::Rgb(80, 60, 30))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(SessionState::AIReview.color())
+                .add_modifier(Modifier::BOLD)
+        };
+
+        let human_style = if current_highlight == SessionState::HumanReview {
+            Style::default()
+                .fg(SessionState::HumanReview.color())
+                .bg(Color::Rgb(80, 30, 60))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(SessionState::HumanReview.color())
+                .add_modifier(Modifier::BOLD)
+        };
+
         let flow_text = vec![
             Line::from(vec![
-                Span::raw("     "),
-                Span::styled(
-                    "WORKING",
-                    Style::default()
-                        .fg(Color::Blue)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" ─────▶ "),
-                Span::styled(
-                    "AI REVIEW",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" ─────▶ "),
-                Span::styled(
-                    "HUMAN REVIEW",
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::raw("        "),
+                Span::styled("🔄 WORKING", working_style),
+                Span::styled(" ━━━▶ ", Style::default().fg(Color::Rgb(75, 85, 99))),
+                Span::styled("🤖 AI REVIEW", ai_style),
+                Span::styled(" ━━━▶ ", Style::default().fg(Color::Rgb(75, 85, 99))),
+                Span::styled("👤 HUMAN REVIEW", human_style),
             ]),
             Line::from(vec![
-                Span::raw("       "),
-                Span::styled(
-                    format!("({})", working_count),
-                    Style::default().fg(Color::Blue),
-                ),
-                Span::raw("            "),
-                Span::styled(
-                    format!("({})", ai_review_count),
-                    Style::default().fg(Color::Yellow),
-                ),
-                Span::raw("              "),
-                Span::styled(
-                    format!("({})", human_review_count),
-                    Style::default().fg(Color::Magenta),
-                ),
+                Span::raw("          "),
+                Span::styled(format!("({})", working_count), working_style),
+                Span::raw("             "),
+                Span::styled(format!("({})", ai_review_count), ai_style),
+                Span::raw("               "),
+                Span::styled(format!("({})", human_review_count), human_style),
             ]),
         ];
 
@@ -242,91 +366,262 @@ impl App {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Gray)),
+                    .border_style(Style::default().fg(Color::Rgb(75, 85, 99)))
+                    .title(" Workflow Pipeline ")
+                    .title_style(Style::default().fg(Color::Rgb(156, 163, 175))),
             );
 
         f.render_widget(flow, area);
     }
 
-    fn render_task_lists(&self, f: &mut Frame, area: Rect) {
-        let mut items = Vec::new();
-        let mut current_state = None;
-        let mut task_number = 1;
+    fn render_modern_table(&self, f: &mut Frame, area: Rect) {
+        let header = Row::new(vec![
+            Cell::from(Span::styled(
+                "#",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Task",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Agent",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Status",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "State",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Description",
+                Style::default()
+                    .fg(Color::Rgb(156, 163, 175))
+                    .add_modifier(Modifier::BOLD),
+            )),
+        ])
+        .style(Style::default().bg(Color::Rgb(17, 24, 39)))
+        .height(1);
 
-        for session in &self.sessions {
-            if current_state != Some(&session.state) {
-                if !items.is_empty() {
-                    items.push(ListItem::new(""));
-                }
+        let rows: Vec<Row> = self
+            .sessions
+            .iter()
+            .enumerate()
+            .map(|(i, session)| {
+                let is_selected = i == self.selected_index;
+                let base_style = if is_selected {
+                    Style::default()
+                        .bg(Color::Rgb(30, 41, 59))
+                        .fg(Color::Rgb(255, 255, 255))
+                } else {
+                    Style::default().fg(Color::Rgb(229, 231, 235))
+                };
 
-                let count = self
-                    .sessions
-                    .iter()
-                    .filter(|s| s.state == session.state)
-                    .count();
-                let state_header =
-                    format!("{} ({}) {}", session.state.name(), count, "─".repeat(60));
-                items.push(
-                    ListItem::new(state_header).style(
-                        Style::default()
-                            .fg(session.state.color())
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                );
-                current_state = Some(&session.state);
-            }
+                let state_indicator = match session.state {
+                    SessionState::Working => "🔄",
+                    SessionState::AIReview => "🤖",
+                    SessionState::HumanReview => "👤",
+                };
 
-            let ide_status = if session.ide_open { "✓" } else { "✗" };
-            let time_info = match &session.state {
-                SessionState::AIReview => {
-                    if let Some(minutes) = session.ai_review_minutes {
-                        format!("⏱️ {}m", minutes)
-                    } else {
-                        "⏱️".to_string()
+                let ide_status = if session.ide_open {
+                    Span::styled("✓ IDE", Style::default().fg(Color::Rgb(34, 197, 94)))
+                } else {
+                    Span::styled("✗ ---", Style::default().fg(Color::Rgb(107, 114, 128)))
+                };
+
+                let time_display = match &session.state {
+                    SessionState::AIReview => {
+                        if let Some(minutes) = session.ai_review_minutes {
+                            format!("⏱️ {}m", minutes)
+                        } else {
+                            "⏱️".to_string()
+                        }
                     }
-                }
-                SessionState::HumanReview => "📝".to_string(),
-                _ => ide_status.to_string(),
-            };
+                    _ => String::new(),
+                };
 
-            let task_line = format!(
-                "  [{}] {:12} 👤 {:8} {:6} \"{}\"",
-                task_number, session.task_name, session.agent_name, time_info, session.description
-            );
+                let status_text = if !time_display.is_empty() {
+                    format!("{} {}", ide_status, time_display)
+                } else {
+                    ide_status.to_string()
+                };
 
-            items.push(ListItem::new(task_line).style(Style::default().fg(Color::White)));
+                let state_cell = Cell::from(Span::styled(
+                    format!("{} {}", state_indicator, session.state.name()),
+                    Style::default()
+                        .fg(session.state.color())
+                        .add_modifier(Modifier::BOLD),
+                ));
 
-            task_number += 1;
-        }
+                let agent_display = if session.agent_name.is_empty() {
+                    "-".to_string()
+                } else {
+                    session.agent_name.clone()
+                };
 
-        let tasks = List::new(items).block(
+                Row::new(vec![
+                    Cell::from(Span::styled(format!("{}", i + 1), base_style)),
+                    Cell::from(Span::styled(
+                        session.task_name.clone(),
+                        base_style.add_modifier(Modifier::BOLD),
+                    )),
+                    Cell::from(Span::styled(agent_display, base_style)),
+                    Cell::from(Text::from(status_text).style(base_style)),
+                    state_cell,
+                    Cell::from(Span::styled(
+                        if session.description.len() > 40 {
+                            format!("{}...", &session.description[..37])
+                        } else {
+                            session.description.clone()
+                        },
+                        base_style,
+                    )),
+                ])
+                .style(base_style)
+                .height(1)
+            })
+            .collect();
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(3),  // #
+                Constraint::Length(15), // Task
+                Constraint::Length(10), // Agent
+                Constraint::Length(12), // Status
+                Constraint::Length(16), // State
+                Constraint::Min(20),    // Description
+            ],
+        )
+        .header(header)
+        .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Gray)),
-        );
+                .border_style(Style::default().fg(Color::Rgb(75, 85, 99)))
+                .title(" Development Sessions ")
+                .title_style(Style::default().fg(Color::Rgb(156, 163, 175))),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::Rgb(59, 130, 246))
+                .fg(Color::Rgb(255, 255, 255))
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
 
-        f.render_widget(tasks, area);
+        f.render_stateful_widget(table, area, &mut self.table_state.clone());
     }
 
-    fn render_statistics(&self, f: &mut Frame, area: Rect) {
-        let stats_text = Line::from(vec![
-            Span::raw("Today: "),
-            Span::styled("✅ 12 Merged", Style::default().fg(Color::Green)),
-            Span::raw(" | "),
-            Span::styled("❌ 3 Cancelled", Style::default().fg(Color::Red)),
-            Span::raw(" | "),
-            Span::styled("🔄 7 Active", Style::default().fg(Color::Blue)),
+    fn render_footer(&self, f: &mut Frame, area: Rect) {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Stats
+                Constraint::Length(2), // Controls
+            ])
+            .split(area);
+
+        // Statistics
+        let stats_line = Line::from(vec![
+            Span::styled("📈 Today: ", Style::default().fg(Color::Rgb(156, 163, 175))),
+            Span::styled(
+                "✓ 12",
+                Style::default()
+                    .fg(Color::Rgb(34, 197, 94))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" merged • ", Style::default().fg(Color::Rgb(156, 163, 175))),
+            Span::styled(
+                "✗ 3",
+                Style::default()
+                    .fg(Color::Rgb(239, 68, 68))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " cancelled • ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "🔄 7",
+                Style::default()
+                    .fg(Color::Rgb(59, 130, 246))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " active • avg review: ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "12m",
+                Style::default()
+                    .fg(Color::Rgb(245, 158, 11))
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]);
 
-        let stats = Paragraph::new(stats_text)
+        let stats = Paragraph::new(stats_line)
             .alignment(Alignment::Center)
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Gray)),
+                    .borders(Borders::TOP)
+                    .border_style(Style::default().fg(Color::Rgb(75, 85, 99))),
             );
 
-        f.render_widget(stats, area);
+        // Controls hint
+        let selected_task = self
+            .sessions
+            .get(self.selected_index)
+            .map(|s| s.task_name.as_str())
+            .unwrap_or("none");
+
+        let controls_line = Line::from(vec![
+            Span::styled("Selected: ", Style::default().fg(Color::Rgb(156, 163, 175))),
+            Span::styled(
+                selected_task,
+                Style::default()
+                    .fg(Color::Rgb(99, 102, 241))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" • Press ", Style::default().fg(Color::Rgb(156, 163, 175))),
+            Span::styled(
+                "Enter",
+                Style::default()
+                    .fg(Color::Rgb(34, 197, 94))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to open IDE • ",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+            Span::styled(
+                "Tab",
+                Style::default()
+                    .fg(Color::Rgb(245, 158, 11))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to switch sections",
+                Style::default().fg(Color::Rgb(156, 163, 175)),
+            ),
+        ]);
+
+        let controls = Paragraph::new(controls_line).alignment(Alignment::Center);
+
+        f.render_widget(stats, layout[0]);
+        f.render_widget(controls, layout[1]);
     }
 }
 
