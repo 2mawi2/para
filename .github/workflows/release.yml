@@ -182,6 +182,8 @@ jobs:
               cd "mcp-server-ts" do
                 system "npm", "ci"
                 system "npm", "run", "build"
+                # Remove old wrapper script if it exists (for upgrades)
+                rm_f bin/"para-mcp-server"
                 # Create wrapper script for the MCP server
                 (bin/"para-mcp-server").write <<~EOS
                   #!/bin/bash
