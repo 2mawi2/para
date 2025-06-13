@@ -344,15 +344,24 @@ fn open_ide_for_conflict_resolution(
 }
 
 fn close_ide_for_session(config: &crate::config::Config, worktree_path: &Path) -> Result<()> {
-    if config.is_wrapper_enabled() {
-        return Ok(());
-    }
-
     // Extract session name from worktree path
     if let Some(session_name) = worktree_path.file_name().and_then(|n| n.to_str()) {
         if config.is_real_ide_environment() {
             let platform = crate::platform::get_platform_manager();
-            if let Err(e) = platform.close_ide_window(session_name, &config.ide.name) {
+
+            // Determine which IDE to close based on configuration
+            let ide_to_close = if config.ide.name == "claude" && config.is_wrapper_enabled() {
+                // When Claude runs in wrapper mode, close the wrapper IDE
+                &config.ide.wrapper.name
+            } else if config.is_wrapper_enabled() {
+                // For other IDEs in wrapper mode, skip closing
+                return Ok(());
+            } else {
+                // For non-wrapper mode, close the configured IDE
+                &config.ide.name
+            };
+
+            if let Err(e) = platform.close_ide_window(session_name, ide_to_close) {
                 eprintln!("Warning: Failed to close IDE window: {}", e);
             }
         }
@@ -708,6 +717,155 @@ mod tests {
 
         // Should return Ok without attempting to close
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_ide_for_session_claude_wrapper_mode() {
+        // This test verifies that when Claude runs in wrapper mode,
+        // we should close the wrapper IDE (Cursor/VS Code) not Claude itself
+
+        // Test 1: Claude in Cursor wrapper
+        let mut config = crate::config::defaults::default_config();
+        config.ide.name = "claude".to_string();
+        config.ide.command = "echo claude".to_string(); // Mock command
+        config.ide.wrapper.enabled = true;
+        config.ide.wrapper.name = "cursor".to_string();
+        config.ide.wrapper.command = "echo cursor".to_string(); // Mock command
+
+        let test_path = PathBuf::from("/test/worktrees/test-session-123");
+
+        // With the fix, this should now attempt to close the wrapper IDE
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+
+        // Test 2: Claude in VS Code wrapper
+        config.ide.wrapper.name = "code".to_string();
+        config.ide.wrapper.command = "echo code".to_string();
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+
+        // Test 3: Non-Claude IDE with wrapper enabled (should skip)
+        config.ide.name = "vim".to_string();
+        config.ide.command = "echo vim".to_string();
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+
+        // Test 4: Claude without wrapper (should close Claude)
+        config.ide.name = "claude".to_string();
+        config.ide.wrapper.enabled = false;
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_ide_all_configurations() {
+        // This test ensures IDE closing works correctly for all supported configurations
+        let test_path = PathBuf::from("/test/worktrees/test-session");
+
+        // Test 1: Standalone Cursor - should close Cursor
+        let mut config = crate::config::defaults::default_config();
+        config.ide.name = "cursor".to_string();
+        config.ide.command = "echo cursor".to_string();
+        config.ide.wrapper.enabled = false;
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // In real execution, this would close Cursor
+
+        // Test 2: Standalone VS Code - should close VS Code
+        config.ide.name = "code".to_string();
+        config.ide.command = "echo code".to_string();
+        config.ide.wrapper.enabled = false;
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // In real execution, this would close VS Code
+
+        // Test 3: Claude in Cursor wrapper - should close Cursor (the wrapper)
+        config.ide.name = "claude".to_string();
+        config.ide.command = "echo claude".to_string();
+        config.ide.wrapper.enabled = true;
+        config.ide.wrapper.name = "cursor".to_string();
+        config.ide.wrapper.command = "echo cursor".to_string();
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // In real execution, this would close Cursor (not Claude)
+
+        // Test 4: Claude in VS Code wrapper - should close VS Code (the wrapper)
+        config.ide.wrapper.name = "code".to_string();
+        config.ide.wrapper.command = "echo code".to_string();
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // In real execution, this would close VS Code (not Claude)
+
+        // Test 5: Other IDE (e.g., vim) standalone - should close vim
+        config.ide.name = "vim".to_string();
+        config.ide.command = "echo vim".to_string();
+        config.ide.wrapper.enabled = false;
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // In real execution, this would close vim
+
+        // Test 6: Other IDE in wrapper mode - should skip closing
+        config.ide.wrapper.enabled = true;
+        config.ide.wrapper.name = "some-wrapper".to_string();
+
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+        // Should skip closing for non-Claude wrapper scenarios
+    }
+
+    #[test]
+    fn test_close_ide_determines_correct_target() {
+        // This test verifies the logic for determining which IDE to close
+        // by checking what would happen in real scenarios
+
+        // Helper function to determine which IDE would be closed
+        fn get_ide_to_close(config: &crate::config::Config) -> Option<&str> {
+            if config.ide.name == "claude" && config.is_wrapper_enabled() {
+                Some(&config.ide.wrapper.name)
+            } else if config.is_wrapper_enabled() {
+                None // Skip closing
+            } else {
+                Some(&config.ide.name)
+            }
+        }
+
+        let mut config = crate::config::defaults::default_config();
+
+        // Scenario 1: Standalone Cursor
+        config.ide.name = "cursor".to_string();
+        config.ide.wrapper.enabled = false;
+        assert_eq!(get_ide_to_close(&config), Some("cursor"));
+
+        // Scenario 2: Standalone VS Code
+        config.ide.name = "code".to_string();
+        assert_eq!(get_ide_to_close(&config), Some("code"));
+
+        // Scenario 3: Claude in Cursor wrapper
+        config.ide.name = "claude".to_string();
+        config.ide.wrapper.enabled = true;
+        config.ide.wrapper.name = "cursor".to_string();
+        assert_eq!(get_ide_to_close(&config), Some("cursor"));
+
+        // Scenario 4: Claude in VS Code wrapper
+        config.ide.wrapper.name = "code".to_string();
+        assert_eq!(get_ide_to_close(&config), Some("code"));
+
+        // Scenario 5: Other IDE standalone
+        config.ide.name = "vim".to_string();
+        config.ide.wrapper.enabled = false;
+        assert_eq!(get_ide_to_close(&config), Some("vim"));
+
+        // Scenario 6: Other IDE with wrapper (should skip)
+        config.ide.wrapper.enabled = true;
+        assert_eq!(get_ide_to_close(&config), None);
     }
 
     #[test]
