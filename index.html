@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Para Git Constellation - A Celestial View of Code Evolution</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000428;
+            background: linear-gradient(to bottom, #000428 0%, #004e92 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        
+        #cosmos {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        .star {
+            fill: #ffffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .star:hover {
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.9));
+        }
+        
+        .constellation-line {
+            stroke: rgba(255, 255, 255, 0.3);
+            stroke-width: 1;
+            fill: none;
+            stroke-dasharray: 5,5;
+            animation: dash 20s linear infinite;
+        }
+        
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -100;
+            }
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            background: linear-gradient(45deg, #fff, #87CEEB);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 1em;
+            color: #87CEEB;
+            margin-top: 5px;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .legend h3 {
+            margin-top: 0;
+            color: #87CEEB;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
+        
+        .stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 200px;
+        }
+        
+        .stats h3 {
+            margin-top: 0;
+            color: #87CEEB;
+        }
+        
+        .stat-item {
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            color: #FFD700;
+        }
+        
+        .shooting-star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            box-shadow: 0 0 10px white;
+        }
+        
+        @keyframes shoot {
+            0% {
+                transform: translate(0, 0);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(300px, 300px);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="cosmos">
+        <div class="title">
+            <h1>Para Git Constellation</h1>
+            <div class="subtitle">A Celestial Journey Through Code Evolution</div>
+        </div>
+        
+        <div class="stats">
+            <h3>Project Statistics</h3>
+            <div class="stat-item">Total Stars: <span class="stat-value" id="total-commits">0</span></div>
+            <div class="stat-item">Constellations: <span class="stat-value" id="total-days">0</span></div>
+            <div class="stat-item">Star Gazers: <span class="stat-value" id="total-authors">0</span></div>
+            <div class="stat-item">Brightest Star: <span class="stat-value" id="biggest-day">-</span></div>
+        </div>
+        
+        <div class="legend">
+            <h3>Star Types</h3>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFD700;"></div>
+                <span>Release Stars</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF6B6B;"></div>
+                <span>Feature Stars</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4ECDC4;"></div>
+                <span>Fix Stars</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #95E1D3;"></div>
+                <span>Merge Stars</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #C7CEEA;"></div>
+                <span>Other Stars</span>
+            </div>
+        </div>
+        
+        <div class="tooltip"></div>
+    </div>
+    
+    <script src="constellation.js"></script>
+</body>
+</html>
