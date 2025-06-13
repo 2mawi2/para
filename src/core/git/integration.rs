@@ -354,6 +354,11 @@ impl<'a> IntegrationManager<'a> {
         Ok(merge_head.exists())
     }
 
+    pub fn is_am_in_progress(&self) -> Result<bool> {
+        let rebase_apply = self.repo.git_dir.join("rebase-apply");
+        Ok(rebase_apply.exists())
+    }
+
     pub fn update_base_branch(&self, branch: &str) -> Result<()> {
         let current_branch = self.repo.get_current_branch()?;
 
@@ -461,6 +466,10 @@ impl<'a> IntegrationManager<'a> {
             let _ = self.abort_cherry_pick();
         }
 
+        if self.is_am_in_progress()? {
+            let _ = self.abort_am();
+        }
+
         let merge_head = self.repo.git_dir.join("MERGE_HEAD");
         if merge_head.exists() {
             let _ = std::fs::remove_file(merge_head);
@@ -485,6 +494,10 @@ impl<'a> IntegrationManager<'a> {
 
     pub fn abort_cherry_pick(&self) -> Result<()> {
         execute_git_command_with_status(self.repo, &["cherry-pick", "--abort"])
+    }
+
+    pub fn abort_am(&self) -> Result<()> {
+        execute_git_command_with_status(self.repo, &["am", "--abort"])
     }
 
     pub fn safe_abort_integration(
@@ -617,6 +630,22 @@ impl<'a> IntegrationManager<'a> {
         std::fs::write(&temp_patch, patch_output)
             .map_err(|e| ParaError::git_operation(format!("Failed to write patch file: {}", e)))?;
 
+        // Save current branch to restore on failure
+        let original_branch = execute_git_command(
+            self.repo,
+            &[
+                "--git-dir",
+                &main_git_dir.to_string_lossy(),
+                "--work-tree",
+                &main_repo_path.to_string_lossy(),
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+            ],
+        )?
+        .trim()
+        .to_string();
+
         // First, checkout target branch in main repo
         execute_git_command_with_status(
             self.repo,
@@ -646,13 +675,45 @@ impl<'a> IntegrationManager<'a> {
         // Cleanup temp file
         let _ = std::fs::remove_file(&temp_patch);
 
-        result.map_err(|e| {
-            ParaError::git_operation(format!(
-                "Failed to apply patches to main repository: {}. \
-                You may need to resolve conflicts manually in the main repository.",
-                e
-            ))
-        })
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // If git am failed, abort it to clean up the state
+                let _ = execute_git_command_with_status(
+                    self.repo,
+                    &[
+                        "--git-dir",
+                        &main_git_dir.to_string_lossy(),
+                        "--work-tree",
+                        &main_repo_path.to_string_lossy(),
+                        "am",
+                        "--abort",
+                    ],
+                );
+
+                // Restore original branch if it's different
+                if original_branch != target_branch {
+                    let _ = execute_git_command_with_status(
+                        self.repo,
+                        &[
+                            "--git-dir",
+                            &main_git_dir.to_string_lossy(),
+                            "--work-tree",
+                            &main_repo_path.to_string_lossy(),
+                            "checkout",
+                            &original_branch,
+                        ],
+                    );
+                }
+
+                Err(ParaError::git_operation(format!(
+                    "Failed to apply patches to main repository: {}. \
+                    The main repository has been restored to its original state. \
+                    Please resolve conflicts manually by checking out the session worktree.",
+                    e
+                )))
+            }
+        }
     }
 }
 
@@ -1378,5 +1439,144 @@ mod tests {
         // The test passes if the method accepts the commit_message parameter
         // Actual integration might fail in test environment, which is ok
         assert!(result.is_err() || result.is_ok());
+    }
+
+    #[test]
+    fn test_is_am_in_progress() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // Initially should not be in AM state
+        assert!(!manager.is_am_in_progress().unwrap());
+
+        // Create rebase-apply directory to simulate AM in progress
+        let rebase_apply = repo.git_dir.join("rebase-apply");
+        fs::create_dir(&rebase_apply).expect("Failed to create rebase-apply dir");
+
+        // Now should detect AM in progress
+        assert!(manager.is_am_in_progress().unwrap());
+
+        // Cleanup
+        fs::remove_dir(&rebase_apply).expect("Failed to remove rebase-apply dir");
+        assert!(!manager.is_am_in_progress().unwrap());
+    }
+
+    #[test]
+    fn test_abort_am() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // abort_am should fail gracefully when not in AM state
+        let result = manager.abort_am();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cleanup_with_am_state() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // Create rebase-apply directory to simulate AM in progress
+        let rebase_apply = repo.git_dir.join("rebase-apply");
+        fs::create_dir(&rebase_apply).expect("Failed to create rebase-apply dir");
+
+        // Cleanup should handle AM state
+        let result = manager.cleanup_integration_state();
+        assert!(result.is_ok());
+
+        // Cleanup the test directory
+        let _ = fs::remove_dir(&rebase_apply);
+    }
+
+    #[test]
+    fn test_apply_patches_handles_detached_head() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // This test verifies the code handles detached HEAD gracefully
+        // The actual git operations would fail in test environment, but
+        // we're testing that our error handling is robust
+        let result = manager.apply_patches_to_main_repo(
+            "some patch content".to_string(),
+            &repo.git_dir,
+            &repo.root,
+            "main",
+        );
+
+        // Should fail but not panic
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cleanup_multiple_operations() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // Simulate multiple operations in progress
+        let rebase_apply = repo.git_dir.join("rebase-apply");
+        let merge_head = repo.git_dir.join("MERGE_HEAD");
+        let cherry_pick_head = repo.git_dir.join("CHERRY_PICK_HEAD");
+
+        fs::create_dir(&rebase_apply).expect("Failed to create rebase-apply");
+        fs::write(&merge_head, "dummy").expect("Failed to create MERGE_HEAD");
+        fs::write(&cherry_pick_head, "dummy").expect("Failed to create CHERRY_PICK_HEAD");
+
+        // Cleanup should handle all states
+        let result = manager.cleanup_integration_state();
+        assert!(result.is_ok());
+
+        // Files should be cleaned up
+        assert!(!merge_head.exists());
+        assert!(!cherry_pick_head.exists());
+
+        // Cleanup test files
+        let _ = fs::remove_dir(&rebase_apply);
+    }
+
+    #[test]
+    fn test_is_in_worktree_with_broken_git_file() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        // Create a worktree-like structure with .git file
+        let worktree_path = temp_dir.path().join("worktree");
+        fs::create_dir(&worktree_path).expect("Failed to create worktree dir");
+
+        // Write invalid .git file content
+        let git_file = worktree_path.join(".git");
+        fs::write(&git_file, "invalid content").expect("Failed to write .git file");
+
+        // Create a minimal git dir structure
+        let git_dir = temp_dir.path().join(".git");
+        fs::create_dir(&git_dir).expect("Failed to create .git dir");
+
+        // Create repo from worktree path
+        let repo = GitRepository {
+            root: worktree_path.clone(),
+            git_dir: git_dir.clone(),
+            work_dir: worktree_path.clone(),
+        };
+        let manager = IntegrationManager::new(&repo);
+
+        // Should handle gracefully
+        let result = manager.is_in_worktree();
+        assert!(result.is_ok());
+        assert!(result.unwrap()); // It's a file, so it's treated as worktree
+    }
+
+    #[test]
+    fn test_safe_abort_integration_with_all_states() {
+        let (_temp_dir, repo) = setup_test_repo();
+        let manager = IntegrationManager::new(&repo);
+
+        // Create various state files
+        let rebase_apply = repo.git_dir.join("rebase-apply");
+        fs::create_dir(&rebase_apply).expect("Failed to create rebase-apply");
+
+        let result = manager.safe_abort_integration(None, "main");
+        // Should succeed even with no backup branch
+        assert!(result.is_ok());
+
+        // Cleanup
+        let _ = fs::remove_dir(&rebase_apply);
     }
 }

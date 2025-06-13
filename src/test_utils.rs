@@ -69,7 +69,7 @@ pub mod test_helpers {
         (temp_dir, service)
     }
 
-    pub fn setup_isolated_test_environment(temp_dir: &TempDir) -> (PathBuf, String) {
+    pub fn setup_isolated_test_environment(temp_dir: &TempDir) -> PathBuf {
         // Create a test config that points to our temp state dir
         let config_dir = temp_dir.path().join(".config").join("para");
         fs::create_dir_all(&config_dir).unwrap();
@@ -82,30 +82,19 @@ pub mod test_helpers {
             serde_json::to_string_pretty(&config).expect("Failed to serialize config");
         fs::write(&config_file, config_json).expect("Failed to write config file");
 
-        // Return the config directory and original HOME for restoration
-        let original_home = std::env::var("HOME").unwrap_or_default();
-        std::env::set_var("HOME", temp_dir.path());
-
-        (config_dir, original_home)
+        config_dir
     }
 
-    pub fn restore_environment(original_dir: PathBuf, original_home: String) {
+    pub fn restore_environment(original_dir: PathBuf) {
         // Try to restore directory, but don't panic if it fails
         if let Err(_e) = std::env::set_current_dir(&original_dir) {
             // If we can't restore to the original directory, try to go to a safe fallback
             let _ = std::env::set_current_dir("/tmp");
         }
-
-        if !original_home.is_empty() {
-            std::env::set_var("HOME", original_home);
-        } else {
-            std::env::remove_var("HOME");
-        }
     }
 
     pub struct TestEnvironmentGuard {
         original_dir: PathBuf,
-        original_home: String,
         test_dir: PathBuf,
         test_config_path: PathBuf,
     }
@@ -124,7 +113,7 @@ pub mod test_helpers {
 
             std::env::set_current_dir(git_temp.path())?;
 
-            let (_config_dir, original_home) = setup_isolated_test_environment(temp_dir);
+            let _config_dir = setup_isolated_test_environment(temp_dir);
 
             // Create test config file
             let test_config_path = temp_dir.path().join("test-config.json");
@@ -135,7 +124,6 @@ pub mod test_helpers {
 
             Ok(TestEnvironmentGuard {
                 original_dir,
-                original_home,
                 test_dir: git_temp.path().to_path_buf(),
                 test_config_path,
             })
@@ -189,7 +177,7 @@ pub mod test_helpers {
                 }
             }
 
-            restore_environment(self.original_dir.clone(), self.original_home.clone());
+            restore_environment(self.original_dir.clone());
         }
     }
 }
