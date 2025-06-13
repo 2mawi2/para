@@ -319,6 +319,8 @@ Para is ideal when working with AI assistants:
 ## Documentation
 
 - **[MCP Integration](docs/MCP_INTEGRATION.md)** - Complete guide to Claude Code MCP integration
+- **[MCP Orchestration](docs/MCP_ORCHESTRATION.md)** - AI orchestration patterns and MCP tool documentation
+- **[Sample Instructions](docs/SAMPLE_PARA_INSTRUCTIONS.md)** - Example CLAUDE.md for CLI-based workflows
 - **[Detailed Configuration](docs/DETAILED_CONFIGURATION.md)** - Advanced IDE setup and environment variables
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing, architecture, testing
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
