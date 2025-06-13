@@ -233,8 +233,11 @@ release BUMP="patch":
     sed -i.bak "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
     rm Cargo.toml.bak
     
+    # Update Cargo.lock to reflect the new version
+    cargo check --quiet
+    
     # Commit version bump to release branch
-    git add Cargo.toml
+    git add Cargo.toml Cargo.lock
     git commit -m "Bump version to $new_version for release"
     
     # Push release branch to trigger GitHub Actions
