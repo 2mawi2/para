@@ -217,9 +217,12 @@ fn perform_pre_finish_operations(
         .map(|s| s.name.clone())
         .unwrap_or_else(|| feature_branch.to_string());
 
-    let platform = get_platform_manager();
-    if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
-        eprintln!("Warning: Failed to close IDE window: {}", e);
+    // Skip IDE window closing in test mode or when using mock IDEs
+    if !cfg!(test) && config.ide.command != "echo" {
+        let platform = get_platform_manager();
+        if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+            eprintln!("Warning: Failed to close IDE window: {}", e);
+        }
     }
 
     if config.should_auto_stage() {
