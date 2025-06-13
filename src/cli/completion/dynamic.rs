@@ -97,6 +97,8 @@ impl DynamicCompletion {
                 .with_description("Setup configuration".to_string()),
             CompletionSuggestion::new("completion".to_string(), CompletionType::Subcommand)
                 .with_description("Generate shell completion script".to_string()),
+            CompletionSuggestion::new("mcp".to_string(), CompletionType::Subcommand)
+                .with_description("MCP integration for Para".to_string()),
         ]
     }
 
@@ -162,6 +164,20 @@ impl DynamicCompletion {
                         .with_description("Generate Zsh completion script".to_string()),
                     CompletionSuggestion::new("fish".to_string(), CompletionType::Value)
                         .with_description("Generate Fish completion script".to_string()),
+                ]);
+            }
+            Some("mcp") => {
+                suggestions.extend(vec![
+                    CompletionSuggestion::new("init".to_string(), CompletionType::Subcommand)
+                        .with_description("Initialize MCP integration for Para".to_string()),
+                    CompletionSuggestion::new("--claude-code".to_string(), CompletionType::Flag)
+                        .with_description("Setup for Claude Code (adds user config)".to_string()),
+                    CompletionSuggestion::new("--cursor".to_string(), CompletionType::Flag)
+                        .with_description("Setup for Cursor (project config only)".to_string()),
+                    CompletionSuggestion::new("--vscode".to_string(), CompletionType::Flag)
+                        .with_description(
+                            "Setup for VS Code with Roo Code (project config only)".to_string(),
+                        ),
                 ]);
             }
             _ => {}
