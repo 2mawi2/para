@@ -89,10 +89,11 @@ impl SessionManager {
                 .unwrap_or_else(|_| "main".to_string())
         });
 
-        let final_session_name = self.resolve_session_name(name)?;
+        let final_session_name = self.resolve_session_name(name.clone())?;
+        // Use original name for branch, not the potentially timestamped session name
         let branch_name = crate::utils::generate_friendly_branch_name(
             self.config.get_branch_prefix(),
-            &final_session_name,
+            &name,
         );
 
         let subtrees_path = repository_root.join(&self.config.directories.subtrees_dir);
