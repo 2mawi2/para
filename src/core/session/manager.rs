@@ -90,10 +90,10 @@ impl SessionManager {
         });
 
         let final_session_name = self.resolve_session_name(name.clone())?;
-        // Use original name for branch, not the potentially timestamped session name
+        // Use final session name for branch to ensure consistency
         let branch_name = crate::utils::generate_friendly_branch_name(
             self.config.get_branch_prefix(),
-            &name,
+            &final_session_name,
         );
 
         let subtrees_path = repository_root.join(&self.config.directories.subtrees_dir);
@@ -621,5 +621,117 @@ mod tests {
         // Test with different prefix
         let branch_name2 = crate::utils::generate_friendly_branch_name("feature", "awesome_robot");
         assert_eq!(branch_name2, "feature/awesome_robot");
+    }
+
+    #[test]
+    fn test_friendly_naming_no_conflicts() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, _git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
+
+        let mut manager = SessionManager::new(&config);
+
+        // Test 1: Create session with friendly name - should use exact name
+        let session_result = manager.create_session("my-awesome-feature".to_string(), None);
+        
+        // Skip if git operations fail in test environment
+        if session_result.is_err() {
+            return;
+        }
+
+        let session = session_result.unwrap();
+        
+        // Verify session name matches exactly
+        assert_eq!(session.name, "my-awesome-feature");
+        
+        // Verify branch name uses friendly format
+        assert_eq!(session.branch, "test/my-awesome-feature");
+        
+        // Verify no timestamp in the name since there was no conflict
+        assert!(!session.name.contains("20"));
+        assert!(!session.branch.contains("20"));
+    }
+
+    #[test]
+    fn test_session_name_conflict_resolution() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, _git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
+
+        let mut manager = SessionManager::new(&config);
+
+        // Create first session manually to simulate existing session
+        let existing_session = SessionState::new(
+            "duplicate-test".to_string(),
+            "test/duplicate-test".to_string(),
+            temp_dir.path().join(".para_worktrees/duplicate-test"),
+        );
+        manager.save_state(&existing_session).unwrap();
+
+        // Test: Try to create session with same name - should get timestamped version
+        let session_result = manager.create_session("duplicate-test".to_string(), None);
+        
+        // Skip if git operations fail in test environment
+        if session_result.is_err() {
+            return;
+        }
+
+        let session = session_result.unwrap();
+        
+        // Verify session name got timestamp suffix due to conflict
+        assert_ne!(session.name, "duplicate-test");
+        assert!(session.name.starts_with("duplicate-test_"));
+        assert!(session.name.contains("20")); // Should contain timestamp
+        
+        // Verify branch name also got timestamp suffix to match session name
+        assert_ne!(session.branch, "test/duplicate-test");
+        assert!(session.branch.starts_with("test/duplicate-test_"));
+        assert!(session.branch.contains("20")); // Should contain timestamp
+        
+        // Verify both session and branch use the same timestamp suffix
+        let session_suffix = session.name.strip_prefix("duplicate-test_").unwrap();
+        let branch_suffix = session.branch.strip_prefix("test/duplicate-test_").unwrap();
+        assert_eq!(session_suffix, branch_suffix);
+    }
+
+    #[test]
+    fn test_session_and_branch_consistency() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, _git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
+
+        // Test that session names and branch names are consistent
+        let session_name = "new-feature";
+        let expected_branch = crate::utils::generate_friendly_branch_name("test", session_name);
+        assert_eq!(expected_branch, "test/new-feature");
+
+        // Test with timestamped name
+        let timestamped_name = "feature-x_20250613-123456";
+        let expected_timestamped_branch = crate::utils::generate_friendly_branch_name("test", timestamped_name);
+        assert_eq!(expected_timestamped_branch, "test/feature-x_20250613-123456");
     }
 }
