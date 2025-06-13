@@ -1,5 +1,5 @@
 use crate::cli::parser::{IntegrateArgs, IntegrationStrategy};
-use crate::config::ConfigManager;
+use crate::config::Config;
 use crate::core::git::{
     GitOperations, GitService, SessionEnvironment, StrategyRequest, StrategyResult,
 };
@@ -11,15 +11,12 @@ use crate::utils::{ParaError, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 
-pub fn execute(args: IntegrateArgs) -> Result<()> {
+pub fn execute(config: Config, args: IntegrateArgs) -> Result<()> {
     validate_integrate_args(&args)?;
 
     if args.abort {
-        return execute_abort();
+        return execute_abort(&config);
     }
-
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
 
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
@@ -331,8 +328,7 @@ fn close_ide_for_session(config: &crate::config::Config, worktree_path: &Path) -
 
     // Extract session name from worktree path
     if let Some(session_name) = worktree_path.file_name().and_then(|n| n.to_str()) {
-        // Skip IDE window closing in test mode or when using mock IDEs
-        if !cfg!(test) && config.ide.command != "echo" {
+        if config.is_real_ide_environment() {
             let platform = crate::platform::get_platform_manager();
             if let Err(e) = platform.close_ide_window(session_name, &config.ide.name) {
                 eprintln!("Warning: Failed to close IDE window: {}", e);
@@ -405,10 +401,7 @@ fn format_strategy(strategy: &IntegrationStrategy) -> String {
     }
 }
 
-pub fn execute_abort() -> Result<()> {
-    let config = ConfigManager::load_or_create()
-        .map_err(|e| ParaError::config_error(format!("Failed to load config: {}", e)))?;
-
+pub fn execute_abort(config: &Config) -> Result<()> {
     let git_service = GitService::discover()?;
     let state_manager = IntegrationStateManager::new(PathBuf::from(config.get_state_dir()));
 
@@ -597,7 +590,11 @@ mod tests {
         std::env::set_current_dir(git_temp.path()).unwrap();
         std::env::set_var("PARA_STATE_DIR", temp_dir.path());
 
-        let result = execute_abort();
+        // Create a test config
+        let mut config = crate::config::defaults::default_config();
+        config.directories.state_dir = temp_dir.path().to_string_lossy().to_string();
+
+        let result = execute_abort(&config);
 
         // Accept any error result since test environment can vary
         match result {
