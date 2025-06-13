@@ -182,6 +182,9 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
 
+        // Create .para directory to ensure gitignore can be created
+        fs::create_dir_all(repo_path.join(".para")).expect("Failed to create .para directory");
+
         Command::new("git")
             .current_dir(repo_path)
             .args(["init", "--initial-branch=main"])
