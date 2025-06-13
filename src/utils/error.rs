@@ -53,6 +53,9 @@ pub enum ParaError {
 
     #[error("Regex error: {0}")]
     Regex(#[from] regex::Error),
+
+    #[error("Watch error: {message}")]
+    Watch { message: String },
 }
 
 pub type Result<T> = std::result::Result<T, ParaError>;
@@ -154,6 +157,12 @@ impl ParaError {
     pub fn serialization(message: impl Into<String>) -> Self {
         Self::Config {
             message: format!("Serialization error: {}", message.into()),
+        }
+    }
+
+    pub fn watch_error(message: impl Into<String>) -> Self {
+        Self::Watch {
+            message: message.into(),
         }
     }
 }

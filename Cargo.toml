@@ -24,6 +24,8 @@ regex = "1.10"
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1.0", features = ["full"] }
+ratatui = "0.28"
+crossterm = "0.28"
 
 [lints.rust]
 warnings = "deny"

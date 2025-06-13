@@ -26,6 +26,7 @@ pub fn execute_command_with_config(
             | Some(Commands::CompleteCommand(_))
             | Some(Commands::CompletionSessions)
             | Some(Commands::CompletionBranches)
+            | Some(Commands::Watch(_))
             | None => None,
             _ => match test_config {
                 Some(cfg) => Some(cfg),
@@ -61,6 +62,7 @@ pub fn execute_command_with_config(
         Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
+        Some(Commands::Watch(args)) => commands::watch::execute(args),
         None => {
             show_usage();
             Ok(())
@@ -88,6 +90,7 @@ fn show_usage() {
     println!("  continue    Complete merge after resolving conflicts");
     println!("  config      Setup configuration");
     println!("  mcp         Setup Model Context Protocol integration");
+    println!("  watch       Monitor active sessions in real-time TUI");
     println!("  completion  Generate shell completion script");
     println!("  help        Print this message or the help of the given subcommand(s)");
     println!();

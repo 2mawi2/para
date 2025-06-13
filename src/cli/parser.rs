@@ -48,6 +48,8 @@ pub enum Commands {
     /// Legacy completion endpoint for branches (hidden)
     #[command(name = "_completion_branches", hide = true)]
     CompletionBranches,
+    /// Watch active Para sessions in real-time TUI
+    Watch(WatchArgs),
 }
 
 #[derive(Args, Debug)]
@@ -212,6 +214,9 @@ pub struct CompleteCommandArgs {
     #[arg(long)]
     pub position: usize,
 }
+
+#[derive(Args, Debug)]
+pub struct WatchArgs {}
 
 #[derive(ValueEnum, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
