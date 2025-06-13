@@ -1,7 +1,7 @@
 use crate::cli::parser::FinishArgs;
 use crate::config::Config;
 use crate::core::git::{
-    FinishRequest, FinishResult, GitOperations, GitService, SessionEnvironment,
+    FinishRequest, FinishResult, GitOperations, GitRepository, GitService, SessionEnvironment,
 };
 use crate::core::session::{SessionManager, SessionState, SessionStatus};
 use crate::platform::get_platform_manager;
@@ -64,6 +64,17 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
 
     if let Some(ref path) = worktree_path {
         if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
+            // Safety check: ensure no uncommitted changes in worktree before removing
+            if let Ok(worktree_repo) = GitRepository::discover_from(path) {
+                if worktree_repo.has_uncommitted_changes().unwrap_or(false) {
+                    eprintln!(
+                        "Warning: Preserving worktree at {} due to uncommitted changes",
+                        path.display()
+                    );
+                    return Ok(());
+                }
+            }
+
             if let Err(e) = ctx.git_service.remove_worktree(path) {
                 eprintln!(
                     "Warning: Failed to remove worktree at {}: {}",
@@ -105,6 +116,17 @@ fn handle_finish_integration_failure(
 
     if let Some(ref path) = worktree_path {
         if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
+            // Safety check: ensure no uncommitted changes in worktree before removing
+            if let Ok(worktree_repo) = GitRepository::discover_from(path) {
+                if worktree_repo.has_uncommitted_changes().unwrap_or(false) {
+                    eprintln!(
+                        "Warning: Preserving worktree at {} due to uncommitted changes",
+                        path.display()
+                    );
+                    return Ok(());
+                }
+            }
+
             if let Err(e) = ctx.git_service.remove_worktree(path) {
                 eprintln!(
                     "Warning: Failed to remove worktree at {}: {}",
@@ -216,7 +238,15 @@ fn perform_pre_finish_operations(
 
     if config.is_real_ide_environment() {
         let platform = get_platform_manager();
-        if let Err(e) = platform.close_ide_window(&session_id, &config.ide.name) {
+
+        // For Claude, we need to close the wrapper IDE, not Claude itself
+        let ide_to_close = if config.ide.name == "claude" && config.is_wrapper_enabled() {
+            &config.ide.wrapper.name
+        } else {
+            &config.ide.name
+        };
+
+        if let Err(e) = platform.close_ide_window(&session_id, ide_to_close) {
             eprintln!("Warning: Failed to close IDE window: {}", e);
         }
     }
@@ -535,7 +565,7 @@ mod tests {
         let (_temp_dir, repo_path) = setup_test_repo();
 
         let mut config = create_test_config(&repo_path);
-        config.session.preserve_on_finish = true; // Enable preserve mode
+        config.session.preserve_on_finish = true; // Enable preserve mode for this test
         let mut session_manager = SessionManager::new(&config);
 
         let session_state = SessionState::new(

@@ -135,16 +135,11 @@ impl MacOSPlatform {
     fn execute_applescript(&self, script: &str) -> Result<()> {
         let output = Command::new("osascript").arg("-e").arg(script).output()?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // Print AppleScript result for debugging
-        if !stdout.trim().is_empty() {
-            eprintln!("AppleScript result: {}", stdout.trim());
-        }
-
         if !output.status.success() {
-            eprintln!("AppleScript failed: {}", stderr);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.trim().is_empty() {
+                eprintln!("Warning: AppleScript error: {}", stderr.trim());
+            }
         }
 
         Ok(())

@@ -66,6 +66,12 @@ src/
 
 ## Configuration System
 
+### Configuration Principles
+- **No Environment Variables**: Para exclusively uses config.json for all configuration
+- **Single Source of Truth**: All settings come from the config file, not environment
+- **State-based**: Runtime state is tracked in state files, not environment variables
+- **Explicit Configuration**: No implicit behavior based on environment
+
 ### Cross-Platform Config
 - Uses `directories` crate for platform-appropriate config paths
 - JSON-based configuration with serde serialization
@@ -110,14 +116,16 @@ Configuration format (JSON):
 
 ### IDE Support Hierarchy
 1. **Claude Code** (Recommended for AI development)
-   - Can run standalone or inside other IDEs (wrapper mode)
-   - Auto-detects terminal for standalone mode
+   - Always runs inside a wrapper IDE (Cursor or VS Code)
+   - Wrapper is configured via `ide.wrapper` in config.json
 
-2. **Cursor** (Default)
-   - Environment variables supported
+2. **Cursor** (Default wrapper)
+   - Supported as both standalone IDE and wrapper for Claude Code
 
 3. **VS Code**
-   - Environment variables supported
+   - Supported as both standalone IDE and wrapper for Claude Code
+
+**Important**: Para does NOT use environment variables for configuration. All configuration is managed through the config.json file and internal state. Do not rely on or check environment variables like WRAPPER_IDE, LAUNCH_IDE, etc.
 
 ### Configuration Commands
 ```bash
