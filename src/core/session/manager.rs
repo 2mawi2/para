@@ -1,7 +1,7 @@
 use super::state::{SessionState, SessionStatus};
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
-use crate::utils::{ParaError, Result};
+use crate::utils::{GitignoreManager, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -81,6 +81,9 @@ impl SessionManager {
         })?;
 
         let repository_root = git_service.repository().root.clone();
+
+        // Ensure .para is ignored in the main repository's .gitignore
+        GitignoreManager::ensure_para_ignored_in_repository(&repository_root)?;
 
         let _base_branch = base_branch.unwrap_or_else(|| {
             git_service
@@ -275,6 +278,12 @@ impl SessionManager {
                 ))
             })?;
 
+            // Ensure .para is ignored in the main repository's .gitignore
+            if let Ok(git_service) = GitService::discover() {
+                let repository_root = git_service.repository().root.clone();
+                GitignoreManager::ensure_para_ignored_in_repository(&repository_root)?;
+            }
+
             // Create .para/.gitignore if we're using the new consolidated structure
             if let Some(para_dir) = self.get_para_directory() {
                 self.ensure_para_gitignore_exists(&para_dir)?;
@@ -313,20 +322,7 @@ impl SessionManager {
 
     /// Ensure .para/.gitignore exists with appropriate content
     fn ensure_para_gitignore_exists(&self, para_dir: &Path) -> Result<()> {
-        let gitignore_path = para_dir.join(".gitignore");
-
-        if !gitignore_path.exists() {
-            let gitignore_content =
-                "# Ignore all para contents except configuration\n*\n!.gitignore\n";
-            fs::write(&gitignore_path, gitignore_content).map_err(|e| {
-                ParaError::fs_error(format!(
-                    "Failed to create .para/.gitignore file {}: {}",
-                    gitignore_path.display(),
-                    e
-                ))
-            })?;
-        }
-        Ok(())
+        GitignoreManager::create_para_internal_gitignore(para_dir)
     }
 }
 
@@ -625,56 +621,54 @@ mod tests {
 
     #[test]
     fn test_friendly_naming_no_conflicts() {
-        use crate::test_utils::test_helpers::*;
-        use tempfile::TempDir;
-
-        let git_temp = TempDir::new().unwrap();
         let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
 
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
-        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para_worktrees")
+            .to_string_lossy()
+            .to_string();
 
-        let mut manager = SessionManager::new(&config);
+        let manager = SessionManager::new(&config);
 
-        // Test 1: Create session with friendly name - should use exact name
-        let session_result = manager.create_session("my-awesome-feature".to_string(), None);
-        
-        // Skip if git operations fail in test environment
-        if session_result.is_err() {
-            return;
-        }
+        // Test session name resolution without conflict
+        let result = manager
+            .resolve_session_name("my-awesome-feature".to_string())
+            .unwrap();
+        assert_eq!(result, "my-awesome-feature");
 
-        let session = session_result.unwrap();
-        
-        // Verify session name matches exactly
-        assert_eq!(session.name, "my-awesome-feature");
-        
-        // Verify branch name uses friendly format
-        assert_eq!(session.branch, "test/my-awesome-feature");
-        
+        // Test branch name generation
+        let branch_name = crate::utils::generate_friendly_branch_name("test", &result);
+        assert_eq!(branch_name, "test/my-awesome-feature");
+
         // Verify no timestamp in the name since there was no conflict
-        assert!(!session.name.contains("20"));
-        assert!(!session.branch.contains("20"));
+        assert!(!result.contains("20"));
+        assert!(!branch_name.contains("20"));
     }
 
     #[test]
     fn test_session_name_conflict_resolution() {
-        use crate::test_utils::test_helpers::*;
-        use tempfile::TempDir;
-
-        let git_temp = TempDir::new().unwrap();
         let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
 
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
-        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para_worktrees")
+            .to_string_lossy()
+            .to_string();
 
-        let mut manager = SessionManager::new(&config);
+        let manager = SessionManager::new(&config);
 
         // Create first session manually to simulate existing session
         let existing_session = SessionState::new(
@@ -684,46 +678,29 @@ mod tests {
         );
         manager.save_state(&existing_session).unwrap();
 
-        // Test: Try to create session with same name - should get timestamped version
-        let session_result = manager.create_session("duplicate-test".to_string(), None);
-        
-        // Skip if git operations fail in test environment
-        if session_result.is_err() {
-            return;
-        }
+        // Test: Try to resolve session with same name - should get timestamped version
+        let result = manager
+            .resolve_session_name("duplicate-test".to_string())
+            .unwrap();
 
-        let session = session_result.unwrap();
-        
         // Verify session name got timestamp suffix due to conflict
-        assert_ne!(session.name, "duplicate-test");
-        assert!(session.name.starts_with("duplicate-test_"));
-        assert!(session.name.contains("20")); // Should contain timestamp
-        
-        // Verify branch name also got timestamp suffix to match session name
-        assert_ne!(session.branch, "test/duplicate-test");
-        assert!(session.branch.starts_with("test/duplicate-test_"));
-        assert!(session.branch.contains("20")); // Should contain timestamp
-        
+        assert_ne!(result, "duplicate-test");
+        assert!(result.starts_with("duplicate-test_"));
+        assert!(result.contains("20")); // Should contain timestamp
+
+        // Test branch name generation with timestamped session name
+        let branch_name = crate::utils::generate_friendly_branch_name("test", &result);
+        assert!(branch_name.starts_with("test/duplicate-test_"));
+        assert!(branch_name.contains("20")); // Should contain timestamp
+
         // Verify both session and branch use the same timestamp suffix
-        let session_suffix = session.name.strip_prefix("duplicate-test_").unwrap();
-        let branch_suffix = session.branch.strip_prefix("test/duplicate-test_").unwrap();
+        let session_suffix = result.strip_prefix("duplicate-test_").unwrap();
+        let branch_suffix = branch_name.strip_prefix("test/duplicate-test_").unwrap();
         assert_eq!(session_suffix, branch_suffix);
     }
 
     #[test]
     fn test_session_and_branch_consistency() {
-        use crate::test_utils::test_helpers::*;
-        use tempfile::TempDir;
-
-        let git_temp = TempDir::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
-
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
-        config.directories.subtrees_dir = temp_dir.path().join(".para_worktrees").to_string_lossy().to_string();
-
         // Test that session names and branch names are consistent
         let session_name = "new-feature";
         let expected_branch = crate::utils::generate_friendly_branch_name("test", session_name);
@@ -731,7 +708,11 @@ mod tests {
 
         // Test with timestamped name
         let timestamped_name = "feature-x_20250613-123456";
-        let expected_timestamped_branch = crate::utils::generate_friendly_branch_name("test", timestamped_name);
-        assert_eq!(expected_timestamped_branch, "test/feature-x_20250613-123456");
+        let expected_timestamped_branch =
+            crate::utils::generate_friendly_branch_name("test", timestamped_name);
+        assert_eq!(
+            expected_timestamped_branch,
+            "test/feature-x_20250613-123456"
+        );
     }
 }
