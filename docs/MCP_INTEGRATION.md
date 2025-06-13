@@ -1,103 +1,168 @@
-# Para MCP Integration Guide
+# MCP Integration Guide
 
-Para now supports Model Context Protocol (MCP) integration, allowing AI agents to use para commands directly through supported editors and AI tools.
+Para integrates seamlessly with Claude Code through the Model Context Protocol (MCP), providing native Para tools directly within Claude Code's interface. This eliminates the need for manual command execution and enables more efficient AI-assisted development workflows.
 
 ## Quick Setup
 
-### Simple Setup (Recommended)
+### Production Installation (Recommended)
 ```bash
-# Install Para CLI and MCP server
-brew install para
+# Install para (when available)
+brew install 2mawi2/tap/para
 
-# Configure MCP integration
+# Navigate to your project
+cd your-project
+
+# One-time MCP setup
+para mcp init --claude-code
+```
+
+### Development Installation
+```bash
+# Clone and build from source
+git clone https://github.com/2mawi2/para.git
+cd para
+just install        # Installs para + MCP server to ~/.local/bin/
+
+# Navigate to your project
+cd your-project
+para mcp init --claude-code
+```
+
+### Interactive Setup
+```bash
 para mcp init
+# Choose your IDE from the interactive menu
 ```
 
-This will:
-1. Create `.mcp.json` for your project (commit this to share with team)
-2. Ask which IDE you want to configure
-3. Set up Para tools for your chosen IDE
+**That's it!** Open Claude Code in your repo and Para tools will be available.
 
-**That's it!** Restart your editor and Para tools will be available.
+## Installation Scenarios
 
-### Non-Interactive Setup
+### Development Workflow (Repository Contributors)
+When working on the Para repository itself:
 ```bash
-# Setup for specific IDEs
-para mcp init --claude-code    # Claude Code
-para mcp init --cursor         # Cursor
-para mcp init --vscode         # VS Code with Roo Code
+git clone https://github.com/2mawi2/para.git
+cd para
+just install                    # Installs to ~/.local/bin
+para mcp init --claude-code     # Uses TypeScript MCP server
 ```
+**Result**: Uses the TypeScript MCP server from `mcp-server-ts/` for better debugging.
 
-### Manual Installation (Development)
+### Production Workflow (End Users)
+For users installing Para to use in their projects:
 ```bash
-# Build from source
-just install        # Installs para + para-mcp-server to ~/.local/bin/
-para mcp init       # Configure MCP integration
+brew install 2mawi2/tap/para    # When available
+cd your-project
+para mcp init --claude-code     # Uses TypeScript MCP server
 ```
+**Result**: Uses the TypeScript MCP server installed by Homebrew (with Node.js wrapper).
 
-## Editor Integration
+### Manual Installation
+Building and installing from source:
+```bash
+git clone https://github.com/2mawi2/para.git
+cd para
+just install                    # Builds and installs to ~/.local/bin
+cd your-project
+para mcp init --claude-code     # Uses installed TypeScript MCP server
+```
+**Result**: Uses the TypeScript MCP server from the built source.
 
-### What Gets Created
+## How Server Discovery Works
 
-The `para mcp init` command creates a `.mcp.json` file in your project:
+Para automatically finds the best available MCP server:
+1. **Local TypeScript server**: `./mcp-server-ts/build/para-mcp-server.js` (development)
+2. **Local installation**: `~/.local/bin/para-mcp-server` (manual install)
+3. **Homebrew server**: `/opt/homebrew/bin/para-mcp-server` (Apple Silicon)
+4. **Homebrew server**: `/usr/local/bin/para-mcp-server` (Intel Mac) 
+5. **Linux Homebrew**: `/home/linuxbrew/.linuxbrew/bin/para-mcp-server`
+6. **System PATH**: Fallback to `para-mcp-server` in PATH
+
+## Generated Configuration
+
+### Development (TypeScript Server)
 ```json
 {
   "mcpServers": {
     "para": {
       "type": "stdio",
-      "command": "para-mcp-server"
+      "command": "node",
+      "args": ["/path/to/repo/mcp-server-ts/build/para-mcp-server.js"]
     }
   }
 }
 ```
 
-**Commit this file** to automatically provide Para tools to your entire team.
+### Production (Homebrew TypeScript Server)
+```json
+{
+  "mcpServers": {
+    "para": {
+      "type": "stdio", 
+      "command": "/opt/homebrew/bin/para-mcp-server",
+      "args": []
+    }
+  }
+}
+```
 
-### IDE-Specific Configuration
+**Important**: `.mcp.json` contains user-specific paths and should be added to `.gitignore`. Each team member should run `para mcp init --claude-code` in their local repo to generate their own config.
 
-#### Claude Code
-- ✅ **Project config**: `.mcp.json` (automatic discovery)
-- Additional setup via `para mcp init --claude-code` adds user-scoped config for better integration
+## IDE Support
 
-#### VS Code with Roo Code
-- ✅ **Project config**: `.mcp.json` (automatic discovery)
-- No additional setup required
+### Claude Code (Recommended)
+```bash
+para mcp init --claude-code
+```
+- Project-scoped `.mcp.json` configuration
+- Native tool integration with automatic discovery
+- Verify with: `claude mcp list`
 
-#### Cursor
-- ✅ **Project config**: `.mcp.json` (automatic discovery)
-- No additional setup required
+### Cursor
+```bash
+para mcp init --cursor
+```
+- Project-scoped `.mcp.json` configuration
+- Supports MCP protocol
 
-## Available MCP Tools
+### VS Code with Roo Cline
+```bash
+para mcp init --vscode
+```
+- Project-scoped `.mcp.json` configuration
+- Works with Roo Cline extension
 
-The para MCP server exposes these tools to AI agents:
+## Available Para Tools
 
-### Session Management
-- **`para_start`** - Start new session
-  - `name` (optional): Session name
-  - `prompt` (optional): Initial prompt
+Once MCP integration is set up, Claude Code gains access to these Para tools:
+
+### Core Session Management
+- **`para_start`** - Create new isolated sessions with Git worktrees
+  - `session_name` (required): Name for the new session
   
-- **`para_finish`** - Complete current session
-  - `message` (required): Commit message
+- **`para_finish`** - Complete sessions with automatic staging and commits
+  - `commit_message` (required): Commit message for the changes
 
-- **`para_dispatch`** - Create AI agent session
-  - `name` (required): Session name
-  - `prompt` (required): Task prompt
-  - `file` (optional): Path to prompt file
+- **`para_list`** - List all active sessions with status and branch information
 
-### Session Operations
-- **`para_list`** - List all sessions
-- **`para_recover`** - Recover previous session
-  - `name` (required): Session name to recover
-  
-- **`para_config_show`** - Show current configuration
+### Advanced Operations
+- **`para_dispatch`** - AI-assisted session creation with prompts
+  - `session_name` (required): Name for the new session
+  - `task_description` (required): Task description for the AI agent
 
-## Available MCP Resources
+- **`para_recover`** - Recover and resume previous sessions
+  - `session_name` (required): Name of the session to recover
 
-AI agents can read these resources for context:
+- **`para_cancel`** - Cancel and delete sessions, removing worktrees and branches
+  - `session_name` (required): Name of the session to cancel
 
-- **`para://current-session`** - Current session state
-- **`para://available-sessions`** - List of all sessions
-- **`para://config`** - Para configuration
+- **`para_config_show`** - Display current Para configuration
+
+### Available Resources
+
+Claude Code can also read these Para resources for context:
+- **`para://current-session`** - Information about the current para session
+- **`para://config`** - Current para configuration
 
 ## Parallel AI Development Orchestration
 
@@ -157,27 +222,26 @@ para_config_show()  # Check configuration for coordination
 
 ### MCP Server Not Found
 ```bash
-# Verify installation
-which para-mcp-server
-
-# Reinstall if missing
-just install
+para mcp init --claude-code
+# Error: No para MCP server found
 ```
 
-### Claude Code Integration Issues
-```bash
-# Remove and re-add server
-claude mcp remove para-server
-claude mcp add para-server para-mcp-server
-```
+**Solutions:**
+- **Development**: `cd mcp-server-ts && npm install && npm run build`
+- **Production**: `just install` or wait for Homebrew formula
+- **Manual**: Ensure para is in your PATH with `which para`
 
-### VSCode/Cursor Configuration
-```bash
-# Verify MCP configuration file
-cat .cursor/mcp.json
+### Claude Code Not Detecting Tools
+1. Verify `.mcp.json` exists in your project root
+2. Restart Claude Code completely
+3. Run `claude mcp list` to verify server registration
+4. Check that para binary is accessible from the configured path
 
-# Check Claude Desktop config (if using)
-cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
+### Server Path Issues
+If you move your para installation:
+```bash
+rm .mcp.json
+para mcp init --claude-code  # Regenerates with correct paths
 ```
 
 ### Permission Issues
@@ -186,7 +250,18 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
 chmod +x ~/.local/bin/para-mcp-server
 
 # Check PATH includes ~/.local/bin
-echo $PATH
+echo $PATH | grep -o ~/.local/bin
+```
+
+### TypeScript Server Issues (Development)
+```bash
+# Rebuild TypeScript server
+cd mcp-server-ts
+npm install
+npm run build
+
+# Verify it runs
+node build/para-mcp-server.js --help
 ```
 
 ## Advanced Configuration
@@ -235,18 +310,62 @@ para://available-sessions -> All session info for coordination
 para://config -> Para configuration for context
 ```
 
+## Benefits Over Traditional Dispatch
+
+| Traditional `para dispatch` | MCP Integration |
+|----------------------------|-----------------|
+| Requires command-line usage | Native Claude Code tools |
+| Manual session management | Integrated workflow |
+| Limited to dispatch command | Full Para toolset |
+| Requires IDE switching | Seamless integration |
+
+## Team Collaboration
+
+### Setup for Teams
+
+**Don't commit `.mcp.json`** - it contains user-specific paths. Instead:
+
+1. **Add to `.gitignore`**:
+```bash
+echo ".mcp.json" >> .gitignore
+git add .gitignore
+git commit -m "Ignore user-specific MCP config"
+```
+
+2. **Document in README**:
+```markdown
+## MCP Setup
+Run `para mcp init --claude-code` to enable Para tools in Claude Code.
+```
+
+3. **Each team member runs**:
+```bash
+para mcp init --claude-code
+```
+
+This generates the correct paths for their system while keeping the repo clean.
+
+## Cross-Platform Support
+
+The MCP integration works across all platforms:
+- **macOS**: Supports both Intel and Apple Silicon Homebrew installations
+- **Linux**: Supports Linuxbrew and manual installations  
+- **Windows**: Supports manual installations
+
 ## Best Practices
 
-1. **Session Naming**: Use descriptive names for MCP-created sessions
-2. **Task Isolation**: Keep agent tasks independent to avoid conflicts
-3. **Regular Cleanup**: Use `para clean` to remove completed sessions
-4. **Monitor Activity**: Check `para list` regularly when multiple agents are active
-5. **Commit Messages**: Ensure agents provide meaningful commit messages
+1. **Commit Configuration**: Always commit `.mcp.json` for team sharing
+2. **Descriptive Sessions**: Use clear session names for MCP-created sessions
+3. **Task Isolation**: Keep agent tasks independent to avoid conflicts
+4. **Regular Monitoring**: Use `para_list` to check active sessions
+5. **Meaningful Commits**: Provide clear commit messages when finishing sessions
 
-## Support
+## What's Next
 
-For MCP integration issues:
-1. Check para logs: `para list --verbose`
-2. Verify MCP server: `para-mcp-server --help`
-3. Test editor integration: Follow editor-specific troubleshooting
-4. Report issues: Include MCP server logs and editor configuration
+With MCP integration set up, you can:
+1. Use Para tools directly from Claude Code's interface
+2. Create isolated development sessions without leaving your IDE
+3. Manage multiple parallel features efficiently
+4. Leverage AI assistance with proper workspace isolation
+
+The MCP integration makes Para's parallel development capabilities a natural part of your Claude Code workflow.

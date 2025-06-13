@@ -68,7 +68,23 @@ para finish "Add new feature"
 
 ## AI Integration
 
-Claude Code support for AI-powered development:
+### Claude Code MCP Integration
+
+Para integrates seamlessly with Claude Code through MCP (Model Context Protocol):
+
+```bash
+# One-time setup (navigate to any repo where you want Para tools)
+para mcp init --claude-code
+
+# This creates .mcp.json with the correct paths for your system
+# (Note: .mcp.json contains user-specific paths, so add it to .gitignore)
+
+# Now Claude Code has Para tools available:
+# - para_start, para_finish, para_dispatch, para_list, etc.
+# - Use Para tools directly from Claude Code interface
+```
+
+### AI-Powered Development
 ```bash
 para dispatch "prompt"                    # Create session with AI prompt
 para dispatch name "prompt"               # Named session with AI prompt
@@ -106,6 +122,8 @@ para finish "Fix bug" --branch existing-feature
 - Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
 The `dispatch` command creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+
+**MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management without needing the dispatch command.
 
 **Note:** Dispatch command only works with Claude Code. Use `para config` to switch IDEs if needed.
 
@@ -203,9 +221,24 @@ para finish "Fix login redirect"   # Finishes current session
 # All features now merged to main branch
 ```
 
-### AI-Powered Development
+### AI-Powered Development with MCP
 ```bash
-# Create AI session with prompt
+# One-time setup in your repo
+para mcp init --claude-code
+
+# This creates .mcp.json (add to .gitignore - contains local paths)
+echo ".mcp.json" >> .gitignore
+
+# Claude Code now has native Para tools:
+# - para_start: Create new sessions  
+# - para_finish: Complete sessions with commits
+# - para_list: View active sessions
+# - para_dispatch: AI-assisted session creation
+```
+
+### Traditional AI Development
+```bash
+# Create AI session with prompt (requires para dispatch)
 para dispatch "Implement user authentication with best security practices"
 
 # Or use a prompt file for complex prompts
@@ -285,6 +318,7 @@ Para is ideal when working with AI assistants:
 
 ## Documentation
 
+- **[MCP Integration](docs/MCP_INTEGRATION.md)** - Complete guide to Claude Code MCP integration
 - **[Detailed Configuration](docs/DETAILED_CONFIGURATION.md)** - Advanced IDE setup and environment variables
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing, architecture, testing
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions

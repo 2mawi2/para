@@ -57,6 +57,19 @@ jobs:
           toolchain: stable
           cache: true
           components: clippy, rustfmt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'mcp-server-ts/package-lock.json'
+
+      - name: Build TypeScript MCP server
+        run: |
+          cd mcp-server-ts
+          npm ci
+          npm run build
     
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -87,10 +100,12 @@ jobs:
           tar -czf artifacts/para-${{ needs.extract-version.outputs.version }}.tar.gz \
             --exclude='.git*' \
             --exclude='subtrees' \
-            --exclude='.para_*' \
+            --exclude='.para*' \
             --exclude='target' \
             --exclude='*.tmp' \
             --exclude='.bats_tmp*' \
+            --exclude='mcp-server-ts/node_modules' \
+            --exclude='mcp-server-ts/build' \
             .
 
       - name: Create checksums
@@ -162,8 +177,24 @@ jobs:
             license "MIT"
           
             depends_on "rust" => :build
+            depends_on "node"
           
             def install
+              # Build and install TypeScript MCP server
+              cd "mcp-server-ts" do
+                system "npm", "ci"
+                system "npm", "run", "build"
+                # Create wrapper script for the MCP server
+                (bin/"para-mcp-server").write <<~EOS
+                  #!/bin/bash
+                  exec node "#{libexec}/para-mcp-server.js" "$@"
+                EOS
+                chmod 0755, bin/"para-mcp-server"
+                # Install the actual JavaScript file
+                libexec.install "build/para-mcp-server.js"
+              end
+              
+              # Install main para binary
               system "cargo", "install", *std_cargo_args
             end
           
@@ -179,12 +210,17 @@ jobs:
                 
                 For fish:
                   para completion fish | source
+                
+                To enable Para tools in Claude Code:
+                  cd your-project && para mcp init --claude-code
               EOS
             end
           
             test do
               assert_match "para", shell_output("#{bin}/para --version")
               system "#{bin}/para", "--help"
+              # Test MCP server is installed
+              assert_predicate bin/"para-mcp-server", :exist?
             end
           end
           EOL
