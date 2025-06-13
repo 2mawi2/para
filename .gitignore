@@ -16,6 +16,9 @@ Thumbs.db
 *.temp
 .bats_tmp*
 
+# Para directories and state files
+.para/
+
 # Para test artifacts
 tests/test_*.tmp
 test_subtrees/
