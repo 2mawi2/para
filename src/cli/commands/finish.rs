@@ -128,9 +128,43 @@ pub fn execute(args: FinishArgs) -> Result<()> {
             }
             println!("  Commit message: {}", args.message);
         }
-        FinishResult::ConflictsPending => {
-            println!("⚠ Conflicts detected during integration");
-            println!("Resolve conflicts manually and run 'para continue'");
+        FinishResult::SuccessWithIntegrationFailure {
+            final_branch,
+            error,
+        } => {
+            let worktree_path = if is_worktree_env {
+                Some(current_dir.clone())
+            } else {
+                session_info.as_ref().map(|s| s.worktree_path.clone())
+            };
+
+            if let Some(session_state) = session_info {
+                if config.should_preserve_on_finish() {
+                    session_manager
+                        .update_session_status(&session_state.name, SessionStatus::Finished)?;
+                } else {
+                    session_manager.delete_state(&session_state.name)?;
+                }
+            }
+
+            if let Some(ref path) = worktree_path {
+                if path != &git_service.repository().root && !config.should_preserve_on_finish() {
+                    if let Err(e) = git_service.remove_worktree(path) {
+                        eprintln!(
+                            "Warning: Failed to remove worktree at {}: {}",
+                            path.display(),
+                            e
+                        );
+                    }
+                }
+            }
+
+            println!("⚠ Session finished with integration failure");
+            println!("  Feature branch: {}", final_branch);
+            println!("  Changes preserved on branch with your commit message");
+            println!("  Integration error: {}", error);
+            println!("  💡 Manually resolve conflicts and integrate the branch, or use 'para integrate {}'", final_branch);
+            println!("  Commit message: {}", args.message);
         }
     }
 
