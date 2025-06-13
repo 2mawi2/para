@@ -26,7 +26,7 @@ pub struct SessionInfo {
     pub ai_review_minutes: Option<u16>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SessionState {
     Working,
     AIReview,
@@ -80,6 +80,18 @@ impl App {
         table_state.select(Some(0));
         Self {
             sessions: create_mock_sessions(),
+            selected_index: 0,
+            should_quit: false,
+            table_state,
+            current_section: 0,
+        }
+    }
+
+    pub fn with_real_data(config: &crate::config::Config) -> Self {
+        let mut table_state = TableState::default();
+        table_state.select(Some(0));
+        Self {
+            sessions: load_sessions_with_fallback(config),
             selected_index: 0,
             should_quit: false,
             table_state,
@@ -686,8 +698,183 @@ fn create_mock_sessions() -> Vec<SessionInfo> {
     ]
 }
 
+fn load_real_sessions(config: &crate::config::Config) -> Result<Vec<SessionInfo>> {
+    use crate::core::session::{SessionManager, SessionStatus};
+    use crate::utils::names::generate_unique_name;
+
+    let session_manager = SessionManager::new(config);
+    let sessions = session_manager.list_sessions()?;
+
+    let mut session_infos = Vec::new();
+    let used_names = Vec::new(); // For future use with better agent naming
+
+    for session in sessions {
+        // Determine session state based on status and worktree existence
+        let state = if session.status == SessionStatus::Active && session.worktree_path.exists() {
+            SessionState::Working
+        } else if session.status == SessionStatus::Finished
+            || (session.status == SessionStatus::Active && !session.worktree_path.exists())
+        {
+            SessionState::HumanReview
+        } else {
+            // Cancelled sessions are not shown in the TUI for now
+            continue;
+        };
+
+        // Generate agent name (simplified for now)
+        let agent_name = generate_unique_name(&used_names);
+
+        // Extract description or use default
+        let description = session
+            .description
+            .unwrap_or_else(|| "No description provided".to_string());
+
+        session_infos.push(SessionInfo {
+            task_name: session.name.clone(),
+            agent_name,
+            description,
+            state,
+            ide_open: state == SessionState::Working, // Working sessions have IDE open
+            ai_review_minutes: None,                  // AI review not implemented yet
+        });
+    }
+
+    Ok(session_infos)
+}
+
+fn load_sessions_with_fallback(config: &crate::config::Config) -> Vec<SessionInfo> {
+    match load_real_sessions(config) {
+        Ok(mut real_sessions) => {
+            // Add some mock AI Review sessions for demonstration
+            real_sessions.extend(vec![
+                SessionInfo {
+                    task_name: "ui-components".to_string(),
+                    agent_name: "ai-eve".to_string(),
+                    description: "React dashboard components (mock)".to_string(),
+                    state: SessionState::AIReview,
+                    ide_open: false,
+                    ai_review_minutes: Some(15),
+                },
+                SessionInfo {
+                    task_name: "api-tests".to_string(),
+                    agent_name: "ai-frank".to_string(),
+                    description: "API integration test suite (mock)".to_string(),
+                    state: SessionState::AIReview,
+                    ide_open: false,
+                    ai_review_minutes: Some(8),
+                },
+            ]);
+            real_sessions
+        }
+        Err(e) => {
+            eprintln!(
+                "Warning: Failed to load real session data: {}. Using mock data.",
+                e
+            );
+            create_mock_sessions()
+        }
+    }
+}
+
 pub fn execute(_args: WatchArgs) -> Result<()> {
-    let mut app = App::new();
+    let config = crate::config::Config::load_or_create()
+        .map_err(|e| crate::utils::ParaError::config_error(e.to_string()))?;
+    let mut app = App::with_real_data(&config);
     app.run()
         .map_err(|e| crate::utils::ParaError::watch_error(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::session::{SessionManager, SessionState as CoreSessionState, SessionStatus};
+    use tempfile::TempDir;
+
+    fn create_simple_test_config(state_dir: &str) -> crate::config::Config {
+        crate::config::Config {
+            ide: crate::config::IdeConfig {
+                name: "echo".to_string(),
+                command: "echo".to_string(),
+                user_data_dir: None,
+                wrapper: crate::config::WrapperConfig {
+                    enabled: false,
+                    name: "".to_string(),
+                    command: "".to_string(),
+                },
+            },
+            directories: crate::config::DirectoryConfig {
+                state_dir: state_dir.to_string(),
+                subtrees_dir: ".para/worktrees".to_string(),
+            },
+            git: crate::config::defaults::default_git_config(),
+            session: crate::config::defaults::default_session_config(),
+        }
+    }
+
+    #[test]
+    fn test_load_real_sessions_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let config =
+            create_simple_test_config(&temp_dir.path().join(".para_state").to_string_lossy());
+
+        let sessions = load_real_sessions(&config).unwrap();
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn test_load_real_sessions_with_active_worktree() {
+        let temp_dir = TempDir::new().unwrap();
+        let config =
+            create_simple_test_config(&temp_dir.path().join(".para_state").to_string_lossy());
+
+        // Create session manager
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session with worktree
+        let session_state = CoreSessionState::with_description(
+            "test-session".to_string(),
+            "para/test-session".to_string(),
+            temp_dir.path().join(".para/worktrees/test-session"),
+            Some("Test description".to_string()),
+        );
+
+        // Create the worktree directory to simulate active session
+        std::fs::create_dir_all(&session_state.worktree_path).unwrap();
+
+        session_manager.save_state(&session_state).unwrap();
+
+        let sessions = load_real_sessions(&config).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].task_name, "test-session");
+        assert_eq!(sessions[0].description, "Test description");
+        assert!(matches!(sessions[0].state, SessionState::Working));
+    }
+
+    #[test]
+    fn test_load_real_sessions_finished_no_worktree() {
+        let temp_dir = TempDir::new().unwrap();
+        let config =
+            create_simple_test_config(&temp_dir.path().join(".para_state").to_string_lossy());
+
+        // Create session manager
+        let session_manager = SessionManager::new(&config);
+
+        // Create a finished session without worktree
+        let mut session_state = CoreSessionState::with_description(
+            "finished-session".to_string(),
+            "para/finished-session".to_string(),
+            temp_dir.path().join(".para/worktrees/finished-session"),
+            Some("Finished task".to_string()),
+        );
+        session_state.update_status(SessionStatus::Finished);
+
+        // Don't create worktree directory to simulate finished session
+        session_manager.save_state(&session_state).unwrap();
+
+        let sessions = load_real_sessions(&config).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].task_name, "finished-session");
+        assert_eq!(sessions[0].description, "Finished task");
+        assert!(matches!(sessions[0].state, SessionState::HumanReview));
+    }
 }

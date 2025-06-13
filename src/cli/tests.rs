@@ -196,6 +196,7 @@ mod cli_tests {
             name_or_prompt: None,
             prompt: None,
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
         assert!(args.validate().is_err());
@@ -204,6 +205,7 @@ mod cli_tests {
             name_or_prompt: Some("test prompt".to_string()),
             prompt: None,
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
         assert!(args.validate().is_ok());

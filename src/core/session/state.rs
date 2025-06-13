@@ -9,9 +9,10 @@ pub struct SessionState {
     pub worktree_path: PathBuf,
     pub created_at: DateTime<Utc>,
     pub status: SessionStatus,
+    pub description: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionStatus {
     Active,
     Finished,
@@ -26,6 +27,23 @@ impl SessionState {
             worktree_path,
             created_at: Utc::now(),
             status: SessionStatus::Active,
+            description: None,
+        }
+    }
+
+    pub fn with_description(
+        name: String,
+        branch: String,
+        worktree_path: PathBuf,
+        description: Option<String>,
+    ) -> Self {
+        Self {
+            name,
+            branch,
+            worktree_path,
+            created_at: Utc::now(),
+            status: SessionStatus::Active,
+            description,
         }
     }
 

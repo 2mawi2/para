@@ -74,8 +74,12 @@ pub struct DispatchArgs {
     #[arg(long, short = 'f', help = "Read prompt from specified file")]
     pub file: Option<PathBuf>,
 
+    /// Task description for the session
+    #[arg(long, short = 'd', help = "Task description for the session")]
+    pub description: Option<String>,
+
     /// Skip IDE permission warnings (dangerous)
-    #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
+    #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
 }
 

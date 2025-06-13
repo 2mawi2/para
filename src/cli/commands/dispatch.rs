@@ -53,7 +53,12 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         .create_worktree(&branch_name, &session_path)
         .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-    let session_state = SessionState::new(session_id.clone(), branch_name, session_path.clone());
+    let session_state = SessionState::with_description(
+        session_id.clone(),
+        branch_name,
+        session_path.clone(),
+        args.description.clone(),
+    );
     session_manager.save_state(&session_state)?;
 
     launch_claude_code(
@@ -444,6 +449,7 @@ mod tests {
             name_or_prompt: Some("implement user auth".to_string()),
             prompt: None,
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -458,6 +464,7 @@ mod tests {
             name_or_prompt: Some("auth-feature".to_string()),
             prompt: Some("implement user authentication".to_string()),
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -475,6 +482,7 @@ mod tests {
             name_or_prompt: Some("my-session".to_string()),
             prompt: None,
             file: Some(file_path),
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -493,6 +501,7 @@ mod tests {
             name_or_prompt: Some(file_path_str),
             prompt: None,
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -511,6 +520,7 @@ mod tests {
             name_or_prompt: Some("feature-branch".to_string()),
             prompt: Some(file_path_str),
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -528,6 +538,7 @@ mod tests {
             name_or_prompt: None,
             prompt: None,
             file: Some(file_path),
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -542,6 +553,7 @@ mod tests {
             name_or_prompt: None,
             prompt: None,
             file: None,
+            description: None,
             dangerously_skip_permissions: false,
         };
 
@@ -551,6 +563,25 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("dispatch requires a prompt text or file path"));
+    }
+
+    #[test]
+    fn test_dispatch_with_description() {
+        let args = DispatchArgs {
+            name_or_prompt: Some("test-session".to_string()),
+            prompt: Some("implement feature".to_string()),
+            file: None,
+            description: Some("OAuth2 authentication flow".to_string()),
+            dangerously_skip_permissions: false,
+        };
+
+        let result = args.resolve_prompt_and_session().unwrap();
+        assert_eq!(result.0, Some("test-session".to_string()));
+        assert_eq!(result.1, "implement feature");
+        assert_eq!(
+            args.description,
+            Some("OAuth2 authentication flow".to_string())
+        );
     }
 
     #[test]
