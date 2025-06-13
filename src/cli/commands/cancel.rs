@@ -44,9 +44,12 @@ pub fn execute(args: CancelArgs) -> Result<()> {
         }
     }
 
-    let platform = get_platform_manager();
-    if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
-        eprintln!("Warning: Failed to close IDE window: {}", e);
+    // Skip IDE window closing in test mode or when using mock IDEs
+    if !cfg!(test) && config.ide.command != "echo" {
+        let platform = get_platform_manager();
+        if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
+            eprintln!("Warning: Failed to close IDE window: {}", e);
+        }
     }
 
     println!(
