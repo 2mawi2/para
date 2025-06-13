@@ -249,6 +249,10 @@ mod tests {
     #[test]
     fn test_detect_session_name_explicit() {
         let (_temp_dir, repo, config) = setup_test_repo();
+
+        // Ensure state directory exists
+        fs::create_dir_all(&config.directories.state_dir).expect("Failed to create state dir");
+
         let git_service =
             GitService::discover_from(&repo.root).expect("Failed to create git service");
         let session_manager = SessionManager::new(&config);
