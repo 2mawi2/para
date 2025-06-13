@@ -324,12 +324,18 @@ fn open_ide_for_conflict_resolution(
     Ok(())
 }
 
-fn close_ide_for_session(config: &crate::config::Config, _worktree_path: &Path) -> Result<()> {
+fn close_ide_for_session(config: &crate::config::Config, worktree_path: &Path) -> Result<()> {
     if config.is_wrapper_enabled() {
         return Ok(());
     }
 
-    println!("🚪 IDE session will remain open for review");
+    // Extract session name from worktree path
+    if let Some(session_name) = worktree_path.file_name().and_then(|n| n.to_str()) {
+        let platform = crate::platform::get_platform_manager();
+        if let Err(e) = platform.close_ide_window(session_name, &config.ide.name) {
+            eprintln!("Warning: Failed to close IDE window: {}", e);
+        }
+    }
 
     Ok(())
 }
@@ -653,5 +659,32 @@ mod tests {
         assert!(matches!(rebase, IntegrationStrategy::Rebase));
         assert!(matches!(merge, IntegrationStrategy::Merge));
         assert!(matches!(squash, IntegrationStrategy::Squash));
+    }
+
+    #[test]
+    fn test_close_ide_for_session() {
+        // Create test config
+        let mut config = crate::config::defaults::default_config();
+        config.ide.name = "test-ide".to_string();
+        config.ide.wrapper.enabled = false;
+
+        // Test path with session name
+        let test_path = PathBuf::from("/test/worktrees/test-session-123");
+
+        // Call the function - it should succeed without error
+        let result = close_ide_for_session(&config, &test_path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_ide_for_session_wrapper_enabled() {
+        let mut config = crate::config::defaults::default_config();
+        config.ide.wrapper.enabled = true;
+
+        let test_path = PathBuf::from("/test/worktrees/test-session");
+        let result = close_ide_for_session(&config, &test_path);
+
+        // Should return Ok without attempting to close
+        assert!(result.is_ok());
     }
 }

@@ -288,6 +288,8 @@ Para is ideal when working with AI assistants:
 - **[Detailed Configuration](docs/DETAILED_CONFIGURATION.md)** - Advanced IDE setup and environment variables
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing, architecture, testing
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Workflow Guide](docs/WORKFLOW.md)** - Visual diagrams of Para workflows and state transitions
+- **[IDE Behavior](docs/IDE_BEHAVIOR.md)** - IDE window management during integration and conflicts
 
 ## Requirements
 

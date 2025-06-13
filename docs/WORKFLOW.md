@@ -2,6 +2,8 @@
 
 This document explains the Para session management workflow and state transitions using visual diagrams.
 
+> **Note**: For detailed information about IDE window management during integration and conflict resolution, see [IDE_BEHAVIOR.md](./IDE_BEHAVIOR.md).
+
 ## Session State Diagram
 
 ```mermaid
