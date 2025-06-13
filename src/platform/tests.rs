@@ -4,11 +4,17 @@ mod platform_tests {
 
     #[test]
     fn test_platform_manager_creation() {
-        let platform = get_platform_manager();
+        // Just test that we can create a platform manager
+        // Don't actually call close_ide_window as it's forbidden in tests
+        let _platform = get_platform_manager();
+    }
 
-        // Test that we can create a platform manager
-        // This should work on all platforms
-        assert!(platform.close_ide_window("test-session", "cursor").is_ok());
+    #[test]
+    #[should_panic(expected = "CRITICAL: close_ide_window called from test environment!")]
+    fn test_close_ide_window_panics_in_tests() {
+        // This test verifies that close_ide_window properly panics when called from tests
+        let platform = get_platform_manager();
+        let _ = platform.close_ide_window("test-session", "cursor");
     }
 
     #[cfg(target_os = "macos")]
@@ -16,19 +22,11 @@ mod platform_tests {
         use crate::platform::{macos::MacOSPlatform, PlatformManager};
 
         #[test]
-        fn test_close_ide_window() {
+        #[should_panic(expected = "CRITICAL: close_ide_window called from test environment!")]
+        fn test_macos_close_ide_window_panics_in_tests() {
+            // Verify that MacOSPlatform specifically panics in test environment
             let platform = MacOSPlatform;
-
-            // Test closing IDE windows - this should not fail even if no IDE is running
-            let result = platform.close_ide_window("test-session", "cursor");
-            assert!(result.is_ok());
-
-            let result = platform.close_ide_window("test-session", "code");
-            assert!(result.is_ok());
-
-            // Test unsupported IDE
-            let result = platform.close_ide_window("test-session", "unsupported");
-            assert!(result.is_ok());
+            let _ = platform.close_ide_window("test-session", "cursor");
         }
     }
 }
