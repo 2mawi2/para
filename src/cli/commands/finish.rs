@@ -463,15 +463,18 @@ mod tests {
 
     #[test]
     fn test_cleanup_session_state_fallback() {
-        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-        let config = create_test_config(temp_dir.path());
+        // Use setup_test_repo to create a proper git repository
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        // Create config using the git repo path
+        let config = create_test_config(&repo_path);
         let mut session_manager = SessionManager::new(&config);
 
         // Create a session state that would normally be found by path
         let session_state = SessionState::new(
             "fallback-test-session".to_string(),
             "test/fallback-branch".to_string(),
-            temp_dir.path().join("some-worktree"),
+            repo_path.join("some-worktree"),
         );
 
         session_manager
@@ -529,15 +532,17 @@ mod tests {
 
     #[test]
     fn test_cleanup_session_state_preserve_mode() {
-        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-        let mut config = create_test_config(temp_dir.path());
+        // Use setup_test_repo to create a proper git repository
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        let mut config = create_test_config(&repo_path);
         config.session.preserve_on_finish = true; // Enable preserve mode
         let mut session_manager = SessionManager::new(&config);
 
         let session_state = SessionState::new(
             "preserve-test-session".to_string(),
             "test/preserve-branch".to_string(),
-            temp_dir.path().join("some-worktree"),
+            repo_path.join("some-worktree"),
         );
 
         session_manager
