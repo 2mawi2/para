@@ -100,13 +100,13 @@ mod tests {
             "Test config should use test IDE name"
         );
 
-        // Verify that load_or_create() still points to the real user config
-        // (which is the correct behavior - no global environment variable override)
-        let real_config = ConfigManager::load_or_create().unwrap();
-        // This should NOT be the same as our test config
+        // Verify that load_or_create() would point to a different config
+        // (we can't actually load it as it might have an invalid IDE command)
+        let default_config_path = ConfigManager::get_config_path().unwrap();
         assert_ne!(
-            real_config.ide.name, "test-ide",
-            "Real config should not be affected by test isolation"
+            guard.config_path().to_string_lossy(),
+            default_config_path,
+            "Test config path should be different from default user config path"
         );
     }
 }
