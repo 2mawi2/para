@@ -75,4 +75,38 @@ mod tests {
             "Test config should use test IDE name"
         );
     }
+
+    #[test]
+    fn test_config_isolation_uses_test_config_explicitly() {
+        use crate::config::ConfigManager;
+        use crate::test_utils::test_helpers::TestEnvironmentGuard;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a guard to set up test environment
+        let guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Tests should explicitly load from the test config path
+        let config = ConfigManager::load_from_file(guard.config_path()).unwrap();
+
+        // Verify we get the isolated test config
+        assert_eq!(
+            config.ide.command, "echo",
+            "Test config should use mock IDE command"
+        );
+        assert_eq!(
+            config.ide.name, "test-ide",
+            "Test config should use test IDE name"
+        );
+
+        // Verify that load_or_create() still points to the real user config
+        // (which is the correct behavior - no global environment variable override)
+        let real_config = ConfigManager::load_or_create().unwrap();
+        // This should NOT be the same as our test config
+        assert_ne!(
+            real_config.ide.name, "test-ide",
+            "Real config should not be affected by test isolation"
+        );
+    }
 }

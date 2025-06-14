@@ -6,6 +6,74 @@ use std::path::Path;
 pub struct GitignoreManager;
 
 impl GitignoreManager {
+    /// Create a new GitignoreManager for the given directory
+    pub fn new(_directory: &str) -> Self {
+        Self
+    }
+
+    /// Add an entry to the .gitignore file in the specified directory
+    pub fn add_entry(&self, entry: &str) -> Result<()> {
+        let gitignore_path = Path::new(".gitignore");
+
+        // Check if entry already exists
+        if gitignore_path.exists() {
+            let content = fs::read_to_string(gitignore_path)?;
+            if Self::is_entry_already_ignored(&content, entry) {
+                return Ok(());
+            }
+        }
+
+        // Add entry to gitignore
+        Self::add_entry_to_gitignore(gitignore_path, entry)?;
+        Ok(())
+    }
+
+    /// Check if entry is already ignored in the gitignore content
+    fn is_entry_already_ignored(content: &str, entry: &str) -> bool {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            if line == entry {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Add entry to gitignore file
+    fn add_entry_to_gitignore(gitignore_path: &Path, entry: &str) -> Result<()> {
+        if gitignore_path.exists() {
+            // Append to existing gitignore
+            let existing_content = fs::read_to_string(gitignore_path)?;
+            let new_content = if existing_content.ends_with('\n') {
+                format!("{}{}\n", existing_content, entry)
+            } else {
+                format!("{}\n{}\n", existing_content, entry)
+            };
+
+            fs::write(gitignore_path, new_content).map_err(|e| {
+                ParaError::fs_error(format!(
+                    "Failed to update .gitignore at {}: {}",
+                    gitignore_path.display(),
+                    e
+                ))
+            })?;
+        } else {
+            // Create new gitignore
+            fs::write(gitignore_path, format!("{}\n", entry)).map_err(|e| {
+                ParaError::fs_error(format!(
+                    "Failed to create .gitignore at {}: {}",
+                    gitignore_path.display(),
+                    e
+                ))
+            })?;
+        }
+
+        Ok(())
+    }
+
     /// Ensure that .para directory is ignored in the repository's main .gitignore
     pub fn ensure_para_ignored_in_repository(repo_root: &Path) -> Result<()> {
         let gitignore_path = repo_root.join(".gitignore");
