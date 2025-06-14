@@ -10,7 +10,7 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 
 ### MCP Tools (for Orchestrator)
 - **para_dispatch** - Primary tool for launching agents
-- **para_integrate** - Manual integration if needed
+- **para_finish** - Complete sessions with optional auto-integration
 - **para_list** - Check status
 - **para_start** - Manual sessions with user
 - **para_finish** - Rarely used
@@ -18,7 +18,6 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 
 ### CLI Commands (for Dispatched Agents)
 - **para finish** - Creates branch for review
-- **para integrate** - Auto-merges to main branch
 - **para list** - Check their own status
 
 ## Orchestration Workflow
@@ -54,8 +53,8 @@ Parallel:
 # Orchestrator dispatches agents
 para_dispatch(session_name="api-spec", file="tasks/TASK_1_api_spec.md")
 
-# Agent completes and integrates automatically
-para integrate "Add API specification"
+# Agent completes and creates branch for review
+para finish "Add API specification"
 
 # Orchestrator continues with user on next tasks
 # No monitoring needed - agents handle their own integration
@@ -78,7 +77,7 @@ Requirements:
 - Follow REST conventions
 - Include input validation
 
-When done: para integrate "Add user authentication"
+When done: para finish "Add user authentication"
 ```
 
 ## MCP Tool Descriptions
@@ -91,10 +90,10 @@ The MCP tools include comprehensive documentation in their descriptions. Key poi
    - Workflow options
    - Example task format
 
-2. **Automatic Integration**:
-   - Agents use `para integrate` to auto-merge
-   - Conflicts create branches for manual resolution
-   - Orchestrator doesn't need to monitor
+2. **Branch Creation**:
+   - Agents use `para finish` to create branches for review
+   - All changes require manual review and merge
+   - Orchestrator can review branches before integration
 
 3. **Task Organization**:
    - Default `tasks/` directory
@@ -112,8 +111,7 @@ The MCP tools include comprehensive documentation in their descriptions. Key poi
 ## Configuration
 
 Users can customize the workflow in their `CLAUDE.md`:
-- Choose `para finish` for manual review workflow
-- Choose `para integrate` for automatic integration
+- Use `para finish` for manual review workflow
 - Add `-d` flag preferences for automation
 
 The MCP tools adapt to these preferences, making the system flexible for different team workflows.

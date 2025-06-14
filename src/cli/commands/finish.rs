@@ -13,7 +13,6 @@ struct FinishContext<'a> {
     is_worktree_env: bool,
     current_dir: &'a std::path::Path,
     feature_branch: &'a str,
-    base_branch: &'a str,
     session_manager: &'a mut SessionManager,
     git_service: &'a GitService,
     config: &'a Config,
@@ -87,64 +86,6 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
 
     println!("✓ Session finished successfully");
     println!("  Feature branch: {}", final_branch);
-    if ctx.args.integrate {
-        println!("  Integrated into: {}", ctx.base_branch);
-    }
-    println!("  Commit message: {}", ctx.args.message);
-
-    Ok(())
-}
-
-/// Handle finish result with integration failure - clean up session, show warning message
-fn handle_finish_integration_failure(
-    final_branch: String,
-    error: String,
-    ctx: &mut FinishContext,
-) -> Result<()> {
-    let worktree_path = if ctx.is_worktree_env {
-        Some(ctx.current_dir.to_path_buf())
-    } else {
-        ctx.session_info.as_ref().map(|s| s.worktree_path.clone())
-    };
-
-    cleanup_session_state(
-        ctx.session_manager,
-        ctx.session_info.clone(),
-        ctx.feature_branch,
-        ctx.config,
-    )?;
-
-    if let Some(ref path) = worktree_path {
-        if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
-            // Safety check: ensure no uncommitted changes in worktree before removing
-            if let Ok(worktree_repo) = GitRepository::discover_from(path) {
-                if worktree_repo.has_uncommitted_changes().unwrap_or(false) {
-                    eprintln!(
-                        "Warning: Preserving worktree at {} due to uncommitted changes",
-                        path.display()
-                    );
-                    return Ok(());
-                }
-            }
-
-            if let Err(e) = ctx.git_service.remove_worktree(path) {
-                eprintln!(
-                    "Warning: Failed to remove worktree at {}: {}",
-                    path.display(),
-                    e
-                );
-            }
-        }
-    }
-
-    println!("⚠ Session finished with integration failure");
-    println!("  Feature branch: {}", final_branch);
-    println!("  Changes preserved on branch with your commit message");
-    println!("  Integration error: {}", error);
-    println!(
-        "  💡 Manually resolve conflicts and integrate the branch, or use 'para integrate {}'",
-        final_branch
-    );
     println!("  Commit message: {}", ctx.args.message);
 
     Ok(())
@@ -275,10 +216,6 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 
     // Determine feature and base branches
     let feature_branch = determine_feature_branch(&session_info, &session_env)?;
-    let base_branch = git_service
-        .repository()
-        .get_main_branch()
-        .unwrap_or_else(|_| "main".to_string());
 
     // Perform pre-finish operations
     perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
@@ -286,10 +223,8 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
     // Execute the finish operation
     let finish_request = FinishRequest {
         feature_branch: feature_branch.clone(),
-        base_branch: base_branch.clone(),
         commit_message: args.message.clone(),
         target_branch_name: args.branch.clone(),
-        integrate: args.integrate,
     };
 
     let result = git_service.finish_session(finish_request)?;
@@ -300,7 +235,6 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
         is_worktree_env,
         current_dir: &current_dir,
         feature_branch: &feature_branch,
-        base_branch: &base_branch,
         session_manager: &mut session_manager,
         git_service: &git_service,
         config: &config,
@@ -310,12 +244,6 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
     match result {
         FinishResult::Success { final_branch } => {
             handle_finish_success(final_branch, &mut ctx)?;
-        }
-        FinishResult::SuccessWithIntegrationFailure {
-            final_branch,
-            error,
-        } => {
-            handle_finish_integration_failure(final_branch, error, &mut ctx)?;
         }
     }
 
@@ -352,7 +280,6 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: crate::cli::parser::IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -407,7 +334,6 @@ mod tests {
         let valid_args = FinishArgs {
             message: "Test commit message".to_string(),
             branch: None,
-            integrate: false,
             session: None,
         };
         assert!(valid_args.validate().is_ok());
@@ -415,7 +341,6 @@ mod tests {
         let empty_message_args = FinishArgs {
             message: "".to_string(),
             branch: None,
-            integrate: false,
             session: None,
         };
         assert!(empty_message_args.validate().is_err());
@@ -423,7 +348,6 @@ mod tests {
         let whitespace_message_args = FinishArgs {
             message: "   ".to_string(),
             branch: None,
-            integrate: false,
             session: None,
         };
         assert!(whitespace_message_args.validate().is_err());
@@ -431,7 +355,6 @@ mod tests {
         let invalid_branch_args = FinishArgs {
             message: "Test message".to_string(),
             branch: Some("-invalid-branch".to_string()),
-            integrate: false,
             session: None,
         };
         assert!(invalid_branch_args.validate().is_err());

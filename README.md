@@ -52,8 +52,6 @@ para finish "Add new feature"
 - `para finish "message"` - Auto-stage & finish session with commit message
 - `para finish "message" --branch custom-name` - Finish with custom branch name
 - `para list` - Show all active sessions
-- `para integrate [session]` - Integrate session into main branch (with conflict handling)
-- `para continue` - Resume after resolving integration conflicts (universal conflict detection)
 - `para cancel [session]` - Discard current or specified session
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
@@ -126,29 +124,6 @@ The `dispatch` command creates new sessions and immediately opens Claude Code wi
 **MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management without needing the dispatch command.
 
 **Note:** Dispatch command only works with Claude Code. Use `para config` to switch IDEs if needed.
-
-## Integration Strategies
-
-Para supports multiple integration strategies for different development workflows:
-
-```bash
-# Rebase strategy (default) - clean linear history
-para integrate --strategy rebase
-
-# Merge strategy - preserves feature branch history  
-para integrate --strategy merge
-
-# Squash strategy - combines all commits into one
-para integrate --strategy squash
-
-# Preview integration without executing
-para integrate --dry-run
-```
-
-### Integration Commands
-- `para integrate [session]` - Integrate session with default strategy
-- `para integrate --abort` - Abort active integration and restore original state
-- `para continue` - Resume paused integration after conflict resolution
 
 ## How It Works
 
@@ -250,39 +225,6 @@ para dispatch --file auth-requirements.prompt
 para finish "Implement OAuth authentication"
 ```
 
-## Integration & Conflict Resolution
-
-Para provides robust conflict resolution with universal conflict detection for all Git operations:
-
-### Basic Integration
-```bash
-# Integrate session into main branch
-para integrate my-session
-# ✅ Integration completed successfully!
-
-# Or integrate current session
-para integrate
-```
-
-### When Conflicts Occur
-```bash
-para integrate my-session
-# ⚠️ Integration paused due to conflicts
-# 📁 Conflicted files:
-#    • README.md
-#    • src/main.rs
-
-# Resolve conflicts manually in your IDE, then:
-para continue
-# ✅ Integration completed successfully!
-```
-
-### Advanced Conflict Features
-- **Universal conflict detection**: Works with merge, rebase, and cherry-pick operations
-- **Automatic staging**: Resolved files are automatically staged
-- **Smart operation detection**: Continues the appropriate Git operation (rebase/merge/cherry-pick)
-- **State management**: Proper distinction between conflicts and failures
-- **IDE integration**: Automatically opens conflicted files for resolution
 
 ## Session Recovery
 
@@ -392,8 +334,6 @@ The completion system provides intelligent suggestions:
 - `para recover <TAB>` → Shows archived sessions
 
 **🌿 Branch & Integration:**
-- `para integrate --target <TAB>` → Shows git branches
-- `para integrate --strategy <TAB>` → Shows: `merge`, `squash`, `rebase`
 - `para finish --branch <TAB>` → Shows git branches
 
 **📄 File & Task Completion:**

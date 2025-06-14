@@ -1,4 +1,3 @@
-use crate::cli::parser::IntegrationStrategy;
 use serde::{Deserialize, Serialize};
 
 pub mod defaults;
@@ -43,7 +42,6 @@ pub struct GitConfig {
     pub branch_prefix: String,
     pub auto_stage: bool,
     pub auto_commit: bool,
-    pub default_integration_strategy: IntegrationStrategy,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -113,10 +111,6 @@ impl Config {
 
     pub fn should_preserve_on_finish(&self) -> bool {
         self.session.preserve_on_finish
-    }
-
-    pub fn get_default_integration_strategy(&self) -> IntegrationStrategy {
-        self.git.default_integration_strategy.clone()
     }
 
     pub fn is_real_ide_environment(&self) -> bool {
