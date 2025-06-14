@@ -11,15 +11,20 @@ Para enables parallel development using Git worktrees. Each task runs in an isol
 
 #### Starting Work
 ```bash
-# For simple tasks
-para dispatch "task-name" "Implement feature X"
+# For simple tasks (short, natural language only)
+para dispatch "task-name" "Implement user login page"
 
-# For complex tasks with file
+# For complex tasks or special characters (RECOMMENDED)
 para dispatch "task-name" --file tasks/TASK_1_feature.md
 
 # Skip IDE permissions (for automation)
 para dispatch "task-name" --file tasks/TASK_1_feature.md -d
 ```
+
+**Important**: Prefer task files over inline descriptions when:
+- Task contains code snippets, JSON, or special characters
+- Task description is longer than a single sentence
+- Task includes technical specifications or formatting
 
 #### Completing Work
 ```bash
