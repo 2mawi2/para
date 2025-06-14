@@ -28,11 +28,8 @@ para dispatch "task-name" --file tasks/TASK_1_feature.md -d
 
 #### Completing Work
 ```bash
-# Option 1: Create branch for manual review
+# Create branch for manual review
 para finish "Implement feature X"
-
-# Option 2: Auto-integrate to main branch (recommended)
-para integrate "Implement feature X"
 ```
 
 ### Task Organization
@@ -69,7 +66,7 @@ Implement a user authentication system with the following requirements:
 Use the existing database configuration.
 Follow project conventions for API responses.
 
-When complete, run: para integrate "Add user authentication system"
+When complete, run: para finish "Add user authentication system"
 ```
 
 ### Parallelization Strategy
@@ -92,19 +89,12 @@ When complete, run: para integrate "Add user authentication system"
 
 ### Integration Workflow
 
-1. **Automatic Integration** (recommended):
-   ```bash
-   para integrate "Your commit message"
-   ```
-   - Automatically merges to main branch
-   - If conflicts occur, creates branch for manual resolution
-
-2. **Manual Review**:
-   ```bash
-   para finish "Your commit message"
-   ```
-   - Creates branch `para/session-name`
-   - Requires manual merge after review
+**Manual Review**:
+```bash
+para finish "Your commit message"
+```
+- Creates branch `para/session-name`
+- Requires manual merge after review
 
 ### Best Practices
 
@@ -118,12 +108,7 @@ When complete, run: para integrate "Add user authentication system"
 
 Specify your team's preference at the beginning of tasks:
 
-**For automatic integration:**
-```
-When complete: para integrate "commit message"
-```
-
-**For manual review:**
+**For branch creation and manual review:**
 ```
 When complete: para finish "commit message"
 ```
@@ -159,11 +144,11 @@ Do not run any para commands on completion.
 
 4. **Agents work independently** and run:
    ```bash
-   para integrate "Add API endpoints"
-   para integrate "Add user interface"
+   para finish "Add API endpoints"
+   para finish "Add user interface"
    ```
 
-5. **Automatic integration** happens as each completes
+5. **Manual integration** happens after review of each branch
 
 ### Troubleshooting
 

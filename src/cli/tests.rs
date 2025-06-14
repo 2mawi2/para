@@ -75,7 +75,6 @@ mod cli_tests {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
                 assert!(args.branch.is_none());
-                assert!(!args.integrate);
                 assert!(args.session.is_none());
             }
             _ => panic!("Expected Finish command"),
@@ -96,20 +95,6 @@ mod cli_tests {
             Commands::Finish(args) => {
                 assert_eq!(args.message, "Complete feature");
                 assert_eq!(args.branch, Some("my-branch".to_string()));
-                assert!(!args.integrate);
-            }
-            _ => panic!("Expected Finish command"),
-        }
-    }
-
-    #[test]
-    fn test_finish_command_with_integrate() {
-        let cli =
-            Cli::try_parse_from(["para", "finish", "Complete feature", "--integrate"]).unwrap();
-        match cli.command.unwrap() {
-            Commands::Finish(args) => {
-                assert_eq!(args.message, "Complete feature");
-                assert!(args.integrate);
             }
             _ => panic!("Expected Finish command"),
         }
@@ -214,7 +199,6 @@ mod cli_tests {
         let args = FinishArgs {
             message: "".to_string(),
             branch: None,
-            integrate: false,
             session: None,
         };
         assert!(args.validate().is_err());
@@ -222,7 +206,6 @@ mod cli_tests {
         let args = FinishArgs {
             message: "Valid commit message".to_string(),
             branch: None,
-            integrate: false,
             session: None,
         };
         assert!(args.validate().is_ok());
@@ -230,7 +213,6 @@ mod cli_tests {
         let args = FinishArgs {
             message: "Valid commit message".to_string(),
             branch: Some("-invalid".to_string()),
-            integrate: false,
             session: None,
         };
         assert!(args.validate().is_err());

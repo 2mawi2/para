@@ -103,10 +103,10 @@ fn find_mcp_server() -> Result<McpServerConfig> {
     let current_exe = std::env::current_exe()
         .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
     let exe_path = current_exe.to_string_lossy();
-    
+
     // Check if running from homebrew location
     let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
-    
+
     if is_homebrew {
         // For homebrew installations, ONLY use homebrew MCP server
         let homebrew_locations = vec![
@@ -125,15 +125,16 @@ fn find_mcp_server() -> Result<McpServerConfig> {
                 });
             }
         }
-        
+
         return Err(ParaError::invalid_args(
             "Para is installed via Homebrew but MCP server is missing.\n\
-            Try reinstalling: brew reinstall para".to_string()
+            Try reinstalling: brew reinstall para"
+                .to_string(),
         ));
     }
-    
+
     // For development/local installations, check in this order:
-    
+
     // 1. Local development: TypeScript server in current directory
     let current_dir = std::env::current_dir()
         .map_err(|e| ParaError::invalid_args(format!("Failed to get current directory: {}", e)))?;

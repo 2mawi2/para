@@ -132,8 +132,8 @@ _para_completion() {
 
     # Command-specific completions
     case "${words[1]}" in
-        finish|integrate)
-            # Third argument for finish/integrate can be session name
+        finish)
+            # Third argument for finish can be session name
             if [[ $cword -eq 3 ]]; then
                 _para_complete_sessions "${cur}"
                 return 0
@@ -156,7 +156,7 @@ _para_completion() {
         *)
             # Default to command completion if no command selected
             if [[ $cword -eq 1 ]]; then
-                local commands="start dispatch finish integrate cancel clean list resume recover continue config completion help"
+                local commands="start dispatch finish cancel clean list resume recover config completion help"
                 COMPREPLY=($(compgen -W "$commands" -- "${cur}"))
             fi
             ;;
@@ -260,7 +260,6 @@ _para() {
                             ;;
                     esac
                     ;;
-                integrate)
                     case $words[CURRENT-1] in
                         --strategy)
                             _para_integration_strategies
@@ -304,13 +303,11 @@ _para_commands() {
         'start:Create session with optional name'
         'dispatch:Start Claude Code session with prompt'
         'finish:Squash all changes into single commit'
-        'integrate:Squash commits and merge into base branch'
         'cancel:Cancel session (moves to archive)'
         'clean:Remove all active sessions'
         'list:List active sessions'
         'resume:Resume session in IDE'
         'recover:Recover cancelled session from archive'
-        'continue:Complete merge after resolving conflicts'
         'config:Setup configuration'
         'completion:Generate shell completion script'
     )
@@ -358,24 +355,11 @@ function __para_finish_needs_session
 end
 complete -f -c para -n "__fish_para_using_subcommand finish; and __para_finish_needs_session" -a "(__para_sessions)" -d "Session to finish"
 
-# para integrate [message] [session-name] - session name is second argument after message  
-function __para_integrate_needs_session
-    set -l cmd (commandline -opc)
-    test (count $cmd) -ge 3
-end
-complete -f -c para -n "__fish_para_using_subcommand integrate; and __para_integrate_needs_session" -a "(__para_sessions)" -d "Session to integrate"
-
 # 2. BRANCH COMPLETIONS  
-# para integrate --target <branch>
-complete -f -c para -n "__fish_para_using_subcommand integrate" -l target -a "(__para_branches)" -d "Target branch"
-
 # para finish --branch <branch>
 complete -f -c para -n "__fish_para_using_subcommand finish" -l branch -a "(__para_branches)" -d "Custom branch name"
 
 # 3. STRATEGY COMPLETIONS
-# para integrate --strategy <strategy>
-complete -f -c para -n "__fish_para_using_subcommand integrate" -l strategy -a "merge squash rebase" -d "Integration strategy"
-
 # 4. FILE COMPLETIONS
 # para dispatch --file <file>
 complete -c para -n "__fish_para_using_subcommand dispatch" -s f -l file -F -d "Prompt file"

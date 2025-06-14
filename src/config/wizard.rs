@@ -186,7 +186,6 @@ pub fn run_quick_setup() -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
     #[test]
@@ -228,7 +227,6 @@ mod tests {
                 branch_prefix: "test-prefix".to_string(),
                 auto_stage: false,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d".to_string(),
@@ -245,7 +243,6 @@ mod tests {
     fn test_config_validation_in_wizard() {
         // Test that configs created by the wizard are valid
         // Create a test config manually to avoid IDE detection in CI
-        use crate::cli::parser::IntegrationStrategy;
         use crate::config::{
             Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
         };
@@ -269,7 +266,6 @@ mod tests {
                 branch_prefix: "para".to_string(),
                 auto_stage: true,
                 auto_commit: true,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

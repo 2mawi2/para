@@ -159,7 +159,6 @@ impl<'a> ArchiveManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use std::fs;
     use std::path::Path;
@@ -186,7 +185,6 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -471,10 +469,11 @@ mod tests {
             .checkout_branch(&initial_branch)
             .unwrap();
 
-        // Rename to archived format
+        // Create archived format branch and delete temp
         branch_manager
-            .rename_branch("temp-old", &old_archive_branch)
+            .create_branch(&old_archive_branch, "temp-old")
             .unwrap();
+        branch_manager.delete_branch("temp-old", true).unwrap();
 
         // Create a recent archived session
         let recent_session = "recent-session";
