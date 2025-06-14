@@ -1,5 +1,4 @@
 use super::*;
-use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 use tempfile::TempDir;
 
@@ -23,7 +22,6 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
             branch_prefix: "para".to_string(),
             auto_stage: true,
             auto_commit: false,
-            default_integration_strategy: IntegrationStrategy::Squash,
         },
         session: SessionConfig {
             default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -178,7 +176,6 @@ mod dynamic_completion_tests {
 
         let finish_flags = completion.get_flag_completions(Some("finish"));
         assert!(finish_flags.iter().any(|s| s.text == "--branch"));
-        assert!(finish_flags.iter().any(|s| s.text == "--integrate"));
 
         let list_flags = completion.get_flag_completions(Some("list"));
         assert!(list_flags.iter().any(|s| s.text == "--verbose"));
@@ -270,7 +267,6 @@ mod generator_tests {
         let bash_script = enhanced_bash.unwrap();
         assert!(bash_script.contains("para"));
         assert!(bash_script.contains("_para_complete_sessions"));
-        assert!(bash_script.contains("_para_complete_integration_strategies"));
 
         let enhanced_zsh =
             generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Zsh);
@@ -278,7 +274,6 @@ mod generator_tests {
         let zsh_script = enhanced_zsh.unwrap();
         assert!(zsh_script.contains("para"));
         assert!(zsh_script.contains("_para_sessions"));
-        assert!(zsh_script.contains("_para_integration_strategies"));
 
         let enhanced_fish =
             generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Fish);
