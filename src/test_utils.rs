@@ -97,6 +97,7 @@ pub mod test_helpers {
         original_dir: PathBuf,
         test_dir: PathBuf,
         test_config_path: PathBuf,
+        original_home: Option<String>,
     }
 
     impl TestEnvironmentGuard {
@@ -113,6 +114,10 @@ pub mod test_helpers {
 
             std::env::set_current_dir(git_temp.path())?;
 
+            // Save original HOME and set temporary HOME
+            let original_home = std::env::var("HOME").ok();
+            std::env::set_var("HOME", temp_dir.path());
+
             let _config_dir = setup_isolated_test_environment(temp_dir);
 
             // Create test config file
@@ -126,6 +131,7 @@ pub mod test_helpers {
                 original_dir,
                 test_dir: git_temp.path().to_path_buf(),
                 test_config_path,
+                original_home,
             })
         }
 
@@ -178,6 +184,12 @@ pub mod test_helpers {
             }
 
             restore_environment(self.original_dir.clone());
+            
+            // Restore original HOME environment variable
+            match &self.original_home {
+                Some(home) => std::env::set_var("HOME", home),
+                None => std::env::remove_var("HOME"),
+            }
         }
     }
 }

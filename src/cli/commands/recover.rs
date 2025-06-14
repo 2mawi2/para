@@ -239,10 +239,9 @@ mod tests {
 
     #[test]
     fn test_successful_recovery_of_archived_session() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
 
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
@@ -287,10 +286,9 @@ mod tests {
 
     #[test]
     fn test_recovery_when_no_archived_sessions_exist() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
 
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
@@ -318,10 +316,9 @@ mod tests {
 
     #[test]
     fn test_recovery_with_invalid_session_names() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
 
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
@@ -347,10 +344,9 @@ mod tests {
 
     #[test]
     fn test_interactive_session_selection_flow() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
 
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
@@ -403,10 +399,9 @@ mod tests {
 
     #[test]
     fn test_force_recovery_when_conflicts_exist() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
 
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
