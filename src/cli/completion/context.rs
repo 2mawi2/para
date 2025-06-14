@@ -41,7 +41,7 @@ impl CompletionContext {
             Some("resume") | Some("cancel") | Some("recover") => {
                 self.position >= 2 && !self.is_completing_flag()
             }
-            Some("finish") | Some("integrate") => self.position == 3 && !self.is_completing_flag(),
+            Some("finish") => self.position == 3 && !self.is_completing_flag(),
             _ => false,
         }
     }

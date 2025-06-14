@@ -38,8 +38,8 @@
 **Problem:** Getting conflicts when finishing sessions  
 **Solution:** This is normal when multiple sessions modify the same files:
 1. Edit the conflicted files to resolve conflicts
-2. **Don't** run `git add` manually
-3. Run `para continue` to auto-stage and complete the finish
+2. **Don't** run `git add` manually  
+3. Run `para finish` again to auto-stage and complete the finish
 
 ### IDE Not Opening
 **Problem:** Para creates session but IDE doesn't open  

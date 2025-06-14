@@ -79,8 +79,6 @@ impl DynamicCompletion {
                 .with_description("Start Claude Code session with prompt".to_string()),
             CompletionSuggestion::new("finish".to_string(), CompletionType::Subcommand)
                 .with_description("Squash all changes into single commit".to_string()),
-            CompletionSuggestion::new("integrate".to_string(), CompletionType::Subcommand)
-                .with_description("Squash commits and merge into base branch".to_string()),
             CompletionSuggestion::new("cancel".to_string(), CompletionType::Subcommand)
                 .with_description("Cancel session (moves to archive)".to_string()),
             CompletionSuggestion::new("clean".to_string(), CompletionType::Subcommand)
@@ -91,8 +89,6 @@ impl DynamicCompletion {
                 .with_description("Resume session in IDE".to_string()),
             CompletionSuggestion::new("recover".to_string(), CompletionType::Subcommand)
                 .with_description("Recover cancelled session from archive".to_string()),
-            CompletionSuggestion::new("continue".to_string(), CompletionType::Subcommand)
-                .with_description("Complete merge after resolving conflicts".to_string()),
             CompletionSuggestion::new("config".to_string(), CompletionType::Subcommand)
                 .with_description("Setup configuration".to_string()),
             CompletionSuggestion::new("completion".to_string(), CompletionType::Subcommand)
@@ -129,14 +125,11 @@ impl DynamicCompletion {
                 ]);
             }
             Some("finish") => {
-                suggestions.extend(vec![
-                    CompletionSuggestion::new("--branch".to_string(), CompletionType::Flag)
-                        .with_description("Rename feature branch to specified name".to_string()),
-                    CompletionSuggestion::new("--integrate".to_string(), CompletionType::Flag)
-                        .with_description("Automatically integrate into base branch".to_string()),
-                    CompletionSuggestion::new("-i".to_string(), CompletionType::Flag)
-                        .with_description("Automatically integrate into base branch".to_string()),
-                ]);
+                suggestions.extend(vec![CompletionSuggestion::new(
+                    "--branch".to_string(),
+                    CompletionType::Flag,
+                )
+                .with_description("Rename feature branch to specified name".to_string())]);
             }
             Some("list") => {
                 suggestions.extend(vec![
@@ -258,7 +251,6 @@ impl DynamicCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use tempfile::TempDir;
 
@@ -282,7 +274,6 @@ mod tests {
                 branch_prefix: "para".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

@@ -1,5 +1,4 @@
 use super::*;
-use crate::cli::parser::IntegrationStrategy;
 use crate::config::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 use tempfile::TempDir;
 
@@ -23,7 +22,6 @@ fn create_test_config(temp_dir: &std::path::Path) -> Config {
             branch_prefix: "para".to_string(),
             auto_stage: true,
             auto_commit: false,
-            default_integration_strategy: IntegrationStrategy::Squash,
         },
         session: SessionConfig {
             default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -178,7 +176,6 @@ mod dynamic_completion_tests {
 
         let finish_flags = completion.get_flag_completions(Some("finish"));
         assert!(finish_flags.iter().any(|s| s.text == "--branch"));
-        assert!(finish_flags.iter().any(|s| s.text == "--integrate"));
 
         let list_flags = completion.get_flag_completions(Some("list"));
         assert!(list_flags.iter().any(|s| s.text == "--verbose"));

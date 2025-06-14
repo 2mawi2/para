@@ -185,7 +185,6 @@ fn is_valid_git_ref_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
     #[test]
@@ -288,7 +287,6 @@ mod tests {
             branch_prefix: "para".to_string(),
             auto_stage: true,
             auto_commit: true,
-            default_integration_strategy: IntegrationStrategy::Squash,
         };
         assert!(validate_git_config(&valid_config).is_ok());
 
@@ -296,7 +294,6 @@ mod tests {
             branch_prefix: "my branch".to_string(),
             auto_stage: true,
             auto_commit: true,
-            default_integration_strategy: IntegrationStrategy::Squash,
         };
         assert!(validate_git_config(&invalid_config).is_err());
     }

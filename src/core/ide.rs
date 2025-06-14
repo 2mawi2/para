@@ -298,7 +298,6 @@ impl IdeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use tempfile::TempDir;
 
     fn create_test_config(ide_name: &str, ide_command: &str) -> Config {
@@ -321,7 +320,6 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: crate::config::SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),

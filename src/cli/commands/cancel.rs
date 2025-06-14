@@ -169,7 +169,6 @@ mod tests {
                 branch_prefix: "para".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: crate::cli::parser::IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
