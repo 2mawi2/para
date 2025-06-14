@@ -239,7 +239,6 @@ pub struct RecoveryValidation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
     use std::fs;
     use std::path::Path;
@@ -266,7 +265,6 @@ mod tests {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
@@ -374,12 +372,12 @@ mod tests {
             .unwrap();
 
         fs::write(
-            git_service.repository().work_dir.join("test-file.txt"),
+            git_service.repository().root.join("test-file.txt"),
             "test content",
         )
         .unwrap();
 
-        let repo_path = &git_service.repository().work_dir;
+        let repo_path = &git_service.repository().root;
         Command::new("git")
             .current_dir(repo_path)
             .args(["add", "test-file.txt"])

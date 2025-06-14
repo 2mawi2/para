@@ -6,7 +6,6 @@ use std::process::Command;
 pub struct GitRepository {
     pub root: PathBuf,
     pub git_dir: PathBuf,
-    pub work_dir: PathBuf,
 }
 
 impl GitRepository {
@@ -37,13 +36,8 @@ impl GitRepository {
         let root = PathBuf::from(root);
 
         let git_dir = Self::get_git_dir(&root)?;
-        let work_dir = root.clone();
 
-        Ok(Self {
-            root,
-            git_dir,
-            work_dir,
-        })
+        Ok(Self { root, git_dir })
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -127,16 +121,6 @@ impl GitRepository {
         Ok(!output.trim().is_empty())
     }
 
-    pub fn get_commit_count_since(&self, base_branch: &str, feature_branch: &str) -> Result<usize> {
-        let range = format!("{}..{}", base_branch, feature_branch);
-        let output = execute_git_command(self, &["rev-list", "--count", &range])?;
-
-        output
-            .trim()
-            .parse::<usize>()
-            .map_err(|e| ParaError::git_operation(format!("Failed to parse commit count: {}", e)))
-    }
-
     pub fn is_clean_working_tree(&self) -> Result<bool> {
         let status_output = execute_git_command(self, &["status", "--porcelain"])?;
         let has_staged = !status_output.trim().is_empty();
@@ -147,17 +131,6 @@ impl GitRepository {
 
         let diff_output = execute_git_command(self, &["diff", "--quiet"]);
         Ok(diff_output.is_ok())
-    }
-
-    pub fn get_remote_url(&self) -> Result<Option<String>> {
-        match execute_git_command(self, &["remote", "get-url", "origin"]) {
-            Ok(url) => Ok(Some(url.trim().to_string())),
-            Err(_) => Ok(None),
-        }
-    }
-
-    pub fn get_merge_base(&self, branch1: &str, branch2: &str) -> Result<String> {
-        execute_git_command(self, &["merge-base", branch1, branch2])
     }
 
     pub fn stage_all_changes(&self) -> Result<()> {
@@ -194,18 +167,6 @@ impl GitRepository {
 
     pub fn checkout_branch(&self, branch: &str) -> Result<()> {
         execute_git_command_with_status(self, &["checkout", branch])
-    }
-
-    pub fn reset_hard(&self, commit: &str) -> Result<()> {
-        execute_git_command_with_status(self, &["reset", "--hard", commit])
-    }
-
-    pub fn get_commit_message(&self, commit: &str) -> Result<String> {
-        execute_git_command(self, &["log", "--format=%B", "-n", "1", commit])
-    }
-
-    pub fn merge_fast_forward(&self, branch: &str) -> Result<()> {
-        execute_git_command_with_status(self, &["merge", "--ff-only", branch])
     }
 
     fn get_git_dir(repo_root: &Path) -> Result<PathBuf> {

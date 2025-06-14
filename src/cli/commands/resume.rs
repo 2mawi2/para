@@ -183,7 +183,6 @@ fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::IntegrationStrategy;
     use crate::config::{
         Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
@@ -245,7 +244,6 @@ mod tests {
                 branch_prefix: "para".into(),
                 auto_stage: true,
                 auto_commit: false,
-                default_integration_strategy: IntegrationStrategy::Squash,
             },
             session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".into(),

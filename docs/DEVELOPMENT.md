@@ -145,7 +145,7 @@ echo 'change A' >> test-file.py && ../../../para.sh finish "A"
 cd ../20*/                           # Session 2: conflicting change
 echo 'change B' >> test-file.py && ../../../para.sh finish "B"  # Conflict!
 # Edit file to resolve conflicts, then:
-./para.sh continue                 # Auto-stages & completes
+../../../para.sh finish "resolve conflicts"  # Auto-stages & completes
 ```
 
 ## 🤝 Contributing

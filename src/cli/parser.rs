@@ -18,8 +18,6 @@ pub enum Commands {
     Dispatch(DispatchArgs),
     /// Squash all changes into single commit
     Finish(FinishArgs),
-    /// Squash commits and merge into base branch
-    Integrate(IntegrateArgs),
     /// Cancel session (moves to archive)
     Cancel(CancelArgs),
     /// Remove all active sessions
@@ -31,17 +29,14 @@ pub enum Commands {
     Resume(ResumeArgs),
     /// Recover cancelled session from archive
     Recover(RecoverArgs),
-    /// Complete merge after resolving conflicts
-    Continue,
     /// Setup configuration
     Config(ConfigArgs),
     /// Generate shell completion script
     Completion(CompletionArgs),
+    /// Initialize shell completions automatically
+    Init,
     /// Setup Model Context Protocol (MCP) integration
     Mcp(crate::cli::commands::mcp::McpCommand),
-    /// Dynamic completion (hidden)
-    #[command(hide = true)]
-    CompleteCommand(CompleteCommandArgs),
     /// Legacy completion endpoint for sessions (hidden)
     #[command(name = "_completion_sessions", hide = true)]
     CompletionSessions,
@@ -92,37 +87,8 @@ pub struct FinishArgs {
     #[arg(long, help = "Rename feature branch to specified name")]
     pub branch: Option<String>,
 
-    /// Automatically integrate into base branch
-    #[arg(long, short = 'i', help = "Automatically integrate into base branch")]
-    pub integrate: bool,
-
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
-}
-
-#[derive(Args, Debug)]
-pub struct IntegrateArgs {
-    /// Commit message for integration
-    pub message: Option<String>,
-
-    /// Session ID (optional, auto-detects if not provided)
-    pub session: Option<String>,
-
-    /// Integration strategy to use
-    #[arg(long, value_enum, help = "Choose integration strategy")]
-    pub strategy: Option<IntegrationStrategy>,
-
-    /// Target branch to integrate into
-    #[arg(long, help = "Integrate into specific target branch")]
-    pub target: Option<String>,
-
-    /// Preview integration without executing
-    #[arg(long, help = "Preview integration without executing")]
-    pub dry_run: bool,
-
-    /// Abort integration and restore original state
-    #[arg(long, help = "Abort integration and restore original state")]
-    pub abort: bool,
 }
 
 #[derive(Args, Debug)]
@@ -195,9 +161,8 @@ pub enum ConfigCommands {
 
 #[derive(Args, Debug)]
 pub struct CompletionArgs {
-    /// Shell to generate completion for
-    #[arg(value_enum)]
-    pub shell: Shell,
+    /// Shell to generate completion for, or 'init' for automatic setup
+    pub shell: String,
 }
 
 #[derive(Args, Debug)]
@@ -222,22 +187,12 @@ pub struct CompleteCommandArgs {
 #[derive(Args, Debug)]
 pub struct WatchArgs {}
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
 #[allow(clippy::enum_variant_names)]
 pub enum Shell {
     Bash,
     Zsh,
     Fish,
-}
-
-#[derive(ValueEnum, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum IntegrationStrategy {
-    /// Create merge commit preserving feature branch history
-    Merge,
-    /// Combine all feature branch commits into single commit
-    Squash,
-    /// Replay feature branch commits on target branch
-    Rebase,
 }
 
 impl StartArgs {

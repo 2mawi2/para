@@ -23,7 +23,7 @@ pub fn execute_command_with_config(
         match cli.command {
             Some(Commands::Config(_))
             | Some(Commands::Completion(_))
-            | Some(Commands::CompleteCommand(_))
+            | Some(Commands::Init)
             | Some(Commands::CompletionSessions)
             | Some(Commands::CompletionBranches)
             | Some(Commands::Watch(_))
@@ -49,17 +49,15 @@ pub fn execute_command_with_config(
             args.validate()?;
             commands::finish::execute(config.unwrap(), args)
         }
-        Some(Commands::Integrate(args)) => commands::integrate::execute(config.unwrap(), args),
         Some(Commands::Cancel(args)) => commands::cancel::execute(config.unwrap(), args),
         Some(Commands::Clean(args)) => commands::clean::execute(config.unwrap(), args),
         Some(Commands::List(args)) => commands::list::execute(config.unwrap(), args),
         Some(Commands::Resume(args)) => commands::resume::execute(config.unwrap(), args),
         Some(Commands::Recover(args)) => commands::recover::execute(config.unwrap(), args),
-        Some(Commands::Continue) => commands::continue_cmd::execute(config.unwrap()),
         Some(Commands::Config(args)) => commands::config::execute(args),
         Some(Commands::Completion(args)) => commands::completion::execute(args),
+        Some(Commands::Init) => commands::init::execute(),
         Some(Commands::Mcp(args)) => commands::mcp::handle_mcp_command(args),
-        Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
         Some(Commands::Watch(args)) => commands::watch::execute(args),
@@ -81,17 +79,16 @@ fn show_usage() {
     println!("  start       Create a new development session");
     println!("  dispatch    Start Claude Code session with a prompt");
     println!("  finish      Complete current session with commit");
-    println!("  integrate   Merge session into base branch");
     println!("  cancel      Cancel current session");
     println!("  clean       Remove all active sessions");
     println!("  list, ls    List active sessions");
     println!("  resume      Resume a session in IDE");
     println!("  recover     Recover cancelled session");
-    println!("  continue    Complete merge after resolving conflicts");
     println!("  config      Setup configuration");
     println!("  mcp         Setup Model Context Protocol integration");
     println!("  watch       Monitor active sessions in real-time TUI");
     println!("  completion  Generate shell completion script");
+    println!("  init        Initialize shell completions automatically");
     println!("  help        Print this message or the help of the given subcommand(s)");
     println!();
     println!("Use 'para <command> --help' for more information on a specific command.");

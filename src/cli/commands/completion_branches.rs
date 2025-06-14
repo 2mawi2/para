@@ -230,8 +230,7 @@ mod tests {
             "git": {
                 "branch_prefix": "custom",
                 "auto_stage": true,
-                "auto_commit": true,
-                "default_integration_strategy": "Squash"
+                "auto_commit": true
             },
             "session": {
                 "default_name_format": "%Y%m%d-%H%M%S",

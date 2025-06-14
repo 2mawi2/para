@@ -421,7 +421,7 @@ mod tests {
 
         let state_file = state_dir.join(format!("{}.state", session_id));
         let json_content = serde_json::to_string_pretty(&session_state).map_err(|e| {
-            crate::utils::ParaError::serialization(format!(
+            crate::utils::ParaError::invalid_config(format!(
                 "Failed to serialize session state: {}",
                 e
             ))

@@ -75,4 +75,38 @@ mod tests {
             "Test config should use test IDE name"
         );
     }
+
+    #[test]
+    fn test_config_isolation_uses_test_config_explicitly() {
+        use crate::config::ConfigManager;
+        use crate::test_utils::test_helpers::TestEnvironmentGuard;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a guard to set up test environment
+        let guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Tests should explicitly load from the test config path
+        let config = ConfigManager::load_from_file(guard.config_path()).unwrap();
+
+        // Verify we get the isolated test config
+        assert_eq!(
+            config.ide.command, "echo",
+            "Test config should use mock IDE command"
+        );
+        assert_eq!(
+            config.ide.name, "test-ide",
+            "Test config should use test IDE name"
+        );
+
+        // Verify that load_or_create() would point to a different config
+        // (we can't actually load it as it might have an invalid IDE command)
+        let default_config_path = ConfigManager::get_config_path().unwrap();
+        assert_ne!(
+            guard.config_path().to_string_lossy(),
+            default_config_path,
+            "Test config path should be different from default user config path"
+        );
+    }
 }

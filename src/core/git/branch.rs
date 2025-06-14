@@ -5,7 +5,6 @@ use regex::Regex;
 #[derive(Debug, Clone)]
 pub struct BranchInfo {
     pub name: String,
-    pub is_current: bool,
 }
 
 pub struct BranchManager<'a> {
@@ -40,13 +39,6 @@ impl<'a> BranchManager<'a> {
         };
 
         execute_git_command_with_status(self.repo, &args)
-    }
-
-    pub fn rename_branch(&self, old_name: &str, new_name: &str) -> Result<()> {
-        self.validate_branch_name(old_name)?;
-        self.validate_branch_name(new_name)?;
-
-        execute_git_command_with_status(self.repo, &["branch", "-m", old_name, new_name])
     }
 
     pub fn branch_exists(&self, name: &str) -> Result<bool> {
@@ -231,19 +223,13 @@ impl<'a> BranchManager<'a> {
         execute_git_command(self.repo, &["rev-parse", branch])
     }
 
-    pub fn create_branch_from_commit(&self, name: &str, commit: &str) -> Result<()> {
-        self.validate_branch_name(name)?;
-        execute_git_command_with_status(self.repo, &["branch", name, commit])
-    }
-
     fn parse_branch_line(&self, line: &str) -> Result<Option<BranchInfo>> {
         let line = line.trim();
         if line.is_empty() {
             return Ok(None);
         }
 
-        let is_current = line.starts_with('*');
-        let line = if is_current {
+        let line = if line.starts_with('*') {
             line.strip_prefix("* ").unwrap_or(line)
         } else {
             line.strip_prefix("  ").unwrap_or(line)
@@ -256,7 +242,7 @@ impl<'a> BranchManager<'a> {
 
         let name = parts[0].to_string();
 
-        Ok(Some(BranchInfo { name, is_current }))
+        Ok(Some(BranchInfo { name }))
     }
 }
 
@@ -473,39 +459,5 @@ mod tests {
             .generate_unique_branch_name("existing-branch")
             .expect("Failed to generate unique name");
         assert_eq!(unique_name, "existing-branch-1");
-    }
-
-    #[test]
-    fn test_branch_operations() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
-
-        let initial_branch = repo
-            .get_current_branch()
-            .expect("Failed to get current branch");
-
-        manager
-            .create_branch("rename-test", &initial_branch)
-            .expect("Failed to create branch");
-
-        repo.checkout_branch(&initial_branch)
-            .expect("Failed to checkout initial branch");
-
-        manager
-            .rename_branch("rename-test", "renamed-branch")
-            .expect("Failed to rename branch");
-
-        assert!(!manager
-            .branch_exists("rename-test")
-            .expect("Failed to check old name"));
-        assert!(manager
-            .branch_exists("renamed-branch")
-            .expect("Failed to check new name"));
-
-        let commit = manager
-            .get_branch_commit("renamed-branch")
-            .expect("Failed to get branch commit");
-        assert!(!commit.is_empty());
-        assert_eq!(commit.len(), 40);
     }
 }

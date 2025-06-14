@@ -154,12 +154,6 @@ impl ParaError {
         }
     }
 
-    pub fn serialization(message: impl Into<String>) -> Self {
-        Self::Config {
-            message: format!("Serialization error: {}", message.into()),
-        }
-    }
-
     pub fn watch_error(message: impl Into<String>) -> Self {
         Self::Watch {
             message: message.into(),

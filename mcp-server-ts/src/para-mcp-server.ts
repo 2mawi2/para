@@ -21,18 +21,44 @@ const execAsync = promisify(exec);
 
 // Para binary path - dynamically discover
 function findParaBinary(): string {
-  // Try multiple locations in order of preference
+  // Check if MCP server is running from homebrew
+  const mcpPath = process.argv[1]; // Path to this script
+  const isHomebrewMcp = mcpPath && (mcpPath.includes('/homebrew/') || mcpPath.includes('/usr/local/'));
+  
+  if (isHomebrewMcp) {
+    // For homebrew MCP server, only use homebrew para
+    const homebrewLocations = [
+      "/opt/homebrew/bin/para",              // Apple Silicon
+      "/usr/local/bin/para",                 // Intel Mac
+      "/home/linuxbrew/.linuxbrew/bin/para", // Linux
+    ];
+    
+    for (const location of homebrewLocations) {
+      try {
+        execSync(`test -x ${location}`, { stdio: 'ignore' });
+        return location;
+      } catch {
+        // Continue to next location
+      }
+    }
+    
+    // If homebrew MCP but no homebrew para found, there's a problem
+    console.error("Warning: Homebrew MCP server but para binary not found in homebrew locations");
+  }
+  
+  // For development or other installations, check in order
   const locations = [
+    process.cwd() + "/target/release/para",           // Local development build
+    process.cwd() + "/target/debug/para",             // Local debug build
     process.env.HOME + "/.local/bin/para",           // Local installation
-    "/opt/homebrew/bin/para",                        // Apple Silicon Homebrew
-    "/usr/local/bin/para",                           // Intel Mac Homebrew  
-    "/home/linuxbrew/.linuxbrew/bin/para",          // Linux Homebrew
+    "/opt/homebrew/bin/para",                        // Homebrew fallback
+    "/usr/local/bin/para",                           // Homebrew fallback
     "para"                                           // System PATH
   ];
 
   for (const location of locations) {
     try {
-      execSync(`command -v ${location}`, { stdio: 'ignore' });
+      execSync(`test -x ${location}`, { stdio: 'ignore' });
       return location;
     } catch {
       // Continue to next location
@@ -44,6 +70,7 @@ function findParaBinary(): string {
 }
 
 const PARA_BINARY = findParaBinary();
+console.error(`Para MCP server using para binary: ${PARA_BINARY}`);
 
 const server = new Server({
   name: "para-mcp-server",
@@ -102,7 +129,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "para_finish",
-        description: "Rarely used by orchestrator. Creates branch without integration. Agents use CLI 'para finish/integrate' commands instead. Only use if you started a manual session with para_start and want to save work without integrating.",
+        description: "Rarely used by orchestrator. Creates branch without merging. Agents use CLI 'para finish' command instead. Only use if you started a manual session with para_start and want to save work without merging.",
         inputSchema: {
           type: "object",
           properties: {
@@ -117,10 +144,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             branch: {
               type: "string",
               description: "Custom branch name instead of default para/session-name"
-            },
-            integrate: {
-              type: "boolean",
-              description: "Automatically integrate into main branch (default: false for manual review)"
             }
           },
           required: ["commit_message"]
@@ -128,7 +151,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "para_dispatch",
-        description: "PRIMARY TOOL: Dispatch AI agents for parallel development. Each agent works in isolated Git worktree.\n\nPARALLELIZATION:\n- SEQUENTIAL: API spec first → then implementations\n- PARALLEL: Frontend + Backend (using same API)\n- AVOID: Same files = conflicts\n\nTASK COMPLEXITY:\n- SIMPLE: Use inline task_description\n- COMPLEX: Create .md file in 'tasks/' directory (default)\n\nTASK WRITING:\n- Keep simple, avoid overengineering\n- State WHAT not HOW\n- Let agents choose implementation\n- End with: 'When done: para integrate \"<msg>\"'\n\nWORKFLOW:\n1. Create tasks/TASK_1_feature.md files\n2. Dispatch agents (they'll integrate automatically)\n3. Continue with user on next tasks\n4. Conflicts? para_integrate creates branch for manual fix\n\nEXAMPLE TASK:\n```\nImplement user authentication with email/password.\nStore users in database.\nReturn JWT tokens.\n\nWhen done: para integrate \"Add user authentication\"\n```",
+        description: "PRIMARY TOOL: Dispatch AI agents for parallel development. Each agent works in isolated Git worktree.\n\nPARALLELIZATION:\n- SEQUENTIAL: API spec first → then implementations\n- PARALLEL: Frontend + Backend (using same API)\n- AVOID: Same files = conflicts\n\nTASK FORMAT:\n- PREFER FILE: Use task files for complex prompts or special characters\n- INLINE ONLY: Simple, short natural language tasks without special symbols\n- DEFAULT: Create .md file in 'tasks/' directory (recommended)\n\nTASK WRITING:\n- Keep simple, avoid overengineering\n- State WHAT not HOW\n- Let agents choose implementation\n- End with: 'When done: para finish \"<msg>\"'\n\nWORKFLOW:\n1. Create tasks/TASK_1_feature.md files\n2. Dispatch agents (they'll finish work automatically)\n3. Continue with user on next tasks\n4. Conflicts? Review branches manually with user\n\nEXAMPLE TASK:\n```\nImplement user authentication with email/password.\nStore users in database.\nReturn JWT tokens.\n\nWhen done: para finish \"Add user authentication\"\n```",
         inputSchema: {
           type: "object",
           properties: {
@@ -138,7 +161,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             task_description: {
               type: "string",
-              description: "Inline task description. Must end with workflow instruction: 'When complete, run: para integrate \"<commit msg>\"' or 'para finish \"<commit msg>\"'"
+              description: "Inline task description for SIMPLE tasks only. Use for short, natural language prompts without special characters. Must end with workflow instruction: 'When complete, run: para finish \"<commit msg>\"'"
             },
             file: {
               type: "string",
@@ -198,33 +221,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: "para_integrate",
-        description: "Integrate finished work into main branch. Automatically rebases changes. If conflicts occur, creates branch for manual resolution with user. Usually not needed - agents auto-integrate. Use if reviewing finished branches or manual integration needed.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            message: {
-              type: "string",
-              description: "Commit message for the integration"
-            },
-            session: {
-              type: "string",
-              description: "Session name to integrate (optional, auto-detects from current directory)"
-            },
-            strategy: {
-              type: "string",
-              enum: ["merge", "squash", "rebase"],
-              description: "Integration strategy: squash (default), merge, or rebase"
-            },
-            target: {
-              type: "string",
-              description: "Target branch (default: main)"
-            }
-          },
-          required: []
-        }
-      },
-      {
         name: "para_cancel",
         description: "DESTRUCTIVE: Permanently delete a para session, removing its worktree and branch. All uncommitted work will be lost. WARNING: Never use this on your current session - it will delete all your work! Use para_finish or para_recover instead. Only use this to clean up abandoned sessions.",
         inputSchema: {
@@ -272,9 +268,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if ((args as any).branch) {
             cmdArgs.push("--branch", (args as any).branch);
-          }
-          if ((args as any).integrate) {
-            cmdArgs.push("--integrate");
           }
           result = await runParaCommand(cmdArgs);
         }
@@ -327,25 +320,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_config_show":
         result = await runParaCommand(["config", "show"]);
-        break;
-
-      case "para_integrate":
-        {
-          const cmdArgs = ["integrate"];
-          if ((args as any).message) {
-            cmdArgs.push((args as any).message);
-          }
-          if ((args as any).session) {
-            cmdArgs.push((args as any).session);
-          }
-          if ((args as any).strategy) {
-            cmdArgs.push("--strategy", (args as any).strategy);
-          }
-          if ((args as any).target) {
-            cmdArgs.push("--target", (args as any).target);
-          }
-          result = await runParaCommand(cmdArgs);
-        }
         break;
 
       case "para_cancel":

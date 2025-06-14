@@ -2,26 +2,19 @@ use crate::utils::error::Result;
 use std::path::{Path, PathBuf};
 
 pub mod branch;
-pub mod conflict;
-pub mod integration;
+pub mod finish;
 pub mod repository;
-pub mod strategy;
 pub mod worktree;
 
 pub use branch::{BranchInfo, BranchManager};
-pub use conflict::ConflictManager;
-pub use integration::{
-    FinishRequest, FinishResult, IntegrationManager, IntegrationRequest, IntegrationResult,
-};
+pub use finish::{FinishManager, FinishRequest, FinishResult};
 pub use repository::GitRepository;
-pub use strategy::{StrategyManager, StrategyRequest, StrategyResult};
 pub use worktree::{WorktreeInfo, WorktreeManager};
 
 pub trait GitOperations {
     fn create_worktree(&self, branch: &str, path: &Path) -> Result<()>;
     fn remove_worktree(&self, path: &Path) -> Result<()>;
     fn finish_session(&self, request: FinishRequest) -> Result<FinishResult>;
-    fn integrate_branch(&self, request: IntegrationRequest) -> Result<IntegrationResult>;
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>>;
     fn list_branches(&self) -> Result<Vec<BranchInfo>>;
     fn create_branch(&self, name: &str, base: &str) -> Result<()>;
@@ -53,13 +46,8 @@ impl GitOperations for GitRepository {
     }
 
     fn finish_session(&self, request: FinishRequest) -> Result<FinishResult> {
-        let manager = IntegrationManager::new(self);
+        let manager = FinishManager::new(self);
         manager.finish_session(request)
-    }
-
-    fn integrate_branch(&self, request: IntegrationRequest) -> Result<IntegrationResult> {
-        let manager = IntegrationManager::new(self);
-        manager.integrate_branch(request)
     }
 
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
@@ -154,18 +142,6 @@ impl GitService {
         BranchManager::new(&self.repo)
     }
 
-    pub fn integration_manager(&self) -> IntegrationManager {
-        IntegrationManager::new(&self.repo)
-    }
-
-    pub fn strategy_manager(&self) -> StrategyManager {
-        StrategyManager::new(&self.repo)
-    }
-
-    pub fn conflict_manager(&self) -> ConflictManager {
-        ConflictManager::new(&self.repo)
-    }
-
     pub fn validate_session_environment(&self, session_path: &Path) -> Result<SessionEnvironment> {
         let worktree_manager = self.worktree_manager();
 
@@ -216,10 +192,6 @@ impl GitOperations for GitService {
 
     fn finish_session(&self, request: FinishRequest) -> Result<FinishResult> {
         self.repo.finish_session(request)
-    }
-
-    fn integrate_branch(&self, request: IntegrationRequest) -> Result<IntegrationResult> {
-        self.repo.integrate_branch(request)
     }
 
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
@@ -403,7 +375,6 @@ mod tests {
 
         let _worktree_manager = service.worktree_manager();
         let _branch_manager = service.branch_manager();
-        let _integration_manager = service.integration_manager();
         let _repo = service.repository();
     }
 }

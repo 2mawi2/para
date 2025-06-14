@@ -12,20 +12,21 @@ impl GitignoreManager {
     }
 
     /// Add an entry to the .gitignore file in the specified directory
-    pub fn add_entry(&self, entry: &str) -> Result<()> {
+    /// Returns true if the entry was added, false if it already existed
+    pub fn add_entry(&self, entry: &str) -> Result<bool> {
         let gitignore_path = Path::new(".gitignore");
 
         // Check if entry already exists
         if gitignore_path.exists() {
             let content = fs::read_to_string(gitignore_path)?;
             if Self::is_entry_already_ignored(&content, entry) {
-                return Ok(());
+                return Ok(false);
             }
         }
 
         // Add entry to gitignore
         Self::add_entry_to_gitignore(gitignore_path, entry)?;
-        Ok(())
+        Ok(true)
     }
 
     /// Check if entry is already ignored in the gitignore content

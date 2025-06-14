@@ -49,12 +49,19 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
     println!("🔧 Setting up Para MCP integration...");
 
     // Always create .mcp.json first
-    create_mcp_json()?;
-    println!("Created .mcp.json");
+    let created = create_mcp_json()?;
+    if created {
+        println!("Created .mcp.json");
+    } else {
+        println!("✓ .mcp.json already exists");
+    }
 
     // Automatically add .mcp.json to .gitignore if it's not already there
-    add_to_gitignore(".mcp.json")?;
-    println!("Added .mcp.json to .gitignore (contains user-specific paths)");
+    match add_to_gitignore(".mcp.json") {
+        Ok(true) => println!("Added .mcp.json to .gitignore (contains user-specific paths)"),
+        Ok(false) => println!("✓ .mcp.json already in .gitignore"),
+        Err(e) => println!("⚠️  Could not update .gitignore: {}", e),
+    }
     println!();
 
     // Determine IDE choice
@@ -92,7 +99,41 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
 }
 
 fn find_mcp_server() -> Result<McpServerConfig> {
-    // Try multiple locations in order of preference
+    // Detect if we're running from a homebrew installation
+    let current_exe = std::env::current_exe()
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
+    let exe_path = current_exe.to_string_lossy();
+
+    // Check if running from homebrew location
+    let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
+
+    if is_homebrew {
+        // For homebrew installations, ONLY use homebrew MCP server
+        let homebrew_locations = vec![
+            "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
+            "/usr/local/bin/para-mcp-server",                 // Intel Mac
+            "/home/linuxbrew/.linuxbrew/bin/para-mcp-server", // Linux
+        ];
+
+        for location in homebrew_locations {
+            let path = PathBuf::from(location);
+            if path.exists() {
+                return Ok(McpServerConfig {
+                    command: path.to_string_lossy().to_string(),
+                    args: vec![],
+                    description: "Homebrew MCP server".to_string(),
+                });
+            }
+        }
+
+        return Err(ParaError::invalid_args(
+            "Para is installed via Homebrew but MCP server is missing.\n\
+            Try reinstalling: brew reinstall para"
+                .to_string(),
+        ));
+    }
+
+    // For development/local installations, check in this order:
 
     // 1. Local development: TypeScript server in current directory
     let current_dir = std::env::current_dir()
@@ -103,50 +144,32 @@ fn find_mcp_server() -> Result<McpServerConfig> {
         return Ok(McpServerConfig {
             command: "node".to_string(),
             args: vec![local_ts_server.to_string_lossy().to_string()],
-            description: "Local TypeScript MCP server".to_string(),
+            description: "Local development TypeScript MCP server".to_string(),
         });
     }
 
-    // 2. System installation: Rust MCP server in ~/.local/bin
+    // 2. System installation: MCP server in ~/.local/bin
     let home_dir = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| "~".to_string());
-    let local_rust_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
+    let local_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
 
-    if local_rust_server.exists() {
+    if local_server.exists() {
         return Ok(McpServerConfig {
-            command: local_rust_server.to_string_lossy().to_string(),
+            command: local_server.to_string_lossy().to_string(),
             args: vec![],
-            description: "Local Rust MCP server".to_string(),
+            description: "Local MCP server".to_string(),
         });
     }
 
-    // 3. Homebrew installation: Check common Homebrew locations
-    let homebrew_locations = vec![
-        "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
-        "/usr/local/bin/para-mcp-server",                 // Intel Mac
-        "/home/linuxbrew/.linuxbrew/bin/para-mcp-server", // Linux
-    ];
-
-    for location in homebrew_locations {
-        let path = PathBuf::from(location);
-        if path.exists() {
-            return Ok(McpServerConfig {
-                command: path.to_string_lossy().to_string(),
-                args: vec![],
-                description: "Homebrew Rust MCP server".to_string(),
-            });
-        }
-    }
-
-    // 4. System PATH: Try to find para-mcp-server in PATH
+    // 3. System PATH as fallback
     if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             return Ok(McpServerConfig {
                 command: path,
                 args: vec![],
-                description: "System PATH Rust MCP server".to_string(),
+                description: "System PATH MCP server".to_string(),
             });
         }
     }
@@ -169,7 +192,7 @@ fn find_mcp_server() -> Result<McpServerConfig> {
     ))
 }
 
-fn create_mcp_json() -> Result<()> {
+fn create_mcp_json() -> Result<bool> {
     // Try to find MCP server in multiple locations
     let mcp_server_path = find_mcp_server()?;
 
@@ -188,12 +211,11 @@ fn create_mcp_json() -> Result<()> {
     );
 
     if std::path::Path::new(".mcp.json").exists() {
-        println!("ℹ️  .mcp.json already exists");
-        return Ok(());
+        return Ok(false);
     }
 
     fs::write(".mcp.json", mcp_config)?;
-    Ok(())
+    Ok(true)
 }
 
 fn prompt_for_ide() -> Result<&'static str> {
@@ -259,12 +281,11 @@ fn configure_claude_code() -> Result<()> {
     Ok(())
 }
 
-fn add_to_gitignore(entry: &str) -> Result<()> {
+fn add_to_gitignore(entry: &str) -> Result<bool> {
     let gitignore_manager = GitignoreManager::new(".");
     gitignore_manager
         .add_entry(entry)
-        .map_err(|e| ParaError::file_operation(format!("Failed to update .gitignore: {}", e)))?;
-    Ok(())
+        .map_err(|e| ParaError::file_operation(format!("Failed to update .gitignore: {}", e)))
 }
 
 #[cfg(test)]
@@ -383,12 +404,14 @@ mod tests {
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
         // Test adding to new gitignore
-        add_to_gitignore(".mcp.json").unwrap();
+        let added = add_to_gitignore(".mcp.json").unwrap();
+        assert!(added);
         let content = fs::read_to_string(".gitignore").unwrap();
         assert!(content.contains(".mcp.json"));
 
         // Test adding duplicate entry (should not duplicate)
-        add_to_gitignore(".mcp.json").unwrap();
+        let added_again = add_to_gitignore(".mcp.json").unwrap();
+        assert!(!added_again);
         let content = fs::read_to_string(".gitignore").unwrap();
         assert_eq!(content.matches(".mcp.json").count(), 1);
 
