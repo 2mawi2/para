@@ -251,7 +251,7 @@ impl App {
                 self.refresh_sessions();
                 return;
             }
-            
+
             // Use internal APIs to open IDE
             let ide_manager = crate::core::ide::IdeManager::new(&self.config);
             if let Err(_e) = ide_manager.launch(&session.worktree_path, false) {
@@ -475,7 +475,21 @@ impl App {
             .map(|s| s.branch.as_str())
             .unwrap_or("");
 
-        let session_info = format!("{} • {} • ", selected_session, selected_branch);
+        // Check if this is the current session (where monitor was run from)
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let session_manager = SessionManager::new(&self.config);
+        let is_current_session =
+            if let Ok(Some(current_session)) = session_manager.find_session_by_path(&current_dir) {
+                current_session.name == selected_session
+            } else {
+                false
+            };
+
+        let session_info = if is_current_session {
+            format!("{} • {} • (CURRENT) • ", selected_session, selected_branch)
+        } else {
+            format!("{} • {} • ", selected_session, selected_branch)
+        };
         let controls = vec![Line::from(vec![
             Span::styled(session_info, Style::default().fg(Color::Rgb(156, 163, 175))),
             Span::styled(
@@ -540,7 +554,7 @@ impl App {
                     Style::default().fg(Color::Rgb(107, 114, 128)) // Gray placeholder
                 } else {
                     Style::default().fg(Color::Rgb(255, 255, 255)) // White text
-                }
+                },
             )),
             Line::from(""),
             Line::from(vec![
@@ -661,6 +675,12 @@ fn load_real_sessions(config: &crate::config::Config) -> Result<Vec<SessionInfo>
 
     let mut session_infos = Vec::new();
 
+    // Check if current directory is a session worktree
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let current_session = session_manager
+        .find_session_by_path(&current_dir)
+        .unwrap_or(None);
+
     for session in sessions {
         // Skip cancelled sessions
         if matches!(session.status, CoreSessionStatus::Cancelled) {
@@ -671,7 +691,14 @@ fn load_real_sessions(config: &crate::config::Config) -> Result<Vec<SessionInfo>
         let last_activity = session.last_activity.unwrap_or(session.created_at);
 
         // Detect status based on activity
-        let status = detect_session_status(&session, &last_activity);
+        let mut status = detect_session_status(&session, &last_activity);
+
+        // If this is the current session (where monitor was run from), mark it as active
+        if let Some(ref current) = current_session {
+            if current.name == session.name {
+                status = SessionStatus::Active;
+            }
+        }
 
         // Load task description
         let task = session.task_description.unwrap_or_else(|| {
@@ -694,8 +721,18 @@ fn load_real_sessions(config: &crate::config::Config) -> Result<Vec<SessionInfo>
         });
     }
 
-    // Sort by last activity (most recent first)
-    session_infos.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
+    // Sort by last activity (most recent first), but put current session first if found
+    session_infos.sort_by(|a, b| {
+        if let Some(ref current) = current_session {
+            if a.name == current.name {
+                return std::cmp::Ordering::Less; // Current session goes first
+            }
+            if b.name == current.name {
+                return std::cmp::Ordering::Greater; // Current session goes first
+            }
+        }
+        b.last_activity.cmp(&a.last_activity)
+    });
 
     Ok(session_infos)
 }
@@ -810,12 +847,12 @@ mod tests {
         let valid_message = "Fix bug in monitor UI";
         let empty_message = "";
         let whitespace_message = "   ";
-        
+
         // Test message validation
         assert!(!valid_message.trim().is_empty());
         assert!(empty_message.trim().is_empty());
         assert!(whitespace_message.trim().is_empty());
-        
+
         // Test that single line messages work correctly
         assert!(!valid_message.contains('\n'));
         assert_eq!(valid_message.len(), 21);
@@ -825,7 +862,7 @@ mod tests {
     fn test_resume_functionality_works_for_all_statuses() {
         // Test that resume should work for all session statuses (Active, Idle, Ready, Stale)
         // This is a unit test to verify the logic, not a full integration test
-        
+
         let session_active = SessionInfo {
             name: "test-active".to_string(),
             branch: "test-branch".to_string(),
