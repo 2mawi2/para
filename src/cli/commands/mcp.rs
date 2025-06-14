@@ -49,12 +49,19 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
     println!("🔧 Setting up Para MCP integration...");
 
     // Always create .mcp.json first
-    create_mcp_json()?;
-    println!("Created .mcp.json");
+    let created = create_mcp_json()?;
+    if created {
+        println!("Created .mcp.json");
+    } else {
+        println!("✓ .mcp.json already exists");
+    }
 
     // Automatically add .mcp.json to .gitignore if it's not already there
-    add_to_gitignore(".mcp.json")?;
-    println!("Added .mcp.json to .gitignore (contains user-specific paths)");
+    match add_to_gitignore(".mcp.json") {
+        Ok(true) => println!("Added .mcp.json to .gitignore (contains user-specific paths)"),
+        Ok(false) => println!("✓ .mcp.json already in .gitignore"),
+        Err(e) => println!("⚠️  Could not update .gitignore: {}", e),
+    }
     println!();
 
     // Determine IDE choice
@@ -169,7 +176,7 @@ fn find_mcp_server() -> Result<McpServerConfig> {
     ))
 }
 
-fn create_mcp_json() -> Result<()> {
+fn create_mcp_json() -> Result<bool> {
     // Try to find MCP server in multiple locations
     let mcp_server_path = find_mcp_server()?;
 
@@ -188,12 +195,11 @@ fn create_mcp_json() -> Result<()> {
     );
 
     if std::path::Path::new(".mcp.json").exists() {
-        println!("ℹ️  .mcp.json already exists");
-        return Ok(());
+        return Ok(false);
     }
 
     fs::write(".mcp.json", mcp_config)?;
-    Ok(())
+    Ok(true)
 }
 
 fn prompt_for_ide() -> Result<&'static str> {
@@ -233,13 +239,7 @@ fn configure_claude_code() -> Result<()> {
                 Ok(server_config) => {
                     println!("✅ Found MCP server: {}", server_config.description);
                     println!("✅ Claude Code will use project-scoped .mcp.json");
-                    println!();
-                    println!("🔍 Verification steps:");
-                    println!("   1. Restart Claude Code completely");
-                    println!("   2. Run: claude mcp list");
-                    println!("   3. Look for 'para' server in the list");
-                    println!("   4. Open this project in Claude Code");
-                    println!("   5. Para tools should appear in the tool panel");
+                    println!("💡 Verify with: claude mcp list");
                 }
                 Err(e) => {
                     println!("❌ MCP server setup incomplete:");
@@ -259,12 +259,11 @@ fn configure_claude_code() -> Result<()> {
     Ok(())
 }
 
-fn add_to_gitignore(entry: &str) -> Result<()> {
+fn add_to_gitignore(entry: &str) -> Result<bool> {
     let gitignore_manager = GitignoreManager::new(".");
     gitignore_manager
         .add_entry(entry)
-        .map_err(|e| ParaError::file_operation(format!("Failed to update .gitignore: {}", e)))?;
-    Ok(())
+        .map_err(|e| ParaError::file_operation(format!("Failed to update .gitignore: {}", e)))
 }
 
 #[cfg(test)]
@@ -383,12 +382,14 @@ mod tests {
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
         // Test adding to new gitignore
-        add_to_gitignore(".mcp.json").unwrap();
+        let added = add_to_gitignore(".mcp.json").unwrap();
+        assert!(added);
         let content = fs::read_to_string(".gitignore").unwrap();
         assert!(content.contains(".mcp.json"));
 
         // Test adding duplicate entry (should not duplicate)
-        add_to_gitignore(".mcp.json").unwrap();
+        let added_again = add_to_gitignore(".mcp.json").unwrap();
+        assert!(!added_again);
         let content = fs::read_to_string(".gitignore").unwrap();
         assert_eq!(content.matches(".mcp.json").count(), 1);
 
