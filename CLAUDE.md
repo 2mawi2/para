@@ -67,9 +67,9 @@ src/
 ## Para Workflow Preferences
 
 **My preferences for this project:**
-- Use `para integrate` workflow - automatically integrate changes to main branch
+- Use `para finish` workflow - create branches for manual review before merging
 - Add `dangerously_skip_permissions: true` when dispatching agents to avoid IDE prompts
-- Dispatched agents should use `para integrate "<commit message>"` to auto-merge their changes
+- Dispatched agents should use `para finish "<commit message>"` to create branches for review
 
 **Note**: Para MCP tools contain comprehensive workflow documentation. Check tool descriptions for parallel development patterns.
 
