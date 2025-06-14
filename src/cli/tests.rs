@@ -137,10 +137,9 @@ mod cli_tests {
     fn test_completion_command() {
         let cli = Cli::try_parse_from(["para", "completion", "bash"]).unwrap();
         match cli.command.unwrap() {
-            Commands::Completion(args) => match args.shell {
-                Shell::Bash => {}
-                _ => panic!("Expected Bash shell"),
-            },
+            Commands::Completion(args) => {
+                assert_eq!(args.shell, "bash");
+            }
             _ => panic!("Expected Completion command"),
         }
     }
@@ -249,52 +248,24 @@ mod cli_tests {
     }
 
     #[test]
-    fn test_complete_command_args() {
-        let cli = Cli::try_parse_from([
-            "para",
-            "complete-command",
-            "--command-line",
-            "para start",
-            "--current-word",
-            "my-",
-            "--position",
-            "2",
-        ])
-        .unwrap();
-        match cli.command.unwrap() {
-            Commands::CompleteCommand(args) => {
-                assert_eq!(args.command_line, "para start");
-                assert_eq!(args.current_word, "my-");
-                assert_eq!(args.position, 2);
-                assert!(args.previous_word.is_none());
-            }
-            _ => panic!("Expected CompleteCommand command"),
-        }
-    }
+    fn test_completion_init_user_expectation() {
+        // Test that users can naturally do "para completion init"
+        // since we tell them to run "para init" from the completion command
+        let result = Cli::try_parse_from(["para", "completion", "init"]);
 
-    #[test]
-    fn test_complete_command_with_previous_word() {
-        let cli = Cli::try_parse_from([
-            "para",
-            "complete-command",
-            "--command-line",
-            "para finish my message",
-            "--current-word",
-            "message",
-            "--previous-word",
-            "my",
-            "--position",
-            "3",
-        ])
-        .unwrap();
+        // This should now work - "init" is accepted as a shell string
+        assert!(
+            result.is_ok(),
+            "para completion init should be a valid command"
+        );
+
+        let cli = result.unwrap();
         match cli.command.unwrap() {
-            Commands::CompleteCommand(args) => {
-                assert_eq!(args.command_line, "para finish my message");
-                assert_eq!(args.current_word, "message");
-                assert_eq!(args.previous_word, Some("my".to_string()));
-                assert_eq!(args.position, 3);
+            Commands::Completion(args) => {
+                // Verify that "init" was parsed as the shell string
+                assert_eq!(args.shell, "init");
             }
-            _ => panic!("Expected CompleteCommand command"),
+            _ => panic!("Expected Completion command"),
         }
     }
 }
