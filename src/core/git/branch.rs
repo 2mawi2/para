@@ -5,7 +5,6 @@ use regex::Regex;
 #[derive(Debug, Clone)]
 pub struct BranchInfo {
     pub name: String,
-    pub is_current: bool,
 }
 
 pub struct BranchManager<'a> {
@@ -230,8 +229,7 @@ impl<'a> BranchManager<'a> {
             return Ok(None);
         }
 
-        let is_current = line.starts_with('*');
-        let line = if is_current {
+        let line = if line.starts_with('*') {
             line.strip_prefix("* ").unwrap_or(line)
         } else {
             line.strip_prefix("  ").unwrap_or(line)
@@ -244,7 +242,7 @@ impl<'a> BranchManager<'a> {
 
         let name = parts[0].to_string();
 
-        Ok(Some(BranchInfo { name, is_current }))
+        Ok(Some(BranchInfo { name }))
     }
 }
 

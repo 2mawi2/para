@@ -33,11 +33,10 @@ pub enum Commands {
     Config(ConfigArgs),
     /// Generate shell completion script
     Completion(CompletionArgs),
+    /// Initialize shell completions automatically
+    Init,
     /// Setup Model Context Protocol (MCP) integration
     Mcp(crate::cli::commands::mcp::McpCommand),
-    /// Dynamic completion (hidden)
-    #[command(hide = true)]
-    CompleteCommand(CompleteCommandArgs),
     /// Legacy completion endpoint for sessions (hidden)
     #[command(name = "_completion_sessions", hide = true)]
     CompletionSessions,
@@ -156,31 +155,11 @@ pub enum ConfigCommands {
 
 #[derive(Args, Debug)]
 pub struct CompletionArgs {
-    /// Shell to generate completion for
-    #[arg(value_enum)]
-    pub shell: Shell,
+    /// Shell to generate completion for, or 'init' for automatic setup
+    pub shell: String,
 }
 
-#[derive(Args, Debug)]
-pub struct CompleteCommandArgs {
-    /// Current command line being completed
-    #[arg(long)]
-    pub command_line: String,
-
-    /// Current word being completed
-    #[arg(long)]
-    pub current_word: String,
-
-    /// Previous word in command line
-    #[arg(long)]
-    pub previous_word: Option<String>,
-
-    /// Position of current word
-    #[arg(long)]
-    pub position: usize,
-}
-
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
 #[allow(clippy::enum_variant_names)]
 pub enum Shell {
     Bash,

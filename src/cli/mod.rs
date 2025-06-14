@@ -23,7 +23,7 @@ pub fn execute_command_with_config(
         match cli.command {
             Some(Commands::Config(_))
             | Some(Commands::Completion(_))
-            | Some(Commands::CompleteCommand(_))
+            | Some(Commands::Init)
             | Some(Commands::CompletionSessions)
             | Some(Commands::CompletionBranches)
             | None => None,
@@ -55,8 +55,8 @@ pub fn execute_command_with_config(
         Some(Commands::Recover(args)) => commands::recover::execute(config.unwrap(), args),
         Some(Commands::Config(args)) => commands::config::execute(args),
         Some(Commands::Completion(args)) => commands::completion::execute(args),
+        Some(Commands::Init) => commands::init::execute(),
         Some(Commands::Mcp(args)) => commands::mcp::handle_mcp_command(args),
-        Some(Commands::CompleteCommand(args)) => commands::complete_command::execute(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
         None => {
@@ -85,6 +85,7 @@ fn show_usage() {
     println!("  config      Setup configuration");
     println!("  mcp         Setup Model Context Protocol integration");
     println!("  completion  Generate shell completion script");
+    println!("  init        Initialize shell completions automatically");
     println!("  help        Print this message or the help of the given subcommand(s)");
     println!();
     println!("Use 'para <command> --help' for more information on a specific command.");
