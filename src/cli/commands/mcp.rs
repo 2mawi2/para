@@ -100,35 +100,9 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
 
 fn find_mcp_server() -> Result<McpServerConfig> {
     // Try multiple locations in order of preference
+    // Prefer system-wide installations over local development versions
 
-    // 1. Local development: TypeScript server in current directory
-    let current_dir = std::env::current_dir()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get current directory: {}", e)))?;
-    let local_ts_server = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
-
-    if local_ts_server.exists() {
-        return Ok(McpServerConfig {
-            command: "node".to_string(),
-            args: vec![local_ts_server.to_string_lossy().to_string()],
-            description: "Local TypeScript MCP server".to_string(),
-        });
-    }
-
-    // 2. System installation: Rust MCP server in ~/.local/bin
-    let home_dir = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| "~".to_string());
-    let local_rust_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
-
-    if local_rust_server.exists() {
-        return Ok(McpServerConfig {
-            command: local_rust_server.to_string_lossy().to_string(),
-            args: vec![],
-            description: "Local Rust MCP server".to_string(),
-        });
-    }
-
-    // 3. Homebrew installation: Check common Homebrew locations
+    // 1. Homebrew installation: Check common Homebrew locations
     let homebrew_locations = vec![
         "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
         "/usr/local/bin/para-mcp-server",                 // Intel Mac
@@ -141,21 +115,48 @@ fn find_mcp_server() -> Result<McpServerConfig> {
             return Ok(McpServerConfig {
                 command: path.to_string_lossy().to_string(),
                 args: vec![],
-                description: "Homebrew Rust MCP server".to_string(),
+                description: "Homebrew MCP server".to_string(),
             });
         }
     }
 
-    // 4. System PATH: Try to find para-mcp-server in PATH
+    // 2. System PATH: Try to find para-mcp-server in PATH
     if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             return Ok(McpServerConfig {
                 command: path,
                 args: vec![],
-                description: "System PATH Rust MCP server".to_string(),
+                description: "System PATH MCP server".to_string(),
             });
         }
+    }
+
+    // 3. System installation: MCP server in ~/.local/bin
+    let home_dir = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| "~".to_string());
+    let local_rust_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
+
+    if local_rust_server.exists() {
+        return Ok(McpServerConfig {
+            command: local_rust_server.to_string_lossy().to_string(),
+            args: vec![],
+            description: "Local MCP server".to_string(),
+        });
+    }
+
+    // 4. Local development: TypeScript server in current directory (lowest priority)
+    let current_dir = std::env::current_dir()
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get current directory: {}", e)))?;
+    let local_ts_server = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
+
+    if local_ts_server.exists() {
+        return Ok(McpServerConfig {
+            command: "node".to_string(),
+            args: vec![local_ts_server.to_string_lossy().to_string()],
+            description: "Local development TypeScript MCP server".to_string(),
+        });
     }
 
     // No MCP server found - provide detailed guidance
