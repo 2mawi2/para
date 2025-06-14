@@ -47,14 +47,22 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           timeout_minutes: "60"
           allowed_tools: |
-            str_replace
-            str_replace_editor
-            run_bash_command
-            view_file
-            list_files
-            mcp__github__create_pending_pull_request_review
-            mcp__github__add_pull_request_review_comment_to_pending_review
-            mcp__github__submit_pending_pull_request_review
-            mcp__github__get_pull_request_diff
-            mcp__github__create_issue_comment
-            mcp__github__create_pull_request_comment
+            Edit
+            Read
+            Write
+            Glob
+            Grep
+            Bash(just test)
+            Bash(just lint)
+            Bash(just fmt)
+            Bash(cargo test:*)
+            Bash(cargo build:*)
+            Bash(cargo check:*)
+            Bash(cargo clippy:*)
+            Bash(git diff:*)
+            Bash(git log:*)
+            Bash(git status)
+            Bash(echo:*)
+            Bash(cat:*)
+            Bash(grep:*)
+            Bash(which:*)
