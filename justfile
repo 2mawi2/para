@@ -277,3 +277,40 @@ release BUMP="patch":
     
     echo "✅ Release $new_version triggered! Monitor at: https://github.com/2mawi2/para/actions"
     echo "💡 The release workflow will automatically merge back to main when complete"
+
+# Refresh Claude credentials for GitHub Actions (idempotent)
+refresh-claude-secrets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    echo "Refreshing Claude credentials for GitHub Actions..."
+    
+    # Get credentials from macOS keychain
+    CREDS=$(security find-generic-password -s "Claude Code-credentials" -a "$USER" -w 2>/dev/null || echo "")
+    
+    if [ -z "$CREDS" ]; then
+        echo "Error: Claude credentials not found in keychain"
+        echo "   Please ensure you're logged in to Claude Code with /login"
+        exit 1
+    fi
+    
+    # Parse JSON to extract tokens
+    ACCESS_TOKEN=$(echo "$CREDS" | python3 -c "import sys, json; print(json.load(sys.stdin)['claudeAiOauth']['accessToken'])")
+    REFRESH_TOKEN=$(echo "$CREDS" | python3 -c "import sys, json; print(json.load(sys.stdin)['claudeAiOauth']['refreshToken'])")
+    EXPIRES_AT=$(echo "$CREDS" | python3 -c "import sys, json; print(json.load(sys.stdin)['claudeAiOauth']['expiresAt'])")
+    
+    # Get repository from git remote
+    REPO=$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git$/\1/' | sed 's/.*github.com[:/]\(.*\)$/\1/')
+    
+    echo "Updating secrets for repository: $REPO"
+    
+    # Set GitHub secrets (idempotent - will update if exists)
+    gh secret set CLAUDE_ACCESS_TOKEN --repo "$REPO" --body "$ACCESS_TOKEN"
+    gh secret set CLAUDE_REFRESH_TOKEN --repo "$REPO" --body "$REFRESH_TOKEN"
+    gh secret set CLAUDE_EXPIRES_AT --repo "$REPO" --body "$EXPIRES_AT"
+    
+    echo "Claude credentials successfully refreshed!"
+    echo ""
+    echo "GitHub Actions configured:"
+    echo "   - Claude PR Assistant (responds to @claude mentions)"
+    echo "   - Claude Auto Review (reviews all PRs automatically)"
