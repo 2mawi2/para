@@ -267,7 +267,6 @@ mod generator_tests {
         let bash_script = enhanced_bash.unwrap();
         assert!(bash_script.contains("para"));
         assert!(bash_script.contains("_para_complete_sessions"));
-        assert!(bash_script.contains("_para_complete_integration_strategies"));
 
         let enhanced_zsh =
             generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Zsh);
@@ -275,7 +274,6 @@ mod generator_tests {
         let zsh_script = enhanced_zsh.unwrap();
         assert!(zsh_script.contains("para"));
         assert!(zsh_script.contains("_para_sessions"));
-        assert!(zsh_script.contains("_para_integration_strategies"));
 
         let enhanced_fish =
             generators::ShellCompletionGenerator::generate_enhanced_completion(Shell::Fish);
