@@ -70,10 +70,6 @@ _para_complete_branches() {
     fi
 }
 
-_para_complete_integration_strategies() {
-    local strategies="merge squash rebase"
-    COMPREPLY=($(compgen -W "$strategies" -- "$1"))
-}
 
 _para_complete_shells() {
     local shells="bash zsh fish"
@@ -118,10 +114,6 @@ _para_completion() {
             ;;
         --branch)
             _para_complete_branches "${cur}"
-            return 0
-            ;;
-        --strategy)
-            _para_complete_integration_strategies "${cur}"
             return 0
             ;;
         --target)
@@ -191,15 +183,6 @@ _para_branches() {
     fi
 }
 
-_para_integration_strategies() {
-    local strategies
-    strategies=(
-        'merge:Create merge commit preserving feature branch history'
-        'squash:Combine all feature branch commits into single commit'
-        'rebase:Replay feature branch commits on target branch'
-    )
-    _describe 'integration strategies' strategies
-}
 
 _para_shells() {
     local shells
@@ -251,20 +234,6 @@ _para() {
                 finish)
                     case $words[CURRENT-1] in
                         --branch)
-                            _para_branches
-                            ;;
-                        *)
-                            if [[ $CURRENT -eq 4 ]]; then
-                                _para_sessions
-                            fi
-                            ;;
-                    esac
-                    ;;
-                    case $words[CURRENT-1] in
-                        --strategy)
-                            _para_integration_strategies
-                            ;;
-                        --target)
                             _para_branches
                             ;;
                         *)
@@ -359,7 +328,6 @@ complete -f -c para -n "__fish_para_using_subcommand finish; and __para_finish_n
 # para finish --branch <branch>
 complete -f -c para -n "__fish_para_using_subcommand finish" -l branch -a "(__para_branches)" -d "Custom branch name"
 
-# 3. STRATEGY COMPLETIONS
 # 4. FILE COMPLETIONS
 # para dispatch --file <file>
 complete -c para -n "__fish_para_using_subcommand dispatch" -s f -l file -F -d "Prompt file"
