@@ -215,13 +215,20 @@ fn extract_session_id_from_archived_branch(
 }
 
 fn display_sessions(sessions: &[SessionInfo], args: &ListArgs) -> Result<()> {
-    if args.quiet {
+    let result = if args.quiet {
         display_quiet_sessions(sessions)
     } else if args.verbose {
         display_verbose_sessions(sessions)
     } else {
         display_compact_sessions(sessions)
+    };
+
+    // Add hint about monitor command (except in quiet mode)
+    if !args.quiet && result.is_ok() {
+        println!("\nTip: Use 'para monitor' for interactive session management");
     }
+
+    result
 }
 
 fn display_quiet_sessions(sessions: &[SessionInfo]) -> Result<()> {

@@ -26,6 +26,7 @@ pub fn execute_command_with_config(
             | Some(Commands::Init)
             | Some(Commands::CompletionSessions)
             | Some(Commands::CompletionBranches)
+            | Some(Commands::Monitor(_))
             | None => None,
             _ => match test_config {
                 Some(cfg) => Some(cfg),
@@ -59,6 +60,7 @@ pub fn execute_command_with_config(
         Some(Commands::Mcp(args)) => commands::mcp::handle_mcp_command(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
+        Some(Commands::Monitor(args)) => commands::monitor::execute(args),
         None => {
             show_usage();
             Ok(())
@@ -84,6 +86,7 @@ fn show_usage() {
     println!("  recover     Recover cancelled session");
     println!("  config      Setup configuration");
     println!("  mcp         Setup Model Context Protocol integration");
+    println!("  monitor     Monitor active sessions with live updates");
     println!("  completion  Generate shell completion script");
     println!("  init        Initialize shell completions automatically");
     println!("  help        Print this message or the help of the given subcommand(s)");
