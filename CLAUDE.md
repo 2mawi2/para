@@ -186,6 +186,7 @@ fn test_with_git_environment() {
 - Use `just release` to create new releases (automatically bumps patch version and creates GitHub release)
 - Must be on main branch with clean working directory
 - Requires GitHub Actions workflow for automated publishing
+- Github releases can be watched with `gh run watch <release-id> --exit-status`, this allows to check if a release succeeded or failed.
 
 ### Commit Style  
 - Keep commit messages short and concise (one line preferred)
