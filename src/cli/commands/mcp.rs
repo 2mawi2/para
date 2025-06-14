@@ -99,54 +99,42 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
 }
 
 fn find_mcp_server() -> Result<McpServerConfig> {
-    // Try multiple locations in order of preference
-    // Prefer system-wide installations over local development versions
+    // Detect if we're running from a homebrew installation
+    let current_exe = std::env::current_exe()
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
+    let exe_path = current_exe.to_string_lossy();
+    
+    // Check if running from homebrew location
+    let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
+    
+    if is_homebrew {
+        // For homebrew installations, ONLY use homebrew MCP server
+        let homebrew_locations = vec![
+            "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
+            "/usr/local/bin/para-mcp-server",                 // Intel Mac
+            "/home/linuxbrew/.linuxbrew/bin/para-mcp-server", // Linux
+        ];
 
-    // 1. Homebrew installation: Check common Homebrew locations
-    let homebrew_locations = vec![
-        "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
-        "/usr/local/bin/para-mcp-server",                 // Intel Mac
-        "/home/linuxbrew/.linuxbrew/bin/para-mcp-server", // Linux
-    ];
-
-    for location in homebrew_locations {
-        let path = PathBuf::from(location);
-        if path.exists() {
-            return Ok(McpServerConfig {
-                command: path.to_string_lossy().to_string(),
-                args: vec![],
-                description: "Homebrew MCP server".to_string(),
-            });
+        for location in homebrew_locations {
+            let path = PathBuf::from(location);
+            if path.exists() {
+                return Ok(McpServerConfig {
+                    command: path.to_string_lossy().to_string(),
+                    args: vec![],
+                    description: "Homebrew MCP server".to_string(),
+                });
+            }
         }
+        
+        return Err(ParaError::invalid_args(
+            "Para is installed via Homebrew but MCP server is missing.\n\
+            Try reinstalling: brew reinstall para".to_string()
+        ));
     }
-
-    // 2. System PATH: Try to find para-mcp-server in PATH
-    if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            return Ok(McpServerConfig {
-                command: path,
-                args: vec![],
-                description: "System PATH MCP server".to_string(),
-            });
-        }
-    }
-
-    // 3. System installation: MCP server in ~/.local/bin
-    let home_dir = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| "~".to_string());
-    let local_rust_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
-
-    if local_rust_server.exists() {
-        return Ok(McpServerConfig {
-            command: local_rust_server.to_string_lossy().to_string(),
-            args: vec![],
-            description: "Local MCP server".to_string(),
-        });
-    }
-
-    // 4. Local development: TypeScript server in current directory (lowest priority)
+    
+    // For development/local installations, check in this order:
+    
+    // 1. Local development: TypeScript server in current directory
     let current_dir = std::env::current_dir()
         .map_err(|e| ParaError::invalid_args(format!("Failed to get current directory: {}", e)))?;
     let local_ts_server = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
@@ -157,6 +145,32 @@ fn find_mcp_server() -> Result<McpServerConfig> {
             args: vec![local_ts_server.to_string_lossy().to_string()],
             description: "Local development TypeScript MCP server".to_string(),
         });
+    }
+
+    // 2. System installation: MCP server in ~/.local/bin
+    let home_dir = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| "~".to_string());
+    let local_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
+
+    if local_server.exists() {
+        return Ok(McpServerConfig {
+            command: local_server.to_string_lossy().to_string(),
+            args: vec![],
+            description: "Local MCP server".to_string(),
+        });
+    }
+
+    // 3. System PATH as fallback
+    if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return Ok(McpServerConfig {
+                command: path,
+                args: vec![],
+                description: "System PATH MCP server".to_string(),
+            });
+        }
     }
 
     // No MCP server found - provide detailed guidance
