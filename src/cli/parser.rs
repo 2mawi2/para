@@ -43,6 +43,8 @@ pub enum Commands {
     /// Legacy completion endpoint for branches (hidden)
     #[command(name = "_completion_branches", hide = true)]
     CompletionBranches,
+    /// Monitor and manage active sessions in real-time (interactive TUI)
+    Monitor(MonitorArgs),
 }
 
 #[derive(Args, Debug)]
@@ -158,6 +160,9 @@ pub struct CompletionArgs {
     /// Shell to generate completion for, or 'init' for automatic setup
     pub shell: String,
 }
+
+#[derive(Args, Debug)]
+pub struct MonitorArgs {}
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
 #[allow(clippy::enum_variant_names)]
