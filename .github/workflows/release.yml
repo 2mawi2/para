@@ -26,9 +26,12 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      version_commit: ${{ steps.version.outputs.version_commit }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         
       - name: Extract current version
         id: version
@@ -39,6 +42,17 @@ jobs:
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $CURRENT_VERSION"
+          
+          # Get the commit SHA that contains this version bump
+          # This ensures we tag the correct commit
+          VERSION_COMMIT=$(git log --pretty=format:"%H" --grep="Bump version to $CURRENT_VERSION" -1)
+          if [ -n "$VERSION_COMMIT" ]; then
+            echo "version_commit=$VERSION_COMMIT" >> $GITHUB_OUTPUT
+            echo "Found version bump commit: $VERSION_COMMIT"
+          else
+            echo "version_commit=$GITHUB_SHA" >> $GITHUB_OUTPUT
+            echo "No version bump commit found, using current commit"
+          fi
 
   test:
     name: Test Build
@@ -125,6 +139,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
@@ -137,6 +153,7 @@ jobs:
         with:
           tag_name: ${{ needs.extract-version.outputs.tag }}
           name: Para ${{ needs.extract-version.outputs.version }}
+          target_commitish: ${{ needs.extract-version.outputs.version_commit }}
           draft: false
           prerelease: false
           generate_release_notes: true
