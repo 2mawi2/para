@@ -29,6 +29,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install dependencies
+        run: |
+          # Install just command runner
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+          
+          # Install Rust toolchain
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Run Claude PR Action
         uses: grll/claude-code-action@beta
         with:
@@ -37,3 +46,15 @@ jobs:
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           timeout_minutes: "60"
+          allowed_tools: |
+            str_replace
+            str_replace_editor
+            run_bash_command
+            view_file
+            list_files
+            mcp__github__create_pending_pull_request_review
+            mcp__github__add_pull_request_review_comment_to_pending_review
+            mcp__github__submit_pending_pull_request_review
+            mcp__github__get_pull_request_diff
+            mcp__github__create_issue_comment
+            mcp__github__create_pull_request_comment

@@ -17,6 +17,15 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install dependencies
+        run: |
+          # Install just command runner
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+          
+          # Install Rust toolchain
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Automatic PR Review
         uses: grll/claude-code-action@beta
         with:
@@ -36,6 +45,18 @@ jobs:
             - Test coverage
             - Documentation updates if needed
 
+            Important: If you find any issues, please run 'just test' to verify the code passes all tests.
+            You can also run 'just lint' to check for linting issues.
+
             Provide constructive feedback with specific suggestions for improvement.
             Use inline comments to highlight specific areas of concern.
-          # allowed_tools: "mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+          allowed_tools: |
+            str_replace
+            str_replace_editor
+            run_bash_command
+            view_file
+            list_files
+            mcp__github__create_pending_pull_request_review
+            mcp__github__add_pull_request_review_comment_to_pending_review
+            mcp__github__submit_pending_pull_request_review
+            mcp__github__get_pull_request_diff
