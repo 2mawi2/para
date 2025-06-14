@@ -6,6 +6,14 @@ use crate::core::session::recovery::{RecoveryOptions, SessionRecovery};
 use crate::core::session::SessionManager;
 use crate::utils::{ParaError, Result};
 use dialoguer::{Confirm, Select};
+use std::env;
+
+/// Check if we're running in non-interactive mode (e.g., from MCP server)
+fn is_non_interactive() -> bool {
+    env::var("PARA_NON_INTERACTIVE").is_ok()
+        || env::var("CI").is_ok()
+        || !atty::is(atty::Stream::Stdin)
+}
 
 pub fn execute(config: Config, args: RecoverArgs) -> Result<()> {
     validate_recover_args(&args)?;
@@ -46,6 +54,15 @@ fn recover_specific_session(
                 }
             }
 
+            if is_non_interactive() {
+                return Err(ParaError::invalid_args(format!(
+                    "Cannot recover session '{}' due to conflicts in non-interactive mode. \
+                     Conflicts: {}. Please resolve conflicts first or run interactively.",
+                    session_name,
+                    validation.conflicts.join(", ")
+                )));
+            }
+
             if !Confirm::new()
                 .with_prompt("Force recovery anyway?")
                 .default(false)
@@ -71,7 +88,25 @@ fn recover_specific_session(
             session_name, archive_entry.archived_at
         );
 
-        if Confirm::new()
+        if is_non_interactive() {
+            // In non-interactive mode, proceed with recovery automatically
+            let recovery_options = RecoveryOptions {
+                force_overwrite: true,
+                preserve_original_name: true,
+            };
+
+            let result = session_recovery.recover_session(session_name, recovery_options)?;
+            println!(
+                "✅ Session '{}' recovered successfully",
+                result.session_name
+            );
+            println!("  Branch: {}", result.branch_name);
+            println!("  Worktree: {}", result.worktree_path.display());
+            println!(
+                "  💡 To open in your IDE, run: para resume {}",
+                result.session_name
+            );
+        } else if Confirm::new()
             .with_prompt(format!("Recover session '{}'?", session_name))
             .default(true)
             .interact()
@@ -129,6 +164,13 @@ fn list_recoverable_sessions(
         );
     }
 
+    if is_non_interactive() {
+        return Err(ParaError::invalid_args(
+            "Cannot interactively select session to recover in non-interactive mode. \
+             Please specify a session name: para recover <session-name>",
+        ));
+    }
+
     if Confirm::new()
         .with_prompt("Recover a session?")
         .default(false)
@@ -166,11 +208,12 @@ fn list_recoverable_sessions(
                 Err(e) => {
                     eprintln!("❌ Failed to recover session: {}", e);
 
-                    if Confirm::new()
-                        .with_prompt("Try force recovery?")
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false)
+                    if !is_non_interactive()
+                        && Confirm::new()
+                            .with_prompt("Try force recovery?")
+                            .default(false)
+                            .interact()
+                            .unwrap_or(false)
                     {
                         let force_options = RecoveryOptions {
                             force_overwrite: true,

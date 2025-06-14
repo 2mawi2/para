@@ -7,6 +7,13 @@ use crate::utils::{ParaError, Result};
 use std::env;
 use std::io::{self, Write};
 
+/// Check if we're running in non-interactive mode (e.g., from MCP server)
+fn is_non_interactive() -> bool {
+    env::var("PARA_NON_INTERACTIVE").is_ok()
+        || env::var("CI").is_ok()
+        || !atty::is(atty::Stream::Stdin)
+}
+
 pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     validate_cancel_args(&args)?;
 
@@ -103,6 +110,14 @@ fn detect_session_name(
 }
 
 fn confirm_cancel_with_changes(session_name: &str) -> Result<()> {
+    if is_non_interactive() {
+        return Err(ParaError::invalid_args(format!(
+            "Cannot cancel session '{}' with uncommitted changes in non-interactive mode. \
+             Please commit or stash your changes first, or run the command interactively.",
+            session_name
+        )));
+    }
+
     print!(
         "Session '{}' has uncommitted changes. Are you sure you want to cancel? This will archive the session but preserve your work. [y/N]: ",
         session_name

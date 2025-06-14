@@ -15,9 +15,6 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec, execSync } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
 
 // Para binary path - dynamically discover
 function findParaBinary(): string {
@@ -84,25 +81,57 @@ const server = new Server({
 
 // Helper function to execute para commands
 async function runParaCommand(args: string[]): Promise<string> {
-  try {
-    // Properly quote arguments that contain spaces
-    const quotedArgs = args.map(arg => {
-      // If the argument contains spaces and isn't already quoted, wrap it in quotes
-      if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
-        return `"${arg.replace(/"/g, '\\"')}"`;
-      }
-      return arg;
-    });
+  return new Promise((resolve, reject) => {
+    try {
+      // Properly quote arguments that contain spaces
+      const quotedArgs = args.map(arg => {
+        // If the argument contains spaces and isn't already quoted, wrap it in quotes
+        if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
+          return `"${arg.replace(/"/g, '\\"')}"`;
+        }
+        return arg;
+      });
 
-    const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
-    const { stdout, stderr } = await execAsync(command);
-    if (stderr && !stderr.includes('warning')) {
-      console.error(`Para command warning: ${stderr}`);
+      const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
+      
+      // Set up environment to indicate non-interactive mode
+      const env = {
+        ...process.env,
+        PARA_NON_INTERACTIVE: '1',
+        CI: '1'  // Many CLIs respect this as non-interactive indicator
+      };
+      
+      const child = exec(command, { env }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`));
+          return;
+        }
+        
+        if (stderr && !stderr.includes('warning')) {
+          console.error(`Para command warning: ${stderr}`);
+        }
+        
+        resolve(stdout.trim());
+      });
+      
+      // Set up timeout of 30 seconds
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new McpError(
+          ErrorCode.InternalError, 
+          `Command timed out after 30 seconds. The command may be waiting for interactive input which is not supported in MCP mode.`
+        ));
+      }, 30000);
+      
+      // Clear timeout if command completes
+      child.on('exit', () => {
+        clearTimeout(timeout);
+      });
+      
+    } catch (error: any) {
+      reject(new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`));
     }
-    return stdout.trim();
-  } catch (error: any) {
-    throw new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`);
-  }
+  });
 }
 
 // List available tools
