@@ -3,29 +3,33 @@ use std::fs;
 use std::path::Path;
 
 /// Manages gitignore files to ensure para directories are properly ignored
-pub struct GitignoreManager;
+pub struct GitignoreManager {
+    directory: String,
+}
 
 impl GitignoreManager {
     /// Create a new GitignoreManager for the given directory
-    pub fn new(_directory: &str) -> Self {
-        Self
+    pub fn new(directory: &str) -> Self {
+        Self {
+            directory: directory.to_string(),
+        }
     }
 
     /// Add an entry to the .gitignore file in the specified directory
     /// Returns true if the entry was added, false if it already existed
     pub fn add_entry(&self, entry: &str) -> Result<bool> {
-        let gitignore_path = Path::new(".gitignore");
+        let gitignore_path = Path::new(&self.directory).join(".gitignore");
 
         // Check if entry already exists
         if gitignore_path.exists() {
-            let content = fs::read_to_string(gitignore_path)?;
+            let content = fs::read_to_string(&gitignore_path)?;
             if Self::is_entry_already_ignored(&content, entry) {
                 return Ok(false);
             }
         }
 
         // Add entry to gitignore
-        Self::add_entry_to_gitignore(gitignore_path, entry)?;
+        Self::add_entry_to_gitignore(&gitignore_path, entry)?;
         Ok(true)
     }
 
@@ -171,6 +175,9 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     #[test]
     fn test_ensure_para_ignored_new_gitignore() {
         let temp_dir = TempDir::new().unwrap();
@@ -250,5 +257,188 @@ mod tests {
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert!(content.contains("*"));
         assert!(content.contains("!.gitignore"));
+    }
+
+    #[test]
+    fn test_add_entry_to_new_gitignore() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+        let added = manager.add_entry("build/").unwrap();
+
+        assert!(added);
+        let gitignore_path = temp_dir.path().join(".gitignore");
+        assert!(gitignore_path.exists());
+
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, "build/\n");
+    }
+
+    #[test]
+    fn test_add_entry_to_existing_gitignore_with_newline() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        // Create existing gitignore with trailing newline
+        fs::write(&gitignore_path, "*.log\ntarget/\n").unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+        let added = manager.add_entry("build/").unwrap();
+
+        assert!(added);
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, "*.log\ntarget/\nbuild/\n");
+    }
+
+    #[test]
+    fn test_add_entry_to_existing_gitignore_without_newline() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        // Create existing gitignore without trailing newline
+        fs::write(&gitignore_path, "*.log\ntarget/").unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+        let added = manager.add_entry("build/").unwrap();
+
+        assert!(added);
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, "*.log\ntarget/\nbuild/\n");
+    }
+
+    #[test]
+    fn test_add_duplicate_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        fs::write(&gitignore_path, "*.log\nbuild/\ntarget/\n").unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+        let added = manager.add_entry("build/").unwrap();
+
+        assert!(!added); // Should return false for duplicate
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        // Content should remain unchanged
+        assert_eq!(content, "*.log\nbuild/\ntarget/\n");
+    }
+
+    #[test]
+    fn test_add_entry_with_comments_and_empty_lines() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        let gitignore_content = "# Build artifacts\nbuild/\n\n# Dependencies\nnode_modules/\n";
+        fs::write(&gitignore_path, gitignore_content).unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+
+        // Try to add duplicate that already exists
+        let added = manager.add_entry("build/").unwrap();
+        assert!(!added);
+
+        // Add new entry
+        let added = manager.add_entry("dist/").unwrap();
+        assert!(added);
+
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(content.contains("dist/"));
+        assert!(content.ends_with("dist/\n"));
+    }
+
+    #[test]
+    fn test_is_entry_already_ignored_edge_cases() {
+        // Test with various whitespace and comment scenarios
+        assert!(GitignoreManager::is_entry_already_ignored(
+            "  build/  \n",
+            "build/"
+        ));
+        assert!(GitignoreManager::is_entry_already_ignored(
+            "# Some comment\nbuild/\n",
+            "build/"
+        ));
+        assert!(GitignoreManager::is_entry_already_ignored(
+            "\n\nbuild/\n\n",
+            "build/"
+        ));
+        assert!(!GitignoreManager::is_entry_already_ignored(
+            "# build/\n",
+            "build/"
+        ));
+        assert!(!GitignoreManager::is_entry_already_ignored(
+            "build\n", "build/"
+        ));
+    }
+
+    #[test]
+    fn test_add_entry_file_permission_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        // Create a read-only gitignore file
+        fs::write(&gitignore_path, "*.log\n").unwrap();
+        let metadata = fs::metadata(&gitignore_path).unwrap();
+        let mut perms = metadata.permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&gitignore_path, perms).unwrap();
+
+        let manager = GitignoreManager::new(dir_path);
+        let result = manager.add_entry("build/");
+
+        // Should fail with permission error
+        assert!(result.is_err());
+        if let Err(e) = result {
+            let error_msg = e.to_string();
+            // Check for either update or create error message
+            assert!(
+                error_msg.contains("Failed to update .gitignore")
+                    || error_msg.contains("Failed to create .gitignore"),
+                "Error message was: {}",
+                error_msg
+            );
+        }
+
+        // Clean up: reset permissions
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&gitignore_path).unwrap().permissions();
+            perms.set_mode(0o644); // Standard read/write permissions for owner
+            fs::set_permissions(&gitignore_path, perms).unwrap();
+        }
+        #[cfg(not(unix))]
+        {
+            let mut perms = fs::metadata(&gitignore_path).unwrap().permissions();
+            perms.set_readonly(false);
+            fs::set_permissions(&gitignore_path, perms).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_add_multiple_entries_sequentially() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir_path = temp_dir.path().to_str().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        let manager = GitignoreManager::new(dir_path);
+
+        // Add first entry
+        assert!(manager.add_entry("build/").unwrap());
+
+        // Add second entry
+        assert!(manager.add_entry("dist/").unwrap());
+
+        // Add third entry
+        assert!(manager.add_entry("*.tmp").unwrap());
+
+        // Try to add duplicate
+        assert!(!manager.add_entry("build/").unwrap());
+
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, "build/\ndist/\n*.tmp\n");
     }
 }
