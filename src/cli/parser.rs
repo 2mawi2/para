@@ -78,7 +78,7 @@ pub struct FinishArgs {
     pub message: String,
 
     /// Custom branch name after finishing
-    #[arg(long, help = "Rename feature branch to specified name")]
+    #[arg(long, short = 'b', help = "Rename feature branch to specified name")]
     pub branch: Option<String>,
 
     /// Session ID (optional, auto-detects if not provided)

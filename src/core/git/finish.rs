@@ -37,16 +37,29 @@ impl<'a> FinishManager<'a> {
         }
 
         // For now, finish just creates a branch
-        let final_branch = if let Some(target_name) = request.target_branch_name {
-            target_name
+        let final_branch = if let Some(ref target_name) = request.target_branch_name {
+            target_name.clone()
         } else {
             request.feature_branch.clone()
         };
 
         // Check out the target branch if it's different
         if final_branch != current_branch {
-            // Create or checkout the target branch
             let branch_manager = BranchManager::new(self.repo);
+
+            // If a custom branch name was provided and it already exists, provide helpful error
+            if request.target_branch_name.is_some()
+                && branch_manager.branch_exists(&final_branch)?
+            {
+                let unique_suggestion =
+                    branch_manager.generate_unique_branch_name(&final_branch)?;
+                return Err(crate::utils::ParaError::git_operation(format!(
+                    "Branch '{}' already exists. Try using a different name like '{}'",
+                    final_branch, unique_suggestion
+                )));
+            }
+
+            // Create or checkout the target branch
             if !branch_manager.branch_exists(&final_branch)? {
                 branch_manager.create_branch(&final_branch, &current_branch)?;
             }
@@ -229,6 +242,48 @@ mod tests {
                 assert_eq!(current_branch, "final-feature");
             }
         }
+    }
+
+    #[test]
+    fn test_finish_session_with_custom_branch_name_already_exists() {
+        let (temp_repo_dir, repo) = setup_test_repo();
+        let manager = FinishManager::new(&repo);
+        let branch_manager = BranchManager::new(&repo);
+
+        let main_branch = repo
+            .get_current_branch()
+            .expect("Failed to get current branch");
+
+        // Create feature branch
+        branch_manager
+            .create_branch("temp-feature", &main_branch)
+            .expect("Failed to create feature branch");
+
+        // Create a branch that will conflict with our target
+        branch_manager
+            .create_branch("existing-target", &main_branch)
+            .expect("Failed to create existing target branch");
+
+        // Switch to feature branch and make changes
+        repo.checkout_branch("temp-feature")
+            .expect("Failed to checkout feature branch");
+
+        fs::write(temp_repo_dir.path().join("feature.txt"), "Feature content")
+            .expect("Failed to write feature file");
+
+        // Test finish with custom target branch name that already exists
+        let request = FinishRequest {
+            feature_branch: "temp-feature".to_string(),
+            commit_message: "Implement feature".to_string(),
+            target_branch_name: Some("existing-target".to_string()),
+        };
+
+        let result = manager.finish_session(request);
+        assert!(result.is_err());
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Branch 'existing-target' already exists"));
+        assert!(error_msg.contains("Try using a different name like"));
     }
 
     #[test]

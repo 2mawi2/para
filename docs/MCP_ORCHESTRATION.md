@@ -17,7 +17,7 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 - **para_cancel** - Cleanup abandoned work
 
 ### CLI Commands (for Dispatched Agents)
-- **para finish** - Creates branch for review
+- **para finish** - Creates branch for review (with optional custom branch names)
 - **para list** - Check their own status
 
 ## Orchestration Workflow
@@ -54,7 +54,7 @@ Parallel:
 para_dispatch(session_name="api-spec", file="tasks/TASK_1_api_spec.md")
 
 # Agent completes and creates branch for review
-para finish "Add API specification"
+para finish "Add API specification" --branch feature/api-v1
 
 # Orchestrator continues with user on next tasks
 # No monitoring needed - agents handle their own integration
@@ -77,7 +77,7 @@ Requirements:
 - Follow REST conventions
 - Include input validation
 
-When done: para finish "Add user authentication"
+When done: para finish "Add user authentication" --branch feature/auth-system
 ```
 
 ## MCP Tool Descriptions
@@ -92,6 +92,7 @@ The MCP tools include comprehensive documentation in their descriptions. Key poi
 
 2. **Branch Creation**:
    - Agents use `para finish` to create branches for review
+   - Custom branch names available with `--branch` or `-b` flag
    - All changes require manual review and merge
    - Orchestrator can review branches before integration
 
@@ -111,7 +112,7 @@ The MCP tools include comprehensive documentation in their descriptions. Key poi
 ## Configuration
 
 Users can customize the workflow in their `CLAUDE.md`:
-- Use `para finish` for manual review workflow
+- Use `para finish` for manual review workflow (with optional custom branch names)
 - Add `-d` flag preferences for automation
 
 The MCP tools adapt to these preferences, making the system flexible for different team workflows.

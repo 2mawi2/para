@@ -93,9 +93,10 @@ sequenceDiagram
     
     Note over User,IDE: Development work happens
     
-    User->>Para: para finish "Implement OAuth"
+    User->>Para: para finish "Implement OAuth" --branch feature/oauth
     Para->>Git: Stage all changes (git add .)
     Para->>Git: Commit with message
+    Para->>Git: Create/switch to custom branch name
     Para->>Git: Switch back to main
     Para->>Git: Remove worktree
     Para->>User: Session complete
@@ -113,7 +114,7 @@ flowchart TD
     E --> F[IDE opens with full context]
     F --> G[AI processes requirements]
     G --> H[Implementation begins]
-    H --> I[para finish 'Complete requirements']
+    H --> I[para finish 'Complete requirements' --branch feature/complex-task]
 ```
 
 ## Error Handling States

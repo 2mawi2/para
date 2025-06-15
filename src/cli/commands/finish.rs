@@ -358,6 +358,13 @@ mod tests {
             session: None,
         };
         assert!(invalid_branch_args.validate().is_err());
+
+        let short_flag_valid_args = FinishArgs {
+            message: "Test message".to_string(),
+            branch: Some("custom-branch-name".to_string()),
+            session: None,
+        };
+        assert!(short_flag_valid_args.validate().is_ok());
     }
 
     #[test]
