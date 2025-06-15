@@ -45,14 +45,16 @@ impl App {
     }
 
     fn run_app<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> AnyhowResult<()> {
+        // Initial draw
+        terminal.draw(|f| self.coordinator.render(f))?;
+
         loop {
-            // Auto-refresh every 2 seconds
-            if self.coordinator.should_refresh() {
+            // Check if we need to refresh sessions
+            let should_refresh = self.coordinator.should_refresh();
+            if should_refresh {
                 self.coordinator.refresh_sessions();
                 self.coordinator.mark_refreshed();
             }
-
-            terminal.draw(|f| self.coordinator.render(f))?;
 
             // Poll for events with timeout for refresh
             if event::poll(std::time::Duration::from_millis(100))? {
@@ -62,7 +64,13 @@ impl App {
                     if self.coordinator.should_quit() {
                         break;
                     }
+
+                    // Redraw after handling key event
+                    terminal.draw(|f| self.coordinator.render(f))?;
                 }
+            } else if should_refresh {
+                // Only redraw if we refreshed sessions
+                terminal.draw(|f| self.coordinator.render(f))?;
             }
         }
         Ok(())

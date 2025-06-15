@@ -57,7 +57,7 @@ impl MonitorRenderer {
                 ),
                 Span::raw("                  "),
                 Span::styled(
-                    "Auto-refresh: 2s",
+                    "Auto-refresh: 5s",
                     Style::default().fg(Color::Rgb(156, 163, 175)),
                 ),
             ]),

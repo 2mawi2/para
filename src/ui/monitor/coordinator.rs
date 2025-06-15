@@ -37,6 +37,7 @@ impl MonitorCoordinator {
     }
 
     pub fn refresh_sessions(&mut self) {
+        // Don't clear cache - let it expire naturally to avoid lag spikes
         self.sessions = self
             .service
             .load_sessions(self.state.show_stale)
