@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod core;
 mod platform;
+mod ui;
 mod utils;
 
 use clap::Parser;
