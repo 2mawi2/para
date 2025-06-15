@@ -7,6 +7,12 @@ use std::path::{Path, PathBuf};
 use crate::cli::parser::Shell;
 use crate::utils::{ParaError, Result};
 
+fn is_non_interactive() -> bool {
+    std::env::var("PARA_NON_INTERACTIVE").is_ok()
+        || std::env::var("CI").is_ok()
+        || !atty::is(atty::Stream::Stdin)
+}
+
 pub fn execute() -> Result<()> {
     println!("Initializing para shell completions...\n");
 
@@ -50,6 +56,12 @@ fn detect_shell() -> Result<Shell> {
         if let Some(shell) = parse_shell_from_path(&shell_env) {
             return Ok(shell);
         }
+    }
+
+    if is_non_interactive() {
+        return Err(ParaError::config_error(
+            "Cannot auto-detect shell in non-interactive mode. Shell completions require interactive setup."
+        ));
     }
 
     println!("Unable to detect shell automatically.");

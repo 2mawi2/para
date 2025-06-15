@@ -15,6 +15,9 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec, execSync } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Para binary path - dynamically discover
 function findParaBinary(): string {
@@ -82,55 +85,44 @@ const server = new Server({
 // Helper function to execute para commands
 async function runParaCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    try {
-      // Properly quote arguments that contain spaces
-      const quotedArgs = args.map(arg => {
-        // If the argument contains spaces and isn't already quoted, wrap it in quotes
-        if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
-          return `"${arg.replace(/"/g, '\\"')}"`;
-        }
-        return arg;
-      });
+    // Properly quote arguments that contain spaces
+    const quotedArgs = args.map(arg => {
+      // If the argument contains spaces and isn't already quoted, wrap it in quotes
+      if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+      }
+      return arg;
+    });
 
-      const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
+    const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
+    
+    // Set environment to indicate non-interactive mode
+    const env = {
+      ...process.env,
+      PARA_NON_INTERACTIVE: '1',
+      CI: '1'  // Many CLIs respect this as well
+    };
+
+    const child = exec(command, { env }, (error, stdout, stderr) => {
+      clearTimeout(timeout);
       
-      // Set up environment to indicate non-interactive mode
-      const env = {
-        ...process.env,
-        PARA_NON_INTERACTIVE: '1',
-        CI: '1'  // Many CLIs respect this as non-interactive indicator
-      };
+      if (error) {
+        reject(new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`));
+        return;
+      }
       
-      const child = exec(command, { env }, (error, stdout, stderr) => {
-        if (error) {
-          reject(new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`));
-          return;
-        }
-        
-        if (stderr && !stderr.includes('warning')) {
-          console.error(`Para command warning: ${stderr}`);
-        }
-        
-        resolve(stdout.trim());
-      });
+      if (stderr && !stderr.includes('warning')) {
+        console.error(`Para command warning: ${stderr}`);
+      }
       
-      // Set up timeout of 30 seconds
-      const timeout = setTimeout(() => {
-        child.kill();
-        reject(new McpError(
-          ErrorCode.InternalError, 
-          `Command timed out after 30 seconds. The command may be waiting for interactive input which is not supported in MCP mode.`
-        ));
-      }, 30000);
-      
-      // Clear timeout if command completes
-      child.on('exit', () => {
-        clearTimeout(timeout);
-      });
-      
-    } catch (error: any) {
-      reject(new McpError(ErrorCode.InternalError, `Para command failed: ${error.message}`));
-    }
+      resolve(stdout.trim());
+    });
+
+    // Set a 30-second timeout
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new McpError(ErrorCode.InternalError, `Command timed out after 30 seconds: ${args.join(' ')}`));
+    }, 30000);
   });
 }
 
