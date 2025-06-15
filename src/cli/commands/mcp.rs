@@ -394,8 +394,8 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let old_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(temp_dir.path()).unwrap();
+        let old_dir = std::env::current_dir().expect("Failed to get current directory");
+        std::env::set_current_dir(temp_dir.path()).expect("Failed to set test directory");
 
         // Test adding to new gitignore
         let added = add_to_gitignore(".mcp.json").unwrap();
@@ -409,6 +409,7 @@ mod tests {
         let content = fs::read_to_string(".gitignore").unwrap();
         assert_eq!(content.matches(".mcp.json").count(), 1);
 
-        std::env::set_current_dir(old_dir).unwrap();
+        // Restore original directory
+        let _ = std::env::set_current_dir(old_dir);
     }
 }

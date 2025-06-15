@@ -63,8 +63,20 @@ fn execute_edit() -> Result<()> {
     Ok(())
 }
 
+fn is_non_interactive() -> bool {
+    std::env::var("PARA_NON_INTERACTIVE").is_ok()
+        || std::env::var("CI").is_ok()
+        || !atty::is(atty::Stream::Stdin)
+}
+
 fn execute_reset() -> Result<()> {
     use dialoguer::{theme::ColorfulTheme, Confirm};
+
+    if is_non_interactive() {
+        return Err(ParaError::invalid_args(
+            "Cannot reset configuration in non-interactive mode. Run interactively to confirm reset."
+        ));
+    }
 
     if !Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(

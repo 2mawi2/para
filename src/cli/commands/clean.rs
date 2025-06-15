@@ -34,6 +34,12 @@ impl SessionCleaner {
         }
     }
 
+    fn is_non_interactive() -> bool {
+        std::env::var("PARA_NON_INTERACTIVE").is_ok()
+            || std::env::var("CI").is_ok()
+            || !atty::is(atty::Stream::Stdin)
+    }
+
     fn execute_clean(&self, args: CleanArgs) -> Result<()> {
         let cleanup_plan = self.analyze_cleanup()?;
 
@@ -225,6 +231,12 @@ impl SessionCleaner {
         if total_items == 0 {
             println!("No items to clean");
             return Ok(false);
+        }
+
+        if Self::is_non_interactive() {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot perform cleanup in non-interactive mode. Use --force flag to skip confirmation prompts."
+            ));
         }
 
         Ok(Confirm::new()

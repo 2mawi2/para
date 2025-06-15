@@ -111,11 +111,10 @@ fn detect_session_name(
 
 fn confirm_cancel_with_changes(session_name: &str) -> Result<()> {
     if is_non_interactive() {
-        return Err(ParaError::invalid_args(format!(
-            "Cannot cancel session '{}' with uncommitted changes in non-interactive mode. \
-             Please commit or stash your changes first, or run the command interactively.",
-            session_name
-        )));
+        return Err(ParaError::invalid_args(
+            "Cannot cancel session with uncommitted changes in non-interactive mode. \
+             Commit or stash changes first, or run interactively.",
+        ));
     }
 
     print!(
@@ -351,5 +350,19 @@ mod tests {
 
         // We cannot test the interactive part in automated tests
         // The function would require stdin input which we cannot provide in CI
+    }
+
+    #[test]
+    fn test_non_interactive_error_in_confirm() {
+        // Test that non-interactive mode returns appropriate error
+        std::env::set_var("PARA_NON_INTERACTIVE", "1");
+
+        let result = confirm_cancel_with_changes("test-session");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("non-interactive mode"));
+        assert!(error_msg.contains("Commit or stash changes"));
+
+        std::env::remove_var("PARA_NON_INTERACTIVE");
     }
 }
