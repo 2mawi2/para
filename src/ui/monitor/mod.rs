@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod activity;
+pub mod cache;
 pub mod coordinator;
 pub mod renderer;
 pub mod service;
