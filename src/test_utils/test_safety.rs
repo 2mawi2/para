@@ -100,13 +100,13 @@ mod tests {
             "Test config should use test IDE name"
         );
 
-        // Verify that load_or_create() would point to a different config
-        // (we can't actually load it as it might have an invalid IDE command)
-        let default_config_path = ConfigManager::get_config_path().unwrap();
-        assert_ne!(
-            guard.config_path().to_string_lossy(),
-            default_config_path,
-            "Test config path should be different from default user config path"
+        // The TestEnvironmentGuard should isolate config loading
+        // Since PARA_CONFIG_PATH is set, the default path resolution should be overridden
+        let resolved_config_path = crate::config::defaults::get_config_file_path();
+        assert!(
+            resolved_config_path.to_string_lossy().contains("test-config.json"),
+            "Config path should point to a test config file due to PARA_CONFIG_PATH override, got: {}",
+            resolved_config_path.display()
         );
     }
 }
