@@ -28,8 +28,14 @@ para dispatch "task-name" --file tasks/TASK_1_feature.md -d
 
 #### Completing Work
 ```bash
-# Create branch for manual review
+# Create branch for manual review (default naming)
 para finish "Implement feature X"
+
+# Create branch with custom name
+para finish "Implement feature X" --branch feature/auth-system
+
+# Create branch with custom name (short flag)
+para finish "Implement feature X" -b bugfix/login-issue
 ```
 
 ### Task Organization
@@ -66,7 +72,7 @@ Implement a user authentication system with the following requirements:
 Use the existing database configuration.
 Follow project conventions for API responses.
 
-When complete, run: para finish "Add user authentication system"
+When complete, run: para finish "Add user authentication system" --branch feature/auth
 ```
 
 ### Parallelization Strategy
@@ -91,10 +97,16 @@ When complete, run: para finish "Add user authentication system"
 
 **Manual Review**:
 ```bash
+# Default branch naming
 para finish "Your commit message"
+# Creates branch `para/session-name`
+
+# Custom branch naming
+para finish "Your commit message" --branch feature/custom-name
+# Creates branch `feature/custom-name`
 ```
-- Creates branch `para/session-name`
 - Requires manual merge after review
+- Custom branch names override default `para/session-name` pattern
 
 ### Best Practices
 
@@ -110,7 +122,11 @@ Specify your team's preference at the beginning of tasks:
 
 **For branch creation and manual review:**
 ```
+# Default branch name
 When complete: para finish "commit message"
+
+# Custom branch name
+When complete: para finish "commit message" --branch feature/my-feature
 ```
 
 **For manual work (no auto-commit):**
@@ -144,8 +160,8 @@ Do not run any para commands on completion.
 
 4. **Agents work independently** and run:
    ```bash
-   para finish "Add API endpoints"
-   para finish "Add user interface"
+   para finish "Add API endpoints" --branch feature/api-v1
+   para finish "Add user interface" --branch feature/ui-components
    ```
 
 5. **Manual integration** happens after review of each branch
