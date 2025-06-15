@@ -54,6 +54,7 @@ pub enum AppMode {
     Normal,
     FinishPrompt,
     CancelConfirm,
+    ErrorDialog,
 }
 
 #[cfg(test)]

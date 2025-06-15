@@ -51,6 +51,7 @@ impl MonitorCoordinator {
             AppMode::Normal => self.handle_normal_key(key),
             AppMode::FinishPrompt => self.handle_finish_prompt_key(key),
             AppMode::CancelConfirm => self.handle_cancel_confirm_key(key),
+            AppMode::ErrorDialog => self.handle_error_dialog_key(key),
         }
     }
 
@@ -115,7 +116,10 @@ impl MonitorCoordinator {
 
     fn resume_selected(&mut self) -> Result<()> {
         if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            self.actions.resume_session(session)?;
+            if let Err(e) = self.actions.resume_session(session) {
+                self.state
+                    .show_error(format!("Failed to resume session: {}", e));
+            }
         }
         Ok(())
     }
@@ -157,6 +161,18 @@ impl MonitorCoordinator {
         Ok(())
     }
 
+    fn handle_error_dialog_key(&mut self, key: KeyEvent) -> Result<()> {
+        use crossterm::event::KeyCode;
+
+        match key.code {
+            KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => {
+                self.state.clear_error();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     pub fn should_quit(&self) -> bool {
         self.state.should_quit
     }
@@ -177,6 +193,7 @@ impl MonitorCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::{KeyCode, KeyEvent};
 
     fn create_test_config() -> Config {
         // Create a minimal test config without using test_utils
@@ -244,6 +261,34 @@ mod tests {
         // Test cancel mode
         coordinator.start_cancel();
         assert_eq!(coordinator.state.mode, AppMode::Normal); // No sessions to cancel
+    }
+
+    #[test]
+    fn test_error_dialog_key_handling() {
+        let config = create_test_config();
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Set up error state
+        coordinator.state.show_error("Test error".to_string());
+        assert_eq!(coordinator.state.mode, AppMode::ErrorDialog);
+
+        // Test Enter key dismisses error
+        let enter_key = KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE);
+        coordinator.handle_key(enter_key).unwrap();
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+        assert!(coordinator.state.error_message.is_none());
+
+        // Test Esc key dismisses error
+        coordinator.state.show_error("Test error 2".to_string());
+        let esc_key = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
+        coordinator.handle_key(esc_key).unwrap();
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+
+        // Test Space key dismisses error
+        coordinator.state.show_error("Test error 3".to_string());
+        let space_key = KeyEvent::new(KeyCode::Char(' '), crossterm::event::KeyModifiers::NONE);
+        coordinator.handle_key(space_key).unwrap();
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
     }
 
     #[test]

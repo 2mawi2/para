@@ -41,6 +41,7 @@ impl MonitorRenderer {
         match state.mode {
             AppMode::FinishPrompt => self.render_finish_prompt(f, state),
             AppMode::CancelConfirm => self.render_cancel_confirm(f),
+            AppMode::ErrorDialog => self.render_error_dialog(f, state),
             _ => {}
         }
     }
@@ -290,6 +291,48 @@ impl MonitorRenderer {
         .alignment(Alignment::Center);
 
         f.render_widget(confirm, area);
+    }
+
+    fn render_error_dialog(&self, f: &mut Frame, state: &MonitorAppState) {
+        let area = centered_rect(60, 25, f.area());
+
+        // Clear the area first to prevent text bleeding through
+        f.render_widget(Clear, area);
+
+        let error_message = state.error_message.as_deref().unwrap_or("Unknown error");
+
+        let error_popup = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("⚠️  ", Style::default().fg(Color::Rgb(239, 68, 68))),
+                Span::styled(
+                    "Error",
+                    Style::default()
+                        .fg(Color::Rgb(239, 68, 68))
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(Span::raw(error_message)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("[Enter]", Style::default().fg(Color::Rgb(34, 197, 94))),
+                Span::raw(" or "),
+                Span::styled("[Esc]", Style::default().fg(Color::Rgb(34, 197, 94))),
+                Span::raw(" to dismiss"),
+            ]),
+        ])
+        .block(
+            Block::default()
+                .title(" Error ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Rgb(239, 68, 68)))
+                .style(Style::default().bg(Color::Rgb(0, 0, 0))), // Black background
+        )
+        .style(Style::default().fg(Color::Rgb(255, 255, 255)))
+        .alignment(Alignment::Center)
+        .wrap(ratatui::widgets::Wrap { trim: true });
+
+        f.render_widget(error_popup, area);
     }
 }
 

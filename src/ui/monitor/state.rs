@@ -11,6 +11,7 @@ pub struct MonitorAppState {
     pub input_buffer: String,
     pub show_stale: bool,
     pub last_refresh: Instant,
+    pub error_message: Option<String>,
 }
 
 impl MonitorAppState {
@@ -26,6 +27,7 @@ impl MonitorAppState {
             input_buffer: String::new(),
             show_stale: false,
             last_refresh: Instant::now(),
+            error_message: None,
         }
     }
 
@@ -114,6 +116,18 @@ impl MonitorAppState {
     /// Check if input is ready for submission (not empty when trimmed)
     pub fn is_input_ready(&self) -> bool {
         !self.input_buffer.trim().is_empty()
+    }
+
+    /// Show an error message to the user
+    pub fn show_error(&mut self, message: String) {
+        self.error_message = Some(message);
+        self.mode = AppMode::ErrorDialog;
+    }
+
+    /// Clear the error message and return to normal mode
+    pub fn clear_error(&mut self) {
+        self.error_message = None;
+        self.mode = AppMode::Normal;
     }
 
     /// Consume the current input buffer and return its content
@@ -238,6 +252,24 @@ mod tests {
         state.selected_index = 10;
         let selected = state.get_selected_session(&sessions);
         assert!(selected.is_none());
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let mut state = MonitorAppState::new();
+
+        // Test showing error
+        assert_eq!(state.mode, AppMode::Normal);
+        assert!(state.error_message.is_none());
+
+        state.show_error("Test error message".to_string());
+        assert_eq!(state.mode, AppMode::ErrorDialog);
+        assert_eq!(state.error_message, Some("Test error message".to_string()));
+
+        // Test clearing error
+        state.clear_error();
+        assert_eq!(state.mode, AppMode::Normal);
+        assert!(state.error_message.is_none());
     }
 
     #[test]

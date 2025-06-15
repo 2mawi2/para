@@ -24,11 +24,21 @@ impl MonitorActions {
             )));
         }
 
-        // Use internal APIs to open IDE
-        let ide_manager = crate::core::ide::IdeManager::new(&self.config);
-        ide_manager
-            .launch(&session.worktree_path, false)
-            .map_err(|e| crate::utils::ParaError::ide_error(format!("Failed to launch IDE: {}", e)))
+        // Launch IDE using para command to avoid output corruption
+        // This delegates to the normal para resume flow which handles output properly
+        let session_name = session.name.clone();
+
+        std::thread::spawn(move || {
+            use std::process::{Command, Stdio};
+
+            let _ = Command::new("para")
+                .args(["resume", &session_name])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+        });
+
+        Ok(())
     }
 
     pub fn finish_session(&self, session: &SessionInfo, message: String) -> Result<()> {
@@ -81,11 +91,14 @@ impl MonitorActions {
 
     pub fn integrate_session(&self, session: &SessionInfo) -> Result<()> {
         use crate::ui::monitor::SessionStatus;
+        use std::process::Stdio;
 
         if matches!(session.status, SessionStatus::Ready) {
             let _ = Command::new("para")
                 .args(["integrate", &session.name])
                 .current_dir(&session.worktree_path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .spawn();
         }
 
