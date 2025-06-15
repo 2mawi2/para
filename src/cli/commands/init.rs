@@ -145,7 +145,7 @@ fn create_backup(config_path: &Path) -> Result<PathBuf> {
 
 fn install_completion(config_path: &Path, shell: &Shell) -> Result<()> {
     let completion_block = format!(
-        "\n# >>> para completion initialize >>>\neval \"$(para completion {})\"\n# <<< para completion initialize <<<\n",
+        "\n# >>> para completion initialize >>>\neval \"$(PARA_COMPLETION_SCRIPT=1 para completion {})\"\n# <<< para completion initialize <<<\n",
         match shell {
             Shell::Bash => "bash",
             Shell::Zsh => "zsh",
@@ -198,7 +198,7 @@ mod tests {
 
         fs::write(
             &config_path,
-            "# >>> para completion initialize >>>\neval \"$(para completion bash)\"\n# <<< para completion initialize <<<\n"
+            "# >>> para completion initialize >>>\neval \"$(PARA_COMPLETION_SCRIPT=1 para completion bash)\"\n# <<< para completion initialize <<<\n"
         ).unwrap();
         assert!(is_completion_installed(&config_path).unwrap());
     }
@@ -226,7 +226,7 @@ mod tests {
 
         let content = fs::read_to_string(&config_path).unwrap();
         assert!(content.contains(">>> para completion initialize >>>"));
-        assert!(content.contains("eval \"$(para completion bash)\""));
+        assert!(content.contains("eval \"$(PARA_COMPLETION_SCRIPT=1 para completion bash)\""));
         assert!(content.contains("<<< para completion initialize <<<"));
     }
 
@@ -246,7 +246,7 @@ mod tests {
         let content = fs::read_to_string(&config_path).unwrap();
         assert!(content.starts_with("# Existing config"));
         assert!(content.contains(">>> para completion initialize >>>"));
-        assert!(content.contains("eval \"$(para completion zsh)\""));
+        assert!(content.contains("eval \"$(PARA_COMPLETION_SCRIPT=1 para completion zsh)\""));
     }
 
     #[test]

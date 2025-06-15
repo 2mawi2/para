@@ -22,7 +22,7 @@ sudo cp target/release/para /usr/local/bin/
 para config
 
 # Optional: Enable shell completion for faster workflow
-para completion generate bash > ~/.local/share/bash-completion/completions/para
+para init
 
 # Create a new session (opens your IDE)
 para start
@@ -166,15 +166,12 @@ para config edit         # Edit config file
 
 Para stores configuration files in platform-specific locations:
 
-**Shell Implementation:**
-- `~/.config/para/config` (shell script format)
-
 **Rust Implementation:**
 - **macOS:** `~/Library/Application Support/para/config.json`
 - **Linux:** `~/.config/para/config.json`
 - **Windows:** `%APPDATA%\para\config.json`
 
-The Rust implementation uses JSON format and is automatically created on first run.
+Para uses JSON format and is automatically created on first run.
 
 ## Example Workflows
 
@@ -301,17 +298,26 @@ Para provides intelligent tab completion for all commands, options, and dynamic 
 
 ### Quick Setup
 
+**Automatic (Recommended):**
+```bash
+para init
+# Auto-detects your shell and installs completions
+# Restart your shell or follow the on-screen instructions
+```
+
+**Manual Setup:**
+
 **Bash:**
 ```bash
 mkdir -p ~/.local/share/bash-completion/completions
-para completion bash > ~/.local/share/bash-completion/completions/para
+PARA_COMPLETION_SCRIPT=1 para completion bash > ~/.local/share/bash-completion/completions/para
 # Restart shell or run: source ~/.local/share/bash-completion/completions/para
 ```
 
 **Zsh:**
 ```bash
 mkdir -p ~/.local/share/zsh/site-functions
-para completion zsh > ~/.local/share/zsh/site-functions/_para
+PARA_COMPLETION_SCRIPT=1 para completion zsh > ~/.local/share/zsh/site-functions/_para
 echo 'fpath=(~/.local/share/zsh/site-functions $fpath)' >> ~/.zshrc
 echo 'autoload -U compinit && compinit' >> ~/.zshrc
 # Restart shell
@@ -320,7 +326,7 @@ echo 'autoload -U compinit && compinit' >> ~/.zshrc
 **Fish:**
 ```bash
 mkdir -p ~/.config/fish/completions  
-para completion fish > ~/.config/fish/completions/para.fish
+PARA_COMPLETION_SCRIPT=1 para completion fish > ~/.config/fish/completions/para.fish
 # Restart shell or run: fish_update_completions
 ```
 
