@@ -95,6 +95,11 @@ pub fn get_default_config_dir() -> std::path::PathBuf {
 }
 
 pub fn get_config_file_path() -> std::path::PathBuf {
+    // Allow environment variable override for config path (used in tests)
+    if let Ok(config_path) = std::env::var("PARA_CONFIG_PATH") {
+        return std::path::PathBuf::from(config_path);
+    }
+
     get_default_config_dir().join("config.json")
 }
 
@@ -114,11 +119,20 @@ mod tests {
 
     #[test]
     fn test_config_paths() {
+        // Clear any test environment variable to test actual default behavior
+        let original_para_config = std::env::var("PARA_CONFIG_PATH").ok();
+        std::env::remove_var("PARA_CONFIG_PATH");
+
         let config_dir = get_default_config_dir();
         let config_file = get_config_file_path();
 
         assert!(config_file.ends_with("config.json"));
         assert!(config_file.starts_with(&config_dir));
+
+        // Restore original environment
+        if let Some(path) = original_para_config {
+            std::env::set_var("PARA_CONFIG_PATH", path);
+        }
     }
 
     #[test]
