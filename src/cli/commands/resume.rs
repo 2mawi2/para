@@ -165,7 +165,35 @@ fn list_and_select_session(
 
 fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
     let ide_manager = IdeManager::new(config);
-    ide_manager.launch(path, false)
+
+    // Check if we should continue conversation
+    let continue_conversation = should_continue_conversation(config, &ide_manager, path);
+
+    if continue_conversation {
+        println!("▶ resuming session with conversation continuation...");
+        ide_manager.launch_with_options(path, false, true)
+    } else {
+        ide_manager.launch(path, false)
+    }
+}
+
+fn should_continue_conversation(config: &Config, ide_manager: &IdeManager, path: &Path) -> bool {
+    // Only continue conversation if:
+    // 1. We're using Claude Code
+    // 2. The IDE is not already running for this session
+
+    if config.ide.name != "claude" {
+        return false;
+    }
+
+    // Extract session name from path
+    if let Some(session_name) = path.file_name().and_then(|n| n.to_str()) {
+        // Check if IDE is already running for this session
+        !ide_manager.is_ide_running_for_session(session_name)
+    } else {
+        // If we can't determine session name, don't continue conversation
+        false
+    }
 }
 
 fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
@@ -283,5 +311,53 @@ mod tests {
 
         // now resume with base name
         assert!(super::resume_specific_session(&config, &git_service, "test4").is_ok());
+    }
+
+    #[test]
+    fn test_should_continue_conversation() {
+        let config = Config {
+            ide: IdeConfig {
+                name: "claude".into(),
+                command: "echo".into(),
+                user_data_dir: None,
+                wrapper: WrapperConfig {
+                    enabled: true,
+                    name: "cursor".into(),
+                    command: "echo".into(),
+                },
+            },
+            directories: DirectoryConfig {
+                subtrees_dir: "subtrees/para".into(),
+                state_dir: ".para_state".into(),
+            },
+            git: GitConfig {
+                branch_prefix: "para".into(),
+                auto_stage: true,
+                auto_commit: false,
+            },
+            session: SessionConfig {
+                default_name_format: "%Y%m%d-%H%M%S".into(),
+                preserve_on_finish: false,
+                auto_cleanup_days: None,
+            },
+        };
+
+        let ide_manager = crate::core::ide::IdeManager::new(&config);
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        // Test with Claude Code - should return true (in test mode always false)
+        let should_continue =
+            super::should_continue_conversation(&config, &ide_manager, &session_path);
+        assert!(!should_continue); // In test mode, IDE is never running
+
+        // Test with non-Claude IDE
+        let mut non_claude_config = config.clone();
+        non_claude_config.ide.name = "vscode".into();
+        let ide_manager = crate::core::ide::IdeManager::new(&non_claude_config);
+        let should_continue =
+            super::should_continue_conversation(&non_claude_config, &ide_manager, &session_path);
+        assert!(!should_continue);
     }
 }
