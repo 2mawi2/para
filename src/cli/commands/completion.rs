@@ -75,3 +75,128 @@ pub fn execute(args: CompletionArgs) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::parser::CompletionArgs;
+    use std::env;
+
+    #[test]
+    fn test_completion_init_redirect() {
+        let args = CompletionArgs {
+            shell: "init".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_completion_bash_shell() {
+        env::set_var("PARA_COMPLETION_SCRIPT", "1");
+
+        let args = CompletionArgs {
+            shell: "bash".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+
+        env::remove_var("PARA_COMPLETION_SCRIPT");
+    }
+
+    #[test]
+    fn test_completion_zsh_shell() {
+        env::set_var("PARA_COMPLETION_SCRIPT", "1");
+
+        let args = CompletionArgs {
+            shell: "zsh".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+
+        env::remove_var("PARA_COMPLETION_SCRIPT");
+    }
+
+    #[test]
+    fn test_completion_fish_shell() {
+        env::set_var("PARA_COMPLETION_SCRIPT", "1");
+
+        let args = CompletionArgs {
+            shell: "fish".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+
+        env::remove_var("PARA_COMPLETION_SCRIPT");
+    }
+
+    #[test]
+    fn test_completion_invalid_shell() {
+        let args = CompletionArgs {
+            shell: "powershell".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_completion_case_insensitive_shell() {
+        env::set_var("PARA_COMPLETION_SCRIPT", "1");
+
+        let args = CompletionArgs {
+            shell: "BASH".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+
+        env::remove_var("PARA_COMPLETION_SCRIPT");
+    }
+
+    #[test]
+    fn test_completion_help_mode() {
+        env::set_var("PARA_COMPLETION_HELP", "1");
+
+        let args = CompletionArgs {
+            shell: "bash".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+
+        env::remove_var("PARA_COMPLETION_HELP");
+    }
+
+    #[test]
+    fn test_completion_default_behavior() {
+        let args = CompletionArgs {
+            shell: "bash".to_string(),
+        };
+
+        let result = execute(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_completion_all_supported_shells() {
+        let shells = vec!["bash", "zsh", "fish"];
+
+        for shell in shells {
+            env::set_var("PARA_COMPLETION_SCRIPT", "1");
+
+            let args = CompletionArgs {
+                shell: shell.to_string(),
+            };
+
+            let result = execute(args);
+            assert!(result.is_ok(), "Failed for shell: {}", shell);
+
+            env::remove_var("PARA_COMPLETION_SCRIPT");
+        }
+    }
+}
