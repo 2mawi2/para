@@ -331,6 +331,14 @@ mod tests {
         assert!(!config.git.branch_prefix.is_empty());
         assert!(!config.ide.name.is_empty());
 
+        // Verify the file was written correctly by reading it back
+        let file_content = std::fs::read_to_string(&config_path).unwrap();
+        assert!(!file_content.is_empty());
+
+        // Parse the content to make sure it's valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&file_content).unwrap();
+        assert!(parsed.is_object());
+
         // Test loading existing config
         let loaded_config = ConfigManager::load_or_create().unwrap();
         assert_eq!(loaded_config.git.branch_prefix, config.git.branch_prefix);
