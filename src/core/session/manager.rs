@@ -724,4 +724,167 @@ mod tests {
             "test/feature-x_20250613-123456"
         );
     }
+
+    #[test]
+    fn test_find_session_by_path() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = temp_dir
+            .path()
+            .join(".para/worktrees")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create test sessions
+        let session1_worktree = temp_dir.path().join(".para/worktrees/feature1");
+        std::fs::create_dir_all(&session1_worktree).unwrap();
+        let session1 = SessionState::new(
+            "feature1".to_string(),
+            "test/feature1".to_string(),
+            session1_worktree.clone(),
+        );
+
+        let session2_worktree = temp_dir.path().join(".para/worktrees/feature2");
+        std::fs::create_dir_all(&session2_worktree).unwrap();
+        let session2 = SessionState::new(
+            "feature2".to_string(),
+            "test/feature2".to_string(),
+            session2_worktree.clone(),
+        );
+
+        manager.save_state(&session1).unwrap();
+        manager.save_state(&session2).unwrap();
+
+        // Test exact match
+        let found = manager
+            .find_session_by_path(&session1_worktree)
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.name, "feature1");
+
+        // Test path inside worktree
+        let nested_path = session1_worktree.join("src/main.rs");
+        std::fs::create_dir_all(nested_path.parent().unwrap()).unwrap();
+        std::fs::write(&nested_path, "test content").unwrap();
+
+        let found = manager.find_session_by_path(&nested_path).unwrap().unwrap();
+        assert_eq!(found.name, "feature1");
+
+        // Test non-existent path
+        let non_existent = temp_dir.path().join("random/path");
+        let result = manager.find_session_by_path(&non_existent).unwrap();
+        assert!(result.is_none());
+
+        // Test path outside any worktree
+        let outside_path = temp_dir.path().join("outside");
+        std::fs::create_dir_all(&outside_path).unwrap();
+        let result = manager.find_session_by_path(&outside_path).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_session_by_branch() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create test sessions with different statuses
+        let active_session = SessionState::new(
+            "active-feature".to_string(),
+            "test/active-branch".to_string(),
+            temp_dir.path().join("active"),
+        );
+
+        let mut finished_session = SessionState::new(
+            "finished-feature".to_string(),
+            "test/finished-branch".to_string(),
+            temp_dir.path().join("finished"),
+        );
+        finished_session.update_status(SessionStatus::Finished);
+
+        let mut cancelled_session = SessionState::new(
+            "cancelled-feature".to_string(),
+            "test/cancelled-branch".to_string(),
+            temp_dir.path().join("cancelled"),
+        );
+        cancelled_session.update_status(SessionStatus::Cancelled);
+
+        manager.save_state(&active_session).unwrap();
+        manager.save_state(&finished_session).unwrap();
+        manager.save_state(&cancelled_session).unwrap();
+
+        // Test finding active session by branch
+        let found = manager
+            .find_session_by_branch("test/active-branch")
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.name, "active-feature");
+        assert!(matches!(found.status, SessionStatus::Active));
+
+        // Test that finished sessions are not found by branch search
+        let result = manager
+            .find_session_by_branch("test/finished-branch")
+            .unwrap();
+        assert!(result.is_none());
+
+        // Test that cancelled sessions are not found by branch search
+        let result = manager
+            .find_session_by_branch("test/cancelled-branch")
+            .unwrap();
+        assert!(result.is_none());
+
+        // Test non-existent branch
+        let result = manager.find_session_by_branch("test/non-existent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_session_with_symlinks() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create a session
+        let worktree_path = temp_dir.path().join("worktree");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+        let session = SessionState::new(
+            "symlink-test".to_string(),
+            "test/symlink-test".to_string(),
+            worktree_path.clone(),
+        );
+        manager.save_state(&session).unwrap();
+
+        // Create a symlink to the worktree
+        let symlink_path = temp_dir.path().join("symlink");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&worktree_path, &symlink_path).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&worktree_path, &symlink_path).unwrap();
+
+        // Test finding session through symlink
+        let found = manager
+            .find_session_by_path(&symlink_path)
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.name, "symlink-test");
+    }
 }
