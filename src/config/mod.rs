@@ -121,6 +121,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_is_real_ide_environment() {
@@ -133,5 +134,212 @@ mod tests {
         // Real IDE in test mode still returns false due to cfg!(test)
         config.ide.command = "cursor".to_string();
         assert!(!config.is_real_ide_environment());
+    }
+
+    #[test]
+    fn test_config_getter_methods() {
+        let config = Config {
+            ide: IdeConfig {
+                name: "test-ide".to_string(),
+                command: "echo".to_string(),
+                user_data_dir: Some("/test/data".to_string()),
+                wrapper: WrapperConfig {
+                    enabled: true,
+                    name: "test-wrapper".to_string(),
+                    command: "echo".to_string(),
+                },
+            },
+            directories: DirectoryConfig {
+                subtrees_dir: "custom/subtrees".to_string(),
+                state_dir: "custom/state".to_string(),
+            },
+            git: GitConfig {
+                branch_prefix: "feature".to_string(),
+                auto_stage: false,
+                auto_commit: true,
+            },
+            session: SessionConfig {
+                default_name_format: "%Y-%m-%d".to_string(),
+                preserve_on_finish: true,
+                auto_cleanup_days: Some(14),
+            },
+        };
+
+        // Test all getter methods
+        assert_eq!(config.get_branch_prefix(), "feature");
+        assert!(config.is_wrapper_enabled());
+        assert_eq!(config.get_state_dir(), "custom/state");
+        assert!(!config.should_auto_stage());
+        assert!(config.should_preserve_on_finish());
+    }
+
+    #[test]
+    fn test_config_error_display() {
+        use std::io;
+
+        // Test IO error
+        let io_error = ConfigError::Io(io::Error::new(io::ErrorKind::NotFound, "file not found"));
+        assert_eq!(io_error.to_string(), "IO error: file not found");
+
+        // Test JSON error
+        let json_str = r#"{"invalid": json}"#;
+        let json_error: Result<Config> =
+            Err(serde_json::from_str::<Config>(json_str).unwrap_err().into());
+        if let Err(ConfigError::Json(e)) = json_error {
+            assert!(e.to_string().contains("expected value"));
+        } else {
+            panic!("Expected JSON error");
+        }
+
+        // Test Validation error
+        let validation_error = ConfigError::Validation("Invalid configuration".to_string());
+        assert_eq!(
+            validation_error.to_string(),
+            "Validation error: Invalid configuration"
+        );
+    }
+
+    #[test]
+    fn test_config_validation_integration() {
+        // Test valid configuration
+        let valid_config = Config {
+            ide: IdeConfig {
+                name: "test".to_string(),
+                command: "echo".to_string(),
+                user_data_dir: None,
+                wrapper: WrapperConfig {
+                    enabled: false,
+                    name: String::new(),
+                    command: String::new(),
+                },
+            },
+            directories: DirectoryConfig {
+                subtrees_dir: "subtrees".to_string(),
+                state_dir: "state".to_string(),
+            },
+            git: GitConfig {
+                branch_prefix: "test".to_string(),
+                auto_stage: true,
+                auto_commit: false,
+            },
+            session: SessionConfig {
+                default_name_format: "%Y%m%d".to_string(),
+                preserve_on_finish: false,
+                auto_cleanup_days: Some(7),
+            },
+        };
+        assert!(valid_config.validate().is_ok());
+
+        // Test invalid configuration (empty IDE name)
+        let mut invalid_config = valid_config.clone();
+        invalid_config.ide.name = String::new();
+        let result = invalid_config.validate();
+        assert!(result.is_err());
+        if let Err(ConfigError::Validation(msg)) = result {
+            assert_eq!(msg, "IDE name cannot be empty");
+        }
+    }
+
+    #[test]
+    fn test_wrapper_config_validation() {
+        // Test wrapper disabled with empty fields (should be valid)
+        let config_wrapper_disabled = Config {
+            ide: IdeConfig {
+                name: "test".to_string(),
+                command: "echo".to_string(),
+                user_data_dir: None,
+                wrapper: WrapperConfig {
+                    enabled: false,
+                    name: String::new(),
+                    command: String::new(),
+                },
+            },
+            directories: DirectoryConfig {
+                subtrees_dir: "subtrees".to_string(),
+                state_dir: "state".to_string(),
+            },
+            git: GitConfig {
+                branch_prefix: "test".to_string(),
+                auto_stage: true,
+                auto_commit: false,
+            },
+            session: SessionConfig {
+                default_name_format: "%Y%m%d".to_string(),
+                preserve_on_finish: false,
+                auto_cleanup_days: None,
+            },
+        };
+        assert!(config_wrapper_disabled.validate().is_ok());
+
+        // Test wrapper enabled with valid fields
+        let mut config_wrapper_enabled = config_wrapper_disabled.clone();
+        config_wrapper_enabled.ide.wrapper = WrapperConfig {
+            enabled: true,
+            name: "claude".to_string(),
+            command: "echo".to_string(),
+        };
+        assert!(config_wrapper_enabled.validate().is_ok());
+
+        // Test wrapper enabled with empty name (should fail)
+        let mut config_invalid_wrapper = config_wrapper_enabled.clone();
+        config_invalid_wrapper.ide.wrapper.name = String::new();
+        let result = config_invalid_wrapper.validate();
+        assert!(result.is_err());
+        if let Err(ConfigError::Validation(msg)) = result {
+            assert_eq!(msg, "Wrapper name cannot be empty when wrapper is enabled");
+        }
+    }
+
+    #[test]
+    fn test_config_environment_override() {
+        let temp_dir = TempDir::new().unwrap();
+        let custom_config_path = temp_dir.path().join("custom_config.json");
+
+        // Save current env var
+        let original_env = std::env::var("PARA_CONFIG_PATH").ok();
+
+        // Set custom path
+        std::env::set_var("PARA_CONFIG_PATH", custom_config_path.to_str().unwrap());
+
+        // Verify the path is used
+        let config_path = defaults::get_config_file_path();
+        assert_eq!(config_path, custom_config_path);
+
+        // Restore original env
+        match original_env {
+            Some(val) => std::env::set_var("PARA_CONFIG_PATH", val),
+            None => std::env::remove_var("PARA_CONFIG_PATH"),
+        }
+    }
+
+    #[test]
+    fn test_config_load_or_create_isolated() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test_config.json");
+
+        // Save current env var to restore later
+        let original_env = std::env::var("PARA_CONFIG_PATH").ok();
+
+        // Set environment to use test config
+        std::env::set_var("PARA_CONFIG_PATH", config_path.to_str().unwrap());
+
+        // Test creating new config when file doesn't exist
+        let config = ConfigManager::load_or_create().unwrap();
+        assert!(config_path.exists());
+
+        // Verify it created a default config
+        assert!(!config.git.branch_prefix.is_empty());
+        assert!(!config.ide.name.is_empty());
+
+        // Test loading existing config
+        let loaded_config = ConfigManager::load_or_create().unwrap();
+        assert_eq!(loaded_config.git.branch_prefix, config.git.branch_prefix);
+        assert_eq!(loaded_config.ide.name, config.ide.name);
+
+        // Restore original env
+        match original_env {
+            Some(val) => std::env::set_var("PARA_CONFIG_PATH", val),
+            None => std::env::remove_var("PARA_CONFIG_PATH"),
+        }
     }
 }
