@@ -394,22 +394,31 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let old_dir = std::env::current_dir().expect("Failed to get current directory");
-        std::env::set_current_dir(temp_dir.path()).expect("Failed to set test directory");
+        let old_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
 
-        // Test adding to new gitignore
-        let added = add_to_gitignore(".mcp.json").unwrap();
-        assert!(added);
-        let content = fs::read_to_string(".gitignore").unwrap();
-        assert!(content.contains(".mcp.json"));
+        // Use a scope to ensure we restore the directory even if the test fails
+        let result = std::panic::catch_unwind(|| {
+            std::env::set_current_dir(temp_dir.path()).expect("Failed to set test directory");
 
-        // Test adding duplicate entry (should not duplicate)
-        let added_again = add_to_gitignore(".mcp.json").unwrap();
-        assert!(!added_again);
-        let content = fs::read_to_string(".gitignore").unwrap();
-        assert_eq!(content.matches(".mcp.json").count(), 1);
+            // Test adding to new gitignore
+            let added = add_to_gitignore(".mcp.json").unwrap();
+            assert!(added);
+            let content = fs::read_to_string(".gitignore").unwrap();
+            assert!(content.contains(".mcp.json"));
 
-        // Restore original directory
+            // Test adding duplicate entry (should not duplicate)
+            let added_again = add_to_gitignore(".mcp.json").unwrap();
+            assert!(!added_again);
+            let content = fs::read_to_string(".gitignore").unwrap();
+            assert_eq!(content.matches(".mcp.json").count(), 1);
+        });
+
+        // Always restore original directory
         let _ = std::env::set_current_dir(old_dir);
+
+        // Re-panic if the test failed
+        if let Err(e) = result {
+            std::panic::resume_unwind(e);
+        }
     }
 }
