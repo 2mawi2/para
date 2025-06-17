@@ -180,11 +180,11 @@ fn launch_claude_in_ide(
     cmd.current_dir(session_path);
     cmd.arg(session_path);
 
+    // Don't wait for the IDE process - let it run in the background
     match cmd.spawn() {
-        Ok(mut child) => {
-            if let Err(e) = child.wait() {
-                eprintln!("Warning: {} process error: {}", ide_name, e);
-            }
+        Ok(_) => {
+            // IDE launched successfully, don't wait for it
+            println!("Opened {} workspace", ide_name);
         }
         Err(e) => {
             return Err(ParaError::ide_error(format!(
