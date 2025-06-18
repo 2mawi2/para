@@ -188,7 +188,7 @@ fn update_tasks_json_for_resume(path: &Path) -> Result<()> {
 
         // Check if it contains prompt file logic (from dispatch)
         let has_prompt_file = content.contains(".claude_prompt_temp");
-        
+
         // Check if it already has the -c flag (and no prompt file)
         if content.contains(" -c") && !has_prompt_file {
             return Ok(()); // Already properly configured
@@ -389,7 +389,7 @@ mod tests {
         let content_after_second_update = fs::read_to_string(&tasks_file).unwrap();
         assert_eq!(updated_content, content_after_second_update);
     }
-    
+
     #[test]
     fn test_update_tasks_json_removes_prompt_file() {
         let temp_dir = TempDir::new().unwrap();
@@ -421,6 +421,8 @@ mod tests {
         assert!(!updated_content.contains(".claude_prompt_temp"));
         assert!(!updated_content.contains("$(cat"));
         assert!(!updated_content.contains("rm '"));
-        assert!(updated_content.contains("\"command\": \"claude --dangerously-skip-permissions -c\","));
+        assert!(
+            updated_content.contains("\"command\": \"claude --dangerously-skip-permissions -c\",")
+        );
     }
 }
