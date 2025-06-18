@@ -37,11 +37,9 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
     println!("🖥️  IDE Configuration");
     println!("Para works with Claude Code in cloud-based wrapper mode.");
 
-    // Claude is the only supported IDE
     let ide_name = "claude".to_string();
     let ide_command = "claude".to_string();
 
-    // Always configure wrapper for Claude
     let wrapper_config = configure_wrapper_mode_simple()?;
 
     Ok(super::IdeConfig {
@@ -150,7 +148,6 @@ pub fn run_quick_setup() -> Result<Config> {
 
     let config = default_config();
 
-    // Check if Claude is available
     let available_ides = get_available_ides();
     if available_ides.is_empty() {
         return Err(ConfigError::Validation(
@@ -160,7 +157,6 @@ pub fn run_quick_setup() -> Result<Config> {
 
     println!("✅ Detected Claude Code");
 
-    // Detect wrapper
     if config.ide.wrapper.enabled {
         println!("✅ Using {} as wrapper", config.ide.wrapper.name);
     }
@@ -180,16 +176,12 @@ mod tests {
     #[test]
     fn test_config_summary_display() {
         let config = super::default_config();
-        // This test just ensures the display function doesn't panic
         display_config_summary(&config);
     }
 
     #[test]
     fn test_quick_setup() {
-        // Test that quick setup creates a valid config
-        // Note: This will use actual defaults and may not work in all environments
         let result = run_quick_setup();
-        // We allow this to fail in test environments where IDEs aren't available
         if let Ok(config) = result {
             assert!(config.validate().is_ok());
         }
@@ -224,14 +216,11 @@ mod tests {
             },
         };
 
-        // Test that display doesn't panic with all options
         display_config_summary(&config);
     }
 
     #[test]
     fn test_config_validation_in_wizard() {
-        // Test that configs created by the wizard are valid
-        // Create a test config manually to avoid IDE detection in CI
         use crate::config::{
             Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
         };
@@ -244,7 +233,7 @@ mod tests {
                 wrapper: WrapperConfig {
                     enabled: true,
                     name: "cursor".to_string(),
-                    command: "echo".to_string(), // Use echo which is guaranteed to be available
+                    command: "echo".to_string(),
                 },
             },
             directories: DirectoryConfig {
@@ -270,7 +259,6 @@ mod tests {
     fn test_ide_detection_integration() {
         let available_ides = get_available_ides();
 
-        // Test that detected IDEs are valid
         for (name, command) in available_ides {
             assert!(!name.is_empty(), "IDE name should not be empty");
             assert!(!command.is_empty(), "IDE command should not be empty");
