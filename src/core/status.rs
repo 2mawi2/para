@@ -39,7 +39,6 @@ pub enum ConfidenceLevel {
 }
 
 impl Status {
-    /// Create a new status
     pub fn new(
         session_name: String,
         current_task: String,
@@ -59,30 +58,25 @@ impl Status {
         }
     }
 
-    /// Update status with blocked state
     pub fn with_blocked(mut self, blocked_reason: Option<String>) -> Self {
         self.is_blocked = blocked_reason.is_some();
         self.blocked_reason = blocked_reason;
         self
     }
 
-    /// Update status with todo progress
     pub fn with_todos(mut self, completed: u32, total: u32) -> Self {
         self.todos_completed = Some(completed);
         self.todos_total = Some(total);
         self
     }
 
-    /// Get the status file path for a session
     pub fn status_file_path(state_dir: &Path, session_name: &str) -> PathBuf {
         state_dir.join(format!("{}.status.json", session_name))
     }
 
-    /// Save status to file
     pub fn save(&self, state_dir: &Path) -> Result<()> {
         let status_file = Self::status_file_path(state_dir, &self.session_name);
 
-        // Ensure state directory exists
         if let Some(parent) = status_file.parent() {
             fs::create_dir_all(parent).map_err(|e| {
                 ParaError::fs_error(format!("Failed to create state directory: {}", e))
@@ -98,7 +92,6 @@ impl Status {
         Ok(())
     }
 
-    /// Load status from file
     pub fn load(state_dir: &Path, session_name: &str) -> Result<Option<Self>> {
         let status_file = Self::status_file_path(state_dir, session_name);
 
@@ -115,7 +108,6 @@ impl Status {
         Ok(Some(status))
     }
 
-    /// Parse test status from string
     pub fn parse_test_status(s: &str) -> Result<TestStatus> {
         match s.to_lowercase().as_str() {
             "passed" => Ok(TestStatus::Passed),
@@ -128,7 +120,6 @@ impl Status {
         }
     }
 
-    /// Parse confidence level from string
     pub fn parse_confidence(s: &str) -> Result<ConfidenceLevel> {
         match s.to_lowercase().as_str() {
             "high" => Ok(ConfidenceLevel::High),
@@ -140,7 +131,6 @@ impl Status {
         }
     }
 
-    /// Parse todos string (format: "completed/total")
     pub fn parse_todos(s: &str) -> Result<(u32, u32)> {
         let parts: Vec<&str> = s.split('/').collect();
         if parts.len() != 2 {
@@ -168,7 +158,6 @@ impl Status {
         Ok((completed, total))
     }
 
-    /// Get todo percentage if todos are set
     pub fn todo_percentage(&self) -> Option<u8> {
         match (self.todos_completed, self.todos_total) {
             (Some(completed), Some(total)) if total > 0 => {
@@ -178,7 +167,6 @@ impl Status {
         }
     }
 
-    /// Format todos display string
     pub fn format_todos(&self) -> Option<String> {
         match (self.todos_completed, self.todos_total) {
             (Some(completed), Some(total)) => {
