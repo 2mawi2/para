@@ -49,81 +49,52 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-    use std::fs;
-    use std::process::Command;
+    use crate::config::{
+        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+    };
     use tempfile::TempDir;
 
-    fn setup_test_repo() -> (TempDir, Config) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let config = Config {
-            ide: crate::config::IdeConfig {
-                name: "echo".to_string(),
+    fn create_simple_test_config(temp_dir: &TempDir) -> Config {
+        Config {
+            ide: IdeConfig {
+                name: "test-ide".to_string(),
                 command: "echo".to_string(),
                 user_data_dir: None,
-                wrapper: crate::config::WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
+                wrapper: WrapperConfig {
+                    enabled: true,
+                    name: "test-wrapper".to_string(),
+                    command: "echo".to_string(),
                 },
             },
-            directories: crate::config::DirectoryConfig {
-                subtrees_dir: repo_path.join("subtrees").to_string_lossy().to_string(),
-                state_dir: repo_path.join(".para_state").to_string_lossy().to_string(),
+            directories: DirectoryConfig {
+                subtrees_dir: temp_dir
+                    .path()
+                    .join("subtrees")
+                    .to_string_lossy()
+                    .to_string(),
+                state_dir: temp_dir
+                    .path()
+                    .join(".para_state")
+                    .to_string_lossy()
+                    .to_string(),
             },
-            git: crate::config::GitConfig {
+            git: GitConfig {
                 branch_prefix: "test".to_string(),
                 auto_stage: true,
                 auto_commit: false,
             },
-            session: crate::config::SessionConfig {
+            session: SessionConfig {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
-        };
-
-        (temp_dir, config)
+        }
     }
 
     #[test]
     fn test_determine_session_name_with_provided_name() {
-        let (_temp_dir, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let config = create_simple_test_config(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let args = StartArgs {
@@ -137,7 +108,8 @@ mod tests {
 
     #[test]
     fn test_determine_session_name_auto_generate() {
-        let (_temp_dir, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let config = create_simple_test_config(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let args = StartArgs {
