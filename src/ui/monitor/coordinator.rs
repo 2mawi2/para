@@ -57,10 +57,19 @@ impl MonitorCoordinator {
     }
 
     fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::KeyCode;
+        use crossterm::event::{KeyCode, KeyModifiers};
 
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.state.quit(),
+            KeyCode::Char('c') => {
+                // Check if Ctrl+C was pressed
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.state.quit();
+                } else {
+                    // Only 'c' key was pressed - cancel session
+                    self.start_cancel();
+                }
+            }
             KeyCode::Char('s') => {
                 self.state.toggle_stale();
                 self.refresh_sessions();
@@ -69,7 +78,6 @@ impl MonitorCoordinator {
             KeyCode::Down | KeyCode::Char('j') => self.state.next_item(&self.sessions),
             KeyCode::Enter => self.resume_selected()?,
             KeyCode::Char('f') => self.start_finish(),
-            KeyCode::Char('c') => self.start_cancel(),
             KeyCode::Char('i') => self.integrate_if_ready()?,
             _ => {}
         }
@@ -77,10 +85,14 @@ impl MonitorCoordinator {
     }
 
     fn handle_finish_prompt_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::KeyCode;
+        use crossterm::event::{KeyCode, KeyModifiers};
 
         match key.code {
             KeyCode::Esc => {
+                self.state.exit_dialog();
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+C acts like Esc in dialog mode
                 self.state.exit_dialog();
             }
             KeyCode::Enter => {
@@ -100,7 +112,7 @@ impl MonitorCoordinator {
     }
 
     fn handle_cancel_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::KeyCode;
+        use crossterm::event::{KeyCode, KeyModifiers};
 
         match key.code {
             KeyCode::Enter => {
@@ -108,6 +120,10 @@ impl MonitorCoordinator {
                 self.state.exit_dialog();
             }
             KeyCode::Esc => {
+                self.state.exit_dialog();
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+C acts like Esc in dialog mode
                 self.state.exit_dialog();
             }
             _ => {}
@@ -163,10 +179,14 @@ impl MonitorCoordinator {
     }
 
     fn handle_error_dialog_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::KeyCode;
+        use crossterm::event::{KeyCode, KeyModifiers};
 
         match key.code {
             KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => {
+                self.state.clear_error();
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Ctrl+C acts like Esc in error dialog
                 self.state.clear_error();
             }
             _ => {}
