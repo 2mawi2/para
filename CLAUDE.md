@@ -201,3 +201,11 @@ fn test_with_git_environment() {
 - Always provide specific, user-friendly error messages
 - Include relevant context (file names, session names, etc.) in error messages
 - Test error conditions thoroughly with unit tests
+
+
+# Thinking
+
+- If you are stuck on a problem, or you iterated on fixing a test for multiple iterations:
+1. Think deeply about the problem first, and find the best option that solves the issue.
+2. If this still doesn't help: Use the user for help, but do this very rarely.
+3. Never try using dirty fixes and workarounds for a hard problem, solve it directly by thinking deep or asking the user for help.
