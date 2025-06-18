@@ -81,21 +81,19 @@ fn list_active_sessions(
     let mut sessions = Vec::new();
 
     for session_state in session_states {
-        // Skip finished or cancelled sessions - they should only appear in --archived
         match session_state.status {
             UnifiedSessionStatus::Finished | UnifiedSessionStatus::Cancelled => continue,
             _ => {}
         }
 
         let has_uncommitted_changes = if session_state.worktree_path.exists() {
-            // Only check for uncommitted changes if the path is a proper git repository
             if let Some(service) = git_service_for_path(&session_state.worktree_path) {
                 service.has_uncommitted_changes().ok()
             } else {
                 Some(false)
             }
         } else {
-            Some(false) // Default to no changes if worktree doesn't exist
+            Some(false)
         };
 
         let is_current = std::env::current_dir()
@@ -108,8 +106,8 @@ fn list_active_sessions(
             session_id: session_state.name.clone(),
             branch: session_state.branch.clone(),
             worktree_path: session_state.worktree_path.clone(),
-            base_branch: "main".to_string(),  // Simplified for now
-            merge_mode: "squash".to_string(), // Default for now
+            base_branch: "main".to_string(),
+            merge_mode: "squash".to_string(),
             status,
             last_modified: Some(session_state.created_at),
             has_uncommitted_changes,
@@ -135,7 +133,6 @@ fn list_archived_sessions(
     let mut sessions = Vec::new();
     let mut seen_session_ids = std::collections::HashSet::new();
 
-    // First, get all sessions with Finished or Cancelled status from state files
     let session_states = session_manager.list_sessions()?;
     for session_state in session_states {
         match session_state.status {
@@ -156,8 +153,8 @@ fn list_archived_sessions(
                     session_id: session_state.name.clone(),
                     branch: session_state.branch.clone(),
                     worktree_path: session_state.worktree_path.clone(),
-                    base_branch: "main".to_string(), // Simplified for now
-                    merge_mode: "squash".to_string(), // Default for now
+                    base_branch: "main".to_string(),
+                    merge_mode: "squash".to_string(),
                     status: SessionStatus::Archived,
                     last_modified: Some(session_state.created_at),
                     has_uncommitted_changes,
@@ -169,7 +166,6 @@ fn list_archived_sessions(
         }
     }
 
-    // Then, add branches with archived naming pattern (if not already included)
     let branch_manager = git_service.branch_manager();
     let branch_prefix = &session_manager.config().git.branch_prefix;
     let archived_branches = branch_manager.list_archived_branches(branch_prefix)?;
@@ -178,7 +174,6 @@ fn list_archived_sessions(
         if let Some(session_id) =
             extract_session_id_from_archived_branch(&branch_name, branch_prefix)
         {
-            // Skip if we already have this session from state files
             if !seen_session_ids.contains(&session_id) {
                 let session_info = SessionInfo {
                     session_id: session_id.clone(),
@@ -196,7 +191,6 @@ fn list_archived_sessions(
         }
     }
 
-    // Sort by last modified date
     sessions.sort_by(|a, b| {
         b.last_modified
             .unwrap_or(DateTime::<Utc>::MIN_UTC)
@@ -210,15 +204,10 @@ fn determine_unified_session_status(
     session_state: &crate::core::session::SessionState,
     git_service: &GitService,
 ) -> Result<SessionStatus> {
-    // Check if worktree path exists
     if !session_state.worktree_path.exists() {
         return Ok(SessionStatus::Missing);
     }
 
-    // Note: We no longer check for Finished/Cancelled here because those sessions
-    // are filtered out in list_active_sessions and handled separately in list_archived_sessions
-
-    // Check if worktree is registered with git
     let worktrees = git_service.list_worktrees()?;
     let worktree_exists = worktrees
         .iter()
@@ -228,7 +217,6 @@ fn determine_unified_session_status(
         return Ok(SessionStatus::Missing);
     }
 
-    // Check for uncommitted changes
     if let Some(service) = git_service_for_path(&session_state.worktree_path) {
         if let Ok(is_clean) = service.is_clean_working_tree() {
             if !is_clean {
@@ -240,13 +228,9 @@ fn determine_unified_session_status(
     Ok(SessionStatus::Active)
 }
 
-// Removed old determine_session_status - using unified session system
-
 fn git_service_for_path(path: &Path) -> Option<GitService> {
     GitService::discover_from(path).ok()
 }
-
-// Removed get_last_modified_time - using unified session system metadata
 
 fn extract_session_id_from_archived_branch(
     branch_name: &str,
@@ -270,7 +254,6 @@ fn display_sessions(sessions: &[SessionInfo], args: &ListArgs) -> Result<()> {
         display_compact_sessions(sessions)
     };
 
-    // Add hint about monitor command (except in quiet mode)
     if !args.quiet && result.is_ok() {
         println!("\nTip: Use 'para monitor' for interactive session management");
     }

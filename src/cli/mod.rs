@@ -18,7 +18,6 @@ pub fn execute_command_with_config(
     cli: Cli,
     test_config: Option<crate::config::Config>,
 ) -> Result<()> {
-    // Load config once for all commands that need it
     let config =
         match cli.command {
             Some(Commands::Config(_))
@@ -66,9 +65,6 @@ pub fn execute_command_with_config(
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
         Some(Commands::Monitor(args)) => commands::monitor::execute(config.unwrap(), args),
         Some(Commands::Status(args)) => commands::status::execute(config.unwrap(), args),
-        None => {
-            // Default to monitor when no command is provided
-            commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {})
-        }
+        None => commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {}),
     }
 }

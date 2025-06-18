@@ -7,7 +7,6 @@ use crate::utils::{ParaError, Result};
 use std::env;
 use std::io::{self, Write};
 
-/// Check if we're running in non-interactive mode (e.g., from MCP server)
 fn is_non_interactive() -> bool {
     env::var("PARA_NON_INTERACTIVE").is_ok()
         || env::var("CI").is_ok()
@@ -39,7 +38,6 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
 
     session_manager.delete_state(&session_state.name)?;
 
-    // Auto-cleanup old archives to prevent bloat
     let archive_manager = crate::core::session::archive::ArchiveManager::new(&config, &git_service);
     if let Ok((old_removed, limit_removed)) = archive_manager.auto_cleanup() {
         if old_removed > 0 || limit_removed > 0 {
