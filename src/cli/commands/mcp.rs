@@ -394,31 +394,22 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
-        let old_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+        let gitignore_path = temp_dir.path().join(".gitignore");
 
-        // Use a scope to ensure we restore the directory even if the test fails
-        let result = std::panic::catch_unwind(|| {
-            std::env::set_current_dir(temp_dir.path()).expect("Failed to set test directory");
+        // Test the GitignoreManager directly without changing directories
+        let gitignore_manager =
+            crate::utils::gitignore::GitignoreManager::new(temp_dir.path().to_str().unwrap());
 
-            // Test adding to new gitignore
-            let added = add_to_gitignore(".mcp.json").unwrap();
-            assert!(added);
-            let content = fs::read_to_string(".gitignore").unwrap();
-            assert!(content.contains(".mcp.json"));
+        // Test adding to new gitignore
+        let added = gitignore_manager.add_entry(".mcp.json").unwrap();
+        assert!(added);
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(content.contains(".mcp.json"));
 
-            // Test adding duplicate entry (should not duplicate)
-            let added_again = add_to_gitignore(".mcp.json").unwrap();
-            assert!(!added_again);
-            let content = fs::read_to_string(".gitignore").unwrap();
-            assert_eq!(content.matches(".mcp.json").count(), 1);
-        });
-
-        // Always restore original directory
-        let _ = std::env::set_current_dir(old_dir);
-
-        // Re-panic if the test failed
-        if let Err(e) = result {
-            std::panic::resume_unwind(e);
-        }
+        // Test adding duplicate entry (should not duplicate)
+        let added_again = gitignore_manager.add_entry(".mcp.json").unwrap();
+        assert!(!added_again);
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content.matches(".mcp.json").count(), 1);
     }
 }
