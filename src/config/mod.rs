@@ -348,7 +348,7 @@ mod tests {
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
         };
-        
+
         // Test 1: Manually save config and verify it can be loaded
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&config_path, config_json).unwrap();
@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(loaded_again.git.branch_prefix, config.git.branch_prefix);
         assert_eq!(loaded_again.ide.name, config.ide.name);
         assert_eq!(loaded_again.ide.command, "echo");
-        
+
         // Note: We don't test the "create" path here because it would try to detect
         // the system IDE, which fails in CI. The create functionality is tested
         // separately in the defaults module tests.
