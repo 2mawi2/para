@@ -34,9 +34,46 @@ impl ConfigManager {
 
     pub fn load_from_file(path: &Path) -> Result<Config> {
         let content = fs::read_to_string(path)?;
-        let config: Config = serde_json::from_str(&content)?;
+        let mut config: Config = serde_json::from_str(&content)?;
+
+        // Migrate old configurations to wrapper mode
+        if !config.ide.wrapper.enabled {
+            eprintln!("🔄 Migrating configuration to use wrapper mode...");
+            config = Self::migrate_to_wrapper_mode(config);
+            // Save the migrated configuration
+            Self::save_to_path(&config, path)?;
+            eprintln!("✅ Configuration migrated successfully");
+        }
+
         config.validate()?;
         Ok(config)
+    }
+
+    fn migrate_to_wrapper_mode(mut config: Config) -> Config {
+        // Enable wrapper mode
+        config.ide.wrapper.enabled = true;
+
+        // If wrapper name/command are empty, use the IDE itself as wrapper
+        if config.ide.wrapper.name.is_empty() {
+            config.ide.wrapper.name = config.ide.name.clone();
+        }
+        if config.ide.wrapper.command.is_empty() {
+            config.ide.wrapper.command = config.ide.command.clone();
+        }
+
+        // Claude requires a different IDE as wrapper
+        if config.ide.name == "claude" && config.ide.wrapper.name == "claude" {
+            // Default to cursor if available, otherwise code
+            if super::defaults::is_command_available("cursor") {
+                config.ide.wrapper.name = "cursor".to_string();
+                config.ide.wrapper.command = "cursor".to_string();
+            } else {
+                config.ide.wrapper.name = "code".to_string();
+                config.ide.wrapper.command = "code".to_string();
+            }
+        }
+
+        config
     }
 
     pub fn save(config: &Config) -> Result<()> {
@@ -226,5 +263,82 @@ mod tests {
         let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
         assert_eq!(loaded_config.ide.name, "custom-ide");
         assert_eq!(loaded_config.git.branch_prefix, "custom-prefix");
+    }
+
+    #[test]
+    fn test_config_migration_to_wrapper_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+
+        // Create an old-style config without wrapper enabled
+        let mut old_config = create_test_config();
+        old_config.ide.wrapper.enabled = false;
+        old_config.ide.wrapper.name = String::new();
+        old_config.ide.wrapper.command = String::new();
+
+        // Save the old config
+        let json = serde_json::to_string_pretty(&old_config).unwrap();
+        fs::write(&config_path, json).unwrap();
+
+        // Load should trigger migration
+        let migrated_config = ConfigManager::load_from_file(&config_path).unwrap();
+
+        // Verify migration happened
+        assert!(migrated_config.ide.wrapper.enabled);
+        assert_eq!(migrated_config.ide.wrapper.name, old_config.ide.name);
+        assert_eq!(migrated_config.ide.wrapper.command, old_config.ide.command);
+
+        // Verify the file was updated
+        let reloaded = ConfigManager::load_from_file(&config_path).unwrap();
+        assert!(reloaded.ide.wrapper.enabled);
+    }
+
+    #[test]
+    fn test_claude_migration_uses_different_wrapper() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+
+        // Create an old-style Claude config
+        let claude_config = Config {
+            ide: super::super::IdeConfig {
+                name: "claude".to_string(),
+                command: "claude".to_string(),
+                user_data_dir: None,
+                wrapper: super::super::WrapperConfig {
+                    enabled: false,
+                    name: String::new(),
+                    command: String::new(),
+                },
+            },
+            directories: super::super::DirectoryConfig {
+                subtrees_dir: "test_subtrees".to_string(),
+                state_dir: "test_state".to_string(),
+            },
+            git: super::super::GitConfig {
+                branch_prefix: "test".to_string(),
+                auto_stage: true,
+                auto_commit: false,
+            },
+            session: super::super::SessionConfig {
+                default_name_format: "%Y%m%d-%H%M%S".to_string(),
+                preserve_on_finish: false,
+                auto_cleanup_days: Some(7),
+            },
+        };
+
+        // Save the old config
+        let json = serde_json::to_string_pretty(&claude_config).unwrap();
+        fs::write(&config_path, json).unwrap();
+
+        // Load should trigger migration
+        let migrated_config = ConfigManager::load_from_file(&config_path).unwrap();
+
+        // Verify Claude uses a different wrapper (cursor or code)
+        assert!(migrated_config.ide.wrapper.enabled);
+        assert_ne!(migrated_config.ide.wrapper.name, "claude");
+        assert!(
+            migrated_config.ide.wrapper.name == "cursor"
+                || migrated_config.ide.wrapper.name == "code"
+        );
     }
 }

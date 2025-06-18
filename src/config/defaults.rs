@@ -11,14 +11,17 @@ pub fn default_config() -> Config {
 
 pub fn default_ide_config() -> IdeConfig {
     let detected_ide = detect_ide();
+
+    // All IDEs now require wrapper mode for cloud-based launching
+    // Default to using the same IDE as wrapper
     IdeConfig {
-        name: detected_ide.0,
-        command: detected_ide.1,
+        name: detected_ide.0.clone(),
+        command: detected_ide.1.clone(),
         user_data_dir: None,
         wrapper: WrapperConfig {
-            enabled: false,
-            name: String::new(),
-            command: String::new(),
+            enabled: true,
+            name: detected_ide.0.clone(),
+            command: detected_ide.1,
         },
     }
 }
@@ -115,6 +118,10 @@ mod tests {
         assert_eq!(config.directories.state_dir, ".para/state");
         assert!(config.git.auto_stage);
         assert!(!config.session.preserve_on_finish);
+        // Verify wrapper is enabled by default
+        assert!(config.ide.wrapper.enabled);
+        assert!(!config.ide.wrapper.name.is_empty());
+        assert!(!config.ide.wrapper.command.is_empty());
     }
 
     #[test]
