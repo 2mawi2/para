@@ -25,8 +25,13 @@ pub fn execute_command_with_config(
             | Some(Commands::Completion(_))
             | Some(Commands::Init)
             | Some(Commands::CompletionSessions)
-            | Some(Commands::CompletionBranches)
-            | None => None,
+            | Some(Commands::CompletionBranches) => None,
+            Some(Commands::Monitor(_)) | None => match test_config {
+                Some(cfg) => Some(cfg),
+                None => Some(ConfigManager::load_or_create().map_err(|e| {
+                    ParaError::config_error(format!("Failed to load config: {}", e))
+                })?),
+            },
             _ => match test_config {
                 Some(cfg) => Some(cfg),
                 None => Some(ConfigManager::load_or_create().map_err(|e| {
@@ -59,34 +64,10 @@ pub fn execute_command_with_config(
         Some(Commands::Mcp(args)) => commands::mcp::handle_mcp_command(args),
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
+        Some(Commands::Monitor(args)) => commands::monitor::execute(config.unwrap(), args),
         None => {
-            show_usage();
-            Ok(())
+            // Default to monitor when no command is provided
+            commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {})
         }
     }
-}
-
-fn show_usage() {
-    println!("para - Parallel IDE Workflow Helper");
-    println!();
-    println!("A tool for managing multiple development sessions with git worktrees and IDEs.");
-    println!();
-    println!("Usage: para <COMMAND>");
-    println!();
-    println!("Commands:");
-    println!("  start       Create a new development session");
-    println!("  dispatch    Start Claude Code session with a prompt");
-    println!("  finish      Complete current session with commit");
-    println!("  cancel      Cancel current session");
-    println!("  clean       Remove all active sessions");
-    println!("  list, ls    List active sessions");
-    println!("  resume      Resume a session in IDE");
-    println!("  recover     Recover cancelled session");
-    println!("  config      Setup configuration");
-    println!("  mcp         Setup Model Context Protocol integration");
-    println!("  completion  Generate shell completion script");
-    println!("  init        Initialize shell completions automatically");
-    println!("  help        Print this message or the help of the given subcommand(s)");
-    println!();
-    println!("Use 'para <command> --help' for more information on a specific command.");
 }

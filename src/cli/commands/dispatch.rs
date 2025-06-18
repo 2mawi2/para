@@ -53,8 +53,18 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         .create_worktree(&branch_name, &session_path)
         .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-    let session_state = SessionState::new(session_id.clone(), branch_name, session_path.clone());
+    let mut session_state =
+        SessionState::new(session_id.clone(), branch_name, session_path.clone());
+
+    // Save task description
+    session_state.task_description = Some(prompt.clone());
     session_manager.save_state(&session_state)?;
+
+    // Also save task to a separate file for backward compatibility
+    let state_dir = Path::new(&config.directories.state_dir);
+    let task_file = state_dir.join(format!("{}.task", session_id));
+    fs::write(&task_file, &prompt)
+        .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
 
     launch_claude_code(
         &config,
