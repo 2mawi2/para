@@ -1,3 +1,4 @@
+use crate::core::status::{ConfidenceLevel, TestStatus};
 use chrono::{DateTime, Utc};
 use ratatui::style::Color;
 use std::path::PathBuf;
@@ -10,6 +11,11 @@ pub struct SessionInfo {
     pub last_activity: DateTime<Utc>,
     pub task: String,
     pub worktree_path: PathBuf,
+    // Agent status fields
+    pub test_status: Option<TestStatus>,
+    pub confidence: Option<ConfidenceLevel>,
+    pub todo_percentage: Option<u8>,
+    pub is_blocked: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,15 +27,6 @@ pub enum SessionStatus {
 }
 
 impl SessionStatus {
-    pub fn icon(&self) -> &str {
-        match self {
-            SessionStatus::Active => "🟢",
-            SessionStatus::Idle => "🟡",
-            SessionStatus::Ready => "✅",
-            SessionStatus::Stale => "⏸️",
-        }
-    }
-
     pub fn name(&self) -> &str {
         match self {
             SessionStatus::Active => "Active",
@@ -60,14 +57,6 @@ pub enum AppMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_session_status_icon() {
-        assert_eq!(SessionStatus::Active.icon(), "🟢");
-        assert_eq!(SessionStatus::Idle.icon(), "🟡");
-        assert_eq!(SessionStatus::Ready.icon(), "✅");
-        assert_eq!(SessionStatus::Stale.icon(), "⏸️");
-    }
 
     #[test]
     fn test_session_status_name() {

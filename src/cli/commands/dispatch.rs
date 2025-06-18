@@ -66,6 +66,9 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     fs::write(&task_file, &prompt)
         .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
 
+    // Create CLAUDE.local.md with status instructions
+    create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
+
     launch_claude_code(
         &config,
         &session_state.worktree_path,
@@ -220,6 +223,62 @@ fn create_claude_task_json(command: &str) -> String {
 }}"#,
         command.replace('"', "\\\"")
     )
+}
+
+fn create_claude_local_md(session_path: &Path, session_name: &str) -> Result<()> {
+    let claude_local_path = session_path.join("CLAUDE.local.md");
+
+    let content = format!(
+        r#"<!-- Para Agent Instructions - DO NOT COMMIT -->
+# Para Session Status Commands
+
+You are working in para session: {}
+
+Use these commands to communicate your progress:
+
+**Required status updates:**
+```bash
+# Every status update MUST include current task, test status, and confidence
+para status "Starting user authentication" --tests unknown --confidence medium
+para status "Implementing JWT tokens" --tests passed --confidence high --todos 2/5
+para status "Fixing auth middleware" --tests failed --confidence low --todos 3/5
+para status "Need help with Redis mocking" --tests failed --confidence low --blocked
+
+# IMPORTANT: --tests flag MUST reflect ALL tests in the codebase, not just current feature!
+# Run full test suite before updating status
+```
+
+**Test Status Guidelines:**
+- `--tests passed`: ALL tests in the entire codebase are passing
+- `--tests failed`: One or more tests are failing anywhere in the codebase
+- `--tests unknown`: Haven't run tests yet or tests are currently running
+
+NEVER report partial test results. Always run the complete test suite.
+
+**When complete:**
+```bash
+para finish "Add user authentication with JWT tokens"
+```
+
+Remember: 
+- EVERY status update must include: task description, --tests flag, and --confidence flag
+- Run ALL tests before updating status (not just tests for current feature)
+- After using TodoWrite tool, include --todos flag with completed/total
+- Update status when:
+  - Starting new work
+  - After running tests
+  - Confidence level changes
+  - Getting blocked
+  - Making significant progress
+"#,
+        session_name
+    );
+
+    // Write the file (overwrite if exists)
+    fs::write(&claude_local_path, content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to write CLAUDE.local.md: {}", e)))?;
+
+    Ok(())
 }
 
 impl DispatchArgs {
@@ -683,5 +742,127 @@ mod tests {
         let result = validate_claude_code_ide(&config);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("wrapper mode"));
+    }
+
+    #[test]
+    fn test_create_claude_local_md() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("session-worktree");
+        std::fs::create_dir_all(&session_path).unwrap();
+
+        let session_name = "test-auth-session";
+        let result = create_claude_local_md(&session_path, session_name);
+        assert!(result.is_ok());
+
+        // Verify file was created
+        let claude_local_path = session_path.join("CLAUDE.local.md");
+        assert!(claude_local_path.exists());
+
+        // Verify content
+        let content = std::fs::read_to_string(&claude_local_path).unwrap();
+
+        // Check session name is included
+        assert!(content.contains(session_name));
+
+        // Check required content sections
+        assert!(content.contains("Para Session Status Commands"));
+        assert!(content.contains("Required status updates:"));
+        assert!(content.contains("--tests"));
+        assert!(content.contains("--confidence"));
+        assert!(content.contains("Test Status Guidelines:"));
+        assert!(content.contains("para finish"));
+
+        // Check specific command examples
+        assert!(content.contains("para status \"Starting"));
+        assert!(content.contains("--tests unknown --confidence medium"));
+        assert!(content.contains("--tests passed --confidence high"));
+        assert!(content.contains("--tests failed --confidence low"));
+        assert!(content.contains("--blocked"));
+        assert!(content.contains("--todos"));
+
+        // Check guidelines
+        assert!(content.contains("ALL tests in the entire codebase"));
+        assert!(content.contains("NEVER report partial test results"));
+        assert!(content.contains("Run full test suite"));
+
+        // Check it contains the DO NOT COMMIT warning
+        assert!(content.contains("DO NOT COMMIT"));
+    }
+
+    #[test]
+    fn test_create_claude_local_md_overwrites_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("session-worktree");
+        std::fs::create_dir_all(&session_path).unwrap();
+
+        let claude_local_path = session_path.join("CLAUDE.local.md");
+
+        // Create existing file with different content
+        std::fs::write(&claude_local_path, "old content").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&claude_local_path).unwrap(),
+            "old content"
+        );
+
+        // Create new CLAUDE.local.md
+        let session_name = "overwrite-test";
+        let result = create_claude_local_md(&session_path, session_name);
+        assert!(result.is_ok());
+
+        // Verify content was overwritten
+        let content = std::fs::read_to_string(&claude_local_path).unwrap();
+        assert!(content.contains(session_name));
+        assert!(content.contains("Para Session Status Commands"));
+        assert!(!content.contains("old content"));
+    }
+
+    #[test]
+    fn test_create_claude_local_md_creates_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("deep").join("nested").join("session");
+        // Don't create directory - let function handle it
+
+        let session_name = "nested-session";
+        let result = create_claude_local_md(&session_path, session_name);
+
+        // Should fail because parent directory doesn't exist and we don't create it
+        assert!(result.is_err());
+
+        // Now create the directory and try again
+        std::fs::create_dir_all(&session_path).unwrap();
+        let result = create_claude_local_md(&session_path, session_name);
+        assert!(result.is_ok());
+
+        let claude_local_path = session_path.join("CLAUDE.local.md");
+        assert!(claude_local_path.exists());
+    }
+
+    #[test]
+    fn test_create_claude_local_md_special_characters_in_session_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("session-worktree");
+        std::fs::create_dir_all(&session_path).unwrap();
+
+        // Test with session names containing special characters
+        let session_names = vec![
+            "session-with-dashes",
+            "session_with_underscores",
+            "session with spaces",
+            "session.with.dots",
+            "session/with/slashes",
+            "session@with@symbols",
+        ];
+
+        for session_name in session_names {
+            let result = create_claude_local_md(&session_path, session_name);
+            assert!(result.is_ok(), "Failed for session name: {}", session_name);
+
+            let content = std::fs::read_to_string(session_path.join("CLAUDE.local.md")).unwrap();
+            assert!(
+                content.contains(session_name),
+                "Session name not found in content for: {}",
+                session_name
+            );
+        }
     }
 }
