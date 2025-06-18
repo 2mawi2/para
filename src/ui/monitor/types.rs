@@ -22,7 +22,8 @@ pub struct SessionInfo {
 pub enum SessionStatus {
     Active, // 🟢 Recent activity (< 5 min)
     Idle,   // 🟡 No activity (5-30 min)
-    Ready,  // ✅ Finished, ready for review
+    Review, // 👀 Finished, ready for review
+    Ready,  // ✅ Finished, ready for review (legacy)
     Stale,  // ⏸️  No activity (> 30 min)
 }
 
@@ -31,6 +32,7 @@ impl SessionStatus {
         match self {
             SessionStatus::Active => "Active",
             SessionStatus::Idle => "Idle",
+            SessionStatus::Review => "Review",
             SessionStatus::Ready => "Ready",
             SessionStatus::Stale => "Stale",
         }
@@ -40,6 +42,7 @@ impl SessionStatus {
         match self {
             SessionStatus::Active => Color::Rgb(34, 197, 94), // Green
             SessionStatus::Idle => Color::Rgb(245, 158, 11),  // Amber
+            SessionStatus::Review => Color::Rgb(147, 51, 234), // Purple
             SessionStatus::Ready => Color::Rgb(99, 102, 241), // Indigo
             SessionStatus::Stale => Color::Rgb(107, 114, 128), // Gray
         }
@@ -62,6 +65,7 @@ mod tests {
     fn test_session_status_name() {
         assert_eq!(SessionStatus::Active.name(), "Active");
         assert_eq!(SessionStatus::Idle.name(), "Idle");
+        assert_eq!(SessionStatus::Review.name(), "Review");
         assert_eq!(SessionStatus::Ready.name(), "Ready");
         assert_eq!(SessionStatus::Stale.name(), "Stale");
     }
@@ -70,6 +74,7 @@ mod tests {
     fn test_session_status_color() {
         assert_eq!(SessionStatus::Active.color(), Color::Rgb(34, 197, 94));
         assert_eq!(SessionStatus::Idle.color(), Color::Rgb(245, 158, 11));
+        assert_eq!(SessionStatus::Review.color(), Color::Rgb(147, 51, 234));
         assert_eq!(SessionStatus::Ready.color(), Color::Rgb(99, 102, 241));
         assert_eq!(SessionStatus::Stale.color(), Color::Rgb(107, 114, 128));
     }

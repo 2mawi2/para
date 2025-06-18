@@ -158,11 +158,13 @@ fn detect_session_status(
     session: &crate::core::session::SessionState,
     last_activity: &DateTime<Utc>,
 ) -> SessionStatus {
-    // Check if session is marked as finished or ready for review
-    if matches!(
-        session.status,
-        CoreSessionStatus::Finished | CoreSessionStatus::Review
-    ) {
+    // Check if session is marked as review
+    if matches!(session.status, CoreSessionStatus::Review) {
+        return SessionStatus::Review;
+    }
+
+    // Check if session is marked as finished (legacy)
+    if matches!(session.status, CoreSessionStatus::Finished) {
         return SessionStatus::Ready;
     }
 
@@ -237,7 +239,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let status = detect_session_status(&session, &now);
-        assert!(matches!(status, SessionStatus::Ready));
+        assert!(matches!(status, SessionStatus::Review));
     }
 
     #[test]

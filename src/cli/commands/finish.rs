@@ -23,23 +23,16 @@ fn cleanup_session_state(
     session_manager: &mut SessionManager,
     session_info: Option<SessionState>,
     feature_branch: &str,
-    config: &Config,
+    _config: &Config,
 ) -> Result<()> {
+    // Always update to Review status (never delete)
+    // This allows the session to remain visible in monitor for review
     if let Some(session_state) = session_info {
-        if config.should_preserve_on_finish() {
-            session_manager.update_session_status(&session_state.name, SessionStatus::Review)?;
-        } else {
-            session_manager.delete_state(&session_state.name)?;
-        }
+        session_manager.update_session_status(&session_state.name, SessionStatus::Review)?;
     } else if let Ok(sessions) = session_manager.list_sessions() {
         for session in sessions {
             if session.branch == feature_branch {
-                if config.should_preserve_on_finish() {
-                    let _ =
-                        session_manager.update_session_status(&session.name, SessionStatus::Review);
-                } else {
-                    let _ = session_manager.delete_state(&session.name);
-                }
+                let _ = session_manager.update_session_status(&session.name, SessionStatus::Review);
                 break;
             }
         }
