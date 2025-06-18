@@ -81,20 +81,16 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
     // Dispatch only works with Claude Code in wrapper mode
-    if config.ide.command.to_lowercase() == "claude"
-        || config.ide.command.to_lowercase() == "claude-code"
+    if (config.ide.command.to_lowercase() == "claude"
+        || config.ide.command.to_lowercase() == "claude-code")
+        && config.is_wrapper_enabled()
     {
         return Ok(());
     }
 
-    // Allow wrapper mode with Claude Code
-    if config.is_wrapper_enabled() && config.ide.command.to_lowercase() == "claude" {
-        return Ok(());
-    }
-
     Err(ParaError::invalid_config(format!(
-        "Dispatch command requires Claude Code IDE. Current IDE: '{}' with command: '{}'. Run 'para config' to configure Claude Code.",
-        config.ide.name, config.ide.command
+        "Dispatch command requires Claude Code in wrapper mode. Current IDE: '{}' with command: '{}', wrapper enabled: {}. Run 'para config' to configure Claude Code with wrapper mode.",
+        config.ide.name, config.ide.command, config.is_wrapper_enabled()
     )))
 }
 
@@ -149,13 +145,8 @@ fn launch_claude_in_ide(
     fs::write(&tasks_file, tasks_json)
         .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
 
-    // Determine which IDE to launch
-    let (ide_command, ide_name) = if config.is_wrapper_enabled() {
-        (&config.ide.wrapper.command, &config.ide.wrapper.name)
-    } else {
-        // If no wrapper, assume we're launching the IDE directly
-        (&config.ide.command, &config.ide.name)
-    };
+    // Launch wrapper IDE (wrapper mode is always required for dispatch)
+    let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
 
     // Save launch information for auto-close functionality
     let state_dir = std::env::current_dir()
@@ -172,18 +163,13 @@ fn launch_claude_in_ide(
 
     let launch_file = state_dir.join(format!("{}.launch", session_id));
 
-    if config.is_wrapper_enabled() {
-        let launch_content = format!(
-            "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
-            config.ide.wrapper.name
-        );
-        fs::write(&launch_file, launch_content)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
-    } else {
-        let launch_content = format!("LAUNCH_METHOD=ide\nLAUNCH_IDE={}\n", config.ide.name);
-        fs::write(&launch_file, launch_content)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
-    }
+    // Always use wrapper mode for dispatch
+    let launch_content = format!(
+        "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
+        config.ide.wrapper.name
+    );
+    fs::write(&launch_file, launch_content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
 
     // Launch IDE
     let mut cmd = Command::new(ide_command);
@@ -586,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_claude_code_ide_accepts_claude() {
+    fn test_validate_claude_code_ide_rejects_claude_without_wrapper() {
         let config = crate::config::Config {
             ide: crate::config::IdeConfig {
                 name: "claude".to_string(),
@@ -604,11 +590,12 @@ mod tests {
         };
 
         let result = validate_claude_code_ide(&config);
-        assert!(result.is_ok());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("wrapper mode"));
     }
 
     #[test]
-    fn test_validate_claude_code_ide_accepts_claude_code() {
+    fn test_validate_claude_code_ide_rejects_claude_code_without_wrapper() {
         let config = crate::config::Config {
             ide: crate::config::IdeConfig {
                 name: "claude-code".to_string(),
@@ -626,7 +613,8 @@ mod tests {
         };
 
         let result = validate_claude_code_ide(&config);
-        assert!(result.is_ok());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("wrapper mode"));
     }
 
     #[test]
@@ -671,10 +659,7 @@ mod tests {
 
         let result = validate_claude_code_ide(&config);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Dispatch command requires Claude Code IDE"));
+        assert!(result.unwrap_err().to_string().contains("wrapper mode"));
     }
 
     #[test]
@@ -697,9 +682,6 @@ mod tests {
 
         let result = validate_claude_code_ide(&config);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Dispatch command requires Claude Code IDE"));
+        assert!(result.unwrap_err().to_string().contains("wrapper mode"));
     }
 }
