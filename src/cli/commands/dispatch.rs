@@ -80,7 +80,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 }
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
-    // Dispatch only works with Claude Code (standalone or wrapper mode)
+    // Dispatch only works with Claude Code in wrapper mode
     if config.ide.command.to_lowercase() == "claude"
         || config.ide.command.to_lowercase() == "claude-code"
     {
@@ -652,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_claude_code_ide_rejects_cursor_standalone() {
+    fn test_validate_claude_code_ide_rejects_cursor() {
         let config = crate::config::Config {
             ide: crate::config::IdeConfig {
                 name: "cursor".to_string(),
@@ -678,7 +678,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_claude_code_ide_rejects_vscode_standalone() {
+    fn test_validate_claude_code_ide_rejects_vscode() {
         let config = crate::config::Config {
             ide: crate::config::IdeConfig {
                 name: "code".to_string(),
