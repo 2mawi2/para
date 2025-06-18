@@ -417,7 +417,6 @@ mod tests {
 
     struct TestEnvironmentGuard {
         original_dir: std::path::PathBuf,
-        original_para_config_path: Option<String>,
     }
 
     impl TestEnvironmentGuard {
@@ -435,20 +434,13 @@ mod tests {
 
             std::env::set_current_dir(git_temp.path())?;
 
-            // Use PARA_CONFIG_PATH instead of modifying HOME
-            let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
-            let test_config_path = temp_dir.path().join("para_config.json");
-            std::env::set_var("PARA_CONFIG_PATH", &test_config_path);
-
             // Create a mock config file for test isolation
+            let test_config_path = temp_dir.path().join("para_config.json");
             let mock_config = create_test_config();
             let config_json = serde_json::to_string_pretty(&mock_config).unwrap();
             fs::write(&test_config_path, config_json).unwrap();
 
-            Ok(TestEnvironmentGuard {
-                original_dir,
-                original_para_config_path,
-            })
+            Ok(TestEnvironmentGuard { original_dir })
         }
     }
 
@@ -456,11 +448,6 @@ mod tests {
         fn drop(&mut self) {
             if let Err(_e) = std::env::set_current_dir(&self.original_dir) {
                 let _ = std::env::set_current_dir("/tmp");
-            }
-
-            match &self.original_para_config_path {
-                Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-                None => std::env::remove_var("PARA_CONFIG_PATH"),
             }
         }
     }

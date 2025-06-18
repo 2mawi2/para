@@ -90,7 +90,6 @@ pub mod test_helpers {
         original_dir: PathBuf,
         test_dir: PathBuf,
         test_config_path: PathBuf,
-        original_para_config_path: Option<String>,
     }
 
     impl TestEnvironmentGuard {
@@ -105,9 +104,6 @@ pub mod test_helpers {
                     .to_path_buf()
             });
 
-            // Save original PARA_CONFIG_PATH
-            let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
-
             std::env::set_current_dir(git_temp.path())?;
 
             let _config_dir = setup_isolated_test_environment(temp_dir);
@@ -119,14 +115,10 @@ pub mod test_helpers {
                 .expect("Failed to serialize test config");
             fs::write(&test_config_path, config_json)?;
 
-            // Set PARA_CONFIG_PATH to our test config
-            std::env::set_var("PARA_CONFIG_PATH", &test_config_path);
-
             Ok(TestEnvironmentGuard {
                 original_dir,
                 test_dir: git_temp.path().to_path_buf(),
                 test_config_path,
-                original_para_config_path,
             })
         }
 
@@ -172,12 +164,6 @@ pub mod test_helpers {
             }
 
             restore_environment(self.original_dir.clone());
-
-            // Restore PARA_CONFIG_PATH
-            match &self.original_para_config_path {
-                Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-                None => std::env::remove_var("PARA_CONFIG_PATH"),
-            }
         }
     }
 }

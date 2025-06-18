@@ -98,11 +98,6 @@ pub fn get_default_config_dir() -> std::path::PathBuf {
 }
 
 pub fn get_config_file_path() -> std::path::PathBuf {
-    // Check for PARA_CONFIG_PATH environment variable first
-    if let Ok(config_path) = std::env::var("PARA_CONFIG_PATH") {
-        return std::path::PathBuf::from(config_path);
-    }
-
     get_default_config_dir().join("config.json")
 }
 
@@ -126,10 +121,6 @@ mod tests {
 
     #[test]
     fn test_config_paths() {
-        // Save and clear PARA_CONFIG_PATH to test default behavior
-        let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
-        std::env::remove_var("PARA_CONFIG_PATH");
-
         // Test that get_default_config_dir returns a valid directory
         let config_dir = get_default_config_dir();
         // The directory path should exist or be creatable
@@ -143,31 +134,6 @@ mod tests {
             Some("config.json")
         );
         assert!(config_file.parent().is_some());
-
-        // Restore PARA_CONFIG_PATH
-        match original_para_config_path {
-            Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-            None => std::env::remove_var("PARA_CONFIG_PATH"),
-        }
-    }
-
-    #[test]
-    fn test_para_config_path_override() {
-        // Save original PARA_CONFIG_PATH
-        let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
-
-        // Test that PARA_CONFIG_PATH overrides default
-        let custom_path = "/tmp/custom_para_config.json";
-        std::env::set_var("PARA_CONFIG_PATH", custom_path);
-
-        let config_file = get_config_file_path();
-        assert_eq!(config_file.to_str().unwrap(), custom_path);
-
-        // Restore PARA_CONFIG_PATH
-        match original_para_config_path {
-            Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
-            None => std::env::remove_var("PARA_CONFIG_PATH"),
-        }
     }
 
     #[test]

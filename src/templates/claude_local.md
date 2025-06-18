@@ -7,22 +7,33 @@ Use these commands to communicate your progress:
 
 **Required status updates:**
 ```bash
-# Every status update MUST include current task, test status, and confidence
-para status "Starting user authentication" --tests unknown --confidence medium
-para status "Implementing JWT tokens" --tests passed --confidence high --todos 2/5
-para status "Fixing auth middleware" --tests failed --confidence low --todos 3/5
-para status "Need help with Redis mocking" --tests failed --confidence low --blocked
+# Every status update MUST be SHORT (5 words max) with test status and confidence
+para status "Starting authentication" --tests unknown --confidence medium
+para status "Implementing JWT" --tests passed --confidence high --todos 2/5
+para status "Fixing middleware" --tests failed --confidence low --todos 3/5
+para status "Blocked Redis mocking" --tests failed --confidence low --blocked
 
 # IMPORTANT: --tests flag MUST reflect ALL tests in the codebase, not just current feature!
 # Run full test suite before updating status
 ```
 
+**DO NOT CONFUSE confidence with test status:**
+- `--confidence` = How confident you are about solving the problem
+- `--tests` = Current actual state of ALL tests in the codebase
+- Example: You can be confident (`--confidence high`) while tests are still failing (`--tests failed`)
+
 **Test Status Guidelines:**
-- `--tests passed`: ALL tests in the entire codebase are passing
-- `--tests failed`: One or more tests are failing anywhere in the codebase
+- `--tests passed`: ALL tests in the entire codebase are passing (just test succeeded)
+- `--tests failed`: One or more tests are failing anywhere in the codebase (just test failed)
 - `--tests unknown`: Haven't run tests yet or tests are currently running
 
+**CRITICAL: Report ACTUAL test status, not your progress:**
+- If `just test` fails → use `--tests failed` (even if you're "about to fix it")
+- If `just test` passes → use `--tests passed`
+- If you haven't run `just test` yet → use `--tests unknown`
+
 NEVER report partial test results. Always run the complete test suite.
+ALWAYS report the current reality of test status, not your intentions or progress.
 
 **When complete:**
 ```bash
