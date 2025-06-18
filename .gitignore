@@ -29,3 +29,6 @@ target/
 
 # MCP configuration (contains user-specific paths)
 .mcp.json
+
+# Para agent instructions (local to each worktree)
+CLAUDE.local.md

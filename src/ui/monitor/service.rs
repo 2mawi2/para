@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::core::session::{SessionManager, SessionStatus as CoreSessionStatus};
+use crate::core::status::Status;
 use crate::ui::monitor::activity::detect_last_activity;
 use crate::ui::monitor::cache::ActivityCache;
 use crate::ui::monitor::{SessionInfo, SessionStatus};
@@ -95,13 +96,37 @@ impl SessionService {
                 }
             });
 
+            // Load agent status if available
+            let state_dir = Path::new(&self.config.directories.state_dir);
+            let agent_status = Status::load(state_dir, &session.name).ok().flatten();
+
+            let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
+                if let Some(ref status) = agent_status {
+                    (
+                        Some(status.test_status.clone()),
+                        Some(status.confidence.clone()),
+                        status.todo_percentage(),
+                        status.is_blocked,
+                        Some(status.current_task.clone()),
+                    )
+                } else {
+                    (None, None, None, false, None)
+                };
+
+            // Use agent task if available, otherwise use session task
+            let final_task = agent_task.unwrap_or(task);
+
             let session_info = SessionInfo {
                 name: session.name.clone(),
                 branch: session.branch.clone(),
                 status,
                 last_activity,
-                task,
+                task: final_task,
                 worktree_path: session.worktree_path.clone(),
+                test_status,
+                confidence,
+                todo_percentage,
+                is_blocked,
             };
 
             // Filter out stale sessions if not showing them
@@ -324,6 +349,251 @@ mod tests {
             let task_name = format!("task-{}", i);
             assert!(cache.contains_key(&task_name));
         }
+    }
+
+    #[test]
+    fn test_agent_status_integration() {
+        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create an agent status file
+        let agent_status = Status::new(
+            "test-session".to_string(),
+            "Agent is working on authentication".to_string(),
+            TestStatus::Passed,
+            ConfidenceLevel::High,
+        )
+        .with_todos(3, 7)
+        .with_blocked(Some("Need help with Redis".to_string()));
+
+        agent_status.save(&state_dir).unwrap();
+
+        // Test status loading logic (mimicking what load_sessions does)
+        let loaded_status = Status::load(&state_dir, "test-session").ok().flatten();
+        assert!(loaded_status.is_some());
+
+        let status = loaded_status.unwrap();
+
+        // Test the tuple extraction logic
+        let (test_status, confidence, todo_percentage, is_blocked, agent_task) = (
+            Some(status.test_status.clone()),
+            Some(status.confidence.clone()),
+            status.todo_percentage(),
+            status.is_blocked,
+            Some(status.current_task.clone()),
+        );
+
+        assert_eq!(test_status, Some(TestStatus::Passed));
+        assert_eq!(confidence, Some(ConfidenceLevel::High));
+        assert_eq!(todo_percentage, Some(43)); // 3/7 = 43%
+        assert!(is_blocked);
+        assert_eq!(
+            agent_task,
+            Some("Agent is working on authentication".to_string())
+        );
+
+        // Test task priority logic (agent task over session task)
+        let session_task = "Session default task".to_string();
+        let final_task = agent_task.unwrap_or(session_task);
+        assert_eq!(final_task, "Agent is working on authentication");
+    }
+
+    #[test]
+    fn test_agent_status_fallback() {
+        use crate::core::status::Status;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // No agent status file exists
+        let loaded_status = Status::load(&state_dir, "nonexistent-session")
+            .ok()
+            .flatten();
+        assert!(loaded_status.is_none());
+
+        // Test fallback values when no agent status
+        let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
+            if let Some(ref status) = loaded_status {
+                (
+                    Some(status.test_status.clone()),
+                    Some(status.confidence.clone()),
+                    status.todo_percentage(),
+                    status.is_blocked,
+                    Some(status.current_task.clone()),
+                )
+            } else {
+                (None, None, None, false, None)
+            };
+
+        assert_eq!(test_status, None);
+        assert_eq!(confidence, None);
+        assert_eq!(todo_percentage, None);
+        assert!(!is_blocked);
+        assert_eq!(agent_task, None);
+
+        // Test task fallback to session task
+        let session_task = "Session default task".to_string();
+        let final_task = agent_task.unwrap_or(session_task.clone());
+        assert_eq!(final_task, session_task);
+    }
+
+    #[test]
+    fn test_session_info_construction_with_agent_status() {
+        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::ui::monitor::{SessionInfo, SessionStatus};
+        use chrono::Utc;
+        use std::path::PathBuf;
+
+        // Create test agent status
+        let agent_status = Status::new(
+            "integration-session".to_string(),
+            "Complex integration task".to_string(),
+            TestStatus::Failed,
+            ConfidenceLevel::Low,
+        )
+        .with_todos(2, 10);
+
+        // Test SessionInfo construction with agent status (mimicking load_sessions logic)
+        let session_name = "integration-session".to_string();
+        let final_task = agent_status.current_task.clone();
+
+        let session_info = SessionInfo {
+            name: session_name.clone(),
+            branch: "test/branch".to_string(),
+            status: SessionStatus::Active,
+            last_activity: Utc::now(),
+            task: final_task,
+            worktree_path: PathBuf::from("/test/path"),
+            test_status: Some(agent_status.test_status.clone()),
+            confidence: Some(agent_status.confidence.clone()),
+            todo_percentage: agent_status.todo_percentage(),
+            is_blocked: agent_status.is_blocked,
+        };
+
+        // Verify agent status is properly integrated
+        assert_eq!(session_info.name, "integration-session");
+        assert_eq!(session_info.task, "Complex integration task"); // Agent task priority
+        assert_eq!(session_info.test_status, Some(TestStatus::Failed));
+        assert_eq!(session_info.confidence, Some(ConfidenceLevel::Low));
+        assert_eq!(session_info.todo_percentage, Some(20)); // 2/10 = 20%
+        assert!(!session_info.is_blocked); // Agent status not blocked
+    }
+
+    #[test]
+    fn test_current_session_detection_priority() {
+        // Test the current session override logic in load_sessions
+        use crate::ui::monitor::SessionStatus;
+
+        // Mock the logic for current session detection
+        let session_name = "current-session".to_string();
+        let current_session_name = Some("current-session".to_string());
+
+        // Simulate status detection
+        let mut status = SessionStatus::Idle; // Would normally be Idle
+
+        // Test current session override (mimicking the load_sessions logic)
+        if let Some(ref current) = current_session_name {
+            if current == &session_name {
+                status = SessionStatus::Active; // Override to Active
+            }
+        }
+
+        assert_eq!(status, SessionStatus::Active);
+
+        // Test with different session
+        let other_session = "other-session".to_string();
+        let mut other_status = SessionStatus::Stale;
+
+        if let Some(ref current) = current_session_name {
+            if current == &other_session {
+                other_status = SessionStatus::Active;
+            }
+        }
+
+        assert_eq!(other_status, SessionStatus::Stale); // Should remain unchanged
+    }
+
+    #[test]
+    fn test_session_sorting_with_current_session() {
+        use crate::ui::monitor::{SessionInfo, SessionStatus};
+        use chrono::{Duration, Utc};
+        use std::path::PathBuf;
+
+        let now = Utc::now();
+
+        // Create test sessions
+        let session1 = SessionInfo {
+            name: "session1".to_string(),
+            branch: "branch1".to_string(),
+            status: SessionStatus::Idle,
+            last_activity: now - Duration::hours(1),
+            task: "Task 1".to_string(),
+            worktree_path: PathBuf::from("/test1"),
+            test_status: None,
+            confidence: None,
+            todo_percentage: None,
+            is_blocked: false,
+        };
+
+        let session2 = SessionInfo {
+            name: "current-session".to_string(),
+            branch: "branch2".to_string(),
+            status: SessionStatus::Active,
+            last_activity: now - Duration::hours(2), // Older than session1
+            task: "Current Task".to_string(),
+            worktree_path: PathBuf::from("/test2"),
+            test_status: None,
+            confidence: None,
+            todo_percentage: None,
+            is_blocked: false,
+        };
+
+        let session3 = SessionInfo {
+            name: "session3".to_string(),
+            branch: "branch3".to_string(),
+            status: SessionStatus::Stale,
+            last_activity: now, // Most recent
+            task: "Task 3".to_string(),
+            worktree_path: PathBuf::from("/test3"),
+            test_status: None,
+            confidence: None,
+            todo_percentage: None,
+            is_blocked: false,
+        };
+
+        let mut sessions = vec![session1, session2, session3];
+        let current_session_name = Some("current-session".to_string());
+
+        // Test sorting logic from load_sessions
+        sessions.sort_by(|a, b| {
+            if let Some(ref current) = current_session_name {
+                if a.name == *current {
+                    return std::cmp::Ordering::Less; // Current session goes first
+                }
+                if b.name == *current {
+                    return std::cmp::Ordering::Greater; // Current session goes first
+                }
+            }
+            b.last_activity.cmp(&a.last_activity) // Then by last activity
+        });
+
+        // Current session should be first despite being older
+        assert_eq!(sessions[0].name, "current-session");
+        // Then by most recent activity
+        assert_eq!(sessions[1].name, "session3"); // Most recent
+        assert_eq!(sessions[2].name, "session1"); // Least recent
     }
 
     fn create_test_config() -> Config {

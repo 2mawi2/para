@@ -48,6 +48,8 @@ pub enum Commands {
     CompletionBranches,
     /// Monitor and manage active sessions in real-time (interactive TUI)
     Monitor(MonitorArgs),
+    /// Update session status (for agents to communicate progress)
+    Status(StatusArgs),
 }
 
 #[derive(Args, Debug)]
@@ -166,6 +168,48 @@ pub struct CompletionArgs {
 
 #[derive(Args, Debug)]
 pub struct MonitorArgs {}
+
+#[derive(Args, Debug)]
+pub struct StatusArgs {
+    #[command(subcommand)]
+    pub command: Option<StatusCommands>,
+
+    /// Current task description (for backwards compatibility)
+    pub task: Option<String>,
+
+    /// Test status (passed, failed, unknown)
+    #[arg(long, help = "Test status: passed, failed, or unknown")]
+    pub tests: Option<String>,
+
+    /// Confidence level (high, medium, low)
+    #[arg(long, help = "Confidence level: high, medium, or low")]
+    pub confidence: Option<String>,
+
+    /// Todo progress (format: completed/total, e.g., 3/7)
+    #[arg(long, help = "Todo progress in format 'completed/total' (e.g., '3/7')")]
+    pub todos: Option<String>,
+
+    /// Mark as blocked
+    #[arg(long, help = "Mark session as blocked")]
+    pub blocked: bool,
+
+    /// Session name (optional, auto-detects from current directory)
+    #[arg(long, help = "Session name (auto-detected if not provided)")]
+    pub session: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum StatusCommands {
+    /// Show status of one or all sessions
+    Show {
+        /// Session name (optional, shows all if not provided)
+        session: Option<String>,
+
+        /// Output format
+        #[arg(long, help = "Output as JSON")]
+        json: bool,
+    },
+}
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
 #[allow(clippy::enum_variant_names)]

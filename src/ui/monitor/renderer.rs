@@ -79,11 +79,13 @@ impl MonitorRenderer {
         state: &MonitorAppState,
     ) {
         let header = Row::new(vec![
-            Cell::from(" # "),
             Cell::from("Session"),
-            Cell::from("Status"),
-            Cell::from("Last Activity"),
-            Cell::from("Task"),
+            Cell::from("State"),
+            Cell::from("Last Modified"),
+            Cell::from("Current Task"),
+            Cell::from("Tests"),
+            Cell::from("Progress"),
+            Cell::from("Confidence"),
         ])
         .style(
             Style::default()
@@ -105,22 +107,77 @@ impl MonitorRenderer {
                     Style::default().fg(Color::Rgb(229, 231, 235))
                 };
 
-                let status_cell = Cell::from(format!(
-                    "{} {}",
-                    session.status.icon(),
+                // Determine session state display
+                let state_text = if session.is_blocked {
+                    "Blocked"
+                } else if matches!(session.status, crate::ui::monitor::SessionStatus::Ready) {
+                    "Finished"
+                } else {
                     session.status.name()
-                ))
-                .style(Style::default().fg(session.status.color()));
+                };
 
+                let state_style = if session.is_blocked {
+                    Style::default().fg(Color::Rgb(239, 68, 68)) // Red for blocked
+                } else {
+                    Style::default().fg(session.status.color())
+                };
+
+                let state_cell = Cell::from(state_text).style(state_style);
                 let activity_text = format_activity(&session.last_activity);
 
+                // Format test status
+                let test_cell = match &session.test_status {
+                    Some(test_status) => {
+                        let (text, color) = match test_status {
+                            crate::core::status::TestStatus::Passed => {
+                                ("Passed", Color::Rgb(34, 197, 94))
+                            }
+                            crate::core::status::TestStatus::Failed => {
+                                ("Failed", Color::Rgb(239, 68, 68))
+                            }
+                            crate::core::status::TestStatus::Unknown => {
+                                ("Unknown", Color::Rgb(156, 163, 175))
+                            }
+                        };
+                        Cell::from(text).style(Style::default().fg(color))
+                    }
+                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                };
+
+                // Format progress
+                let progress_cell = match session.todo_percentage {
+                    Some(pct) => Cell::from(format!("{}%", pct))
+                        .style(Style::default().fg(Color::Rgb(99, 102, 241))),
+                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                };
+
+                // Format confidence
+                let confidence_cell = match &session.confidence {
+                    Some(confidence) => {
+                        let (text, color) = match confidence {
+                            crate::core::status::ConfidenceLevel::High => {
+                                ("High", Color::Rgb(34, 197, 94))
+                            }
+                            crate::core::status::ConfidenceLevel::Medium => {
+                                ("Medium", Color::Rgb(245, 158, 11))
+                            }
+                            crate::core::status::ConfidenceLevel::Low => {
+                                ("Low", Color::Rgb(239, 68, 68))
+                            }
+                        };
+                        Cell::from(text).style(Style::default().fg(color))
+                    }
+                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                };
+
                 Row::new(vec![
-                    Cell::from(format!("[{}]", i + 1)).style(base_style),
                     Cell::from(session.name.clone()).style(base_style.add_modifier(Modifier::BOLD)),
-                    status_cell,
+                    state_cell,
                     Cell::from(activity_text).style(base_style),
-                    Cell::from(format!("\"{}\"", truncate_task(&session.task, 40)))
-                        .style(base_style),
+                    Cell::from(truncate_task(&session.task, 40)).style(base_style),
+                    test_cell,
+                    progress_cell,
+                    confidence_cell,
                 ])
                 .height(1)
             })
@@ -129,11 +186,13 @@ impl MonitorRenderer {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(5),  // #
                 Constraint::Min(20),    // Session - Allow full names to show
-                Constraint::Length(12), // Status
-                Constraint::Length(14), // Last Activity
-                Constraint::Min(30),    // Task
+                Constraint::Length(10), // State
+                Constraint::Length(14), // Last Modified
+                Constraint::Min(30),    // Current Task
+                Constraint::Length(10), // Tests
+                Constraint::Length(10), // Progress
+                Constraint::Length(10), // Confidence
             ],
         )
         .header(header)
@@ -382,6 +441,10 @@ mod tests {
                 last_activity: Utc::now(),
                 task: "Task 1".to_string(),
                 worktree_path: PathBuf::from("/tmp/session1"),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
             },
             SessionInfo {
                 name: "session2".to_string(),
@@ -390,6 +453,10 @@ mod tests {
                 last_activity: Utc::now(),
                 task: "Task 2".to_string(),
                 worktree_path: PathBuf::from("/tmp/session2"),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
             },
         ]
     }

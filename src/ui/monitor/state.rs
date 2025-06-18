@@ -165,6 +165,10 @@ mod tests {
                 last_activity: Utc::now(),
                 task: "Task 1".to_string(),
                 worktree_path: PathBuf::from("/tmp/session1"),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
             },
             SessionInfo {
                 name: "session2".to_string(),
@@ -173,6 +177,10 @@ mod tests {
                 last_activity: Utc::now(),
                 task: "Task 2".to_string(),
                 worktree_path: PathBuf::from("/tmp/session2"),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
             },
             SessionInfo {
                 name: "session3".to_string(),
@@ -181,6 +189,10 @@ mod tests {
                 last_activity: Utc::now(),
                 task: "Task 3".to_string(),
                 worktree_path: PathBuf::from("/tmp/session3"),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
             },
         ]
     }

@@ -65,6 +65,7 @@ pub fn execute_command_with_config(
         Some(Commands::CompletionSessions) => commands::completion_sessions::execute(),
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
         Some(Commands::Monitor(args)) => commands::monitor::execute(config.unwrap(), args),
+        Some(Commands::Status(args)) => commands::status::execute(config.unwrap(), args),
         None => {
             // Default to monitor when no command is provided
             commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {})

@@ -123,6 +123,10 @@ mod tests {
             last_activity: Utc::now(),
             task: "Test task".to_string(),
             worktree_path: PathBuf::from("/tmp/test-session"),
+            test_status: None,
+            confidence: None,
+            todo_percentage: None,
+            is_blocked: false,
         }
     }
 
