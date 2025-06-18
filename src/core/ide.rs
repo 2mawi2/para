@@ -16,13 +16,22 @@ impl IdeManager {
     }
 
     pub fn launch(&self, path: &Path, skip_permissions: bool) -> Result<()> {
+        self.launch_with_options(path, skip_permissions, false)
+    }
+
+    pub fn launch_with_options(
+        &self,
+        path: &Path,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> Result<()> {
         // Check if IDE wrapper is enabled and we're launching Claude Code
         if self.config.name == "claude" && self.config.wrapper.enabled {
             println!(
                 "▶ launching Claude Code inside {} wrapper...",
                 self.config.wrapper.name
             );
-            return self.launch_wrapper(path, skip_permissions);
+            return self.launch_wrapper_with_options(path, skip_permissions, continue_conversation);
         }
 
         // Claude Code requires wrapper mode when not in test mode
@@ -50,6 +59,9 @@ impl IdeManager {
 
         if self.config.name == "claude" {
             cmd.arg("--no-confirm");
+            if continue_conversation {
+                cmd.arg("-c");
+            }
         }
 
         let output = cmd.output().map_err(|e| {
@@ -155,10 +167,23 @@ impl IdeManager {
         unreachable!("is_test_mode should only return true for 'true' or 'echo ' commands")
     }
 
-    fn launch_wrapper(&self, path: &Path, skip_permissions: bool) -> Result<()> {
+    fn launch_wrapper_with_options(
+        &self,
+        path: &Path,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> Result<()> {
         match self.config.wrapper.name.as_str() {
-            "cursor" => self.launch_cursor_wrapper(path, skip_permissions),
-            "code" => self.launch_vscode_wrapper(path, skip_permissions),
+            "cursor" => self.launch_cursor_wrapper_with_options(
+                path,
+                skip_permissions,
+                continue_conversation,
+            ),
+            "code" => self.launch_vscode_wrapper_with_options(
+                path,
+                skip_permissions,
+                continue_conversation,
+            ),
             _ => {
                 println!("⚠️  Unsupported wrapper IDE: {}", self.config.wrapper.name);
                 println!("   Falling back to regular Claude Code launch...");
@@ -168,8 +193,13 @@ impl IdeManager {
         }
     }
 
-    fn launch_cursor_wrapper(&self, path: &Path, skip_permissions: bool) -> Result<()> {
-        self.write_autorun_task(path, skip_permissions)?;
+    fn launch_cursor_wrapper_with_options(
+        &self,
+        path: &Path,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> Result<()> {
+        self.write_autorun_task_with_options(path, skip_permissions, continue_conversation)?;
 
         // Check wrapper-specific test mode like shell version
         if self.is_wrapper_test_mode() {
@@ -211,8 +241,13 @@ impl IdeManager {
         Ok(())
     }
 
-    fn launch_vscode_wrapper(&self, path: &Path, skip_permissions: bool) -> Result<()> {
-        self.write_autorun_task(path, skip_permissions)?;
+    fn launch_vscode_wrapper_with_options(
+        &self,
+        path: &Path,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> Result<()> {
+        self.write_autorun_task_with_options(path, skip_permissions, continue_conversation)?;
 
         if self.is_test_mode() {
             println!("▶ skipping VS Code wrapper launch (test stub)");
@@ -232,13 +267,19 @@ impl IdeManager {
         Ok(())
     }
 
-    fn write_autorun_task(&self, path: &Path, skip_permissions: bool) -> Result<()> {
+    fn write_autorun_task_with_options(
+        &self,
+        path: &Path,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> Result<()> {
         let vscode_dir = path.join(".vscode");
         fs::create_dir_all(&vscode_dir).map_err(|e| {
             ParaError::ide_error(format!("Failed to create .vscode directory: {}", e))
         })?;
 
-        let claude_command = self.build_claude_wrapper_command(skip_permissions);
+        let claude_command =
+            self.build_claude_wrapper_command_with_options(skip_permissions, continue_conversation);
         let task_json = self.generate_claude_task_json("Start Claude Code", &claude_command);
 
         let tasks_file = vscode_dir.join("tasks.json");
@@ -248,11 +289,19 @@ impl IdeManager {
         Ok(())
     }
 
-    fn build_claude_wrapper_command(&self, skip_permissions: bool) -> String {
+    fn build_claude_wrapper_command_with_options(
+        &self,
+        skip_permissions: bool,
+        continue_conversation: bool,
+    ) -> String {
         let mut base_cmd = "claude".to_string();
 
         if skip_permissions {
             base_cmd.push_str(" --dangerously-skip-permissions");
+        }
+
+        if continue_conversation {
+            base_cmd.push_str(" -c");
         }
 
         base_cmd
@@ -407,7 +456,7 @@ mod tests {
         let manager = IdeManager::new(&config);
 
         // Test task generation
-        let result = manager.write_autorun_task(temp_dir.path(), false);
+        let result = manager.write_autorun_task_with_options(temp_dir.path(), false, false);
         assert!(result.is_ok());
 
         // Check that .vscode/tasks.json was created
@@ -439,5 +488,56 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Claude Code requires supported wrapper mode (cursor or code)"));
+    }
+
+    #[test]
+    fn test_continue_conversation_flag() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = create_test_config("claude", "echo");
+        config.ide.wrapper.enabled = true;
+        config.ide.wrapper.name = "cursor".to_string();
+        config.ide.wrapper.command = "echo".to_string();
+
+        let manager = IdeManager::new(&config);
+
+        // Test with continue_conversation = false
+        let result = manager.launch_with_options(temp_dir.path(), true, false);
+        assert!(result.is_ok());
+
+        // Check that tasks.json doesn't contain -c flag
+        let tasks_file = temp_dir.path().join(".vscode/tasks.json");
+        assert!(tasks_file.exists());
+        let content = std::fs::read_to_string(&tasks_file).unwrap();
+        assert!(!content.contains(" -c"));
+
+        // Test with continue_conversation = true
+        let result = manager.launch_with_options(temp_dir.path(), true, true);
+        assert!(result.is_ok());
+
+        // Check that tasks.json contains -c flag
+        let content = std::fs::read_to_string(&tasks_file).unwrap();
+        assert!(content.contains(" -c"));
+    }
+
+    #[test]
+    fn test_build_claude_wrapper_command_options() {
+        let config = create_test_config("claude", "claude");
+        let manager = IdeManager::new(&config);
+
+        // Test basic command
+        let cmd = manager.build_claude_wrapper_command_with_options(false, false);
+        assert_eq!(cmd, "claude");
+
+        // Test with skip permissions
+        let cmd = manager.build_claude_wrapper_command_with_options(true, false);
+        assert_eq!(cmd, "claude --dangerously-skip-permissions");
+
+        // Test with continue conversation
+        let cmd = manager.build_claude_wrapper_command_with_options(false, true);
+        assert_eq!(cmd, "claude -c");
+
+        // Test with both options
+        let cmd = manager.build_claude_wrapper_command_with_options(true, true);
+        assert_eq!(cmd, "claude --dangerously-skip-permissions -c");
     }
 }
