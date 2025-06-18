@@ -36,11 +36,9 @@ impl ConfigManager {
         let content = fs::read_to_string(path)?;
         let mut config: Config = serde_json::from_str(&content)?;
 
-        // Migrate old configurations to wrapper mode
         if !config.ide.wrapper.enabled {
             eprintln!("🔄 Migrating configuration to use wrapper mode...");
             config = Self::migrate_to_wrapper_mode(config);
-            // Save the migrated configuration
             Self::save_to_path(&config, path)?;
             eprintln!("✅ Configuration migrated successfully");
         }
@@ -50,10 +48,8 @@ impl ConfigManager {
     }
 
     fn migrate_to_wrapper_mode(mut config: Config) -> Config {
-        // Enable wrapper mode
         config.ide.wrapper.enabled = true;
 
-        // If wrapper name/command are empty, use the IDE itself as wrapper
         if config.ide.wrapper.name.is_empty() {
             config.ide.wrapper.name = config.ide.name.clone();
         }
@@ -61,9 +57,7 @@ impl ConfigManager {
             config.ide.wrapper.command = config.ide.command.clone();
         }
 
-        // Claude requires a different IDE as wrapper
         if config.ide.name == "claude" && config.ide.wrapper.name == "claude" {
-            // Default to cursor if available, otherwise code
             if super::defaults::is_command_available("cursor") {
                 config.ide.wrapper.name = "cursor".to_string();
                 config.ide.wrapper.command = "cursor".to_string();
@@ -197,12 +191,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.json");
 
-        // Create an existing config file
         let original_config = create_test_config();
         let json = serde_json::to_string_pretty(&original_config).unwrap();
         fs::write(&config_path, json).unwrap();
 
-        // Load the existing config
         let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
         assert!(loaded_config.validate().is_ok());
         assert_eq!(loaded_config.ide.name, original_config.ide.name);
@@ -213,7 +205,6 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.json");
 
-        // Test loading from existing file
         let original_config = create_test_config();
         let json = serde_json::to_string_pretty(&original_config).unwrap();
         fs::write(&config_path, json).unwrap();
@@ -232,11 +223,9 @@ mod tests {
         original_config.ide.name = "custom-ide".to_string();
         original_config.git.branch_prefix = "custom-prefix".to_string();
 
-        // Save to temporary file
         let json = serde_json::to_string_pretty(&original_config).unwrap();
         fs::write(&config_path, json).unwrap();
 
-        // Load from the same file
         let loaded_config = ConfigManager::load_from_file(&config_path).unwrap();
         assert_eq!(loaded_config.ide.name, "custom-ide");
         assert_eq!(loaded_config.git.branch_prefix, "custom-prefix");
@@ -247,25 +236,21 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.json");
 
-        // Create an old-style config without wrapper enabled
         let mut old_config = create_test_config();
         old_config.ide.wrapper.enabled = false;
         old_config.ide.wrapper.name = String::new();
         old_config.ide.wrapper.command = String::new();
 
-        // Save the old config
         let json = serde_json::to_string_pretty(&old_config).unwrap();
         fs::write(&config_path, json).unwrap();
 
         // Load should trigger migration
         let migrated_config = ConfigManager::load_from_file(&config_path).unwrap();
 
-        // Verify migration happened
         assert!(migrated_config.ide.wrapper.enabled);
         assert_eq!(migrated_config.ide.wrapper.name, old_config.ide.name);
         assert_eq!(migrated_config.ide.wrapper.command, old_config.ide.command);
 
-        // Verify the file was updated
         let reloaded = ConfigManager::load_from_file(&config_path).unwrap();
         assert!(reloaded.ide.wrapper.enabled);
     }
@@ -275,7 +260,6 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.json");
 
-        // Create an old-style Claude config
         let claude_config = Config {
             ide: super::super::IdeConfig {
                 name: "claude".to_string(),
@@ -303,11 +287,9 @@ mod tests {
             },
         };
 
-        // Save the old config
         let json = serde_json::to_string_pretty(&claude_config).unwrap();
         fs::write(&config_path, json).unwrap();
 
-        // Load should trigger migration
         let migrated_config = ConfigManager::load_from_file(&config_path).unwrap();
 
         // Verify Claude uses a different wrapper (cursor or code)
