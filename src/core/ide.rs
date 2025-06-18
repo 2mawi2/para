@@ -1,7 +1,7 @@
 use crate::config::{Config, IdeConfig};
 use crate::utils::{ParaError, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 pub struct IdeManager {
@@ -342,89 +342,6 @@ impl IdeManager {
             "Claude Code requires supported wrapper mode (cursor or code)".to_string(),
         ))
     }
-
-    /// Check if an IDE is already running for a given session
-    pub fn is_ide_running_for_session(&self, session_name: &str) -> bool {
-        // In test mode, always return false
-        if self.is_test_mode() || self.is_wrapper_test_mode() {
-            return false;
-        }
-
-        // Try to read the launch file to understand how the IDE was launched
-        let state_dir = std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".para_state");
-
-        let launch_file = state_dir.join(format!("{}.launch", session_name));
-
-        if !launch_file.exists() {
-            // No launch file means IDE was not launched via dispatch, check anyway
-            return self.check_ide_process_running(None);
-        }
-
-        // Parse launch file to determine which IDE to check
-        if let Ok(content) = fs::read_to_string(&launch_file) {
-            if content.contains("LAUNCH_METHOD=wrapper") {
-                // Extract wrapper IDE name
-                for line in content.lines() {
-                    if line.starts_with("WRAPPER_IDE=") {
-                        let wrapper_ide = line.trim_start_matches("WRAPPER_IDE=").trim();
-                        return self.check_ide_process_running(Some(wrapper_ide));
-                    }
-                }
-            } else if content.contains("LAUNCH_METHOD=ide") {
-                // Direct IDE launch - check configured IDE
-                return self.check_ide_process_running(Some(&self.config.name));
-            }
-        }
-
-        // Default: check configured IDE
-        self.check_ide_process_running(None)
-    }
-
-    /// Platform-specific check if an IDE process is running
-    fn check_ide_process_running(&self, ide_name: Option<&str>) -> bool {
-        // Determine which IDE to check
-        let ide_to_check = if let Some(name) = ide_name {
-            name
-        } else if self.config.wrapper.enabled {
-            &self.config.wrapper.name
-        } else {
-            &self.config.name
-        };
-
-        // Platform-specific process detection
-        #[cfg(target_os = "macos")]
-        {
-            self.check_macos_ide_running(ide_to_check)
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            // For non-macOS platforms, we can't reliably detect running processes
-            // Return false to allow the continuation flag to be added
-            false
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn check_macos_ide_running(&self, ide_name: &str) -> bool {
-        // Map IDE names to macOS application names
-        let app_name = match ide_name {
-            "cursor" => "Cursor",
-            "code" => "Code",
-            "vscode" => "Code",
-            _ => return false, // Unknown IDE, assume not running
-        };
-
-        // Use pgrep to check if the application is running
-        let output = Command::new("pgrep").arg("-x").arg(app_name).output();
-
-        match output {
-            Ok(output) => output.status.success(),
-            Err(_) => false,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -600,15 +517,6 @@ mod tests {
         // Check that tasks.json contains -c flag
         let content = std::fs::read_to_string(&tasks_file).unwrap();
         assert!(content.contains(" -c"));
-    }
-
-    #[test]
-    fn test_ide_process_detection() {
-        let config = create_test_config("claude", "echo");
-        let manager = IdeManager::new(&config);
-
-        // In test mode, should always return false
-        assert!(!manager.is_ide_running_for_session("test-session"));
     }
 
     #[test]
