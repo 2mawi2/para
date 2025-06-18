@@ -3,14 +3,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-/// Cache entry for activity detection
 #[derive(Clone, Debug)]
 struct CacheEntry {
     activity_time: Option<DateTime<Utc>>,
     cached_at: DateTime<Utc>,
 }
 
-/// Thread-safe cache for activity detection results
 #[derive(Clone)]
 pub struct ActivityCache {
     entries: Arc<Mutex<HashMap<PathBuf, CacheEntry>>>,
@@ -18,7 +16,6 @@ pub struct ActivityCache {
 }
 
 impl ActivityCache {
-    /// Create a new cache with the specified TTL (time to live)
     pub fn new(ttl_seconds: i64) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
@@ -26,7 +23,6 @@ impl ActivityCache {
         }
     }
 
-    /// Get a cached activity time if it's still valid
     pub fn get(&self, path: &PathBuf) -> Option<Option<DateTime<Utc>>> {
         let entries = self.entries.lock().unwrap();
         if let Some(entry) = entries.get(path) {
@@ -38,7 +34,6 @@ impl ActivityCache {
         None
     }
 
-    /// Store an activity time in the cache
     pub fn set(&self, path: PathBuf, activity_time: Option<DateTime<Utc>>) {
         let mut entries = self.entries.lock().unwrap();
         entries.insert(

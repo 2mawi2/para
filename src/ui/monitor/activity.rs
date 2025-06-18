@@ -5,8 +5,6 @@ use std::time::SystemTime;
 
 /// Detect the last activity time for a session worktree
 ///
-/// This approach is used by popular git repos like GitLens and Tower.
-/// (with the exception that they also user FSMonitor for large repositories, we don't it's to complex)
 /// Uses a three-tier strategy for optimal performance:
 /// 1. Lightweight file monitoring of git internals (fastest)
 /// 2. Git plumbing commands for actual change detection

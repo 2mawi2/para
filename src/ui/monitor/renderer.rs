@@ -11,32 +11,26 @@ use ratatui::{
 };
 use std::path::PathBuf;
 
-/// Creates a visual progress bar using Unicode block characters
 fn create_progress_bar(percentage: u8) -> String {
     const BAR_WIDTH: usize = 8;
     let filled = (percentage as f32 / 100.0 * BAR_WIDTH as f32).round() as usize;
     let filled = filled.min(BAR_WIDTH);
 
-    let mut bar = String::with_capacity(BAR_WIDTH + 5); // Extra space for percentage
+    let mut bar = String::with_capacity(BAR_WIDTH + 5);
 
-    // Add filled blocks
     for _ in 0..filled {
         bar.push('█');
     }
 
-    // Add empty blocks
     for _ in filled..BAR_WIDTH {
         bar.push('░');
     }
-
-    // Add percentage
     bar.push(' ');
     bar.push_str(&format!("{}%", percentage));
 
     bar
 }
 
-/// UI renderer for the monitor interface
 pub struct MonitorRenderer {
     config: Config,
 }
@@ -46,14 +40,13 @@ impl MonitorRenderer {
         Self { config }
     }
 
-    /// Main UI rendering function
     pub fn render(&self, f: &mut Frame, sessions: &[SessionInfo], state: &MonitorAppState) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Min(10),   // Main table
-                Constraint::Length(3), // Footer with controls
+                Constraint::Length(3),
+                Constraint::Min(10),
+                Constraint::Length(3),
             ])
             .margin(1)
             .split(f.area());
@@ -61,8 +54,6 @@ impl MonitorRenderer {
         self.render_header(f, main_layout[0]);
         self.render_table(f, main_layout[1], sessions, state);
         self.render_footer(f, main_layout[2], sessions, state);
-
-        // Render mode-specific overlays
         match state.mode {
             AppMode::FinishPrompt => self.render_finish_prompt(f, state),
             AppMode::CancelConfirm => self.render_cancel_confirm(f),
@@ -131,14 +122,12 @@ impl MonitorRenderer {
                         .bg(Color::Rgb(30, 41, 59))
                         .fg(Color::Rgb(255, 255, 255))
                 } else if is_stale {
-                    // Use dimmed colors for stale sessions to make them less prominent
                     Style::default()
                         .fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
                 } else {
                     Style::default().fg(Color::Rgb(229, 231, 235))
                 };
 
-                // Determine session state display
                 let state_text = if session.is_blocked {
                     "Blocked"
                 } else {
@@ -146,7 +135,7 @@ impl MonitorRenderer {
                 };
 
                 let state_style = if session.is_blocked {
-                    Style::default().fg(Color::Rgb(239, 68, 68)) // Red for blocked
+                    Style::default().fg(Color::Rgb(239, 68, 68))
                 } else {
                     Style::default().fg(session.status.color())
                 };
@@ -154,7 +143,6 @@ impl MonitorRenderer {
                 let state_cell = Cell::from(state_text).style(state_style);
                 let activity_text = format_activity(&session.last_activity);
 
-                // Format test status
                 let test_cell = match &session.test_status {
                     Some(test_status) => {
                         let (text, color) = match test_status {
@@ -192,23 +180,22 @@ impl MonitorRenderer {
                     })),
                 };
 
-                // Format progress with visual progress bar
                 let progress_cell = match session.todo_percentage {
                     Some(pct) => {
                         let progress_bar = create_progress_bar(pct);
                         let color = if is_stale {
                             crate::ui::monitor::types::SessionStatus::dimmed_text_color()
                         } else if pct == 100 {
-                            Color::Rgb(34, 197, 94) // Green when complete
+                            Color::Rgb(34, 197, 94)
                         } else if pct >= 50 {
-                            Color::Rgb(99, 102, 241) // Blue for good progress
+                            Color::Rgb(99, 102, 241)
                         } else {
-                            Color::Rgb(245, 158, 11) // Amber for early progress
+                            Color::Rgb(245, 158, 11)
                         };
                         Cell::from(progress_bar).style(Style::default().fg(color))
                     }
                     None => {
-                        let empty_bar = "░░░░░░░░ ─"; // 8 empty blocks with dash for no progress
+                        let empty_bar = "░░░░░░░░ ─";
                         Cell::from(empty_bar).style(Style::default().fg(if is_stale {
                             crate::ui::monitor::types::SessionStatus::dimmed_text_color()
                         } else {
@@ -217,7 +204,6 @@ impl MonitorRenderer {
                     }
                 };
 
-                // Format confidence
                 let confidence_cell = match &session.confidence {
                     Some(confidence) => {
                         let (text, color) = match confidence {
@@ -271,13 +257,13 @@ impl MonitorRenderer {
         let table = Table::new(
             rows,
             [
-                Constraint::Min(20),    // Session - Allow full names to show
-                Constraint::Length(10), // State
-                Constraint::Length(14), // Last Modified
-                Constraint::Min(30),    // Current Task
-                Constraint::Length(10), // Tests
-                Constraint::Length(13), // Progress - wider for bar + percentage
-                Constraint::Length(10), // Confidence
+                Constraint::Min(20),
+                Constraint::Length(10),
+                Constraint::Length(14),
+                Constraint::Min(30),
+                Constraint::Length(10),
+                Constraint::Length(13),
+                Constraint::Length(10),
             ],
         )
         .header(header)
@@ -307,7 +293,6 @@ impl MonitorRenderer {
             .map(|s| s.branch.as_str())
             .unwrap_or("");
 
-        // Check if this is the current session (where monitor was run from)
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let session_manager = SessionManager::new(&self.config);
         let is_current_session =
@@ -368,7 +353,6 @@ impl MonitorRenderer {
     fn render_finish_prompt(&self, f: &mut Frame, state: &MonitorAppState) {
         let area = centered_rect(60, 25, f.area());
 
-        // Clear the area first to prevent text bleeding through
         f.render_widget(Clear, area);
 
         let input_text = if state.get_input().is_empty() {
@@ -383,9 +367,9 @@ impl MonitorRenderer {
             Line::from(Span::styled(
                 input_text,
                 if state.get_input().is_empty() {
-                    Style::default().fg(Color::Rgb(107, 114, 128)) // Gray placeholder
+                    Style::default().fg(Color::Rgb(107, 114, 128))
                 } else {
-                    Style::default().fg(Color::Rgb(255, 255, 255)) // White text
+                    Style::default().fg(Color::Rgb(255, 255, 255))
                 },
             )),
             Line::from(""),
@@ -401,7 +385,7 @@ impl MonitorRenderer {
                 .title(" Finish Session ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Rgb(99, 102, 241)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))), // Black background
+                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
         )
         .style(Style::default().fg(Color::Rgb(255, 255, 255)));
 
@@ -409,9 +393,8 @@ impl MonitorRenderer {
     }
 
     fn render_cancel_confirm(&self, f: &mut Frame) {
-        let area = centered_rect(50, 20, f.area()); // Increased height to 20% to ensure content fits
+        let area = centered_rect(50, 20, f.area());
 
-        // Clear the area first to prevent text bleeding through
         f.render_widget(Clear, area);
 
         let confirm = Paragraph::new(vec![
@@ -429,7 +412,7 @@ impl MonitorRenderer {
                 .title(" Confirm Cancel ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Rgb(239, 68, 68)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))), // Black background
+                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
         )
         .style(Style::default().fg(Color::Rgb(255, 255, 255)))
         .alignment(Alignment::Center);
@@ -440,7 +423,6 @@ impl MonitorRenderer {
     fn render_error_dialog(&self, f: &mut Frame, state: &MonitorAppState) {
         let area = centered_rect(60, 25, f.area());
 
-        // Clear the area first to prevent text bleeding through
         f.render_widget(Clear, area);
 
         let error_message = state.error_message.as_deref().unwrap_or("Unknown error");
@@ -470,7 +452,7 @@ impl MonitorRenderer {
                 .title(" Error ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Rgb(239, 68, 68)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))), // Black background
+                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
         )
         .style(Style::default().fg(Color::Rgb(255, 255, 255)))
         .alignment(Alignment::Center)
