@@ -298,8 +298,22 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let custom_config_path = temp_dir.path().join("custom_config.json");
 
-        // Create a test config
-        let test_config = defaults::default_config();
+        // Create a test config with mock IDE for CI compatibility
+        let test_config = Config {
+            ide: IdeConfig {
+                name: "test".to_string(),
+                command: "echo".to_string(),
+                user_data_dir: None,
+                wrapper: WrapperConfig {
+                    enabled: false,
+                    name: String::new(),
+                    command: String::new(),
+                },
+            },
+            directories: defaults::default_directory_config(),
+            git: defaults::default_git_config(),
+            session: defaults::default_session_config(),
+        };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
 
