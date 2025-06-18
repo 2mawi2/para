@@ -77,9 +77,7 @@ impl App {
     }
 }
 
-pub fn execute(_args: MonitorArgs) -> Result<()> {
-    let config = crate::config::Config::load_or_create()
-        .map_err(|e| crate::utils::ParaError::config_error(e.to_string()))?;
+pub fn execute(config: crate::config::Config, _args: MonitorArgs) -> Result<()> {
     let mut app = App::new(config);
     app.run()
         .map_err(|e| crate::utils::ParaError::ide_error(format!("Monitor UI error: {}", e)))

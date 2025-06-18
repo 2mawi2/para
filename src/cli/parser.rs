@@ -4,7 +4,10 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "para")]
 #[command(about = "Parallel IDE Workflow Helper")]
-#[command(version, long_about = None)]
+#[command(
+    version,
+    long_about = "When run without any command, opens the monitor view to manage active sessions"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
