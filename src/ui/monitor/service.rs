@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// Service for managing session data in the monitor UI
 pub struct SessionService {
     config: Config,
     activity_cache: ActivityCache,
@@ -21,7 +20,6 @@ impl SessionService {
     pub fn new(config: Config) -> Self {
         Self {
             config,
-            // Cache activity detection results for 5 seconds
             activity_cache: ActivityCache::new(5),
             task_cache: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -33,27 +31,21 @@ impl SessionService {
 
         let mut session_infos = Vec::new();
 
-        // Check if current directory is a session worktree
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let current_session = session_manager
             .find_session_by_path(&current_dir)
             .unwrap_or(None);
 
         for session in sessions {
-            // Skip cancelled sessions only - keep finished sessions visible
             if matches!(session.status, CoreSessionStatus::Cancelled) {
                 continue;
             }
-
-            // Get last activity from cache or detect it
             let last_activity = {
                 let path = session.worktree_path.clone();
 
-                // Check cache first
                 if let Some(cached) = self.activity_cache.get(&path) {
                     cached
                 } else {
-                    // Not in cache, detect and store
                     let detected = detect_last_activity(&path);
                     self.activity_cache.set(path, detected);
                     detected
@@ -62,41 +54,30 @@ impl SessionService {
             .or(session.last_activity)
             .unwrap_or(session.created_at);
 
-            // Detect status based on activity
             let mut status = detect_session_status(&session, &last_activity);
-
-            // If this is the current session (where monitor was run from), mark it as active
             if let Some(ref current) = current_session {
                 if current.name == session.name {
                     status = SessionStatus::Active;
                 }
             }
 
-            // Load task description with caching
             let task = session.task_description.clone().unwrap_or_else(|| {
                 // Check cache first
                 let cache = self.task_cache.lock().unwrap();
                 if let Some(cached_task) = cache.get(&session.name) {
                     cached_task.clone()
                 } else {
-                    drop(cache); // Release lock before file I/O
-
-                    // Try to load from task file for backward compatibility
+                    drop(cache);
                     let state_dir = Path::new(&self.config.directories.state_dir);
                     let task_file = state_dir.join(format!("{}.task", session.name));
-                    let task = std::fs::read_to_string(task_file).unwrap_or_else(|_| {
-                        // Show full session name if no task description
-                        format!("Session: {}", &session.name)
-                    });
-
-                    // Cache the result
+                    let task = std::fs::read_to_string(task_file)
+                        .unwrap_or_else(|_| format!("Session: {}", &session.name));
                     let mut cache = self.task_cache.lock().unwrap();
                     cache.insert(session.name.clone(), task.clone());
                     task
                 }
             });
 
-            // Load agent status if available
             let state_dir = Path::new(&self.config.directories.state_dir);
             let agent_status = Status::load(state_dir, &session.name).ok().flatten();
 
@@ -113,7 +94,6 @@ impl SessionService {
                     (None, None, None, false, None)
                 };
 
-            // Use agent task if available, otherwise use session task
             let final_task = agent_task.unwrap_or(task);
 
             let session_info = SessionInfo {
@@ -129,7 +109,6 @@ impl SessionService {
                 is_blocked,
             };
 
-            // Filter out stale sessions if not showing them
             if !show_stale && matches!(session_info.status, SessionStatus::Stale) {
                 continue;
             }
@@ -137,14 +116,13 @@ impl SessionService {
             session_infos.push(session_info);
         }
 
-        // Sort by last activity (most recent first), but put current session first if found
         session_infos.sort_by(|a, b| {
             if let Some(ref current) = current_session {
                 if a.name == current.name {
-                    return std::cmp::Ordering::Less; // Current session goes first
+                    return std::cmp::Ordering::Less;
                 }
                 if b.name == current.name {
-                    return std::cmp::Ordering::Greater; // Current session goes first
+                    return std::cmp::Ordering::Greater;
                 }
             }
             b.last_activity.cmp(&a.last_activity)
