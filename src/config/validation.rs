@@ -22,12 +22,10 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
         ));
     }
 
-    // Para only supports Claude Code (except for test configurations)
-    if ide.command.to_lowercase() != "claude" 
-        && ide.command.to_lowercase() != "claude-code" 
-        && ide.command != "echo"  // Allow echo for tests
+    if ide.command.to_lowercase() != "claude"
+        && ide.command.to_lowercase() != "claude-code"
+        && ide.command != "echo"
         && !ide.command.starts_with("echo ")
-    // Allow echo commands for tests
     {
         return Err(ConfigError::Validation(format!(
             "Para only supports Claude Code. Current IDE: '{}'. Please run 'para config' to configure Claude Code.",
@@ -49,7 +47,6 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
         )));
     }
 
-    // Wrapper mode is required for Claude Code (except for test configurations)
     if !ide.wrapper.enabled && ide.command.to_lowercase() == "claude" {
         return Err(ConfigError::Validation(
             "Claude Code requires wrapper mode. Please run 'para config' to enable wrapper mode."
@@ -69,7 +66,6 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
             ));
         }
 
-        // Validate wrapper is cursor or code (or echo for tests)
         if ide.wrapper.command != "cursor"
             && ide.wrapper.command != "code"
             && ide.wrapper.command != "echo"

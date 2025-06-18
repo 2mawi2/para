@@ -128,11 +128,9 @@ mod tests {
     fn test_is_real_ide_environment() {
         let mut config = defaults::default_config();
 
-        // Mock IDE should return false
         config.ide.command = "echo".to_string();
         assert!(!config.is_real_ide_environment());
 
-        // Real IDE in test mode still returns false due to cfg!(test)
         config.ide.command = "cursor".to_string();
         assert!(!config.is_real_ide_environment());
     }
@@ -166,7 +164,6 @@ mod tests {
             },
         };
 
-        // Test all getter methods
         assert_eq!(config.get_branch_prefix(), "feature");
         assert!(config.is_wrapper_enabled());
         assert_eq!(config.get_state_dir(), "custom/state");
@@ -178,11 +175,9 @@ mod tests {
     fn test_config_error_display() {
         use std::io;
 
-        // Test IO error
         let io_error = ConfigError::Io(io::Error::new(io::ErrorKind::NotFound, "file not found"));
         assert_eq!(io_error.to_string(), "IO error: file not found");
 
-        // Test JSON error
         let json_str = r#"{"invalid": json}"#;
         let json_error: Result<Config> =
             Err(serde_json::from_str::<Config>(json_str).unwrap_err().into());
@@ -192,7 +187,6 @@ mod tests {
             panic!("Expected JSON error");
         }
 
-        // Test Validation error
         let validation_error = ConfigError::Validation("Invalid configuration".to_string());
         assert_eq!(
             validation_error.to_string(),
@@ -202,7 +196,6 @@ mod tests {
 
     #[test]
     fn test_config_validation_integration() {
-        // Test valid configuration
         let valid_config = Config {
             ide: IdeConfig {
                 name: "test".to_string(),
@@ -231,7 +224,6 @@ mod tests {
         };
         assert!(valid_config.validate().is_ok());
 
-        // Test invalid configuration (empty IDE name)
         let mut invalid_config = valid_config.clone();
         invalid_config.ide.name = String::new();
         let result = invalid_config.validate();
@@ -243,7 +235,6 @@ mod tests {
 
     #[test]
     fn test_wrapper_config_validation() {
-        // Test wrapper disabled with empty fields (should be valid)
         let config_wrapper_disabled = Config {
             ide: IdeConfig {
                 name: "test".to_string(),
@@ -272,7 +263,6 @@ mod tests {
         };
         assert!(config_wrapper_disabled.validate().is_ok());
 
-        // Test wrapper enabled with valid fields
         let mut config_wrapper_enabled = config_wrapper_disabled.clone();
         config_wrapper_enabled.ide.wrapper = WrapperConfig {
             enabled: true,
@@ -281,7 +271,6 @@ mod tests {
         };
         assert!(config_wrapper_enabled.validate().is_ok());
 
-        // Test wrapper enabled with empty name (should fail)
         let mut config_invalid_wrapper = config_wrapper_enabled.clone();
         config_invalid_wrapper.ide.wrapper.name = String::new();
         let result = config_invalid_wrapper.validate();
