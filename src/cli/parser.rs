@@ -4,7 +4,10 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "para")]
 #[command(about = "Parallel IDE Workflow Helper")]
-#[command(version, long_about = None)]
+#[command(
+    version,
+    long_about = "When run without any command, opens the monitor view to manage active sessions"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -43,6 +46,8 @@ pub enum Commands {
     /// Legacy completion endpoint for branches (hidden)
     #[command(name = "_completion_branches", hide = true)]
     CompletionBranches,
+    /// Monitor and manage active sessions in real-time (interactive TUI)
+    Monitor(MonitorArgs),
 }
 
 #[derive(Args, Debug)]
@@ -158,6 +163,9 @@ pub struct CompletionArgs {
     /// Shell to generate completion for, or 'init' for automatic setup
     pub shell: String,
 }
+
+#[derive(Args, Debug)]
+pub struct MonitorArgs {}
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
 #[allow(clippy::enum_variant_names)]

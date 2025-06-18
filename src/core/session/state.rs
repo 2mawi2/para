@@ -9,9 +9,21 @@ pub struct SessionState {
     pub worktree_path: PathBuf,
     pub created_at: DateTime<Utc>,
     pub status: SessionStatus,
+
+    // New fields for monitor UI
+    pub task_description: Option<String>,
+    pub last_activity: Option<DateTime<Utc>>,
+    pub git_stats: Option<GitStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitStats {
+    pub files_changed: u32,
+    pub lines_added: u32,
+    pub lines_removed: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionStatus {
     Active,
     Finished,
@@ -26,6 +38,9 @@ impl SessionState {
             worktree_path,
             created_at: Utc::now(),
             status: SessionStatus::Active,
+            task_description: None,
+            last_activity: None,
+            git_stats: None,
         }
     }
 

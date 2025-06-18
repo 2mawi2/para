@@ -9,6 +9,7 @@ pub mod finish;
 pub mod init;
 pub mod list;
 pub mod mcp;
+pub mod monitor;
 pub mod recover;
 pub mod resume;
 pub mod start;
