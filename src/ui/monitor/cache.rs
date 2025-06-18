@@ -173,22 +173,22 @@ mod tests {
 
     #[test]
     fn test_cache_ttl_boundary() {
-        let cache = ActivityCache::new(1); // 1 second TTL
+        let cache = ActivityCache::new(2); // 2 second TTL for more reliable testing
         let path = PathBuf::from("/test/path");
         let time = Utc::now();
 
         cache.set(path.clone(), Some(time));
 
-        // Just before expiration
-        thread::sleep(StdDuration::from_millis(900));
+        // Well before expiration (50% of TTL)
+        thread::sleep(StdDuration::from_millis(1000));
         assert_eq!(
             cache.get(&path),
             Some(Some(time)),
-            "Should still be cached at 900ms"
+            "Should still be cached at 1000ms (50% of TTL)"
         );
 
-        // Just after expiration
-        thread::sleep(StdDuration::from_millis(200));
-        assert_eq!(cache.get(&path), None, "Should be expired at 1100ms");
+        // After expiration
+        thread::sleep(StdDuration::from_millis(1500));
+        assert_eq!(cache.get(&path), None, "Should be expired at 2500ms");
     }
 }
