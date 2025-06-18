@@ -110,8 +110,6 @@ impl MonitorRenderer {
                 // Determine session state display
                 let state_text = if session.is_blocked {
                     "Blocked"
-                } else if matches!(session.status, crate::ui::monitor::SessionStatus::Ready) {
-                    "Finished"
                 } else {
                     session.status.name()
                 };

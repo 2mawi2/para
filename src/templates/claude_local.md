@@ -41,6 +41,7 @@ para finish "Add user authentication with JWT tokens"
 ```
 
 Remember: 
+- **STATUS MUST BE 5 WORDS MAX** (e.g., "Fixing auth tests", "Adding API endpoint")
 - EVERY status update must include: task description, --tests flag, and --confidence flag
 - Run ALL tests before updating status (not just tests for current feature)
 - **MANDATORY: After using TodoWrite tool, IMMEDIATELY update status with --todos flag**
@@ -73,10 +74,13 @@ This ensures the orchestrator can see your progress in real-time!
 
 Example:
 ```bash
-# REQUIRED: Send final status first
-para status "Completed authentication module implementation" --tests passed --confidence high --todos 5/5
+# REQUIRED: Send final status first (5 WORDS MAX!)
+para status "Completed auth module" --tests passed --confidence high --todos 5/5
 
 # Then provide your summary...
 ```
 
-**NEVER** provide a summary without first sending a final status update. This is essential for proper monitoring and tracking.
+**CRITICAL RULES:**
+1. Status messages MUST be 5 words or less
+2. NEVER provide a summary without first sending a final status update
+3. Final status MUST show actual test results (not your intentions)
