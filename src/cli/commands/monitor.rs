@@ -58,15 +58,22 @@ impl App {
 
             // Poll for events with timeout for refresh
             if event::poll(std::time::Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    self.coordinator.handle_key(key).unwrap_or(());
+                match event::read()? {
+                    Event::Key(key) => {
+                        self.coordinator.handle_key(key).unwrap_or(());
 
-                    if self.coordinator.should_quit() {
-                        break;
+                        if self.coordinator.should_quit() {
+                            break;
+                        }
+
+                        // Redraw after handling key event
+                        terminal.draw(|f| self.coordinator.render(f))?;
                     }
-
-                    // Redraw after handling key event
-                    terminal.draw(|f| self.coordinator.render(f))?;
+                    Event::Resize(_, _) => {
+                        // Redraw immediately on resize
+                        terminal.draw(|f| self.coordinator.render(f))?;
+                    }
+                    _ => {}
                 }
             } else if should_refresh {
                 // Only redraw if we refreshed sessions
