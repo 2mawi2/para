@@ -444,8 +444,12 @@ mod tests {
             &config,
         );
         assert!(result.is_ok());
-        // Session should be deleted (preserve_on_finish = false in test config)
-        assert!(!session_manager.session_exists("fallback-test-session"));
+        // Session should be in Review status (always preserved now)
+        assert!(session_manager.session_exists("fallback-test-session"));
+        let updated_session = session_manager
+            .load_state("fallback-test-session")
+            .expect("Session should exist");
+        assert!(matches!(updated_session.status, SessionStatus::Review));
 
         // Test Case 2: Fallback path - session_info is None but session exists with matching branch
         // Re-create the session for fallback test
@@ -462,8 +466,12 @@ mod tests {
             &config,
         );
         assert!(result.is_ok());
-        // Session should be deleted via fallback lookup
-        assert!(!session_manager.session_exists("fallback-test-session"));
+        // Session should be in Review status via fallback lookup
+        assert!(session_manager.session_exists("fallback-test-session"));
+        let updated_session = session_manager
+            .load_state("fallback-test-session")
+            .expect("Session should exist");
+        assert!(matches!(updated_session.status, SessionStatus::Review));
 
         // Test Case 3: Fallback with non-matching branch name
         session_manager
@@ -605,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn test_session_lifecycle_no_preserve_deletes_session() {
+    fn test_session_lifecycle_always_review_status() {
         // Test that with preserve_on_finish = false, session is deleted entirely
         let (_temp_dir, repo_path) = setup_test_repo();
 
@@ -632,7 +640,11 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        // Session should be completely deleted (not preserved in any status)
-        assert!(!session_manager.session_exists("no-preserve-test"));
+        // Session should be in Review status (always preserved now)
+        assert!(session_manager.session_exists("no-preserve-test"));
+        let updated_session = session_manager
+            .load_state("no-preserve-test")
+            .expect("Session should exist");
+        assert!(matches!(updated_session.status, SessionStatus::Review));
     }
 }
