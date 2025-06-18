@@ -27,17 +27,8 @@ pub enum ParaError {
     #[error("File not found: {path}")]
     FileNotFound { path: String },
 
-    #[error("Directory not found: {path}")]
-    DirectoryNotFound { path: String },
-
-    #[error("IDE not available: {ide}")]
-    IdeNotAvailable { ide: String },
-
     #[error("Invalid session name: {name} - {reason}")]
     InvalidSessionName { name: String, reason: String },
-
-    #[error("Permission denied: {path}")]
-    PermissionDenied { path: String },
 
     #[error("Worktree operation failed: {message}")]
     WorktreeOperation { message: String },
@@ -102,23 +93,11 @@ impl ParaError {
         Self::FileNotFound { path: path.into() }
     }
 
-    pub fn directory_not_found(path: impl Into<String>) -> Self {
-        Self::DirectoryNotFound { path: path.into() }
-    }
-
-    pub fn ide_not_available(ide: impl Into<String>) -> Self {
-        Self::IdeNotAvailable { ide: ide.into() }
-    }
-
     pub fn invalid_session_name(name: impl Into<String>, reason: impl Into<String>) -> Self {
         Self::InvalidSessionName {
             name: name.into(),
             reason: reason.into(),
         }
-    }
-
-    pub fn permission_denied(path: impl Into<String>) -> Self {
-        Self::PermissionDenied { path: path.into() }
     }
 
     pub fn worktree_operation(message: impl Into<String>) -> Self {
