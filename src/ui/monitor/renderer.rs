@@ -11,6 +11,31 @@ use ratatui::{
 };
 use std::path::PathBuf;
 
+/// Creates a visual progress bar using Unicode block characters
+fn create_progress_bar(percentage: u8) -> String {
+    const BAR_WIDTH: usize = 8;
+    let filled = (percentage as f32 / 100.0 * BAR_WIDTH as f32).round() as usize;
+    let filled = filled.min(BAR_WIDTH);
+
+    let mut bar = String::with_capacity(BAR_WIDTH + 5); // Extra space for percentage
+
+    // Add filled blocks
+    for _ in 0..filled {
+        bar.push('█');
+    }
+
+    // Add empty blocks
+    for _ in filled..BAR_WIDTH {
+        bar.push('░');
+    }
+
+    // Add percentage
+    bar.push(' ');
+    bar.push_str(&format!("{}%", percentage));
+
+    bar
+}
+
 /// UI renderer for the monitor interface
 pub struct MonitorRenderer {
     config: Config,
@@ -57,7 +82,7 @@ impl MonitorRenderer {
                 ),
                 Span::raw("                  "),
                 Span::styled(
-                    "Auto-refresh: 5s",
+                    "Auto-refresh: 2s",
                     Style::default().fg(Color::Rgb(156, 163, 175)),
                 ),
             ]),
@@ -99,10 +124,16 @@ impl MonitorRenderer {
             .enumerate()
             .map(|(i, session)| {
                 let is_selected = i == state.selected_index;
+                let is_stale = session.status.should_dim();
+
                 let base_style = if is_selected {
                     Style::default()
                         .bg(Color::Rgb(30, 41, 59))
                         .fg(Color::Rgb(255, 255, 255))
+                } else if is_stale {
+                    // Use dimmed colors for stale sessions to make them less prominent
+                    Style::default()
+                        .fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
                 } else {
                     Style::default().fg(Color::Rgb(229, 231, 235))
                 };
@@ -127,45 +158,101 @@ impl MonitorRenderer {
                 let test_cell = match &session.test_status {
                     Some(test_status) => {
                         let (text, color) = match test_status {
-                            crate::core::status::TestStatus::Passed => {
-                                ("Passed", Color::Rgb(34, 197, 94))
-                            }
-                            crate::core::status::TestStatus::Failed => {
-                                ("Failed", Color::Rgb(239, 68, 68))
-                            }
-                            crate::core::status::TestStatus::Unknown => {
-                                ("Unknown", Color::Rgb(156, 163, 175))
-                            }
+                            crate::core::status::TestStatus::Passed => (
+                                "Passed",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(34, 197, 94)
+                                },
+                            ),
+                            crate::core::status::TestStatus::Failed => (
+                                "Failed",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(239, 68, 68)
+                                },
+                            ),
+                            crate::core::status::TestStatus::Unknown => (
+                                "Unknown",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(156, 163, 175)
+                                },
+                            ),
                         };
                         Cell::from(text).style(Style::default().fg(color))
                     }
-                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                    None => Cell::from("-").style(Style::default().fg(if is_stale {
+                        crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                    } else {
+                        Color::Rgb(107, 114, 128)
+                    })),
                 };
 
-                // Format progress
+                // Format progress with visual progress bar
                 let progress_cell = match session.todo_percentage {
-                    Some(pct) => Cell::from(format!("{}%", pct))
-                        .style(Style::default().fg(Color::Rgb(99, 102, 241))),
-                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                    Some(pct) => {
+                        let progress_bar = create_progress_bar(pct);
+                        let color = if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else if pct == 100 {
+                            Color::Rgb(34, 197, 94) // Green when complete
+                        } else if pct >= 50 {
+                            Color::Rgb(99, 102, 241) // Blue for good progress
+                        } else {
+                            Color::Rgb(245, 158, 11) // Amber for early progress
+                        };
+                        Cell::from(progress_bar).style(Style::default().fg(color))
+                    }
+                    None => {
+                        let empty_bar = "░░░░░░░░ ─"; // 8 empty blocks with dash for no progress
+                        Cell::from(empty_bar).style(Style::default().fg(if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(107, 114, 128)
+                        }))
+                    }
                 };
 
                 // Format confidence
                 let confidence_cell = match &session.confidence {
                     Some(confidence) => {
                         let (text, color) = match confidence {
-                            crate::core::status::ConfidenceLevel::High => {
-                                ("High", Color::Rgb(34, 197, 94))
-                            }
-                            crate::core::status::ConfidenceLevel::Medium => {
-                                ("Medium", Color::Rgb(245, 158, 11))
-                            }
-                            crate::core::status::ConfidenceLevel::Low => {
-                                ("Low", Color::Rgb(239, 68, 68))
-                            }
+                            crate::core::status::ConfidenceLevel::High => (
+                                "High",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(34, 197, 94)
+                                },
+                            ),
+                            crate::core::status::ConfidenceLevel::Medium => (
+                                "Medium",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(245, 158, 11)
+                                },
+                            ),
+                            crate::core::status::ConfidenceLevel::Low => (
+                                "Low",
+                                if is_stale {
+                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                                } else {
+                                    Color::Rgb(239, 68, 68)
+                                },
+                            ),
                         };
                         Cell::from(text).style(Style::default().fg(color))
                     }
-                    None => Cell::from("-").style(Style::default().fg(Color::Rgb(107, 114, 128))),
+                    None => Cell::from("-").style(Style::default().fg(if is_stale {
+                        crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                    } else {
+                        Color::Rgb(107, 114, 128)
+                    })),
                 };
 
                 Row::new(vec![
@@ -189,7 +276,7 @@ impl MonitorRenderer {
                 Constraint::Length(14), // Last Modified
                 Constraint::Min(30),    // Current Task
                 Constraint::Length(10), // Tests
-                Constraint::Length(10), // Progress
+                Constraint::Length(13), // Progress - wider for bar + percentage
                 Constraint::Length(10), // Confidence
             ],
         )
@@ -481,5 +568,28 @@ mod tests {
         assert_eq!(sessions.len(), 2);
         assert_eq!(state.mode, AppMode::Normal);
         assert_eq!(renderer.config.git.branch_prefix, "para");
+    }
+
+    #[test]
+    fn test_create_progress_bar() {
+        // Test empty progress (0%)
+        assert_eq!(create_progress_bar(0), "░░░░░░░░ 0%");
+
+        // Test partial progress (25%)
+        assert_eq!(create_progress_bar(25), "██░░░░░░ 25%");
+
+        // Test half progress (50%)
+        assert_eq!(create_progress_bar(50), "████░░░░ 50%");
+
+        // Test mostly complete (75%)
+        assert_eq!(create_progress_bar(75), "██████░░ 75%");
+
+        // Test complete (100%)
+        assert_eq!(create_progress_bar(100), "████████ 100%");
+
+        // Test edge cases
+        assert_eq!(create_progress_bar(1), "░░░░░░░░ 1%"); // Very small progress rounds to 0 blocks
+        assert_eq!(create_progress_bar(13), "█░░░░░░░ 13%"); // 13% = 1.04 blocks ≈ 1 block
+        assert_eq!(create_progress_bar(99), "████████ 99%"); // Almost complete rounds to full blocks
     }
 }

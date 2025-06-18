@@ -47,6 +47,16 @@ impl SessionStatus {
             SessionStatus::Stale => Color::Rgb(107, 114, 128), // Gray
         }
     }
+
+    /// Returns true if this session status should be rendered with dimmed/transparent appearance
+    pub fn should_dim(&self) -> bool {
+        matches!(self, SessionStatus::Stale)
+    }
+
+    /// Returns a dimmed version of the standard text color for stale sessions
+    pub fn dimmed_text_color() -> Color {
+        Color::Rgb(75, 85, 99) // Darker gray for stale session text
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -77,5 +87,19 @@ mod tests {
         assert_eq!(SessionStatus::Review.color(), Color::Rgb(147, 51, 234));
         assert_eq!(SessionStatus::Ready.color(), Color::Rgb(99, 102, 241));
         assert_eq!(SessionStatus::Stale.color(), Color::Rgb(107, 114, 128));
+    }
+
+    #[test]
+    fn test_session_status_should_dim() {
+        assert!(!SessionStatus::Active.should_dim());
+        assert!(!SessionStatus::Idle.should_dim());
+        assert!(!SessionStatus::Review.should_dim());
+        assert!(!SessionStatus::Ready.should_dim());
+        assert!(SessionStatus::Stale.should_dim());
+    }
+
+    #[test]
+    fn test_dimmed_text_color() {
+        assert_eq!(SessionStatus::dimmed_text_color(), Color::Rgb(75, 85, 99));
     }
 }

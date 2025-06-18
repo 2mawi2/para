@@ -83,9 +83,9 @@ impl MonitorAppState {
         self.input_buffer.clear();
     }
 
-    /// Check if it's time to refresh (every 5 seconds)
+    /// Check if it's time to refresh (every 2 seconds for faster updates)
     pub fn should_refresh(&self) -> bool {
-        self.last_refresh.elapsed().as_secs() >= 5
+        self.last_refresh.elapsed().as_secs() >= 2
     }
 
     /// Mark that a refresh just occurred
