@@ -38,99 +38,9 @@ pub fn execute() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::path::PathBuf;
-    use std::process::Command;
     use tempfile::TempDir;
-
-    struct TestEnvironmentGuard {
-        original_dir: PathBuf,
-        original_home: Option<String>,
-        original_xdg_config_home: Option<String>,
-    }
-
-    impl TestEnvironmentGuard {
-        fn new(
-            git_temp: &TempDir,
-            temp_dir: &TempDir,
-        ) -> std::result::Result<Self, std::io::Error> {
-            let original_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/tmp"));
-            let original_home = std::env::var("HOME").ok();
-            let original_xdg_config_home = std::env::var("XDG_CONFIG_HOME").ok();
-
-            std::env::set_current_dir(git_temp.path())?;
-
-            // Isolate config by setting HOME to temp directory
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::remove_var("XDG_CONFIG_HOME");
-
-            Ok(TestEnvironmentGuard {
-                original_dir,
-                original_home,
-                original_xdg_config_home,
-            })
-        }
-    }
-
-    impl Drop for TestEnvironmentGuard {
-        fn drop(&mut self) {
-            let _ = std::env::set_current_dir(&self.original_dir);
-
-            // Restore HOME
-            match &self.original_home {
-                Some(home) => std::env::set_var("HOME", home),
-                None => std::env::remove_var("HOME"),
-            }
-
-            // Restore XDG_CONFIG_HOME
-            match &self.original_xdg_config_home {
-                Some(xdg) => std::env::set_var("XDG_CONFIG_HOME", xdg),
-                None => std::env::remove_var("XDG_CONFIG_HOME"),
-            }
-        }
-    }
-
-    fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let service = crate::core::git::GitService::discover_from(repo_path)
-            .expect("Failed to discover repo");
-        (temp_dir, service)
-    }
 
     #[test]
     fn test_execute_with_no_git_repo() {
@@ -210,35 +120,20 @@ mod tests {
         let (_git_temp, git_service) = setup_test_repo();
 
         // Create config with custom prefix
-        let config_dir = temp_dir.path().join(".config").join("para");
-        fs::create_dir_all(&config_dir).unwrap();
-        let config_content = r#"{
-            "ide": {
-                "name": "test",
-                "command": "echo",
-                "user_data_dir": null,
-                "wrapper": {
-                    "enabled": false,
-                    "name": "",
-                    "command": ""
-                }
-            },
-            "directories": {
-                "subtrees_dir": "subtrees/custom",
-                "state_dir": ".para_state"
-            },
-            "git": {
-                "branch_prefix": "custom",
-                "auto_stage": true,
-                "auto_commit": true
-            },
-            "session": {
-                "default_name_format": "%Y%m%d-%H%M%S",
-                "preserve_on_finish": true,
-                "auto_cleanup_days": 30
-            }
-        }"#;
-        fs::write(config_dir.join("config.json"), config_content).unwrap();
+        let mut config = create_test_config();
+        config.git.branch_prefix = "custom".to_string();
+        config.directories.subtrees_dir = "subtrees/custom".to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.session.preserve_on_finish = true;
+        config.session.auto_cleanup_days = Some(30);
+
+        // Write config to the test config path
+        let config_json = serde_json::to_string_pretty(&config).unwrap();
+        fs::write(_guard.config_path(), config_json).unwrap();
 
         // Create branches with different prefixes
         let branch_manager = git_service.branch_manager();

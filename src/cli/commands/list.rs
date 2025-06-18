@@ -365,7 +365,12 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_config() -> crate::config::Config {
-        crate::config::defaults::default_config()
+        let mut config = crate::config::defaults::default_config();
+        // Always use mock IDE commands in tests
+        config.ide.name = "test-ide".to_string();
+        config.ide.command = "echo".to_string();
+        config.ide.wrapper.command = "echo".to_string();
+        config
     }
 
     fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
@@ -412,7 +417,7 @@ mod tests {
 
     struct TestEnvironmentGuard {
         original_dir: std::path::PathBuf,
-        original_home: String,
+        original_para_config_path: Option<String>,
     }
 
     impl TestEnvironmentGuard {
@@ -430,12 +435,19 @@ mod tests {
 
             std::env::set_current_dir(git_temp.path())?;
 
-            let original_home = std::env::var("HOME").unwrap_or_default();
-            std::env::set_var("HOME", temp_dir.path());
+            // Use PARA_CONFIG_PATH instead of modifying HOME
+            let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
+            let test_config_path = temp_dir.path().join("para_config.json");
+            std::env::set_var("PARA_CONFIG_PATH", &test_config_path);
+
+            // Create a mock config file for test isolation
+            let mock_config = create_test_config();
+            let config_json = serde_json::to_string_pretty(&mock_config).unwrap();
+            fs::write(&test_config_path, config_json).unwrap();
 
             Ok(TestEnvironmentGuard {
                 original_dir,
-                original_home,
+                original_para_config_path,
             })
         }
     }
@@ -446,10 +458,9 @@ mod tests {
                 let _ = std::env::set_current_dir("/tmp");
             }
 
-            if !self.original_home.is_empty() {
-                std::env::set_var("HOME", &self.original_home);
-            } else {
-                std::env::remove_var("HOME");
+            match &self.original_para_config_path {
+                Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
+                None => std::env::remove_var("PARA_CONFIG_PATH"),
             }
         }
     }

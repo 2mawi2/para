@@ -1,3 +1,4 @@
+use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
@@ -58,6 +59,9 @@ fn resume_specific_session(
             }
         }
 
+        // Ensure CLAUDE.local.md exists for the session
+        create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
+
         launch_ide_for_session(config, &session_state.worktree_path)?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
@@ -85,6 +89,21 @@ fn resume_specific_session(
             })
             .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
 
+        // Try to find session name from matching worktree
+        if let Some(session_name) = session_manager
+            .list_sessions()?
+            .into_iter()
+            .find(|s| {
+                s.worktree_path == matching_worktree.path || s.branch == matching_worktree.branch
+            })
+            .map(|s| s.name)
+        {
+            create_claude_local_md(&matching_worktree.path, &session_name)?;
+        } else {
+            // Fallback: use session name from search
+            create_claude_local_md(&matching_worktree.path, session_name)?;
+        }
+
         launch_ide_for_session(config, &matching_worktree.path)?;
         println!(
             "✅ Resumed session at '{}'",
@@ -105,6 +124,17 @@ fn detect_and_resume_session(
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
             println!("Current directory is a worktree for branch: {}", branch);
+
+            // Try to find session name from current directory or branch
+            if let Some(session_name) = session_manager
+                .list_sessions()?
+                .into_iter()
+                .find(|s| s.worktree_path == current_dir || s.branch == branch)
+                .map(|s| s.name)
+            {
+                create_claude_local_md(&current_dir, &session_name)?;
+            }
+
             launch_ide_for_session(config, &current_dir)?;
             println!("✅ Resumed current session");
             Ok(())
@@ -156,6 +186,9 @@ fn list_and_select_session(
                 session.worktree_path.display()
             )));
         }
+
+        // Ensure CLAUDE.local.md exists for the session
+        create_claude_local_md(&session.worktree_path, &session.name)?;
 
         launch_ide_for_session(config, &session.worktree_path)?;
         println!("✅ Resumed session '{}'", session.name);
