@@ -24,30 +24,25 @@ impl<'a> FinishManager<'a> {
     }
 
     pub fn finish_session(&self, request: FinishRequest) -> Result<FinishResult> {
-        // Ensure we're on the feature branch
         let current_branch = self.repo.get_current_branch()?;
         if current_branch != request.feature_branch {
             self.repo.checkout_branch(&request.feature_branch)?;
         }
 
-        // Staging changes
         if self.repo.has_uncommitted_changes()? {
             self.repo.stage_all_changes()?;
             self.repo.commit(&request.commit_message)?;
         }
 
-        // For now, finish just creates a branch
         let final_branch = if let Some(ref target_name) = request.target_branch_name {
             target_name.clone()
         } else {
             request.feature_branch.clone()
         };
 
-        // Check out the target branch if it's different
         if final_branch != current_branch {
             let branch_manager = BranchManager::new(self.repo);
 
-            // If a custom branch name was provided and it already exists, provide helpful error
             if request.target_branch_name.is_some()
                 && branch_manager.branch_exists(&final_branch)?
             {
@@ -59,7 +54,6 @@ impl<'a> FinishManager<'a> {
                 )));
             }
 
-            // Create or checkout the target branch
             if !branch_manager.branch_exists(&final_branch)? {
                 branch_manager.create_branch(&final_branch, &current_branch)?;
             }
