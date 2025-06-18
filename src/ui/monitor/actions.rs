@@ -77,8 +77,10 @@ impl MonitorActions {
                     // Archive the branch
                     let _ = git_service.archive_branch_with_session_name(&branch, &name, &prefix);
 
-                    // Remove worktree
-                    let _ = git_service.remove_worktree(&worktree_to_remove);
+                    // Force remove worktree (user already confirmed in UI)
+                    let _ = git_service
+                        .worktree_manager()
+                        .force_remove_worktree(&worktree_to_remove);
                 }
             });
 
