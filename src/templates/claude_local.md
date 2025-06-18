@@ -51,3 +51,21 @@ para status "Current task description" --tests [status] --confidence [level] --t
 ```
 
 This ensures the orchestrator can see your progress in real-time!
+
+## MANDATORY: Final Status Before Summary
+
+**CRITICAL REQUIREMENT**: Before providing any final summary or conclusion, you MUST:
+
+1. Send a final status update with your current state
+2. Include test results, confidence level, and any remaining todos
+3. ONLY THEN provide your summary
+
+Example:
+```bash
+# REQUIRED: Send final status first
+para status "Completed authentication module implementation" --tests passed --confidence high --todos 5/5
+
+# Then provide your summary...
+```
+
+**NEVER** provide a summary without first sending a final status update. This is essential for proper monitoring and tracking.
