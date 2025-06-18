@@ -105,7 +105,7 @@ pub mod test_helpers {
                     .to_path_buf()
             });
 
-            // Store original PARA_CONFIG_PATH if it exists
+            // Save original PARA_CONFIG_PATH
             let original_para_config_path = std::env::var("PARA_CONFIG_PATH").ok();
 
             std::env::set_current_dir(git_temp.path())?;
@@ -119,7 +119,7 @@ pub mod test_helpers {
                 .expect("Failed to serialize test config");
             fs::write(&test_config_path, config_json)?;
 
-            // Set PARA_CONFIG_PATH to our test config to override default config resolution
+            // Set PARA_CONFIG_PATH to our test config
             std::env::set_var("PARA_CONFIG_PATH", &test_config_path);
 
             Ok(TestEnvironmentGuard {
@@ -171,13 +171,13 @@ pub mod test_helpers {
                 }
             }
 
-            // Restore original PARA_CONFIG_PATH
+            restore_environment(self.original_dir.clone());
+
+            // Restore PARA_CONFIG_PATH
             match &self.original_para_config_path {
                 Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
                 None => std::env::remove_var("PARA_CONFIG_PATH"),
             }
-
-            restore_environment(self.original_dir.clone());
         }
     }
 }

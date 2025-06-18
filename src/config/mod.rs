@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod defaults;
 pub mod manager;
+pub mod path;
 pub mod validation;
 pub mod wizard;
 

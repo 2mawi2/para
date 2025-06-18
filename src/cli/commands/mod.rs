@@ -1,5 +1,6 @@
 pub mod cancel;
 pub mod clean;
+pub mod common;
 pub mod completion;
 pub mod completion_branches;
 pub mod completion_sessions;

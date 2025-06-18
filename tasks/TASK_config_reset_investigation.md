@@ -91,11 +91,6 @@ rg -n "setup_test|TestEnvironment" src/
 - Error handling - does it reset config inappropriately?
 - Auto-detection logic - does it overwrite existing settings?
 
-### Environment Variables
-- Check if `PARA_CONFIG_PATH` is being set/unset inappropriately
-- Look for environment variable conflicts
-- Verify test isolation sets proper env vars
-
 ## Expected Fixes
 
 ### If Tests Are The Problem:

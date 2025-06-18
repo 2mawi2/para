@@ -94,6 +94,9 @@ mod tests {
 
     #[test]
     fn test_completion_bash_shell() {
+        // Save original value
+        let original = env::var("PARA_COMPLETION_SCRIPT").ok();
+
         env::set_var("PARA_COMPLETION_SCRIPT", "1");
 
         let args = CompletionArgs {
@@ -103,11 +106,18 @@ mod tests {
         let result = execute(args);
         assert!(result.is_ok());
 
-        env::remove_var("PARA_COMPLETION_SCRIPT");
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("PARA_COMPLETION_SCRIPT", val),
+            None => env::remove_var("PARA_COMPLETION_SCRIPT"),
+        }
     }
 
     #[test]
     fn test_completion_zsh_shell() {
+        // Save original value
+        let original = env::var("PARA_COMPLETION_SCRIPT").ok();
+
         env::set_var("PARA_COMPLETION_SCRIPT", "1");
 
         let args = CompletionArgs {
@@ -117,11 +127,18 @@ mod tests {
         let result = execute(args);
         assert!(result.is_ok());
 
-        env::remove_var("PARA_COMPLETION_SCRIPT");
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("PARA_COMPLETION_SCRIPT", val),
+            None => env::remove_var("PARA_COMPLETION_SCRIPT"),
+        }
     }
 
     #[test]
     fn test_completion_fish_shell() {
+        // Save original value
+        let original = env::var("PARA_COMPLETION_SCRIPT").ok();
+
         env::set_var("PARA_COMPLETION_SCRIPT", "1");
 
         let args = CompletionArgs {
@@ -131,7 +148,11 @@ mod tests {
         let result = execute(args);
         assert!(result.is_ok());
 
-        env::remove_var("PARA_COMPLETION_SCRIPT");
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("PARA_COMPLETION_SCRIPT", val),
+            None => env::remove_var("PARA_COMPLETION_SCRIPT"),
+        }
     }
 
     #[test]
@@ -146,6 +167,9 @@ mod tests {
 
     #[test]
     fn test_completion_case_insensitive_shell() {
+        // Save original value
+        let original = env::var("PARA_COMPLETION_SCRIPT").ok();
+
         env::set_var("PARA_COMPLETION_SCRIPT", "1");
 
         let args = CompletionArgs {
@@ -155,11 +179,18 @@ mod tests {
         let result = execute(args);
         assert!(result.is_ok());
 
-        env::remove_var("PARA_COMPLETION_SCRIPT");
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("PARA_COMPLETION_SCRIPT", val),
+            None => env::remove_var("PARA_COMPLETION_SCRIPT"),
+        }
     }
 
     #[test]
     fn test_completion_help_mode() {
+        // Save original value
+        let original = env::var("PARA_COMPLETION_HELP").ok();
+
         env::set_var("PARA_COMPLETION_HELP", "1");
 
         let args = CompletionArgs {
@@ -169,7 +200,11 @@ mod tests {
         let result = execute(args);
         assert!(result.is_ok());
 
-        env::remove_var("PARA_COMPLETION_HELP");
+        // Restore original value
+        match original {
+            Some(val) => env::set_var("PARA_COMPLETION_HELP", val),
+            None => env::remove_var("PARA_COMPLETION_HELP"),
+        }
     }
 
     #[test]
@@ -187,6 +222,9 @@ mod tests {
         let shells = vec!["bash", "zsh", "fish"];
 
         for shell in shells {
+            // Save original value
+            let original = env::var("PARA_COMPLETION_SCRIPT").ok();
+
             env::set_var("PARA_COMPLETION_SCRIPT", "1");
 
             let args = CompletionArgs {
@@ -196,7 +234,11 @@ mod tests {
             let result = execute(args);
             assert!(result.is_ok(), "Failed for shell: {}", shell);
 
-            env::remove_var("PARA_COMPLETION_SCRIPT");
+            // Restore original value
+            match original {
+                Some(val) => env::set_var("PARA_COMPLETION_SCRIPT", val),
+                None => env::remove_var("PARA_COMPLETION_SCRIPT"),
+            }
         }
     }
 }

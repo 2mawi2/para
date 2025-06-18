@@ -1,3 +1,4 @@
+use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::StartArgs;
 use crate::config::Config;
 use crate::core::ide::IdeManager;
@@ -12,6 +13,8 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     let session_name = determine_session_name(&args, &session_manager)?;
 
     let session_state = session_manager.create_session(session_name.clone(), None)?;
+
+    create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
     let ide_manager = IdeManager::new(&config);
     ide_manager.launch(

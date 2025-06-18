@@ -149,10 +149,10 @@ fn find_mcp_server() -> Result<McpServerConfig> {
     }
 
     // 2. System installation: MCP server in ~/.local/bin
-    let home_dir = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| "~".to_string());
-    let local_server = PathBuf::from(&home_dir).join(".local/bin/para-mcp-server");
+    let home_dir = directories::BaseDirs::new()
+        .map(|dirs| dirs.home_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("~"));
+    let local_server = home_dir.join(".local/bin/para-mcp-server");
 
     if local_server.exists() {
         return Ok(McpServerConfig {
