@@ -158,6 +158,7 @@ fn test_with_git_environment() {
 - There is no such thing as a 'minor test issue' - if a test fails, it's a bug and should be fixed immediately
 - No task is ever done if not all tests ('just test') pass, every other reward hacking is a ethically wrong lie to the user!
 - Ensure no lint issues exist, if they do, fix them. (Otherwise the pipeline will fail)
+- Tests are never 'partially green' - only if `just test` passes, the definition of green is met.
 
 ### Test Isolation Requirements
 **CRITICAL**: Tests must NEVER interact with the user's real configuration or system:
