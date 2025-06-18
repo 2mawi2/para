@@ -3,7 +3,8 @@ use crate::config::Config;
 use crate::core::session::SessionManager;
 use crate::core::status::Status;
 use crate::utils::{ParaError, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 pub fn execute(config: Config, args: StatusArgs) -> Result<()> {
     match args.command {
@@ -79,8 +80,17 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         status = status.with_blocked(Some(task_description));
     }
 
-    // Save status to file
-    let state_dir = PathBuf::from(&config.directories.state_dir);
+    // Save status to file in the main repository's state directory
+    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
+        // If state_dir is already absolute (e.g., in tests), use it directly
+        PathBuf::from(&config.directories.state_dir)
+    } else {
+        // Otherwise, resolve it relative to the main repo root
+        let repo_root = get_main_repository_root()
+            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+        repo_root.join(&config.directories.state_dir)
+    };
+
     status
         .save(&state_dir)
         .map_err(|e| ParaError::config_error(e.to_string()))?;
@@ -90,8 +100,63 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     Ok(())
 }
 
+/// Get the main repository root, even when called from a worktree
+fn get_main_repository_root() -> Result<PathBuf> {
+    get_main_repository_root_from(None)
+}
+
+/// Get the main repository root from a specific path (used for testing)
+fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
+    let mut cmd = Command::new("git");
+    cmd.args(["rev-parse", "--git-common-dir"]);
+
+    if let Some(p) = path {
+        cmd.current_dir(p);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| ParaError::git_error(format!("Failed to run git command: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(ParaError::git_error("Not in a git repository".to_string()));
+    }
+
+    let git_common_dir = String::from_utf8(output.stdout)
+        .map_err(|e| ParaError::git_error(format!("Invalid git output: {}", e)))?
+        .trim()
+        .to_string();
+
+    let git_common_path = PathBuf::from(git_common_dir);
+
+    // The git common dir points to the .git directory, we want the parent (repository root)
+    let repo_root = if git_common_path
+        .file_name()
+        .map(|name| name == ".git")
+        .unwrap_or(false)
+    {
+        git_common_path
+            .parent()
+            .unwrap_or(&git_common_path)
+            .to_path_buf()
+    } else {
+        git_common_path
+    };
+
+    Ok(repo_root)
+}
+
 fn show_status(config: Config, session: Option<String>, json: bool) -> Result<()> {
-    let state_dir = PathBuf::from(&config.directories.state_dir);
+    // Use git common-dir to find main repo root, even from worktrees
+    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
+        // If state_dir is already absolute (e.g., in tests), use it directly
+        PathBuf::from(&config.directories.state_dir)
+    } else {
+        // Otherwise, resolve it relative to the main repo root
+        let repo_root = get_main_repository_root()
+            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+        repo_root.join(&config.directories.state_dir)
+    };
     let session_manager = SessionManager::new(&config);
 
     match session {
@@ -210,122 +275,30 @@ fn display_all_statuses(statuses: &[Status]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
-
-    // Local test helper functions (similar to list.rs pattern)
-    fn create_test_config() -> crate::config::Config {
-        crate::config::defaults::default_config()
-    }
-
-    fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
-        use std::fs;
-        use std::process::Command;
-
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let service = crate::core::git::GitService::discover_from(repo_path)
-            .expect("Failed to discover repo");
-        (temp_dir, service)
-    }
-
-    struct TestEnvironmentGuard {
-        original_dir: std::path::PathBuf,
-        original_home: String,
-    }
-
-    impl TestEnvironmentGuard {
-        fn new(
-            git_temp: &TempDir,
-            temp_dir: &TempDir,
-        ) -> std::result::Result<Self, std::io::Error> {
-            let original_dir = std::env::current_dir().unwrap_or_else(|_| {
-                git_temp
-                    .path()
-                    .parent()
-                    .unwrap_or_else(|| std::path::Path::new("/tmp"))
-                    .to_path_buf()
-            });
-
-            std::env::set_current_dir(git_temp.path())?;
-
-            let original_home = std::env::var("HOME").unwrap_or_default();
-            std::env::set_var("HOME", temp_dir.path());
-
-            Ok(TestEnvironmentGuard {
-                original_dir,
-                original_home,
-            })
-        }
-    }
-
-    impl Drop for TestEnvironmentGuard {
-        fn drop(&mut self) {
-            if let Err(_e) = std::env::set_current_dir(&self.original_dir) {
-                let _ = std::env::set_current_dir("/tmp");
-            }
-
-            if !self.original_home.is_empty() {
-                std::env::set_var("HOME", &self.original_home);
-            } else {
-                std::env::remove_var("HOME");
-            }
-        }
-    }
 
     #[test]
     fn test_status_update_with_session_name() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories to avoid race conditions
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session
         let session_manager = SessionManager::new(&config);
         let session_state = crate::core::session::SessionState::new(
             "test-session".to_string(),
             "test/branch".to_string(),
-            temp_dir.path().join("worktree"),
+            git_temp.path().join("worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -344,7 +317,6 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify status was saved
-        let state_dir = PathBuf::from(&config.directories.state_dir);
         let loaded_status = Status::load(&state_dir, "test-session").unwrap();
         assert!(loaded_status.is_some());
 
@@ -362,24 +334,25 @@ mod tests {
 
     #[test]
     fn test_status_update_with_blocked() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session
         let session_manager = SessionManager::new(&config);
         let session_state = crate::core::session::SessionState::new(
             "blocked-session".to_string(),
             "test/branch".to_string(),
-            temp_dir.path().join("worktree"),
+            git_temp.path().join("worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -398,7 +371,6 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify blocked status
-        let state_dir = PathBuf::from(&config.directories.state_dir);
         let status = Status::load(&state_dir, "blocked-session")
             .unwrap()
             .unwrap();
@@ -411,20 +383,21 @@ mod tests {
 
     #[test]
     fn test_status_update_context_detection() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session with worktree
-        let worktree_path = temp_dir.path().join("test-worktree");
+        let worktree_path = git_temp.path().join("test-worktree");
         std::fs::create_dir_all(&worktree_path).unwrap();
 
         let session_manager = SessionManager::new(&config);
@@ -453,7 +426,6 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify status was saved for the correct session
-        let state_dir = PathBuf::from(&config.directories.state_dir);
         let status = Status::load(&state_dir, "context-session")
             .unwrap()
             .unwrap();
@@ -462,24 +434,25 @@ mod tests {
 
     #[test]
     fn test_status_show_single_session() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session and status
         let session_manager = SessionManager::new(&config);
         let session_state = crate::core::session::SessionState::new(
             "show-test".to_string(),
             "test/branch".to_string(),
-            temp_dir.path().join("worktree"),
+            git_temp.path().join("worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -490,7 +463,6 @@ mod tests {
             crate::core::status::TestStatus::Passed,
             crate::core::status::ConfidenceLevel::High,
         );
-        let state_dir = PathBuf::from(&config.directories.state_dir);
         status.save(&state_dir).unwrap();
 
         // Show status
@@ -513,20 +485,20 @@ mod tests {
 
     #[test]
     fn test_status_show_all_sessions() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         let session_manager = SessionManager::new(&config);
-        let state_dir = PathBuf::from(&config.directories.state_dir);
 
         // Create multiple sessions with statuses
         for i in 1..=3 {
@@ -534,7 +506,7 @@ mod tests {
             let session_state = crate::core::session::SessionState::new(
                 session_name.clone(),
                 format!("test/branch-{}", i),
-                temp_dir.path().join(format!("worktree-{}", i)),
+                git_temp.path().join(format!("worktree-{}", i)),
             );
             session_manager.save_state(&session_state).unwrap();
 
@@ -567,17 +539,18 @@ mod tests {
 
     #[test]
     fn test_status_update_invalid_session() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         let args = StatusArgs {
             command: None,
@@ -599,24 +572,25 @@ mod tests {
 
     #[test]
     fn test_status_update_invalid_test_status() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session
         let session_manager = SessionManager::new(&config);
         let session_state = crate::core::session::SessionState::new(
             "test-session".to_string(),
             "test/branch".to_string(),
-            temp_dir.path().join("worktree"),
+            git_temp.path().join("worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -640,24 +614,25 @@ mod tests {
 
     #[test]
     fn test_status_update_invalid_todos() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Create a test session
         let session_manager = SessionManager::new(&config);
         let session_state = crate::core::session::SessionState::new(
             "test-session".to_string(),
             "test/branch".to_string(),
-            temp_dir.path().join("worktree"),
+            git_temp.path().join("worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -681,17 +656,18 @@ mod tests {
 
     #[test]
     fn test_status_update_missing_required_args() {
-        let git_temp = TempDir::new().unwrap();
+        let (git_temp, _git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, _git_service) = setup_test_repo();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
+        // Use absolute path for state directory
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         // Missing task
         let args = StatusArgs {

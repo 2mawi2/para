@@ -40,7 +40,7 @@ impl SessionService {
             .unwrap_or(None);
 
         for session in sessions {
-            // Skip cancelled sessions
+            // Skip cancelled sessions only - keep finished sessions visible
             if matches!(session.status, CoreSessionStatus::Cancelled) {
                 continue;
             }
@@ -158,8 +158,11 @@ fn detect_session_status(
     session: &crate::core::session::SessionState,
     last_activity: &DateTime<Utc>,
 ) -> SessionStatus {
-    // Check if session is marked as finished
-    if matches!(session.status, CoreSessionStatus::Finished) {
+    // Check if session is marked as finished or ready for review
+    if matches!(
+        session.status,
+        CoreSessionStatus::Finished | CoreSessionStatus::Review
+    ) {
         return SessionStatus::Ready;
     }
 
@@ -217,6 +220,20 @@ mod tests {
             std::path::PathBuf::from("/test"),
         );
         session.update_status(CoreSessionStatus::Finished);
+
+        let now = chrono::Utc::now();
+        let status = detect_session_status(&session, &now);
+        assert!(matches!(status, SessionStatus::Ready));
+    }
+
+    #[test]
+    fn test_detect_session_status_review() {
+        let mut session = SessionState::new(
+            "review-session".to_string(),
+            "review-branch".to_string(),
+            std::path::PathBuf::from("/test"),
+        );
+        session.update_status(CoreSessionStatus::Review);
 
         let now = chrono::Utc::now();
         let status = detect_session_status(&session, &now);

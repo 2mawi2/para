@@ -19,17 +19,6 @@ impl MockPlatformManager {
             close_calls: Rc::new(RefCell::new(Vec::new())),
         }
     }
-
-    pub fn get_close_calls(&self) -> Vec<(String, String)> {
-        self.close_calls.borrow().clone()
-    }
-
-    pub fn was_close_called_for(&self, session_id: &str) -> bool {
-        self.close_calls
-            .borrow()
-            .iter()
-            .any(|(sid, _)| sid == session_id)
-    }
 }
 
 impl PlatformManager for MockPlatformManager {

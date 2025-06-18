@@ -226,7 +226,25 @@ fn create_claude_task_json(command: &str) -> String {
 }
 
 fn create_claude_local_md(session_path: &Path, session_name: &str) -> Result<()> {
+    println!(
+        "Creating CLAUDE.local.md for session '{}' at path: {}",
+        session_name,
+        session_path.display()
+    );
+
+    // Ensure the session path exists
+    if !session_path.exists() {
+        return Err(ParaError::fs_error(format!(
+            "Session path does not exist: {}",
+            session_path.display()
+        )));
+    }
+
     let claude_local_path = session_path.join("CLAUDE.local.md");
+    println!(
+        "CLAUDE.local.md will be created at: {}",
+        claude_local_path.display()
+    );
 
     let content = format!(
         r#"<!-- Para Agent Instructions - DO NOT COMMIT -->
@@ -263,13 +281,25 @@ para finish "Add user authentication with JWT tokens"
 Remember: 
 - EVERY status update must include: task description, --tests flag, and --confidence flag
 - Run ALL tests before updating status (not just tests for current feature)
-- After using TodoWrite tool, include --todos flag with completed/total
+- **MANDATORY: After using TodoWrite tool, IMMEDIATELY update status with --todos flag**
 - Update status when:
   - Starting new work
+  - **IMMEDIATELY after every TodoWrite tool use** (with progress --todos X/Y)
   - After running tests
   - Confidence level changes
   - Getting blocked
   - Making significant progress
+
+**CRITICAL: TodoWrite → Status Update Pattern:**
+```bash
+# 1. Update your todos first
+TodoWrite tool with updated progress
+
+# 2. IMMEDIATELY report status with progress
+para status "Current task description" --tests [status] --confidence [level] --todos X/Y
+```
+
+This ensures the orchestrator can see your progress in real-time!
 "#,
         session_name
     );
@@ -278,6 +308,10 @@ Remember:
     fs::write(&claude_local_path, content)
         .map_err(|e| ParaError::fs_error(format!("Failed to write CLAUDE.local.md: {}", e)))?;
 
+    println!(
+        "✅ CLAUDE.local.md created successfully at: {}",
+        claude_local_path.display()
+    );
     Ok(())
 }
 
