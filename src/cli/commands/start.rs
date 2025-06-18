@@ -47,8 +47,6 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
     }
 }
 
-// Removed helper functions - now handled by SessionManager
-
 #[cfg(test)]
 mod tests {
     use super::*;

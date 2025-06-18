@@ -25,8 +25,6 @@ fn cleanup_session_state(
     feature_branch: &str,
     _config: &Config,
 ) -> Result<()> {
-    // Always update to Review status (never delete)
-    // This allows the session to remain visible in monitor for review
     if let Some(session_state) = session_info {
         session_manager.update_session_status(&session_state.name, SessionStatus::Review)?;
     } else if let Ok(sessions) = session_manager.list_sessions() {
@@ -56,7 +54,6 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
 
     if let Some(ref path) = worktree_path {
         if path != &ctx.git_service.repository().root && !ctx.config.should_preserve_on_finish() {
-            // Safety check: ensure no uncommitted changes in worktree before removing
             if let Ok(worktree_repo) = GitRepository::discover_from(path) {
                 if worktree_repo.has_uncommitted_changes().unwrap_or(false) {
                     eprintln!(
@@ -84,7 +81,6 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
     Ok(())
 }
 
-/// Initialize and validate the environment for finish operation
 fn initialize_finish_environment(
     args: &FinishArgs,
 ) -> Result<(GitService, std::path::PathBuf, SessionEnvironment)> {
@@ -101,7 +97,6 @@ fn initialize_finish_environment(
     Ok((git_service, current_dir, session_env))
 }
 
-/// Resolve session information from args and environment
 fn resolve_session_info(
     args: &FinishArgs,
     session_env: &SessionEnvironment,
@@ -138,7 +133,6 @@ fn resolve_session_info(
     Ok((session_info, is_worktree_env))
 }
 
-/// Determine the feature branch name from session info or environment
 fn determine_feature_branch(
     session_info: &Option<SessionState>,
     session_env: &SessionEnvironment,
@@ -155,7 +149,6 @@ fn determine_feature_branch(
     }
 }
 
-/// Perform pre-finish operations (IDE closing, staging)
 fn perform_pre_finish_operations(
     session_info: &Option<SessionState>,
     feature_branch: &str,
@@ -163,8 +156,6 @@ fn perform_pre_finish_operations(
     git_service: &GitService,
 ) -> Result<()> {
     println!("Finishing session: {}", feature_branch);
-
-    // Close IDE window before Git operations (in case Git operations fail)
     let session_id = session_info
         .as_ref()
         .map(|s| s.name.clone())
@@ -173,7 +164,6 @@ fn perform_pre_finish_operations(
     if config.is_real_ide_environment() {
         let platform = get_platform_manager();
 
-        // For Claude, we need to close the wrapper IDE, not Claude itself
         let ide_to_close = if config.ide.name == "claude" && config.is_wrapper_enabled() {
             &config.ide.wrapper.name
         } else {
@@ -199,21 +189,16 @@ fn perform_pre_finish_operations(
 }
 
 pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
-    // Initialize environment and validate
     let (git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
     let mut session_manager = SessionManager::new(&config);
 
-    // Resolve session information
     let (session_info, is_worktree_env) =
         resolve_session_info(&args, &session_env, &mut session_manager, &current_dir)?;
 
-    // Determine feature and base branches
     let feature_branch = determine_feature_branch(&session_info, &session_env)?;
 
-    // Perform pre-finish operations
     perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
 
-    // Execute the finish operation
     let finish_request = FinishRequest {
         feature_branch: feature_branch.clone(),
         commit_message: args.message.clone(),
@@ -222,7 +207,6 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 
     let result = git_service.finish_session(finish_request)?;
 
-    // Handle the result
     let mut ctx = FinishContext {
         session_info,
         is_worktree_env,

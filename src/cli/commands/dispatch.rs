@@ -57,17 +57,14 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     let mut session_state =
         SessionState::new(session_id.clone(), branch_name, session_path.clone());
 
-    // Save task description
     session_state.task_description = Some(prompt.clone());
     session_manager.save_state(&session_state)?;
 
-    // Also save task to a separate file for backward compatibility
     let state_dir = Path::new(&config.directories.state_dir);
     let task_file = state_dir.join(format!("{}.task", session_id));
     fs::write(&task_file, &prompt)
         .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
 
-    // Create CLAUDE.local.md with status instructions
     create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
     launch_claude_code(
@@ -84,7 +81,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 }
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
-    // Dispatch only works with Claude Code in wrapper mode
     if (config.ide.command.to_lowercase() == "claude"
         || config.ide.command.to_lowercase() == "claude-code")
         && config.is_wrapper_enabled()
@@ -104,14 +100,12 @@ fn launch_claude_code(
     prompt: &str,
     skip_permissions: bool,
 ) -> Result<()> {
-    // Create temporary prompt file (always, for consistency)
     let temp_prompt_file = session_path.join(".claude_prompt_temp");
     if !prompt.is_empty() {
         fs::write(&temp_prompt_file, prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write temp prompt file: {}", e)))?;
     }
 
-    // Always launch Claude in IDE mode
     launch_claude_in_ide(config, session_path, &temp_prompt_file, skip_permissions)
 }
 
@@ -121,12 +115,10 @@ fn launch_claude_in_ide(
     temp_prompt_file: &Path,
     skip_permissions: bool,
 ) -> Result<()> {
-    // Create .vscode directory
     let vscode_dir = session_path.join(".vscode");
     fs::create_dir_all(&vscode_dir)
         .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
 
-    // Build Claude command for tasks.json
     let mut base_cmd = config.ide.command.clone();
     if skip_permissions {
         base_cmd.push_str(" --dangerously-skip-permissions");
@@ -143,16 +135,13 @@ fn launch_claude_in_ide(
         base_cmd
     };
 
-    // Create tasks.json
     let tasks_json = create_claude_task_json(&claude_task_cmd);
     let tasks_file = vscode_dir.join("tasks.json");
     fs::write(&tasks_file, tasks_json)
         .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
 
-    // Launch wrapper IDE (wrapper mode is always required for dispatch)
     let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
 
-    // Save launch information for auto-close functionality
     let state_dir = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".para_state");
@@ -167,7 +156,6 @@ fn launch_claude_in_ide(
 
     let launch_file = state_dir.join(format!("{}.launch", session_id));
 
-    // Always use wrapper mode for dispatch
     let launch_content = format!(
         "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
         config.ide.wrapper.name
@@ -175,15 +163,12 @@ fn launch_claude_in_ide(
     fs::write(&launch_file, launch_content)
         .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
 
-    // Launch IDE
     let mut cmd = Command::new(ide_command);
     cmd.current_dir(session_path);
     cmd.arg(session_path);
 
-    // Don't wait for the IDE process - let it run in the background
     match cmd.spawn() {
         Ok(_) => {
-            // IDE launched successfully, don't wait for it
             println!("Opened {} workspace", ide_name);
         }
         Err(e) => {
@@ -235,7 +220,6 @@ fn create_claude_task_json(command: &str) -> String {
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
-            // File flag provided - highest priority
             (_, _, Some(file_path)) => {
                 let prompt = read_file_content(file_path)?;
                 if prompt.trim().is_empty() {
@@ -247,22 +231,18 @@ impl DispatchArgs {
                 Ok((self.name_or_prompt.clone(), prompt))
             }
 
-            // Single argument - could be session+prompt, prompt, or file
             (Some(arg), None, None) => {
                 if is_likely_file_path(arg) {
-                    // Auto-detect file path
                     let prompt = read_file_content(Path::new(arg))?;
                     if prompt.trim().is_empty() {
                         return Err(ParaError::file_not_found(format!("file is empty: {}", arg)));
                     }
                     Ok((None, prompt))
                 } else {
-                    // Treat as inline prompt
                     Ok((None, arg.clone()))
                 }
             }
 
-            // Two arguments - session name + (prompt or file)
             (Some(session), Some(prompt_or_file), None) => {
                 if is_likely_file_path(prompt_or_file) {
                     let prompt = read_file_content(Path::new(prompt_or_file))?;
@@ -278,7 +258,6 @@ impl DispatchArgs {
                 }
             }
 
-            // Error cases
             (None, None, None) => Err(ParaError::invalid_args(
                 "dispatch requires a prompt text or file path",
             )),
@@ -291,17 +270,14 @@ impl DispatchArgs {
 }
 
 fn is_likely_file_path(input: &str) -> bool {
-    // Return false if empty
     if input.is_empty() {
         return false;
     }
 
-    // Check if it's an existing file first
     if Path::new(input).is_file() {
         return true;
     }
 
-    // Check if it looks like a URL scheme - if so, it's NOT a file path
     if input.starts_with("http://")
         || input.starts_with("https://")
         || input.starts_with("ftp://")
@@ -313,22 +289,18 @@ fn is_likely_file_path(input: &str) -> bool {
         return false;
     }
 
-    // Check if it looks like a file path (contains / or ends with common extensions)
     if input.contains('/') {
-        // Contains path separator, but make sure it's not just text with URLs
-        // If it contains spaces and URLs, it's likely a prompt, not a file path
         if (input.contains(" http://")
             || input.contains(" https://")
             || input.contains(" ftp://")
             || input.contains(" ssh://"))
             && input.contains(' ')
         {
-            return false; // Contains spaces and URLs - likely a prompt
+            return false;
         }
-        return true; // Looks like a real file path
+        return true;
     }
 
-    // Check for common text file extensions
     input.ends_with(".txt")
         || input.ends_with(".md")
         || input.ends_with(".rst")
@@ -339,7 +311,6 @@ fn is_likely_file_path(input: &str) -> bool {
 }
 
 fn read_file_content(path: &Path) -> Result<String> {
-    // Convert relative path to absolute if needed for better error messages
     let absolute_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -348,7 +319,6 @@ fn read_file_content(path: &Path) -> Result<String> {
             .join(path)
     };
 
-    // Check if file exists and is readable
     if !absolute_path.exists() {
         return Err(ParaError::file_not_found(format!(
             "file not found: {}",
@@ -363,7 +333,6 @@ fn read_file_content(path: &Path) -> Result<String> {
         )));
     }
 
-    // Check if file is readable
     match fs::metadata(&absolute_path) {
         Ok(metadata) => {
             if metadata.permissions().readonly() && metadata.len() == 0 {
@@ -381,7 +350,6 @@ fn read_file_content(path: &Path) -> Result<String> {
         }
     }
 
-    // Read file content
     fs::read_to_string(&absolute_path).map_err(|e| {
         ParaError::file_operation(format!("failed to read file: {} ({})", path.display(), e))
     })
