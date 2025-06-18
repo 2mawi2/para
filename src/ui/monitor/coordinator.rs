@@ -37,13 +37,10 @@ impl MonitorCoordinator {
     }
 
     pub fn refresh_sessions(&mut self) {
-        // Don't clear cache - let it expire naturally to avoid lag spikes
         self.sessions = self
             .service
             .load_sessions(self.state.show_stale)
             .unwrap_or_else(|_| Vec::new());
-
-        // Update selection bounds after sessions change
         self.state.update_selection_for_sessions(&self.sessions);
     }
 
@@ -62,11 +59,9 @@ impl MonitorCoordinator {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.state.quit(),
             KeyCode::Char('c') => {
-                // Check if Ctrl+C was pressed
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.state.quit();
                 } else {
-                    // Only 'c' key was pressed - cancel session
                     self.start_cancel();
                 }
             }
@@ -92,7 +87,6 @@ impl MonitorCoordinator {
                 self.state.exit_dialog();
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Ctrl+C acts like Esc in dialog mode
                 self.state.exit_dialog();
             }
             KeyCode::Enter => {
@@ -123,7 +117,6 @@ impl MonitorCoordinator {
                 self.state.exit_dialog();
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Ctrl+C acts like Esc in dialog mode
                 self.state.exit_dialog();
             }
             _ => {}
@@ -186,7 +179,6 @@ impl MonitorCoordinator {
                 self.state.clear_error();
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Ctrl+C acts like Esc in error dialog
                 self.state.clear_error();
             }
             _ => {}

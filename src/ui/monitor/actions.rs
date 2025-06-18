@@ -16,7 +16,6 @@ impl MonitorActions {
     }
 
     pub fn resume_session(&self, session: &SessionInfo) -> Result<()> {
-        // Verify worktree path exists
         if !session.worktree_path.exists() {
             return Err(crate::utils::ParaError::file_operation(format!(
                 "Worktree path does not exist: {}",
@@ -24,8 +23,6 @@ impl MonitorActions {
             )));
         }
 
-        // Launch IDE using para command to avoid output corruption
-        // This delegates to the normal para resume flow which handles output properly
         let session_name = session.name.clone();
 
         std::thread::spawn(move || {
@@ -42,7 +39,6 @@ impl MonitorActions {
     }
 
     pub fn finish_session(&self, session: &SessionInfo, message: String) -> Result<()> {
-        // Run in a separate thread to prevent git output from appearing in UI
         let worktree_path = session.worktree_path.clone();
         let branch = session.branch.clone();
 
@@ -63,9 +59,7 @@ impl MonitorActions {
     pub fn cancel_session(&self, session: &SessionInfo) -> Result<()> {
         let session_manager = SessionManager::new(&self.config);
 
-        // Load session state and archive the branch
         if let Ok(session_state) = session_manager.load_state(&session.name) {
-            // Run git operations in a separate thread to prevent output in UI
             let worktree_path = session.worktree_path.clone();
             let branch = session_state.branch.clone();
             let name = session_state.name.clone();
@@ -74,10 +68,7 @@ impl MonitorActions {
 
             std::thread::spawn(move || {
                 if let Ok(git_service) = GitService::discover_from(&worktree_path) {
-                    // Archive the branch
                     let _ = git_service.archive_branch_with_session_name(&branch, &name, &prefix);
-
-                    // Force remove worktree (user already confirmed in UI)
                     let _ = git_service
                         .worktree_manager()
                         .force_remove_worktree(&worktree_to_remove);
@@ -165,7 +156,6 @@ mod tests {
         let config = create_test_config();
         let actions = MonitorActions::new(config);
 
-        // Just test that we can create the actions instance
         assert_eq!(actions.config.git.branch_prefix, "para");
     }
 
@@ -175,7 +165,6 @@ mod tests {
         let actions = MonitorActions::new(config);
         let session = create_test_session();
 
-        // Should fail because the path doesn't exist
         let result = actions.resume_session(&session);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not exist"));
@@ -189,13 +178,12 @@ mod tests {
         let mut session = create_test_session();
         session.status = SessionStatus::Ready;
 
-        // Should succeed (even if command doesn't work in test)
         let result = actions.integrate_session(&session);
         assert!(result.is_ok());
 
         // Test with non-ready status
         session.status = SessionStatus::Idle;
         let result = actions.integrate_session(&session);
-        assert!(result.is_ok()); // Should still succeed but do nothing
+        assert!(result.is_ok());
     }
 }
