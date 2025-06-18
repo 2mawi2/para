@@ -40,7 +40,6 @@ impl IdeManager {
     }
 
     fn is_wrapper_test_mode(&self) -> bool {
-        // Check if wrapper command is a test command
         let wrapper_cmd = &self.config.wrapper.command;
         wrapper_cmd == "true" || wrapper_cmd.starts_with("echo ")
     }
@@ -77,7 +76,6 @@ impl IdeManager {
     ) -> Result<()> {
         self.write_autorun_task_with_options(path, skip_permissions, continue_conversation)?;
 
-        // Check wrapper-specific test mode like shell version
         if self.is_wrapper_test_mode() {
             println!("▶ skipping Cursor wrapper launch (test stub)");
             println!(
@@ -87,10 +85,8 @@ impl IdeManager {
             return Ok(());
         }
 
-        // Get wrapper command from config
         let wrapper_cmd = &self.config.wrapper.command;
 
-        // Handle echo commands like shell version
         if wrapper_cmd.starts_with("echo ") {
             let mut cmd = Command::new("sh");
             cmd.arg("-c")
@@ -101,7 +97,6 @@ impl IdeManager {
             return Ok(());
         }
 
-        // Check if command exists
         if !crate::config::defaults::is_command_available(wrapper_cmd) {
             return Err(ParaError::ide_error(
                 "⚠️  Cursor wrapper CLI not found. Please install Cursor CLI or update your configuration.\n   Falling back to regular Claude Code launch...".to_string()
@@ -115,7 +110,6 @@ impl IdeManager {
         let mut cmd = Command::new(wrapper_cmd);
         cmd.arg(path.to_string_lossy().as_ref());
 
-        // Launch in background like shell version ("&")
         cmd.spawn()
             .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {}", e)))?;
         println!(
@@ -143,10 +137,8 @@ impl IdeManager {
             return Ok(());
         }
 
-        // Get wrapper command from config
         let wrapper_cmd = &self.config.wrapper.command;
 
-        // Handle echo commands like shell version
         if wrapper_cmd.starts_with("echo ") {
             let mut cmd = Command::new("sh");
             cmd.arg("-c")
@@ -157,7 +149,6 @@ impl IdeManager {
             return Ok(());
         }
 
-        // Check if command exists
         if !crate::config::defaults::is_command_available(wrapper_cmd) {
             return Err(ParaError::ide_error(
                 "⚠️  VS Code wrapper CLI not found. Please install VS Code CLI or update your configuration.".to_string()
@@ -212,19 +203,12 @@ impl IdeManager {
     ) -> String {
         let mut base_cmd = self.config.command.clone();
 
-        // Add IDE-specific flags
-        match self.config.name.as_str() {
-            "claude" => {
-                if skip_permissions {
-                    base_cmd.push_str(" --dangerously-skip-permissions");
-                }
-                if continue_conversation {
-                    base_cmd.push_str(" -c");
-                }
+        if self.config.name.as_str() == "claude" {
+            if skip_permissions {
+                base_cmd.push_str(" --dangerously-skip-permissions");
             }
-            _ => {
-                // For non-Claude IDEs, we just use the base command
-                // Additional flags can be added here in the future if needed
+            if continue_conversation {
+                base_cmd.push_str(" -c");
             }
         }
 
