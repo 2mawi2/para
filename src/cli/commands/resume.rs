@@ -295,9 +295,9 @@ mod tests {
                 command: "echo".into(),
                 user_data_dir: None,
                 wrapper: WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
+                    enabled: true,
+                    name: "cursor".into(),
+                    command: "echo".into(),
                 },
             },
             directories: DirectoryConfig {
@@ -350,7 +350,7 @@ mod tests {
         session_manager.save_state(&state).unwrap();
 
         // now resume with base name
-        assert!(super::resume_specific_session(&config, &git_service, "test4").is_ok());
+        super::resume_specific_session(&config, &git_service, "test4").unwrap();
     }
 
     #[test]

@@ -37,9 +37,9 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
     println!("🖥️  IDE Selection");
 
     let ide_options = vec![
-        "cursor (Direct Cursor IDE)",
-        "code (Direct VS Code IDE)",
-        "claude (Claude Code inside another IDE)",
+        "cursor (Cursor IDE)",
+        "code (VS Code IDE)",
+        "claude (Claude Code)",
     ];
 
     let ide_selection = Select::with_theme(&ColorfulTheme::default())
@@ -56,13 +56,16 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
         _ => unreachable!(),
     };
 
+    // All IDEs now require wrapper mode for cloud-based launching
     let wrapper_config = if ide_name == "claude" {
+        // Claude needs a different IDE as wrapper
         configure_wrapper_mode_simple()?
     } else {
+        // Non-Claude IDEs use themselves as wrapper
         super::WrapperConfig {
-            enabled: false,
-            name: String::new(),
-            command: String::new(),
+            enabled: true,
+            name: ide_name.clone(),
+            command: ide_command.clone(),
         }
     };
 
