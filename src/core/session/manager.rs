@@ -19,43 +19,34 @@ impl SessionManager {
         }
     }
 
-    /// Resolve state directory relative to main repository root, not current working directory
     fn resolve_state_dir(config: &Config) -> PathBuf {
         let state_dir_path = config.get_state_dir();
 
-        // If it's already an absolute path, use it as-is (important for tests)
         if Path::new(state_dir_path).is_absolute() {
             return PathBuf::from(state_dir_path);
         }
 
-        // Try to resolve relative to main repository root, but be very conservative
-        // Don't let git discovery failures break anything
         if let Ok(git_service) = GitService::discover() {
             let repo_root = git_service.repository().root.clone();
             let main_repo_root = Self::get_main_repo_root(&repo_root);
             main_repo_root.join(state_dir_path)
         } else {
-            // Git discovery failed - just use the path as-is for backward compatibility
-            // This ensures tests and edge cases continue to work
             PathBuf::from(state_dir_path)
         }
     }
 
-    /// Get the main repository root, handling worktree case
     fn get_main_repo_root(current_repo_root: &Path) -> PathBuf {
         let git_path = current_repo_root.join(".git");
 
-        // If .git is a file (worktree), extract main repo path
         if git_path.is_file() {
             if let Ok(git_content) = fs::read_to_string(&git_path) {
                 if let Some(git_dir) = git_content.strip_prefix("gitdir: ") {
                     let git_dir = git_dir.trim();
                     let git_path = PathBuf::from(git_dir);
                     if let Some(main_repo_root) = git_path
-                        .parent() // .git/worktrees
-                        .and_then(|p| p.parent()) // .git
+                        .parent()
                         .and_then(|p| p.parent())
-                    // main repo root
+                        .and_then(|p| p.parent())
                     {
                         return main_repo_root.to_path_buf();
                     }
@@ -63,7 +54,6 @@ impl SessionManager {
             }
         }
 
-        // If .git is a directory or we can't parse the worktree info, assume we're in main repo
         current_repo_root.to_path_buf()
     }
 
@@ -82,7 +72,6 @@ impl SessionManager {
 
         let repository_root = git_service.repository().root.clone();
 
-        // Ensure .para is ignored in the main repository's .gitignore
         GitignoreManager::ensure_para_ignored_in_repository(&repository_root)?;
 
         let _base_branch = base_branch.unwrap_or_else(|| {
@@ -106,7 +95,6 @@ impl SessionManager {
                 ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
             })?;
 
-            // Create .para/.gitignore if we're using the new consolidated structure
             if let Some(para_dir) = self.get_para_directory_from_subtrees(&subtrees_path) {
                 self.ensure_para_gitignore_exists(&para_dir)?;
             }
@@ -202,7 +190,7 @@ impl SessionManager {
                     if let Some(session_name) = stem.to_str() {
                         match self.load_state(session_name) {
                             Ok(state) => sessions.push(state),
-                            Err(_) => continue, // Skip corrupted state files
+                            Err(_) => continue,
                         }
                     }
                 }
@@ -223,7 +211,6 @@ impl SessionManager {
                 .canonicalize()
                 .unwrap_or_else(|_| session.worktree_path.clone());
 
-            // Check exact match or if we're inside the worktree
             if canonical_path == session_canonical
                 || canonical_path.starts_with(&session_canonical)
                 || session_canonical.starts_with(&canonical_path)
@@ -287,13 +274,11 @@ impl SessionManager {
                 ))
             })?;
 
-            // Ensure .para is ignored in the main repository's .gitignore
             if let Ok(git_service) = GitService::discover() {
                 let repository_root = git_service.repository().root.clone();
                 GitignoreManager::ensure_para_ignored_in_repository(&repository_root)?;
             }
 
-            // Create .para/.gitignore if we're using the new consolidated structure
             if let Some(para_dir) = self.get_para_directory() {
                 self.ensure_para_gitignore_exists(&para_dir)?;
             }
@@ -358,7 +343,6 @@ mod tests {
             .to_string();
 
         let manager = SessionManager::new(&config);
-        // State directory is created on demand
         assert!(!manager.state_dir.exists());
     }
 
@@ -380,19 +364,15 @@ mod tests {
 
         let manager = SessionManager::new(&config);
 
-        // Trigger state directory creation
         manager.ensure_state_dir_exists().unwrap();
 
-        // Verify .para directory structure is created
         let para_dir = temp_dir.path().join(".para");
         assert!(para_dir.exists());
         assert!(para_dir.join("state").exists());
 
-        // Verify .para/.gitignore is created
         let gitignore_path = para_dir.join(".gitignore");
         assert!(gitignore_path.exists());
 
-        // Verify gitignore content
         let gitignore_content = std::fs::read_to_string(&gitignore_path).unwrap();
         assert!(gitignore_content.contains("*"));
         assert!(gitignore_content.contains("!.gitignore"));
@@ -416,13 +396,10 @@ mod tests {
 
         let _manager = SessionManager::new(&config);
 
-        // Create a session manually to test path structure
         let session_name = "test-session".to_string();
 
-        // Verify expected worktree path (simplified without brand prefix)
         let expected_worktree_path = temp_dir.path().join(".para/worktrees").join(&session_name);
 
-        // The worktree path should be directly under .para/worktrees/ without brand prefix
         assert!(expected_worktree_path
             .to_string_lossy()
             .contains(".para/worktrees/test-session"));
@@ -448,14 +425,12 @@ mod tests {
             .to_string();
         let manager = SessionManager::new(&config);
 
-        // Create session manually without git operations
         let session = SessionState::new(
             "test-session-save".to_string(),
             "para/test-branch".to_string(),
             temp_dir.path().join("test-worktree"),
         );
 
-        // Test save and load functionality
         manager.save_state(&session).unwrap();
         assert!(manager.session_exists(&session.name));
 
@@ -482,7 +457,6 @@ mod tests {
             .to_string();
         let manager = SessionManager::new(&config);
 
-        // Create sessions without using git operations to avoid directory issues
         let session1 = SessionState::new(
             "session1".to_string(),
             "test/branch1".to_string(),
@@ -518,7 +492,6 @@ mod tests {
             .to_string();
         let manager = SessionManager::new(&config);
 
-        // Create session manually without git operations
         let session = SessionState::new(
             "test-session-delete".to_string(),
             "para/test-branch".to_string(),
@@ -549,7 +522,6 @@ mod tests {
             .to_string();
         let mut manager = SessionManager::new(&config);
 
-        // Create session manually without git operations
         let session = SessionState::new(
             "test-session-update".to_string(),
             "para/test-branch".to_string(),

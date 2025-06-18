@@ -73,7 +73,6 @@ impl GitRepository {
     }
 
     pub fn get_main_branch(&self) -> Result<String> {
-        // Always prefer a local 'main' branch if it exists to encourage modern default.
         if execute_git_command(
             self,
             &["show-ref", "--verify", "--quiet", "refs/heads/main"],
@@ -83,7 +82,6 @@ impl GitRepository {
             return Ok("main".to_string());
         }
 
-        // Fallback to remote HEAD reference (could be master or something else).
         if let Ok(branch_ref) =
             execute_git_command(self, &["symbolic-ref", "refs/remotes/origin/HEAD"])
         {
@@ -92,7 +90,6 @@ impl GitRepository {
             }
         }
 
-        // Legacy repositories might use 'master'. Detect it explicitly.
         if execute_git_command(
             self,
             &["show-ref", "--verify", "--quiet", "refs/heads/master"],
@@ -102,7 +99,6 @@ impl GitRepository {
             return Ok("master".to_string());
         }
 
-        // As another common pattern, check for 'develop'.
         if execute_git_command(
             self,
             &["show-ref", "--verify", "--quiet", "refs/heads/develop"],
@@ -112,7 +108,6 @@ impl GitRepository {
             return Ok("develop".to_string());
         }
 
-        // Default backstop.
         Ok("main".to_string())
     }
 
