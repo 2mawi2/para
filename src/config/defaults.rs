@@ -12,7 +12,6 @@ pub fn default_config() -> Config {
 pub fn default_ide_config() -> IdeConfig {
     let detected_ide = detect_ide();
 
-    // Claude Code requires a wrapper (cursor or code)
     // Default to cursor if available, otherwise code
     let wrapper_command = if is_command_available("cursor") {
         "cursor"
@@ -58,12 +57,10 @@ pub fn default_session_config() -> SessionConfig {
 }
 
 pub fn detect_ide() -> (String, String) {
-    // Para only supports Claude Code
     ("claude".to_string(), "claude".to_string())
 }
 
 pub fn get_available_ides() -> Vec<(String, String)> {
-    // Para only supports Claude Code
     if is_command_available("claude") {
         vec![("claude".to_string(), "claude".to_string())]
     } else {
@@ -91,8 +88,7 @@ pub fn get_default_config_dir() -> std::path::PathBuf {
     if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "para") {
         proj_dirs.config_dir().to_path_buf()
     } else {
-        // Fallback for the extremely rare case where directories crate fails
-        // Use current directory as last resort
+        // Fallback for rare case where directories crate fails
         std::path::PathBuf::from(".").join(".config").join("para")
     }
 }
@@ -113,7 +109,6 @@ mod tests {
         assert_eq!(config.directories.state_dir, ".para/state");
         assert!(config.git.auto_stage);
         assert!(!config.session.preserve_on_finish);
-        // Verify wrapper is enabled by default
         assert!(config.ide.wrapper.enabled);
         assert!(!config.ide.wrapper.name.is_empty());
         assert!(!config.ide.wrapper.command.is_empty());
@@ -121,14 +116,10 @@ mod tests {
 
     #[test]
     fn test_config_paths() {
-        // Test that get_default_config_dir returns a valid directory
         let config_dir = get_default_config_dir();
-        // The directory path should exist or be creatable
         assert!(!config_dir.as_os_str().is_empty());
 
-        // Test the default config file path
         let config_file = get_config_file_path();
-        // The file should be named config.json
         assert_eq!(
             config_file.file_name().and_then(|n| n.to_str()),
             Some("config.json")
@@ -139,8 +130,6 @@ mod tests {
     #[test]
     fn test_ide_detection() {
         let available = get_available_ides();
-        // Note: This test allows empty IDE lists for CI environments
-        // where IDEs might not be installed
         println!("Available IDEs: {:?}", available);
     }
 }
