@@ -119,19 +119,30 @@ mod tests {
 
     #[test]
     fn test_config_paths() {
-        // Clear any test environment variable to test actual default behavior
+        // Save original environment variable
         let original_para_config = std::env::var("PARA_CONFIG_PATH").ok();
-        std::env::remove_var("PARA_CONFIG_PATH");
-
-        let config_dir = get_default_config_dir();
+        
+        // Test with environment variable
+        let test_path = "/tmp/test/config.json";
+        std::env::set_var("PARA_CONFIG_PATH", test_path);
         let config_file = get_config_file_path();
-
-        assert!(config_file.ends_with("config.json"));
-        assert!(config_file.starts_with(&config_dir));
-
-        // Restore original environment
-        if let Some(path) = original_para_config {
-            std::env::set_var("PARA_CONFIG_PATH", path);
+        assert_eq!(config_file.to_str().unwrap(), test_path);
+        
+        // Test without environment variable (in a thread to avoid affecting other tests)
+        std::thread::spawn(|| {
+            std::env::remove_var("PARA_CONFIG_PATH");
+            let config_dir = get_default_config_dir();
+            let config_file = get_config_file_path();
+            assert!(config_file.ends_with("config.json"));
+            assert!(config_file.starts_with(&config_dir));
+        })
+        .join()
+        .unwrap();
+        
+        // Restore original environment variable
+        match original_para_config {
+            Some(path) => std::env::set_var("PARA_CONFIG_PATH", path),
+            None => std::env::remove_var("PARA_CONFIG_PATH"),
         }
     }
 

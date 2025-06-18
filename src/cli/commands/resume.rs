@@ -6,6 +6,7 @@ use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
 use dialoguer::Select;
 use std::env;
+use std::fs;
 use std::path::Path;
 
 pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
@@ -165,7 +166,74 @@ fn list_and_select_session(
 
 fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
     let ide_manager = IdeManager::new(config);
-    ide_manager.launch(path, false)
+
+    // For Claude Code in wrapper mode, always use continuation flag when resuming
+    if config.ide.name == "claude" && config.ide.wrapper.enabled {
+        println!("▶ resuming Claude Code session with conversation continuation...");
+        // Update existing tasks.json to include -c flag
+        update_tasks_json_for_resume(path)?;
+        ide_manager.launch_with_options(path, false, true)
+    } else {
+        ide_manager.launch(path, false)
+    }
+}
+
+fn update_tasks_json_for_resume(path: &Path) -> Result<()> {
+    let tasks_file = path.join(".vscode/tasks.json");
+
+    if tasks_file.exists() {
+        // Read existing tasks.json
+        let content = fs::read_to_string(&tasks_file)
+            .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+
+        // Check if it contains prompt file logic (from dispatch)
+        let has_prompt_file = content.contains(".claude_prompt_temp");
+        
+        // Check if it already has the -c flag (and no prompt file)
+        if content.contains(" -c") && !has_prompt_file {
+            return Ok(()); // Already properly configured
+        }
+
+        let updated_content = if has_prompt_file {
+            // Remove the prompt file logic and add -c flag
+            // Replace the entire command line
+            content
+                .lines()
+                .map(|line| {
+                    if line.contains("\"command\":") && line.contains("claude_prompt_temp") {
+                        // Extract whether we have --dangerously-skip-permissions
+                        if line.contains("--dangerously-skip-permissions") {
+                            "      \"command\": \"claude --dangerously-skip-permissions -c\","
+                        } else {
+                            "      \"command\": \"claude -c\","
+                        }
+                    } else {
+                        line
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            // Just add -c flag to existing command
+            if content.contains("claude --dangerously-skip-permissions") {
+                content.replace(
+                    "claude --dangerously-skip-permissions",
+                    "claude --dangerously-skip-permissions -c",
+                )
+            } else if content.contains("\"claude\"") {
+                content.replace("\"claude\"", "\"claude -c\"")
+            } else {
+                // Look for other patterns
+                content.replace("\"command\": \"claude", "\"command\": \"claude -c")
+            }
+        };
+
+        // Write updated content back
+        fs::write(&tasks_file, updated_content)
+            .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))?;
+    }
+
+    Ok(())
 }
 
 fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
@@ -283,5 +351,76 @@ mod tests {
 
         // now resume with base name
         assert!(super::resume_specific_session(&config, &git_service, "test4").is_ok());
+    }
+
+    #[test]
+    fn test_update_tasks_json_for_resume() {
+        let temp_dir = TempDir::new().unwrap();
+        let vscode_dir = temp_dir.path().join(".vscode");
+        fs::create_dir_all(&vscode_dir).unwrap();
+
+        // Test with dangerously-skip-permissions flag
+        let tasks_file = vscode_dir.join("tasks.json");
+        let original_content = r#"{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Claude Code with Prompt",
+      "type": "shell",
+      "command": "claude --dangerously-skip-permissions \"$(cat '/path/to/prompt'; rm '/path/to/prompt')\"",
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, original_content).unwrap();
+
+        // Update the tasks.json
+        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+
+        // Check it was updated
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("claude --dangerously-skip-permissions -c"));
+        assert!(!updated_content.contains("claude --dangerously-skip-permissions \""));
+
+        // Test idempotency - running again shouldn't change it
+        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+        let content_after_second_update = fs::read_to_string(&tasks_file).unwrap();
+        assert_eq!(updated_content, content_after_second_update);
+    }
+    
+    #[test]
+    fn test_update_tasks_json_removes_prompt_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let vscode_dir = temp_dir.path().join(".vscode");
+        fs::create_dir_all(&vscode_dir).unwrap();
+
+        // Test with prompt file command from dispatch
+        let tasks_file = vscode_dir.join("tasks.json");
+        let original_content = r#"{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Claude Code with Prompt",
+      "type": "shell",
+      "command": "claude --dangerously-skip-permissions \"$(cat '/path/.claude_prompt_temp'; rm '/path/.claude_prompt_temp')\"",
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, original_content).unwrap();
+
+        // Update the tasks.json
+        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+
+        // Check prompt file logic was removed and -c flag added
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(!updated_content.contains(".claude_prompt_temp"));
+        assert!(!updated_content.contains("$(cat"));
+        assert!(!updated_content.contains("rm '"));
+        assert!(updated_content.contains("\"command\": \"claude --dangerously-skip-permissions -c\","));
     }
 }
