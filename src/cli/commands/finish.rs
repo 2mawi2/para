@@ -27,7 +27,7 @@ fn cleanup_session_state(
 ) -> Result<()> {
     if let Some(session_state) = session_info {
         if config.should_preserve_on_finish() {
-            session_manager.update_session_status(&session_state.name, SessionStatus::Finished)?;
+            session_manager.update_session_status(&session_state.name, SessionStatus::Review)?;
         } else {
             session_manager.delete_state(&session_state.name)?;
         }
@@ -35,8 +35,8 @@ fn cleanup_session_state(
         for session in sessions {
             if session.branch == feature_branch {
                 if config.should_preserve_on_finish() {
-                    let _ = session_manager
-                        .update_session_status(&session.name, SessionStatus::Finished);
+                    let _ =
+                        session_manager.update_session_status(&session.name, SessionStatus::Review);
                 } else {
                     let _ = session_manager.delete_state(&session.name);
                 }
@@ -517,11 +517,129 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        // Session should still exist but be marked as finished
+        // Session should still exist but be marked as ready for review
         assert!(session_manager.session_exists("preserve-test-session"));
         let updated_session = session_manager
             .load_state("preserve-test-session")
             .expect("Session should still exist");
-        assert!(matches!(updated_session.status, SessionStatus::Finished));
+        assert!(matches!(updated_session.status, SessionStatus::Review));
+    }
+
+    #[test]
+    fn test_session_lifecycle_transition_to_review() {
+        // Test that finish command transitions sessions to Review status in preserve mode
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        let mut config = create_test_config(&repo_path);
+        config.session.preserve_on_finish = true;
+        let mut session_manager = SessionManager::new(&config);
+
+        let session_state = SessionState::new(
+            "lifecycle-test-session".to_string(),
+            "test/lifecycle-branch".to_string(),
+            repo_path.join("test-worktree"),
+        );
+
+        // Session should start as Active
+        assert!(matches!(session_state.status, SessionStatus::Active));
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Call cleanup_session_state with preserve mode
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state.clone()),
+            "test/lifecycle-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Session should exist and be in Review status
+        assert!(session_manager.session_exists("lifecycle-test-session"));
+        let updated_session = session_manager
+            .load_state("lifecycle-test-session")
+            .expect("Session should exist after finish");
+
+        // Should transition to Review status (not Finished)
+        assert!(matches!(updated_session.status, SessionStatus::Review));
+
+        // Should preserve session metadata for review
+        assert_eq!(updated_session.name, "lifecycle-test-session");
+        assert_eq!(updated_session.branch, "test/lifecycle-branch");
+    }
+
+    #[test]
+    fn test_session_lifecycle_worktree_cleanup_in_review() {
+        // Test that when transitioning to Review status, worktree should be cleaned up
+        // but session state should be preserved
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        let mut config = create_test_config(&repo_path);
+        config.session.preserve_on_finish = true;
+        let mut session_manager = SessionManager::new(&config);
+
+        let worktree_path = repo_path.join("test-worktree");
+
+        let session_state = SessionState::new(
+            "worktree-cleanup-test".to_string(),
+            "test/worktree-cleanup-branch".to_string(),
+            worktree_path.clone(),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // After cleanup_session_state, session should be in Review status
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state),
+            "test/worktree-cleanup-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Session should be preserved in Review status
+        let updated_session = session_manager
+            .load_state("worktree-cleanup-test")
+            .expect("Session should exist");
+        assert!(matches!(updated_session.status, SessionStatus::Review));
+
+        // Session should still have worktree path info (for potential cleanup operations)
+        assert_eq!(updated_session.worktree_path, worktree_path);
+    }
+
+    #[test]
+    fn test_session_lifecycle_no_preserve_deletes_session() {
+        // Test that with preserve_on_finish = false, session is deleted entirely
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        let mut config = create_test_config(&repo_path);
+        config.session.preserve_on_finish = false; // No preservation
+        let mut session_manager = SessionManager::new(&config);
+
+        let session_state = SessionState::new(
+            "no-preserve-test".to_string(),
+            "test/no-preserve-branch".to_string(),
+            repo_path.join("test-worktree"),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Call cleanup with no preservation
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state),
+            "test/no-preserve-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Session should be completely deleted (not preserved in any status)
+        assert!(!session_manager.session_exists("no-preserve-test"));
     }
 }

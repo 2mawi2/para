@@ -5,6 +5,9 @@ mod platform;
 mod ui;
 mod utils;
 
+#[cfg(test)]
+mod test_utils;
+
 use clap::Parser;
 use cli::{execute_command, Cli};
 

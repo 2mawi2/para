@@ -21,13 +21,6 @@ pub mod test_helpers {
         config
     }
 
-    /// Creates a test config with custom state directory
-    pub fn create_test_config_with_dir(state_dir: &Path) -> Config {
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
-        config
-    }
-
     pub fn setup_test_repo() -> (TempDir, GitService) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
@@ -139,13 +132,6 @@ pub mod test_helpers {
 
         pub fn config_path(&self) -> &Path {
             &self.test_config_path
-        }
-
-        pub fn load_config(&self) -> Result<Config, std::io::Error> {
-            let content = fs::read_to_string(&self.test_config_path)?;
-            let config: Config = serde_json::from_str(&content)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            Ok(config)
         }
     }
 

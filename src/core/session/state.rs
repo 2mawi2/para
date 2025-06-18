@@ -26,7 +26,8 @@ pub struct GitStats {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionStatus {
     Active,
-    Finished,
+    Review,
+    Finished, // Deprecated - use Review instead
     Cancelled,
 }
 
@@ -78,6 +79,86 @@ mod tests {
         state.update_status(SessionStatus::Finished);
         assert!(matches!(state.status, SessionStatus::Finished));
 
+        state.update_status(SessionStatus::Cancelled);
+        assert!(matches!(state.status, SessionStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_session_lifecycle_active_to_review() {
+        let mut state = SessionState::new(
+            "feature-session".to_string(),
+            "para/feature-session".to_string(),
+            PathBuf::from("/repo/.para/worktrees/feature-session"),
+        );
+
+        // Should start as Active
+        assert!(matches!(state.status, SessionStatus::Active));
+
+        // When work is finished, should transition to Review
+        state.update_status(SessionStatus::Review);
+        assert!(matches!(state.status, SessionStatus::Review));
+    }
+
+    #[test]
+    fn test_session_lifecycle_review_status_properties() {
+        let mut state = SessionState::new(
+            "review-session".to_string(),
+            "para/review-session".to_string(),
+            PathBuf::from("/repo/.para/worktrees/review-session"),
+        );
+
+        // Transition to Review status
+        state.update_status(SessionStatus::Review);
+
+        // Review sessions should:
+        // 1. Still have branch information (for merging)
+        assert_eq!(state.branch, "para/review-session");
+
+        // 2. Still have session name (for identification)
+        assert_eq!(state.name, "review-session");
+
+        // 3. Be in Review status
+        assert!(matches!(state.status, SessionStatus::Review));
+    }
+
+    #[test]
+    fn test_session_status_display_behavior() {
+        // Test that Review status can be properly serialized/deserialized
+        let state = SessionState {
+            name: "test".to_string(),
+            branch: "para/test".to_string(),
+            worktree_path: PathBuf::from("/test"),
+            created_at: Utc::now(),
+            status: SessionStatus::Review,
+            task_description: Some("Completed feature implementation".to_string()),
+            last_activity: None,
+            git_stats: None,
+        };
+
+        // Should be able to serialize and deserialize Review status
+        let json = serde_json::to_string(&state).unwrap();
+        let deserialized: SessionState = serde_json::from_str(&json).unwrap();
+        assert!(matches!(deserialized.status, SessionStatus::Review));
+        assert_eq!(deserialized.name, "test");
+    }
+
+    #[test]
+    fn test_session_lifecycle_all_valid_transitions() {
+        let mut state = SessionState::new(
+            "transition-test".to_string(),
+            "para/transition-test".to_string(),
+            PathBuf::from("/test"),
+        );
+
+        // Active -> Review (normal completion)
+        assert!(matches!(state.status, SessionStatus::Active));
+        state.update_status(SessionStatus::Review);
+        assert!(matches!(state.status, SessionStatus::Review));
+
+        // Reset for next test
+        state.update_status(SessionStatus::Active);
+
+        // Active -> Cancelled (user cancellation)
         state.update_status(SessionStatus::Cancelled);
         assert!(matches!(state.status, SessionStatus::Cancelled));
     }
