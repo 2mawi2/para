@@ -206,6 +206,12 @@ fn create_claude_task_json(command: &str) -> String {
       "label": "Start Claude Code with Prompt",
       "type": "shell",
       "command": "{}",
+      "options": {{
+        "env": {{
+          "FORCE_COLOR": "1",
+          "TERM": "xterm-256color"
+        }}
+      }},
       "group": {{
         "kind": "build",
         "isDefault": true

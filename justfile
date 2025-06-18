@@ -16,14 +16,21 @@ build:
 build-release:
     cargo build --release
 
-# Install Rust binaries locally (CLI + MCP server)
+# Install para CLI and MCP server
 install: build-release
     @echo "🚀 Installing Para binaries..."
     @mkdir -p ~/.local/bin
     @cp target/release/para ~/.local/bin/para
-    @cp target/release/para-mcp-server ~/.local/bin/para-mcp-server
     @echo "✅ Para CLI binary installed to ~/.local/bin/para"
-    @echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"
+    @# Check if MCP server exists before copying
+    @if [ -f "mcp-server-ts/build/para-mcp-server.js" ]; then \
+        echo "📦 Installing MCP server..."; \
+        cp mcp-server-ts/build/para-mcp-server.js ~/.local/bin/para-mcp-server; \
+        chmod +x ~/.local/bin/para-mcp-server; \
+        echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"; \
+    else \
+        echo "⚠️  MCP server not found. Run 'cd mcp-server-ts && npm install && npm run build' to build it"; \
+    fi
     @echo ""
     @echo "🔧 Next steps:"
     @echo "   Run 'para mcp init' to configure MCP integration for your IDE"
@@ -181,8 +188,7 @@ status:
     @echo "Binary status:"
     @[ -f target/debug/para ] && echo "  ✅ debug CLI binary built" || echo "  ❌ debug CLI binary not found"
     @[ -f target/release/para ] && echo "  ✅ release CLI binary built" || echo "  ❌ release CLI binary not found"
-    @[ -f target/debug/para-mcp-server ] && echo "  ✅ debug MCP server built" || echo "  ❌ debug MCP server not found"
-    @[ -f target/release/para-mcp-server ] && echo "  ✅ release MCP server built" || echo "  ❌ release MCP server not found"
+    @[ -f mcp-server-ts/build/para-mcp-server.js ] && echo "  ✅ MCP server built" || echo "  ❌ MCP server not found (build with: cd mcp-server-ts && npm install && npm run build)"
 
 # Development workflow setup
 dev-setup: setup-hooks test
