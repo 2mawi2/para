@@ -12,16 +12,24 @@ pub fn default_config() -> Config {
 pub fn default_ide_config() -> IdeConfig {
     let detected_ide = detect_ide();
 
-    // All IDEs now require wrapper mode for cloud-based launching
-    // Default to using the same IDE as wrapper
+    // Claude Code requires a wrapper (cursor or code)
+    // Default to cursor if available, otherwise code
+    let wrapper_command = if is_command_available("cursor") {
+        "cursor"
+    } else if is_command_available("code") {
+        "code"
+    } else {
+        "cursor" // fallback
+    };
+
     IdeConfig {
         name: detected_ide.0.clone(),
-        command: detected_ide.1.clone(),
+        command: detected_ide.1,
         user_data_dir: None,
         wrapper: WrapperConfig {
             enabled: true,
-            name: detected_ide.0.clone(),
-            command: detected_ide.1,
+            name: wrapper_command.to_string(),
+            command: wrapper_command.to_string(),
         },
     }
 }
@@ -50,24 +58,17 @@ pub fn default_session_config() -> SessionConfig {
 }
 
 pub fn detect_ide() -> (String, String) {
-    let ides = [("cursor", "cursor"), ("code", "code"), ("claude", "claude")];
-
-    for (name, command) in &ides {
-        if is_command_available(command) {
-            return (name.to_string(), command.to_string());
-        }
-    }
-
-    ("cursor".to_string(), "cursor".to_string())
+    // Para only supports Claude Code
+    ("claude".to_string(), "claude".to_string())
 }
 
 pub fn get_available_ides() -> Vec<(String, String)> {
-    let ides = [("cursor", "cursor"), ("code", "code"), ("claude", "claude")];
-
-    ides.iter()
-        .filter(|(_, command)| is_command_available(command))
-        .map(|(name, command)| (name.to_string(), command.to_string()))
-        .collect()
+    // Para only supports Claude Code
+    if is_command_available("claude") {
+        vec![("claude".to_string(), "claude".to_string())]
+    } else {
+        vec![]
+    }
 }
 
 pub fn is_command_available(command: &str) -> bool {
