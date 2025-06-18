@@ -2,7 +2,6 @@ use crate::ui::monitor::{AppMode, SessionInfo};
 use ratatui::widgets::TableState;
 use std::time::Instant;
 
-/// UI state management for the monitor interface
 pub struct MonitorAppState {
     pub selected_index: usize,
     pub should_quit: bool,
@@ -25,13 +24,12 @@ impl MonitorAppState {
             table_state,
             mode: AppMode::Normal,
             input_buffer: String::new(),
-            show_stale: true, // Show all sessions by default
+            show_stale: true,
             last_refresh: Instant::now(),
             error_message: None,
         }
     }
 
-    /// Navigate to the previous item in the session list
     pub fn previous_item(&mut self, _sessions: &[SessionInfo]) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
@@ -39,7 +37,6 @@ impl MonitorAppState {
         }
     }
 
-    /// Navigate to the next item in the session list
     pub fn next_item(&mut self, sessions: &[SessionInfo]) {
         if self.selected_index < sessions.len().saturating_sub(1) {
             self.selected_index += 1;
@@ -47,7 +44,6 @@ impl MonitorAppState {
         }
     }
 
-    /// Update the selected index when sessions change (e.g., after refresh)
     pub fn update_selection_for_sessions(&mut self, sessions: &[SessionInfo]) {
         if self.selected_index >= sessions.len() && !sessions.is_empty() {
             self.selected_index = sessions.len() - 1;
@@ -56,88 +52,71 @@ impl MonitorAppState {
             self.selected_index = 0;
             self.table_state.select(None);
         } else {
-            // Ensure table state is in sync
             self.table_state.select(Some(self.selected_index));
         }
     }
 
-    /// Get the currently selected session
     pub fn get_selected_session<'a>(&self, sessions: &'a [SessionInfo]) -> Option<&'a SessionInfo> {
         sessions.get(self.selected_index)
     }
 
-    /// Start the finish prompt mode
     pub fn start_finish(&mut self) {
         self.mode = AppMode::FinishPrompt;
         self.input_buffer.clear();
     }
 
-    /// Start the cancel confirmation mode
     pub fn start_cancel(&mut self) {
         self.mode = AppMode::CancelConfirm;
     }
 
-    /// Exit any dialog mode and return to normal
     pub fn exit_dialog(&mut self) {
         self.mode = AppMode::Normal;
         self.input_buffer.clear();
     }
 
-    /// Check if it's time to refresh (every 2 seconds for faster updates)
     pub fn should_refresh(&self) -> bool {
         self.last_refresh.elapsed().as_secs() >= 2
     }
 
-    /// Mark that a refresh just occurred
     pub fn mark_refreshed(&mut self) {
         self.last_refresh = Instant::now();
     }
 
-    /// Toggle showing stale sessions
     pub fn toggle_stale(&mut self) {
         self.show_stale = !self.show_stale;
     }
 
-    /// Add a character to the input buffer (for commit messages)
     pub fn add_char(&mut self, c: char) {
         self.input_buffer.push(c);
     }
 
-    /// Remove the last character from input buffer
     pub fn backspace(&mut self) {
         self.input_buffer.pop();
     }
 
-    /// Get the current input buffer content
     pub fn get_input(&self) -> &str {
         &self.input_buffer
     }
 
-    /// Check if input is ready for submission (not empty when trimmed)
     pub fn is_input_ready(&self) -> bool {
         !self.input_buffer.trim().is_empty()
     }
 
-    /// Show an error message to the user
     pub fn show_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.mode = AppMode::ErrorDialog;
     }
 
-    /// Clear the error message and return to normal mode
     pub fn clear_error(&mut self) {
         self.error_message = None;
         self.mode = AppMode::Normal;
     }
 
-    /// Consume the current input buffer and return its content
     pub fn take_input(&mut self) -> String {
         let input = self.input_buffer.clone();
         self.input_buffer.clear();
         input
     }
-
-    /// Request to quit the application
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
