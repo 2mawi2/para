@@ -18,9 +18,16 @@ para status "Blocked Redis mocking" --tests failed --confidence low --blocked
 ```
 
 **DO NOT CONFUSE confidence with test status:**
-- `--confidence` = How confident you are about solving the problem
+- `--confidence` = How confident you are about successfully completing your assigned task
 - `--tests` = Current actual state of ALL tests in the codebase
 - Example: You can be confident (`--confidence high`) while tests are still failing (`--tests failed`)
+
+**Confidence Level Definitions:**
+- `--confidence high` = You understand the problem clearly and have a solid plan to complete it (80%+ certain)
+- `--confidence medium` = You have some understanding but may need to research or experiment (50-80% certain)  
+- `--confidence low` = Problem is unclear, complex, or you're encountering unexpected blockers (< 50% certain)
+
+**Use low confidence to signal when you need help - this allows the orchestrator to intervene and assist you.**
 
 **Test Status Guidelines:**
 - `--tests passed`: ALL tests in the entire codebase are passing (just test succeeded)
@@ -32,8 +39,31 @@ para status "Blocked Redis mocking" --tests failed --confidence low --blocked
 - If `just test` passes → use `--tests passed`
 - If you haven't run `just test` yet → use `--tests unknown`
 
+**MANDATORY: Immediate test failure reporting:**
+- **As soon as you discover ANY failing test** → IMMEDIATELY update status with `--tests failed`
+- **Don't wait** until you try to fix it - report the failure the moment you see it
+- **Even if you didn't cause the failure** - if you see red tests, report `--tests failed`
+- **Before starting any new work** - always run `just test` first and report results
+
 NEVER report partial test results. Always run the complete test suite.
 ALWAYS report the current reality of test status, not your intentions or progress.
+
+**Required Workflow:**
+```bash
+# 1. ALWAYS start by checking test status
+just test
+para status "Starting work" --tests [result] --confidence [level]
+
+# 2. If you discover failing tests at any point
+para status "Found failing tests" --tests failed --confidence [level]
+
+# 3. Work on your task, updating status regularly
+para status "Implementing feature" --tests [current_status] --confidence [level] --todos X/Y
+
+# 4. Before finishing, ensure all tests pass
+just test
+para status "Ready to finish" --tests passed --confidence high --todos X/X
+```
 
 **When complete:**
 ```bash
