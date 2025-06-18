@@ -263,11 +263,11 @@ mod tests {
 
         // Test basic state
         assert_eq!(coordinator.state.selected_index, 0);
-        assert!(!coordinator.state.show_stale);
+        assert!(coordinator.state.show_stale); // Now defaults to true
 
         // Test stale toggle
         coordinator.state.toggle_stale();
-        assert!(coordinator.state.show_stale);
+        assert!(!coordinator.state.show_stale);
     }
 
     #[test]
@@ -345,11 +345,11 @@ mod tests {
         let down_key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         assert!(coordinator.handle_key(down_key).is_ok());
 
-        // Test stale toggle
-        assert!(!coordinator.state.show_stale);
+        // Test stale toggle (now starts as true)
+        assert!(coordinator.state.show_stale);
         let stale_key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
         assert!(coordinator.handle_key(stale_key).is_ok());
-        assert!(coordinator.state.show_stale);
+        assert!(!coordinator.state.show_stale);
     }
 
     #[test]

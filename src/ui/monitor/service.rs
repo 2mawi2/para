@@ -144,7 +144,7 @@ fn detect_session_status(
 
     match elapsed.num_minutes() {
         0..=5 => SessionStatus::Active,
-        6..=30 => SessionStatus::Idle,
+        6..=1440 => SessionStatus::Idle, // 1440 minutes = 24 hours
         _ => SessionStatus::Stale,
     }
 }
@@ -173,9 +173,14 @@ mod tests {
         let status = detect_session_status(&session, &ten_minutes_ago);
         assert!(matches!(status, SessionStatus::Idle));
 
-        // Test stale status (> 30 minutes)
-        let hour_ago = now - chrono::Duration::hours(1);
-        let status = detect_session_status(&session, &hour_ago);
+        // Test idle status (23 hours ago - still idle, not stale)
+        let twenty_three_hours_ago = now - chrono::Duration::hours(23);
+        let status = detect_session_status(&session, &twenty_three_hours_ago);
+        assert!(matches!(status, SessionStatus::Idle));
+
+        // Test stale status (> 24 hours)
+        let twenty_five_hours_ago = now - chrono::Duration::hours(25);
+        let status = detect_session_status(&session, &twenty_five_hours_ago);
         assert!(matches!(status, SessionStatus::Stale));
     }
 

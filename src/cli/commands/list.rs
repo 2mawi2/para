@@ -81,6 +81,12 @@ fn list_active_sessions(
     let mut sessions = Vec::new();
 
     for session_state in session_states {
+        // Skip finished or cancelled sessions - they should only appear in --archived
+        match session_state.status {
+            UnifiedSessionStatus::Finished | UnifiedSessionStatus::Cancelled => continue,
+            _ => {}
+        }
+
         let has_uncommitted_changes = if session_state.worktree_path.exists() {
             // Only check for uncommitted changes if the path is a proper git repository
             if let Some(service) = git_service_for_path(&session_state.worktree_path) {
@@ -126,30 +132,76 @@ fn list_archived_sessions(
     session_manager: &SessionManager,
     git_service: &GitService,
 ) -> Result<Vec<SessionInfo>> {
+    let mut sessions = Vec::new();
+    let mut seen_session_ids = std::collections::HashSet::new();
+
+    // First, get all sessions with Finished or Cancelled status from state files
+    let session_states = session_manager.list_sessions()?;
+    for session_state in session_states {
+        match session_state.status {
+            UnifiedSessionStatus::Finished | UnifiedSessionStatus::Cancelled => {
+                seen_session_ids.insert(session_state.name.clone());
+
+                let has_uncommitted_changes = if session_state.worktree_path.exists() {
+                    if let Some(service) = git_service_for_path(&session_state.worktree_path) {
+                        service.has_uncommitted_changes().ok()
+                    } else {
+                        Some(false)
+                    }
+                } else {
+                    Some(false)
+                };
+
+                let session_info = SessionInfo {
+                    session_id: session_state.name.clone(),
+                    branch: session_state.branch.clone(),
+                    worktree_path: session_state.worktree_path.clone(),
+                    base_branch: "main".to_string(), // Simplified for now
+                    merge_mode: "squash".to_string(), // Default for now
+                    status: SessionStatus::Archived,
+                    last_modified: Some(session_state.created_at),
+                    has_uncommitted_changes,
+                    is_current: false,
+                };
+                sessions.push(session_info);
+            }
+            _ => {}
+        }
+    }
+
+    // Then, add branches with archived naming pattern (if not already included)
     let branch_manager = git_service.branch_manager();
     let branch_prefix = &session_manager.config().git.branch_prefix;
     let archived_branches = branch_manager.list_archived_branches(branch_prefix)?;
-
-    let mut sessions = Vec::new();
 
     for branch_name in archived_branches {
         if let Some(session_id) =
             extract_session_id_from_archived_branch(&branch_name, branch_prefix)
         {
-            let session_info = SessionInfo {
-                session_id: session_id.clone(),
-                branch: branch_name.clone(),
-                worktree_path: PathBuf::new(),
-                base_branch: "unknown".to_string(),
-                merge_mode: "unknown".to_string(),
-                status: SessionStatus::Archived,
-                last_modified: None,
-                has_uncommitted_changes: None,
-                is_current: false,
-            };
-            sessions.push(session_info);
+            // Skip if we already have this session from state files
+            if !seen_session_ids.contains(&session_id) {
+                let session_info = SessionInfo {
+                    session_id: session_id.clone(),
+                    branch: branch_name.clone(),
+                    worktree_path: PathBuf::new(),
+                    base_branch: "unknown".to_string(),
+                    merge_mode: "unknown".to_string(),
+                    status: SessionStatus::Archived,
+                    last_modified: None,
+                    has_uncommitted_changes: None,
+                    is_current: false,
+                };
+                sessions.push(session_info);
+            }
         }
     }
+
+    // Sort by last modified date
+    sessions.sort_by(|a, b| {
+        b.last_modified
+            .unwrap_or(DateTime::<Utc>::MIN_UTC)
+            .cmp(&a.last_modified.unwrap_or(DateTime::<Utc>::MIN_UTC))
+    });
 
     Ok(sessions)
 }
@@ -163,13 +215,8 @@ fn determine_unified_session_status(
         return Ok(SessionStatus::Missing);
     }
 
-    // Check session status first
-    match session_state.status {
-        UnifiedSessionStatus::Cancelled | UnifiedSessionStatus::Finished => {
-            return Ok(SessionStatus::Archived);
-        }
-        _ => {}
-    }
+    // Note: We no longer check for Finished/Cancelled here because those sessions
+    // are filtered out in list_active_sessions and handled separately in list_archived_sessions
 
     // Check if worktree is registered with git
     let worktrees = git_service.list_worktrees()?;
@@ -658,6 +705,61 @@ mod tests {
         // So we'll test that GitService::discover_from fails for non-git directories
         let result = GitService::discover_from(temp_dir.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_finished_sessions_in_archived() -> Result<()> {
+        use crate::core::session::SessionState;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let repo_root = &git_service.repository().root;
+        let state_dir = repo_root.join(".para_state");
+
+        // Create config that points to our test state directory
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a finished session
+        fs::create_dir_all(&state_dir)?;
+        let mut finished_session = SessionState::new(
+            "finished-session".to_string(),
+            "para/finished-branch".to_string(),
+            temp_dir.path().join("finished-worktree"),
+        );
+        finished_session.update_status(crate::core::session::SessionStatus::Finished);
+
+        let state_file = state_dir.join("finished-session.state");
+        let json_content = serde_json::to_string_pretty(&finished_session)?;
+        fs::write(state_file, json_content)?;
+
+        // Create an active session for comparison
+        let active_session = SessionState::new(
+            "active-session".to_string(),
+            "para/active-branch".to_string(),
+            temp_dir.path().join("active-worktree"),
+        );
+
+        let state_file = state_dir.join("active-session.state");
+        let json_content = serde_json::to_string_pretty(&active_session)?;
+        fs::write(state_file, json_content)?;
+
+        // Test that active list doesn't include finished session
+        let active_sessions = list_active_sessions(&session_manager, &git_service)?;
+        assert_eq!(active_sessions.len(), 1);
+        assert_eq!(active_sessions[0].session_id, "active-session");
+
+        // Test that archived list includes finished session
+        let archived_sessions = list_archived_sessions(&session_manager, &git_service)?;
+        assert_eq!(archived_sessions.len(), 1);
+        assert_eq!(archived_sessions[0].session_id, "finished-session");
+        assert_eq!(archived_sessions[0].status, SessionStatus::Archived);
+
+        Ok(())
     }
 
     #[test]

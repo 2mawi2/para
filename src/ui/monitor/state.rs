@@ -25,7 +25,7 @@ impl MonitorAppState {
             table_state,
             mode: AppMode::Normal,
             input_buffer: String::new(),
-            show_stale: false,
+            show_stale: true, // Show all sessions by default
             last_refresh: Instant::now(),
             error_message: None,
         }
@@ -192,7 +192,7 @@ mod tests {
         assert!(!state.should_quit);
         assert_eq!(state.mode, AppMode::Normal);
         assert!(state.input_buffer.is_empty());
-        assert!(!state.show_stale);
+        assert!(state.show_stale); // Changed to true by default
     }
 
     #[test]
@@ -339,12 +339,12 @@ mod tests {
     fn test_toggles() {
         let mut state = MonitorAppState::new();
 
-        // Test stale toggle
-        assert!(!state.show_stale);
-        state.toggle_stale();
+        // Test stale toggle (starts as true now)
         assert!(state.show_stale);
         state.toggle_stale();
         assert!(!state.show_stale);
+        state.toggle_stale();
+        assert!(state.show_stale);
 
         // Test quit
         assert!(!state.should_quit);
