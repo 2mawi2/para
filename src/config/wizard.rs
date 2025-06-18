@@ -34,40 +34,15 @@ pub fn run_config_wizard() -> Result<Config> {
 }
 
 fn configure_ide_simple() -> Result<super::IdeConfig> {
-    println!("🖥️  IDE Selection");
+    println!("🖥️  IDE Configuration");
+    println!("Para works with Claude Code in cloud-based wrapper mode.");
 
-    let ide_options = vec![
-        "cursor (Cursor IDE)",
-        "code (VS Code IDE)",
-        "claude (Claude Code)",
-    ];
+    // Claude is the only supported IDE
+    let ide_name = "claude".to_string();
+    let ide_command = "claude".to_string();
 
-    let ide_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which IDE would you like to use?")
-        .items(&ide_options)
-        .default(0)
-        .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
-
-    let (ide_name, ide_command) = match ide_selection {
-        0 => ("cursor".to_string(), "cursor".to_string()),
-        1 => ("code".to_string(), "code".to_string()),
-        2 => ("claude".to_string(), "claude".to_string()),
-        _ => unreachable!(),
-    };
-
-    // All IDEs now require wrapper mode for cloud-based launching
-    let wrapper_config = if ide_name == "claude" {
-        // Claude needs a different IDE as wrapper
-        configure_wrapper_mode_simple()?
-    } else {
-        // Non-Claude IDEs use themselves as wrapper
-        super::WrapperConfig {
-            enabled: true,
-            name: ide_name.clone(),
-            command: ide_command.clone(),
-        }
-    };
+    // Always configure wrapper for Claude
+    let wrapper_config = configure_wrapper_mode_simple()?;
 
     Ok(super::IdeConfig {
         name: ide_name,
@@ -78,21 +53,25 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
 }
 
 fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
-    let wrapper_options = vec!["cursor", "code"];
+    let wrapper_options = vec!["cursor (Cursor IDE)", "code (VS Code)"];
 
     let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which IDE should wrap Claude Code?")
+        .with_prompt("Which IDE wrapper would you like to use for Claude Code?")
         .items(&wrapper_options)
         .default(0)
         .interact()
         .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
 
-    let wrapper_name = wrapper_options[wrapper_selection].to_string();
+    let (wrapper_name, wrapper_command) = match wrapper_selection {
+        0 => ("cursor".to_string(), "cursor".to_string()),
+        1 => ("code".to_string(), "code".to_string()),
+        _ => unreachable!(),
+    };
 
     Ok(super::WrapperConfig {
         enabled: true,
-        name: wrapper_name.clone(),
-        command: wrapper_name,
+        name: wrapper_name,
+        command: wrapper_command,
     })
 }
 
@@ -169,14 +148,21 @@ pub fn run_quick_setup() -> Result<Config> {
     println!("🚀 Para Quick Setup");
     println!("Using detected defaults with minimal prompts.\n");
 
-    let mut config = default_config();
+    let config = default_config();
 
+    // Check if Claude is available
     let available_ides = get_available_ides();
-    if !available_ides.is_empty() {
-        let (ide_name, ide_command) = available_ides[0].clone();
-        config.ide.name = ide_name.clone();
-        config.ide.command = ide_command;
-        println!("✅ Detected IDE: {}", ide_name);
+    if available_ides.is_empty() {
+        return Err(ConfigError::Validation(
+            "Claude Code is not available. Please install Claude Code and ensure it's in your PATH.".to_string()
+        ));
+    }
+
+    println!("✅ Detected Claude Code");
+
+    // Detect wrapper
+    if config.ide.wrapper.enabled {
+        println!("✅ Using {} as wrapper", config.ide.wrapper.name);
     }
 
     config.validate()?;
@@ -252,13 +238,13 @@ mod tests {
 
         let config = Config {
             ide: IdeConfig {
-                name: "test-ide".to_string(),
-                command: "echo".to_string(), // Use echo which is guaranteed to be available
+                name: "claude".to_string(),
+                command: "claude".to_string(),
                 user_data_dir: None,
                 wrapper: WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
+                    enabled: true,
+                    name: "cursor".to_string(),
+                    command: "echo".to_string(), // Use echo which is guaranteed to be available
                 },
             },
             directories: DirectoryConfig {

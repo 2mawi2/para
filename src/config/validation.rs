@@ -22,6 +22,19 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
         ));
     }
 
+    // Para only supports Claude Code (except for test configurations)
+    if ide.command.to_lowercase() != "claude" 
+        && ide.command.to_lowercase() != "claude-code" 
+        && ide.command != "echo"  // Allow echo for tests
+        && !ide.command.starts_with("echo ")
+    // Allow echo commands for tests
+    {
+        return Err(ConfigError::Validation(format!(
+            "Para only supports Claude Code. Current IDE: '{}'. Please run 'para config' to configure Claude Code.",
+            ide.name
+        )));
+    }
+
     if !is_valid_ide_name(&ide.name) {
         return Err(ConfigError::Validation(format!(
             "Invalid IDE name '{}'. Must contain only alphanumeric characters and hyphens",
@@ -31,9 +44,17 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
 
     if !super::defaults::is_command_available(&ide.command) {
         return Err(ConfigError::Validation(format!(
-            "IDE command '{}' is not available. Please ensure it's installed and in your PATH",
+            "Claude Code command '{}' is not available. Please ensure Claude Code is installed and in your PATH",
             ide.command
         )));
+    }
+
+    // Wrapper mode is required for Claude Code (except for test configurations)
+    if !ide.wrapper.enabled && ide.command.to_lowercase() == "claude" {
+        return Err(ConfigError::Validation(
+            "Claude Code requires wrapper mode. Please run 'para config' to enable wrapper mode."
+                .to_string(),
+        ));
     }
 
     if ide.wrapper.enabled {
@@ -47,10 +68,23 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
                 "Wrapper command cannot be empty when wrapper is enabled".to_string(),
             ));
         }
+
+        // Validate wrapper is cursor or code (or echo for tests)
+        if ide.wrapper.command != "cursor"
+            && ide.wrapper.command != "code"
+            && ide.wrapper.command != "echo"
+            && !ide.wrapper.command.starts_with("echo ")
+        {
+            return Err(ConfigError::Validation(format!(
+                "Invalid wrapper '{}'. Claude Code requires either 'cursor' or 'code' as wrapper.",
+                ide.wrapper.command
+            )));
+        }
+
         if !super::defaults::is_command_available(&ide.wrapper.command) {
             return Err(ConfigError::Validation(format!(
-                "Wrapper command '{}' is not available",
-                ide.wrapper.command
+                "Wrapper command '{}' is not available. Please ensure {} is installed.",
+                ide.wrapper.command, ide.wrapper.name
             )));
         }
     }
@@ -241,21 +275,36 @@ mod tests {
 
     #[test]
     fn test_ide_config_validation() {
+        // Valid config - Claude with wrapper
         let valid_config = IdeConfig {
-            name: "cursor".to_string(),
-            command: "echo".to_string(), // Use 'echo' as it's always available
+            name: "claude".to_string(),
+            command: "claude".to_string(),
             user_data_dir: None,
             wrapper: WrapperConfig {
-                enabled: false,
-                name: String::new(),
-                command: String::new(),
+                enabled: true,
+                name: "cursor".to_string(),
+                command: "echo".to_string(), // Use 'echo' as it's always available
             },
         };
         assert!(validate_ide_config(&valid_config).is_ok());
 
+        // Invalid - non-Claude IDE
         let invalid_config = IdeConfig {
-            name: "".to_string(),
+            name: "cursor".to_string(),
             command: "cursor".to_string(),
+            user_data_dir: None,
+            wrapper: WrapperConfig {
+                enabled: true,
+                name: "cursor".to_string(),
+                command: "cursor".to_string(),
+            },
+        };
+        assert!(validate_ide_config(&invalid_config).is_err());
+
+        // Invalid - Claude without wrapper
+        let invalid_no_wrapper = IdeConfig {
+            name: "claude".to_string(),
+            command: "claude".to_string(),
             user_data_dir: None,
             wrapper: WrapperConfig {
                 enabled: false,
@@ -263,7 +312,7 @@ mod tests {
                 command: String::new(),
             },
         };
-        assert!(validate_ide_config(&invalid_config).is_err());
+        assert!(validate_ide_config(&invalid_no_wrapper).is_err());
     }
 
     #[test]
