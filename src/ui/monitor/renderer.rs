@@ -35,6 +35,8 @@ pub struct MonitorRenderer {
     config: Config,
 }
 
+struct TableBuilder;
+
 impl MonitorRenderer {
     pub fn new(config: Config) -> Self {
         Self { config }
@@ -94,7 +96,31 @@ impl MonitorRenderer {
         sessions: &[SessionInfo],
         state: &MonitorAppState,
     ) {
-        let header = Row::new(vec![
+        let table_builder = TableBuilder::new();
+        let table = table_builder.build_table(sessions, state);
+        f.render_stateful_widget(table, area, &mut state.table_state.clone());
+    }
+}
+
+impl TableBuilder {
+    fn new() -> Self {
+        Self
+    }
+
+    fn build_table(&self, sessions: &[SessionInfo], state: &MonitorAppState) -> Table<'static> {
+        let header = self.create_header();
+        let rows = self.create_rows(sessions, state);
+        let constraints = self.create_constraints();
+
+        Table::new(rows, constraints).header(header).block(
+            Block::default()
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .border_style(Style::default().fg(Color::Rgb(75, 85, 99))),
+        )
+    }
+
+    fn create_header(&self) -> Row<'static> {
+        Row::new(vec![
             Cell::from("Session"),
             Cell::from("State"),
             Cell::from("Last Modified"),
@@ -108,174 +134,191 @@ impl MonitorRenderer {
                 .fg(Color::Rgb(156, 163, 175))
                 .add_modifier(Modifier::BOLD),
         )
-        .height(1);
-
-        let rows: Vec<Row> = sessions
-            .iter()
-            .enumerate()
-            .map(|(i, session)| {
-                let is_selected = i == state.selected_index;
-                let is_stale = session.status.should_dim();
-
-                let base_style = if is_selected {
-                    Style::default()
-                        .bg(Color::Rgb(30, 41, 59))
-                        .fg(Color::Rgb(255, 255, 255))
-                } else if is_stale {
-                    Style::default()
-                        .fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
-                } else {
-                    Style::default().fg(Color::Rgb(229, 231, 235))
-                };
-
-                let state_text = if session.is_blocked {
-                    "Blocked"
-                } else {
-                    session.status.name()
-                };
-
-                let state_style = if session.is_blocked {
-                    Style::default().fg(Color::Rgb(239, 68, 68))
-                } else {
-                    Style::default().fg(session.status.color())
-                };
-
-                let state_cell = Cell::from(state_text).style(state_style);
-                let activity_text = format_activity(&session.last_activity);
-
-                let test_cell = match &session.test_status {
-                    Some(test_status) => {
-                        let (text, color) = match test_status {
-                            crate::core::status::TestStatus::Passed => (
-                                "Passed",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(34, 197, 94)
-                                },
-                            ),
-                            crate::core::status::TestStatus::Failed => (
-                                "Failed",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(239, 68, 68)
-                                },
-                            ),
-                            crate::core::status::TestStatus::Unknown => (
-                                "Unknown",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(156, 163, 175)
-                                },
-                            ),
-                        };
-                        Cell::from(text).style(Style::default().fg(color))
-                    }
-                    None => Cell::from("-").style(Style::default().fg(if is_stale {
-                        crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                    } else {
-                        Color::Rgb(107, 114, 128)
-                    })),
-                };
-
-                let progress_cell = match session.todo_percentage {
-                    Some(pct) => {
-                        let progress_bar = create_progress_bar(pct);
-                        let color = if is_stale {
-                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                        } else if pct == 100 {
-                            Color::Rgb(34, 197, 94)
-                        } else if pct >= 50 {
-                            Color::Rgb(99, 102, 241)
-                        } else {
-                            Color::Rgb(245, 158, 11)
-                        };
-                        Cell::from(progress_bar).style(Style::default().fg(color))
-                    }
-                    None => {
-                        let empty_bar = "░░░░░░░░ ─";
-                        Cell::from(empty_bar).style(Style::default().fg(if is_stale {
-                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                        } else {
-                            Color::Rgb(107, 114, 128)
-                        }))
-                    }
-                };
-
-                let confidence_cell = match &session.confidence {
-                    Some(confidence) => {
-                        let (text, color) = match confidence {
-                            crate::core::status::ConfidenceLevel::High => (
-                                "High",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(34, 197, 94)
-                                },
-                            ),
-                            crate::core::status::ConfidenceLevel::Medium => (
-                                "Medium",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(245, 158, 11)
-                                },
-                            ),
-                            crate::core::status::ConfidenceLevel::Low => (
-                                "Low",
-                                if is_stale {
-                                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                                } else {
-                                    Color::Rgb(239, 68, 68)
-                                },
-                            ),
-                        };
-                        Cell::from(text).style(Style::default().fg(color))
-                    }
-                    None => Cell::from("-").style(Style::default().fg(if is_stale {
-                        crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                    } else {
-                        Color::Rgb(107, 114, 128)
-                    })),
-                };
-
-                Row::new(vec![
-                    Cell::from(session.name.clone()).style(base_style.add_modifier(Modifier::BOLD)),
-                    state_cell,
-                    Cell::from(activity_text).style(base_style),
-                    Cell::from(truncate_task(&session.task, 40)).style(base_style),
-                    test_cell,
-                    progress_cell,
-                    confidence_cell,
-                ])
-                .height(1)
-            })
-            .collect();
-
-        let table = Table::new(
-            rows,
-            [
-                Constraint::Min(20),
-                Constraint::Length(10),
-                Constraint::Length(14),
-                Constraint::Min(30),
-                Constraint::Length(10),
-                Constraint::Length(13),
-                Constraint::Length(10),
-            ],
-        )
-        .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::TOP | Borders::BOTTOM)
-                .border_style(Style::default().fg(Color::Rgb(75, 85, 99))),
-        );
-
-        f.render_stateful_widget(table, area, &mut state.table_state.clone());
+        .height(1)
     }
 
+    fn create_constraints(&self) -> [Constraint; 7] {
+        [
+            Constraint::Min(20),
+            Constraint::Length(10),
+            Constraint::Length(14),
+            Constraint::Min(30),
+            Constraint::Length(10),
+            Constraint::Length(13),
+            Constraint::Length(10),
+        ]
+    }
+
+    fn create_rows(&self, sessions: &[SessionInfo], state: &MonitorAppState) -> Vec<Row<'static>> {
+        sessions
+            .iter()
+            .enumerate()
+            .map(|(i, session)| self.create_row(session, i, state))
+            .collect()
+    }
+
+    fn create_row(
+        &self,
+        session: &SessionInfo,
+        index: usize,
+        state: &MonitorAppState,
+    ) -> Row<'static> {
+        let is_selected = index == state.selected_index;
+        let is_stale = session.status.should_dim();
+        let base_style = self.create_base_style(is_selected, is_stale);
+
+        let state_cell = self.create_state_cell(session);
+        let activity_text = format_activity(&session.last_activity);
+        let test_cell = self.create_test_cell(session, is_stale);
+        let progress_cell = self.create_progress_cell(session, is_stale);
+        let confidence_cell = self.create_confidence_cell(session, is_stale);
+
+        Row::new(vec![
+            Cell::from(session.name.clone()).style(base_style.add_modifier(Modifier::BOLD)),
+            state_cell,
+            Cell::from(activity_text).style(base_style),
+            Cell::from(truncate_task(&session.task, 40)).style(base_style),
+            test_cell,
+            progress_cell,
+            confidence_cell,
+        ])
+        .height(1)
+    }
+
+    fn create_base_style(&self, is_selected: bool, is_stale: bool) -> Style {
+        if is_selected {
+            Style::default()
+                .bg(Color::Rgb(30, 41, 59))
+                .fg(Color::Rgb(255, 255, 255))
+        } else if is_stale {
+            Style::default().fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
+        } else {
+            Style::default().fg(Color::Rgb(229, 231, 235))
+        }
+    }
+
+    fn create_state_cell(&self, session: &SessionInfo) -> Cell<'static> {
+        let state_text = if session.is_blocked {
+            "Blocked"
+        } else {
+            session.status.name()
+        };
+
+        let state_style = if session.is_blocked {
+            Style::default().fg(Color::Rgb(239, 68, 68))
+        } else {
+            Style::default().fg(session.status.color())
+        };
+
+        Cell::from(state_text.to_string()).style(state_style)
+    }
+
+    fn create_test_cell(&self, session: &SessionInfo, is_stale: bool) -> Cell<'static> {
+        match &session.test_status {
+            Some(test_status) => {
+                let (text, color) = match test_status {
+                    crate::core::status::TestStatus::Passed => (
+                        "Passed",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(34, 197, 94)
+                        },
+                    ),
+                    crate::core::status::TestStatus::Failed => (
+                        "Failed",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(239, 68, 68)
+                        },
+                    ),
+                    crate::core::status::TestStatus::Unknown => (
+                        "Unknown",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(156, 163, 175)
+                        },
+                    ),
+                };
+                Cell::from(text.to_string()).style(Style::default().fg(color))
+            }
+            None => Cell::from("-").style(Style::default().fg(if is_stale {
+                crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+            } else {
+                Color::Rgb(107, 114, 128)
+            })),
+        }
+    }
+
+    fn create_progress_cell(&self, session: &SessionInfo, is_stale: bool) -> Cell<'static> {
+        match session.todo_percentage {
+            Some(pct) => {
+                let progress_bar = create_progress_bar(pct);
+                let color = if is_stale {
+                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                } else if pct == 100 {
+                    Color::Rgb(34, 197, 94)
+                } else if pct >= 50 {
+                    Color::Rgb(99, 102, 241)
+                } else {
+                    Color::Rgb(245, 158, 11)
+                };
+                Cell::from(progress_bar).style(Style::default().fg(color))
+            }
+            None => {
+                let empty_bar = "░░░░░░░░ ─";
+                Cell::from(empty_bar).style(Style::default().fg(if is_stale {
+                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                } else {
+                    Color::Rgb(107, 114, 128)
+                }))
+            }
+        }
+    }
+
+    fn create_confidence_cell(&self, session: &SessionInfo, is_stale: bool) -> Cell<'static> {
+        match &session.confidence {
+            Some(confidence) => {
+                let (text, color) = match confidence {
+                    crate::core::status::ConfidenceLevel::High => (
+                        "High",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(34, 197, 94)
+                        },
+                    ),
+                    crate::core::status::ConfidenceLevel::Medium => (
+                        "Medium",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(245, 158, 11)
+                        },
+                    ),
+                    crate::core::status::ConfidenceLevel::Low => (
+                        "Low",
+                        if is_stale {
+                            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+                        } else {
+                            Color::Rgb(239, 68, 68)
+                        },
+                    ),
+                };
+                Cell::from(text.to_string()).style(Style::default().fg(color))
+            }
+            None => Cell::from("-").style(Style::default().fg(if is_stale {
+                crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+            } else {
+                Color::Rgb(107, 114, 128)
+            })),
+        }
+    }
+}
+
+impl MonitorRenderer {
     fn render_footer(
         &self,
         f: &mut Frame,
@@ -573,5 +616,71 @@ mod tests {
         assert_eq!(create_progress_bar(1), "░░░░░░░░ 1%"); // Very small progress rounds to 0 blocks
         assert_eq!(create_progress_bar(13), "█░░░░░░░ 13%"); // 13% = 1.04 blocks ≈ 1 block
         assert_eq!(create_progress_bar(99), "████████ 99%"); // Almost complete rounds to full blocks
+    }
+
+    #[test]
+    fn test_table_builder_creation() {
+        let table_builder = TableBuilder::new();
+        let sessions = create_test_sessions();
+        let state = MonitorAppState::new();
+
+        // Test that we can create a table
+        let _table = table_builder.build_table(&sessions, &state);
+        // We can't easily test the internal structure, but we can verify
+        // that the method completes without panicking
+    }
+
+    #[test]
+    fn test_table_builder_constraints() {
+        let table_builder = TableBuilder::new();
+        let constraints = table_builder.create_constraints();
+
+        // Test that we have the right number of constraints (7 columns)
+        assert_eq!(constraints.len(), 7);
+    }
+
+    #[test]
+    fn test_table_builder_header() {
+        let table_builder = TableBuilder::new();
+        let _header = table_builder.create_header();
+
+        // Test that header is created (we can't easily inspect Cell contents)
+    }
+
+    #[test]
+    fn test_table_builder_cell_creation() {
+        let table_builder = TableBuilder::new();
+        let session = &create_test_sessions()[0];
+
+        // Test base style creation
+        let _selected_style = table_builder.create_base_style(true, false);
+        let _normal_style = table_builder.create_base_style(false, false);
+        let _stale_style = table_builder.create_base_style(false, true);
+
+        // Test that different styles are created (we can't easily compare Style structs)
+
+        // Test cell creation methods
+        let _state_cell = table_builder.create_state_cell(session);
+        let _test_cell = table_builder.create_test_cell(session, false);
+        let _progress_cell = table_builder.create_progress_cell(session, false);
+        let _confidence_cell = table_builder.create_confidence_cell(session, false);
+
+        // Test that cells are created successfully
+    }
+
+    #[test]
+    fn test_table_builder_row_creation() {
+        let table_builder = TableBuilder::new();
+        let sessions = create_test_sessions();
+        let state = MonitorAppState::new();
+
+        let rows = table_builder.create_rows(&sessions, &state);
+
+        // Test that we get the right number of rows
+        assert_eq!(rows.len(), sessions.len());
+
+        // Test individual row creation
+        let _row = table_builder.create_row(&sessions[0], 0, &state);
+        // Row created successfully
     }
 }
