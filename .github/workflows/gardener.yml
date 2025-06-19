@@ -173,7 +173,7 @@ jobs:
         if: steps.task.outputs.skip_work != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           title: "🌿 Gardener Fix for: ${{ steps.task.outputs.task_file }}"
           body: |
             ## 🌿 Gardener Automated Fix

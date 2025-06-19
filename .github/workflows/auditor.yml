@@ -108,7 +108,7 @@ jobs:
         if: steps.analysis.outputs.skip_task != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           commit-message: "auditor: Propose task to fix unwrap in ${{ steps.analysis.outputs.sanitized_filename }}"
           title: "Auditor Proposal: New Tech Debt Task"
           body: |
