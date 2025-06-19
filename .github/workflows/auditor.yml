@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  propose-task:
+  analyze-codebase:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      issues: write
       id-token: write
-      actions: write
     
     steps:
       - name: Checkout repository
@@ -26,42 +25,7 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
-      - name: Install ripgrep
-        run: |
-          curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
-          sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
-
-      - name: Analysis step - Find unwrap usage
-        id: analysis
-        run: |
-          # Find files with .unwrap() usage
-          unwrap_files=$(rg --type rust -l "\.unwrap\(\)" src/ || true)
-          
-          if [ -z "$unwrap_files" ]; then
-            echo "No .unwrap() usage found in src/"
-            echo "skip_task=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Select random file
-          selected_file=$(echo "$unwrap_files" | shuf -n 1)
-          echo "Selected file: $selected_file"
-          
-          # Sanitize filename for task file and branch
-          base_filename=$(basename "$selected_file" .rs)
-          sanitized_filename=$(echo "$base_filename" | sed 's/[^a-zA-Z0-9_-]/-/g')
-          
-          # Generate unique task filename
-          timestamp=$(date +%s)
-          task_filename="tasks/gardener-backlog/${timestamp}-fix-unwrap-in-${sanitized_filename}.md"
-          
-          echo "selected_file=$selected_file" >> $GITHUB_OUTPUT
-          echo "sanitized_filename=$sanitized_filename" >> $GITHUB_OUTPUT
-          echo "task_filename=$task_filename" >> $GITHUB_OUTPUT
-          echo "skip_task=false" >> $GITHUB_OUTPUT
-
-      - name: Generate task file with Claude
-        if: steps.analysis.outputs.skip_task != 'true'
+      - name: Analyze codebase for technical debt
         uses: 2mawi2/claude-code-action-extended@main
         with:
           use_oauth: true
@@ -69,67 +33,38 @@ jobs:
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            Create a markdown task file at `${{ steps.analysis.outputs.task_filename }}` with the following content:
-
-            # Fix .unwrap() Usage in ${{ steps.analysis.outputs.selected_file }}
-
-            ## Task Description
-            Replace all `.unwrap()` calls in the file `${{ steps.analysis.outputs.selected_file }}` with proper error handling using the `?` operator.
-
-            ## Requirements
-            1. Review the file `${{ steps.analysis.outputs.selected_file }}`
-            2. Identify all `.unwrap()` calls
-            3. Replace each `.unwrap()` with proper error propagation using `?`
-            4. Ensure the function signatures return appropriate `Result` types
-            5. Add proper error context where needed using `anyhow` or `thiserror`
-            6. Run `just test` to ensure all tests pass
-            7. Run `just lint` to ensure code quality
-
-            ## File to Fix
-            `${{ steps.analysis.outputs.selected_file }}`
-
-            ## Completion Command
-            When the task is complete, run:
-            ```bash
-            para finish "refactor: Replace unwrap in ${{ steps.analysis.outputs.sanitized_filename }}" --branch "gardener/fix-unwrap-in-${{ steps.analysis.outputs.sanitized_filename }}"
-            ```
-
-            ## Success Criteria
-            - All `.unwrap()` calls removed from the target file
-            - Proper error handling implemented
-            - All tests pass (`just test`)
-            - Code passes linting (`just lint`)
-            - No breaking changes to public APIs
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test:*),Bash(just lint),Bash(just fmt),Bash(just build),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(cargo fmt:*),Bash(rustfmt:*),Bash(clippy:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(rg:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(uniq:*),Bash(wc:*),Bash(which:*),Bash(command:*),Bash(type:*),Bash(echo:*),Bash(printf:*),Bash(test:*),Bash([:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(readlink:*),Bash(date:*),Bash(env:*),Bash(pwd),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(find:*),Bash(tree:*),Bash(file:*),Bash(stat:*),WebFetch(domain:github.com)"
-          timeout_minutes: "15"
-
-      - name: Create pull request
-        if: steps.analysis.outputs.skip_task != 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          commit-message: "auditor: Propose task to fix unwrap in ${{ steps.analysis.outputs.sanitized_filename }}"
-          title: "Auditor Proposal: New Tech Debt Task"
-          body: |
-            ## 🔍 Auditor Analysis Results
+            You are a code auditor tasked with finding technical debt in this Rust codebase.
             
-            The Auditor has identified technical debt in the codebase and proposes a new task.
+            Please analyze the codebase comprehensively to identify technical debt, including but not limited to:
+            - Error handling issues (unwrap, expect, panic)
+            - Code duplication
+            - Complex functions that need refactoring
+            - Missing tests
+            - Outdated dependencies
+            - Performance bottlenecks
+            - Security vulnerabilities
+            - Poor naming or unclear code
+            - Missing documentation
+            - Architectural issues
             
-            **File analyzed:** `${{ steps.analysis.outputs.selected_file }}`
-            **Task file:** `${{ steps.analysis.outputs.task_filename }}`
-            **Issue:** `.unwrap()` usage that should be replaced with proper error handling
+            Use all available tools to:
+            1. Explore the codebase structure
+            2. Read and analyze code files
+            3. Run tests to understand coverage
+            4. Check for linting issues
+            5. Analyze git history for problematic areas
             
-            ## 🎯 Proposed Fix
-            Replace `.unwrap()` calls with proper `?` error propagation to improve error handling and code reliability.
+            For each significant technical debt item found:
+            1. Create a GitHub issue with:
+               - Clear title describing the problem
+               - Detailed description of the issue
+               - Why it's important to fix
+               - Suggested approach for fixing
+               - Add the label "technical-debt"
             
-            ## 🤖 Next Steps
-            Once this PR is merged, the Gardener workflow will automatically:
-            1. Create a feature branch
-            2. Dispatch an agent to perform the work
-            3. Create a PR with the proposed fix
-            
-            ---
-            *This PR was created automatically by the Auditor workflow*
-          branch: "auditor/propose-task-${{ github.run_id }}"
-          delete-branch: true
+            Create at most 3 issues per run to avoid overwhelming the team.
+            Focus on the most impactful technical debt first.
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test:*),Bash(just lint),Bash(just fmt),Bash(just build),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(cargo fmt:*),Bash(rustfmt:*),Bash(clippy:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(rg:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(uniq:*),Bash(wc:*),Bash(which:*),Bash(command:*),Bash(type:*),Bash(echo:*),Bash(printf:*),Bash(test:*),Bash([:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(readlink:*),Bash(date:*),Bash(env:*),Bash(pwd),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(find:*),Bash(tree:*),Bash(file:*),Bash(stat:*),WebFetch(domain:github.com),mcp__github__create_issue,mcp__github__add_issue_labels"
+          timeout_minutes: "30"
