@@ -54,12 +54,7 @@ impl SessionService {
             .or(session.last_activity)
             .unwrap_or(session.created_at);
 
-            let mut status = detect_session_status(&session, &last_activity);
-            if let Some(ref current) = current_session {
-                if current.name == session.name {
-                    status = SessionStatus::Active;
-                }
-            }
+            let status = detect_session_status(&session, &last_activity);
 
             let task = session.task_description.clone().unwrap_or_else(|| {
                 // Check cache first
@@ -489,37 +484,24 @@ mod tests {
     }
 
     #[test]
-    fn test_current_session_detection_priority() {
-        // Test the current session override logic in load_sessions
-        use crate::ui::monitor::SessionStatus;
+    fn test_current_session_keeps_actual_status() {
+        // Test that current session is no longer forced to Active status
+        use crate::core::session::SessionState;
+        use chrono::Utc;
 
-        // Mock the logic for current session detection
-        let session_name = "current-session".to_string();
-        let current_session_name = Some("current-session".to_string());
+        // Create a session that would be Idle based on time
+        let session = SessionState::new(
+            "current-session".to_string(),
+            "test-branch".to_string(),
+            std::path::PathBuf::from("/test"),
+        );
 
-        // Simulate status detection
-        let mut status = SessionStatus::Idle; // Would normally be Idle
+        // Test that status is based on activity time, not current session
+        let ten_minutes_ago = Utc::now() - chrono::Duration::minutes(10);
+        let status = detect_session_status(&session, &ten_minutes_ago);
 
-        // Test current session override (mimicking the load_sessions logic)
-        if let Some(ref current) = current_session_name {
-            if current == &session_name {
-                status = SessionStatus::Active; // Override to Active
-            }
-        }
-
-        assert_eq!(status, SessionStatus::Active);
-
-        // Test with different session
-        let other_session = "other-session".to_string();
-        let mut other_status = SessionStatus::Stale;
-
-        if let Some(ref current) = current_session_name {
-            if current == &other_session {
-                other_status = SessionStatus::Active;
-            }
-        }
-
-        assert_eq!(other_status, SessionStatus::Stale); // Should remain unchanged
+        // Should be Idle based on time, not forced to Active
+        assert!(matches!(status, SessionStatus::Idle));
     }
 
     #[test]
