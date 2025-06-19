@@ -1,18 +1,17 @@
-name: Gardener - Technical Debt Remediation
+name: Gardener - Fix Technical Debt Issues
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'tasks/gardener-backlog/**'
+  issues:
+    types: [opened, labeled]
 
 jobs:
-  work-on-task:
+  fix-technical-debt:
     runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'technical-debt')
     permissions:
       contents: write
       pull-requests: write
+      issues: write
       id-token: write
     
     steps:
@@ -27,53 +26,15 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
-
-      - name: Identify new task
-        id: task
+      - name: Create working branch
         run: |
-          # Find the task file that was added in this commit
-          added_files=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
-          task_file=$(echo "$added_files" | grep "^tasks/gardener-backlog/.*\.md$" | head -1)
-          
-          if [ -z "$task_file" ]; then
-            echo "No task file found in commit"
-            echo "skip_work=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "Task file: $task_file"
-          
-          # Extract components for branch naming
-          task_basename=$(basename "$task_file" .md)
-          # Remove timestamp prefix (assuming format: timestamp-description)
-          branch_suffix=$(echo "$task_basename" | sed 's/^[0-9]*-//')
-          branch_name="gardener/$branch_suffix"
-          
-          # Generate session name from task
-          session_name=$(echo "$branch_suffix" | sed 's/-/_/g')
-          
-          echo "task_file=$task_file" >> $GITHUB_OUTPUT
-          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT  
-          echo "session_name=$session_name" >> $GITHUB_OUTPUT
-          echo "skip_work=false" >> $GITHUB_OUTPUT
+          # Create branch name from issue number and title
+          BRANCH_NAME="fix/issue-${{ github.event.issue.number }}-$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-50)"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        id: branch
 
-      - name: Create feature branch
-        if: steps.task.outputs.skip_work != 'true'
-        run: |
-          git checkout -b "${{ steps.task.outputs.branch_name }}"
-          git push -u origin "${{ steps.task.outputs.branch_name }}"
-
-      - name: Read task file
-        if: steps.task.outputs.skip_work != 'true'
-        id: read_task
-        run: |
-          task_content=$(cat "${{ steps.task.outputs.task_file }}")
-          echo "task_content<<EOF" >> $GITHUB_OUTPUT
-          echo "$task_content" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Execute task with Claude
-        if: steps.task.outputs.skip_work != 'true'
+      - name: Fix technical debt issue
         uses: 2mawi2/claude-code-action-extended@main
         with:
           use_oauth: true
@@ -83,68 +44,55 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            Please complete the following technical debt remediation task:
+            You are working on fixing the following technical debt issue:
+            
+            Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
+            
+            ${{ github.event.issue.body }}
+            
+            Please:
+            1. Understand the issue thoroughly
+            2. Implement the fix following best practices
+            3. Ensure all tests pass after your changes
+            4. Run linting to ensure code quality
+            5. Commit your changes with a descriptive message
+            6. Comment on the issue with a summary of what you did
+            
+            Important:
+            - Make focused changes that address only this specific issue
+            - Write clean, well-documented code
+            - Add tests if necessary
+            - Use `git add -A && git commit -m "fix: [description] (closes #${{ github.event.issue.number }})"` for the commit
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test:*),Bash(just lint),Bash(just fmt),Bash(just build),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(cargo fmt:*),Bash(rustfmt:*),Bash(clippy:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(rg:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(uniq:*),Bash(wc:*),Bash(which:*),Bash(command:*),Bash(type:*),Bash(echo:*),Bash(printf:*),Bash(test:*),Bash([:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(readlink:*),Bash(date:*),Bash(env:*),Bash(pwd),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git show:*),WebFetch(domain:github.com),mcp__github__create_comment"
+          timeout_minutes: "45"
 
-            ${{ steps.read_task.outputs.task_content }}
-
-            Important instructions:
-            1. Work on the current branch: ${{ steps.task.outputs.branch_name }}
-            2. Read the task file carefully and follow all requirements
-            3. After making changes, run `just test` to ensure all tests pass
-            4. Run `just lint` to ensure code quality
-            5. When complete, commit your changes with: git add -A && git commit -m "refactor: Replace unwrap in ${{ steps.task.outputs.session_name }}"
-            6. Do NOT run `para finish` - just commit the changes directly
-
-            Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test:*),Bash(just lint),Bash(just fmt),Bash(just build),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(cargo fmt:*),Bash(rustfmt:*),Bash(clippy:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(rg:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(uniq:*),Bash(wc:*),Bash(which:*),Bash(command:*),Bash(type:*),Bash(echo:*),Bash(printf:*),Bash(test:*),Bash([:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(readlink:*),Bash(date:*),Bash(env:*),Bash(pwd),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git show:*),WebFetch(domain:github.com)"
-          timeout_minutes: "30"
-
-      - name: Verify work completion
-        if: steps.task.outputs.skip_work != 'true'
+      - name: Push changes
         run: |
-          # Check if the agent created a commit
-          if [ $(git rev-list --count HEAD ^origin/main) -eq 0 ]; then
-            echo "No commits found - agent may not have completed work"
-            exit 1
-          fi
-          
-          # Run tests to verify the fix
-          just test || {
-            echo "Tests failed after agent work"
-            exit 1
-          }
+          git push -u origin "${{ steps.branch.outputs.branch_name }}"
 
       - name: Create pull request
-        if: steps.task.outputs.skip_work != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          title: "🌿 Gardener Fix for: ${{ steps.task.outputs.task_file }}"
+          branch: ${{ steps.branch.outputs.branch_name }}
+          title: "🌿 Fix: ${{ github.event.issue.title }}"
           body: |
             ## 🌿 Gardener Automated Fix
             
-            This PR contains an automated fix generated by the Gardener workflow.
+            This PR fixes the technical debt identified in #${{ github.event.issue.number }}
             
-            **Original task:** `${{ steps.task.outputs.task_file }}`
-            **Branch:** `${{ steps.task.outputs.branch_name }}`
-            **Session:** `${{ steps.task.outputs.session_name }}`
+            ### 📋 Issue Description
+            ${{ github.event.issue.title }}
             
-            ## 🔧 Work Performed
-            The agent was dispatched to work on the technical debt task and has:
-            - Analyzed the specified file(s)
-            - Implemented the requested changes
-            - Ensured all tests pass
-            - Followed code quality standards
+            ### 🔧 Changes Made
+            The Gardener has automatically implemented a fix for this technical debt issue.
             
-            ## ✅ Verification
-            - Tests pass: `just test` ✓
-            - Code quality: `just lint` ✓
-            - Changes committed via `para finish` ✓
+            ### ✅ Checklist
+            - [ ] All tests pass
+            - [ ] Code follows project conventions
+            - [ ] No breaking changes introduced
             
-            ## 📋 Next Steps
-            Please review the changes and merge if they meet your standards.
+            Closes #${{ github.event.issue.number }}
             
             ---
             *This PR was created automatically by the Gardener workflow*
-          branch: ${{ steps.task.outputs.branch_name }}
-          base: main
