@@ -1,0 +1,35 @@
+name: Test Extended Claude Action
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-extended:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Extended Claude Action
+        uses: 2mawi2/claude-code-action-extended@main
+        with:
+          use_oauth: true
+          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          direct_prompt: |
+            This is a test of the extended Claude Code Action.
+            
+            Please verify that:
+            1. The action can handle workflow_dispatch events
+            2. OAuth authentication works with Claude Max subscription
+            3. Direct prompts are processed correctly
+            
+            If this works, respond with a simple acknowledgment.
+          allowed_tools: "Read"
+          timeout_minutes: "2"

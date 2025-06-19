@@ -74,7 +74,7 @@ jobs:
 
       - name: Execute task with Claude
         if: steps.task.outputs.skip_work != 'true'
-        uses: grll/claude-code-action@beta
+        uses: 2mawi2/claude-code-action-extended@main
         with:
           use_oauth: true
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
