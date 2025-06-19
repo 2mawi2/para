@@ -27,7 +27,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Automatic PR Review
-        uses: grll/claude-code-action@beta
+        uses: 2mawi2/claude-code-action-extended@main
         with:
           use_oauth: true
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
