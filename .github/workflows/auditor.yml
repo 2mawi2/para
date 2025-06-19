@@ -64,7 +64,7 @@ jobs:
         uses: 2mawi2/claude-code-action-extended@main
         with:
           use_oauth: true
-          model: "claude-4-0-sonnet-20250219"
+          model: "claude-sonnet-4-20250514"
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
@@ -102,7 +102,6 @@ jobs:
             - No breaking changes to public APIs
           allowed_tools: "Write,Read"
           timeout_minutes: "5"
-          dangerously_skip_permissions: true
 
       - name: Create pull request
         if: steps.analysis.outputs.skip_task != 'true'
