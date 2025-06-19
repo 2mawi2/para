@@ -96,62 +96,7 @@ jobs:
             6. Do NOT run `para finish` - just commit the changes directly
 
             Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
-          allowed_tools: |
-            Edit
-            Read
-            Write
-            MultiEdit
-            Glob
-            Grep
-            LS
-            TodoRead
-            TodoWrite
-            Bash(just test)
-            Bash(just test:*)
-            Bash(just lint)
-            Bash(just fmt)
-            Bash(just build)
-            Bash(cargo test:*)
-            Bash(cargo build:*)
-            Bash(cargo check:*)
-            Bash(cargo clippy:*)
-            Bash(cargo fmt:*)
-            Bash(rustfmt:*)
-            Bash(clippy:*)
-            Bash(ls:*)
-            Bash(cat:*)
-            Bash(head:*)
-            Bash(tail:*)
-            Bash(grep:*)
-            Bash(rg:*)
-            Bash(awk:*)
-            Bash(sed:*)
-            Bash(sort:*)
-            Bash(uniq:*)
-            Bash(wc:*)
-            Bash(which:*)
-            Bash(command:*)
-            Bash(type:*)
-            Bash(echo:*)
-            Bash(printf:*)
-            Bash(test:*)
-            Bash([:*)
-            Bash(basename:*)
-            Bash(dirname:*)
-            Bash(realpath:*)
-            Bash(readlink:*)
-            Bash(date:*)
-            Bash(env:*)
-            Bash(pwd)
-            Bash(git status)
-            Bash(git diff:*)
-            Bash(git log:*)
-            Bash(git add:*)
-            Bash(git commit:*)
-            Bash(git branch:*)
-            Bash(git rev-parse:*)
-            Bash(git show:*)
-            WebFetch(domain:github.com)
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test:*),Bash(just lint),Bash(just fmt),Bash(just build),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(cargo fmt:*),Bash(rustfmt:*),Bash(clippy:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(rg:*),Bash(awk:*),Bash(sed:*),Bash(sort:*),Bash(uniq:*),Bash(wc:*),Bash(which:*),Bash(command:*),Bash(type:*),Bash(echo:*),Bash(printf:*),Bash(test:*),Bash([:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(readlink:*),Bash(date:*),Bash(env:*),Bash(pwd),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git show:*),WebFetch(domain:github.com)"
           timeout_minutes: "30"
 
       - name: Verify work completion
