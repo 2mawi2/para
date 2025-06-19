@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     
     steps:
       - name: Checkout repository
@@ -62,11 +63,16 @@ jobs:
         if: steps.analysis.outputs.skip_task != 'true'
         uses: grll/claude-code-action@beta
         with:
+          use_oauth: true
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
-          permissions: write
-          prompt: |
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: "30"
+          allowed_tools: |
+            Write
+            Read
+          direct_prompt: |
             Create a markdown task file at `${{ steps.analysis.outputs.task_filename }}` with the following content:
 
             # Fix .unwrap() Usage in ${{ steps.analysis.outputs.selected_file }}
