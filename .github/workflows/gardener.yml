@@ -7,7 +7,10 @@ on:
 jobs:
   fix-technical-debt:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'technical-debt')
+    # Only process issues created by 2mawi2 with technical-debt label
+    if: |
+      contains(github.event.issue.labels.*.name, 'technical-debt') &&
+      github.event.issue.user.login == '2mawi2'
     permissions:
       contents: write
       pull-requests: write

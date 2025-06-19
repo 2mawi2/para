@@ -8,6 +8,8 @@ on:
 jobs:
   analyze-codebase:
     runs-on: ubuntu-latest
+    # Only allow 2mawi2 to trigger this workflow
+    if: github.actor == '2mawi2'
     permissions:
       contents: read
       issues: write
