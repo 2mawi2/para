@@ -74,33 +74,9 @@ jobs:
 
       - name: Execute task with Claude
         if: steps.task.outputs.skip_work != 'true'
-        uses: grll/claude-code-action@beta
+        uses: anthropics/claude-code-base-action@beta
         with:
-          use_oauth: true
-          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
-          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
-          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          timeout_minutes: "30"
-          allowed_tools: |
-            Edit
-            Read
-            Write
-            Glob
-            Grep
-            Bash(just test)
-            Bash(just lint)
-            Bash(just fmt)
-            Bash(cargo test:*)
-            Bash(cargo build:*)
-            Bash(cargo check:*)
-            Bash(cargo clippy:*)
-            Bash(git diff:*)
-            Bash(git log:*)
-            Bash(git status)
-            Bash(git add:*)
-            Bash(git commit:*)
-          direct_prompt: |
+          prompt: |
             Please complete the following technical debt remediation task:
 
             ${{ steps.read_task.outputs.task_content }}
@@ -114,6 +90,9 @@ jobs:
             6. Do NOT run `para finish` - just commit the changes directly
 
             Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
+          allowed_tools: "Edit,Read,Write,Glob,Grep,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(git diff:*),Bash(git log:*),Bash(git status),Bash(git add:*),Bash(git commit:*)"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          timeout_minutes: "30"
 
       - name: Verify work completion
         if: steps.task.outputs.skip_work != 'true'
