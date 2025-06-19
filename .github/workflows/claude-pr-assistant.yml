@@ -49,23 +49,4 @@ jobs:
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           timeout_minutes: "60"
-          allowed_tools: |
-            Edit
-            Read
-            Write
-            Glob
-            Grep
-            Bash(just test)
-            Bash(just lint)
-            Bash(just fmt)
-            Bash(cargo test)
-            Bash(cargo build)
-            Bash(cargo check)
-            Bash(cargo clippy)
-            Bash(git diff)
-            Bash(git log)
-            Bash(git status)
-            Bash(echo)
-            Bash(cat)
-            Bash(grep)
-            Bash(which)
+          allowed_tools: "Edit,Read,Write,Glob,Grep,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test),Bash(cargo build),Bash(cargo check),Bash(cargo clippy),Bash(git diff),Bash(git log),Bash(git status),Bash(echo),Bash(cat),Bash(grep),Bash(which)"
