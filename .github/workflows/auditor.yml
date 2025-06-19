@@ -59,12 +59,13 @@ jobs:
             5. Analyze git history for problematic areas
             
             For each significant technical debt item found:
-            1. Create a GitHub issue with:
+            1. Create a GitHub issue using the gh CLI:
+               - Use: gh issue create --title "Title" --body "Description" --label "technical-debt"
                - Clear title describing the problem
                - Detailed description of the issue
                - Why it's important to fix
                - Suggested approach for fixing
-               - Add the label "technical-debt"
+               - The label "technical-debt" must be included
             
             Create at most 3 issues per run to avoid overwhelming the team.
             Focus on the most impactful technical debt first.
