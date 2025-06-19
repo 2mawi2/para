@@ -68,5 +68,5 @@ jobs:
             
             Create at most 3 issues per run to avoid overwhelming the team.
             Focus on the most impactful technical debt first.
-          allowed_tools: "Bash(*),Edit(*),Read(*),Write(*),MultiEdit(*),Glob(*),Grep(*),LS(*),TodoRead,TodoWrite,WebFetch(*),WebSearch(*),mcp__github__create_issue,mcp__github__add_issue_labels"
+          allowed_tools: "Bash(*),Edit(*),Read(*),Write(*),MultiEdit(*),Glob(*),Grep(*),LS(*),TodoRead,TodoWrite,mcp__github__create_issue,mcp__github__add_issue_labels"
           timeout_minutes: "30"
