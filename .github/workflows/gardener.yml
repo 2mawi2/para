@@ -72,27 +72,37 @@ jobs:
           echo "$task_content" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Install Claude Code
+        if: steps.task.outputs.skip_work != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code@latest
+
       - name: Execute task with Claude
         if: steps.task.outputs.skip_work != 'true'
-        uses: anthropics/claude-code-base-action@beta
-        with:
-          prompt: |
-            Please complete the following technical debt remediation task:
+        run: |
+          # Create prompt file
+          cat > task_prompt.txt <<'EOF'
+          Please complete the following technical debt remediation task:
 
-            ${{ steps.read_task.outputs.task_content }}
+          ${{ steps.read_task.outputs.task_content }}
 
-            Important instructions:
-            1. Work on the current branch: ${{ steps.task.outputs.branch_name }}
-            2. Read the task file carefully and follow all requirements
-            3. After making changes, run `just test` to ensure all tests pass
-            4. Run `just lint` to ensure code quality
-            5. When complete, commit your changes with: git add -A && git commit -m "refactor: Replace unwrap in ${{ steps.task.outputs.session_name }}"
-            6. Do NOT run `para finish` - just commit the changes directly
+          Important instructions:
+          1. Work on the current branch: ${{ steps.task.outputs.branch_name }}
+          2. Read the task file carefully and follow all requirements
+          3. After making changes, run `just test` to ensure all tests pass
+          4. Run `just lint` to ensure code quality
+          5. When complete, commit your changes with: git add -A && git commit -m "refactor: Replace unwrap in ${{ steps.task.outputs.session_name }}"
+          6. Do NOT run `para finish` - just commit the changes directly
 
-            Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
-          allowed_tools: "Edit,Read,Write,Glob,Grep,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(git diff:*),Bash(git log:*),Bash(git status),Bash(git add:*),Bash(git commit:*)"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          timeout_minutes: "30"
+          Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
+          EOF
+
+          # Run Claude Code with your subscription (30 minute timeout)
+          timeout 1800 claude -p --allowedTools "Edit,Read,Write,Glob,Grep,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test:*),Bash(cargo build:*),Bash(cargo check:*),Bash(cargo clippy:*),Bash(git diff:*),Bash(git log:*),Bash(git status),Bash(git add:*),Bash(git commit:*)" < task_prompt.txt
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          CLAUDE_REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          CLAUDE_EXPIRES_AT: ${{ secrets.CLAUDE_EXPIRES_AT }}
 
       - name: Verify work completion
         if: steps.task.outputs.skip_work != 'true'
