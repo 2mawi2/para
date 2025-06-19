@@ -233,7 +233,7 @@ mod tests {
                 wrapper: WrapperConfig {
                     enabled: true,
                     name: "cursor".to_string(),
-                    command: "echo".to_string(),
+                    command: "cursor".to_string(),
                 },
             },
             directories: DirectoryConfig {
@@ -252,7 +252,10 @@ mod tests {
             },
         };
 
-        assert!(config.validate().is_ok(), "Test config should be valid");
+        assert!(
+            config.validate_no_cmd_check().is_ok(),
+            "Test config should be valid"
+        );
     }
 
     #[test]

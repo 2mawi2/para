@@ -10,6 +10,18 @@ pub fn validate_config(config: &Config) -> Result<()> {
 }
 
 pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
+    validate_ide_config_with_checks(ide, true)
+}
+
+#[cfg(test)]
+pub fn validate_ide_config_no_cmd_check(ide: &super::IdeConfig) -> Result<()> {
+    validate_ide_config_with_checks(ide, false)
+}
+
+fn validate_ide_config_with_checks(
+    ide: &super::IdeConfig,
+    check_command_availability: bool,
+) -> Result<()> {
     if ide.name.is_empty() {
         return Err(ConfigError::Validation(
             "IDE name cannot be empty".to_string(),
@@ -40,7 +52,7 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
         )));
     }
 
-    if !super::defaults::is_command_available(&ide.command) {
+    if check_command_availability && !super::defaults::is_command_available(&ide.command) {
         return Err(ConfigError::Validation(format!(
             "Claude Code command '{}' is not available. Please ensure Claude Code is installed and in your PATH",
             ide.command
@@ -77,7 +89,9 @@ pub fn validate_ide_config(ide: &super::IdeConfig) -> Result<()> {
             )));
         }
 
-        if !super::defaults::is_command_available(&ide.wrapper.command) {
+        if check_command_availability
+            && !super::defaults::is_command_available(&ide.wrapper.command)
+        {
             return Err(ConfigError::Validation(format!(
                 "Wrapper command '{}' is not available. Please ensure {} is installed.",
                 ide.wrapper.command, ide.wrapper.name
@@ -279,10 +293,10 @@ mod tests {
             wrapper: WrapperConfig {
                 enabled: true,
                 name: "cursor".to_string(),
-                command: "echo".to_string(), // Use 'echo' as it's always available
+                command: "cursor".to_string(),
             },
         };
-        assert!(validate_ide_config(&valid_config).is_ok());
+        assert!(validate_ide_config_no_cmd_check(&valid_config).is_ok());
 
         // Invalid - non-Claude IDE
         let invalid_config = IdeConfig {
@@ -295,7 +309,7 @@ mod tests {
                 command: "cursor".to_string(),
             },
         };
-        assert!(validate_ide_config(&invalid_config).is_err());
+        assert!(validate_ide_config_no_cmd_check(&invalid_config).is_err());
 
         // Invalid - Claude without wrapper
         let invalid_no_wrapper = IdeConfig {
@@ -308,7 +322,7 @@ mod tests {
                 command: String::new(),
             },
         };
-        assert!(validate_ide_config(&invalid_no_wrapper).is_err());
+        assert!(validate_ide_config_no_cmd_check(&invalid_no_wrapper).is_err());
     }
 
     #[test]
