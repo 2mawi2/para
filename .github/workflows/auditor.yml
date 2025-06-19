@@ -69,5 +69,5 @@ jobs:
             
             Create at most 3 issues per run to avoid overwhelming the team.
             Focus on the most impactful technical debt first.
-          allowed_tools: "Bash(*),Edit(*),Read(*),Write(*),MultiEdit(*),Glob(*),Grep(*),LS(*),TodoRead,TodoWrite"
+          allowed_tools: "Bash(just test),Bash(just lint),Bash(just fmt),Bash(git status),Bash(git diff),Bash(git log),Bash(git blame),Bash(gh issue create),Bash(gh issue list),Bash(cargo test),Bash(cargo clippy),Bash(rg),Bash(grep),Bash(find),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(wc),Bash(pwd),Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite"
           timeout_minutes: "30"
