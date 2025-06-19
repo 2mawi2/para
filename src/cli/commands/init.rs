@@ -146,14 +146,26 @@ fn create_backup(config_path: &Path) -> Result<PathBuf> {
 }
 
 fn install_completion(config_path: &Path, shell: &Shell) -> Result<()> {
-    let completion_block = format!(
-        "\n# >>> para completion initialize >>>\neval \"$(PARA_COMPLETION_SCRIPT=1 para completion {})\"\n# <<< para completion initialize <<<\n",
-        match shell {
-            Shell::Bash => "bash",
-            Shell::Zsh => "zsh",
-            Shell::Fish => "fish",
+    let completion_block = match shell {
+        Shell::Fish => {
+            "\n# >>> para completion initialize >>>\n# Add timeout protection to prevent shell startup blocking\nif command -v timeout >/dev/null 2>&1\n    eval \"$(timeout 5 env PARA_COMPLETION_SCRIPT=1 para completion fish 2>/dev/null || echo '# Para completion failed to load')\"\nelse\n    # Fallback for systems without timeout command\n    eval \"$(PARA_COMPLETION_SCRIPT=1 para completion fish 2>/dev/null || echo '# Para completion failed to load')\"\nend\n# <<< para completion initialize <<<\n".to_string()
         }
-    );
+        _ => {
+            format!(
+                "\n# >>> para completion initialize >>>\n# Add timeout protection to prevent shell startup blocking\nif command -v timeout >/dev/null 2>&1; then\n    eval \"$(timeout 5 PARA_COMPLETION_SCRIPT=1 para completion {} 2>/dev/null || echo '# Para completion failed to load')\"\nelse\n    eval \"$(PARA_COMPLETION_SCRIPT=1 para completion {} 2>/dev/null || echo '# Para completion failed to load')\"\nfi\n# <<< para completion initialize <<<\n",
+                match shell {
+                    Shell::Bash => "bash",
+                    Shell::Zsh => "zsh", 
+                    Shell::Fish => unreachable!(),
+                },
+                match shell {
+                    Shell::Bash => "bash",
+                    Shell::Zsh => "zsh",
+                    Shell::Fish => unreachable!(),
+                }
+            )
+        }
+    };
 
     if config_path.exists() {
         let mut content = fs::read_to_string(config_path)
@@ -228,7 +240,7 @@ mod tests {
 
         let content = fs::read_to_string(&config_path).unwrap();
         assert!(content.contains(">>> para completion initialize >>>"));
-        assert!(content.contains("eval \"$(PARA_COMPLETION_SCRIPT=1 para completion bash)\""));
+        assert!(content.contains("PARA_COMPLETION_SCRIPT=1 para completion bash"));
         assert!(content.contains("<<< para completion initialize <<<"));
     }
 
@@ -248,7 +260,7 @@ mod tests {
         let content = fs::read_to_string(&config_path).unwrap();
         assert!(content.starts_with("# Existing config"));
         assert!(content.contains(">>> para completion initialize >>>"));
-        assert!(content.contains("eval \"$(PARA_COMPLETION_SCRIPT=1 para completion zsh)\""));
+        assert!(content.contains("PARA_COMPLETION_SCRIPT=1 para completion zsh"));
     }
 
     #[test]

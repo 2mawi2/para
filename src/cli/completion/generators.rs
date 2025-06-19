@@ -42,7 +42,8 @@ impl ShellCompletionGenerator {
 
 _para_complete_sessions() {
     local sessions
-    if command -v para >/dev/null 2>&1; then
+    # Avoid recursive calls during completion generation
+    if command -v para >/dev/null 2>&1 && [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
         sessions=$(para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
         if [[ -n "$sessions" ]]; then
             COMPREPLY=($(compgen -W "$sessions" -- "$1"))
@@ -52,7 +53,8 @@ _para_complete_sessions() {
 
 _para_complete_archived_sessions() {
     local sessions
-    if command -v para >/dev/null 2>&1; then
+    # Avoid recursive calls during completion generation
+    if command -v para >/dev/null 2>&1 && [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
         sessions=$(para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
         if [[ -n "$sessions" ]]; then
             COMPREPLY=($(compgen -W "$sessions" -- "$1"))
@@ -165,14 +167,20 @@ complete -F _para_completion para
 # Para completion helper functions for zsh
 _para_sessions() {
     local sessions
-    sessions=(${(f)"$(para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
-    _describe 'active sessions' sessions
+    # Avoid recursive calls during completion generation
+    if [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
+        sessions=(${(f)"$(para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        _describe 'active sessions' sessions
+    fi
 }
 
 _para_archived_sessions() {
     local sessions
-    sessions=(${(f)"$(para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
-    _describe 'archived sessions' sessions
+    # Avoid recursive calls during completion generation
+    if [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
+        sessions=(${(f)"$(para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        _describe 'archived sessions' sessions
+    fi
 }
 
 _para_branches() {
@@ -292,11 +300,17 @@ compdef _para para
         r#"
 # Para completion helper functions for fish shell
 function __para_sessions
-    para list --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+    # Avoid recursive calls during completion generation
+    if test -z "$PARA_COMPLETION_SCRIPT"
+        para list --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+    end
 end
 
 function __para_archived_sessions
-    para list --archived --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+    # Avoid recursive calls during completion generation
+    if test -z "$PARA_COMPLETION_SCRIPT"
+        para list --archived --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+    end
 end
 
 function __para_branches
