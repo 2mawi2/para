@@ -94,6 +94,15 @@ impl Config {
         validation::validate_config(self)
     }
 
+    #[cfg(test)]
+    pub fn validate_no_cmd_check(&self) -> Result<()> {
+        validation::validate_ide_config_no_cmd_check(&self.ide)?;
+        validation::validate_directory_config(&self.directories)?;
+        validation::validate_git_config(&self.git)?;
+        validation::validate_session_config(&self.session)?;
+        Ok(())
+    }
+
     pub fn get_branch_prefix(&self) -> &str {
         &self.git.branch_prefix
     }
