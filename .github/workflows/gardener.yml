@@ -66,7 +66,7 @@ jobs:
             - Write clean, well-documented code
             - Add tests if necessary
             - Use `git add -A && git commit -m "fix: [description] (closes #${{ github.event.issue.number }})"` for the commit
-          allowed_tools: "Bash(just test),Bash(just lint),Bash(just fmt),Bash(just build),Bash(git add),Bash(git commit),Bash(git status),Bash(git diff),Bash(git log),Bash(cargo test),Bash(cargo build),Bash(cargo check),Bash(cargo clippy),Bash(cargo fmt),Bash(gh issue comment),Bash(rg),Bash(grep),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(echo),Bash(pwd),Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite"
+          allowed_tools: "Bash,Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite"
           timeout_minutes: "45"
 
       - name: Push changes
