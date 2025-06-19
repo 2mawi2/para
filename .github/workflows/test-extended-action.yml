@@ -34,3 +34,4 @@ jobs:
             If this works, respond with a simple acknowledgment.
           allowed_tools: "Read"
           timeout_minutes: "2"
+          dangerously_skip_permissions: true

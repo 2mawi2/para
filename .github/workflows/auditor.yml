@@ -102,6 +102,7 @@ jobs:
             - No breaking changes to public APIs
           allowed_tools: "Write,Read"
           timeout_minutes: "5"
+          dangerously_skip_permissions: true
 
       - name: Create pull request
         if: steps.analysis.outputs.skip_task != 'true'

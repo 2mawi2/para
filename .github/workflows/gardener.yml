@@ -97,6 +97,7 @@ jobs:
             Focus on the specific file mentioned in the task and ensure high-quality, well-tested code.
           allowed_tools: "Edit,Read,Write,Glob,Grep,Bash"
           timeout_minutes: "30"
+          dangerously_skip_permissions: true
 
       - name: Verify work completion
         if: steps.task.outputs.skip_work != 'true'
