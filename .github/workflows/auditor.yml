@@ -29,6 +29,8 @@ jobs:
 
       - name: Analyze codebase for technical debt
         uses: 2mawi2/claude-code-action-extended@main
+        env:
+          ALLOWED_TOOLS: "Bash,Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite"
         with:
           use_oauth: true
           model: "claude-sonnet-4-20250514"
