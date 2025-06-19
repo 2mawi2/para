@@ -59,45 +59,55 @@ jobs:
           echo "task_filename=$task_filename" >> $GITHUB_OUTPUT
           echo "skip_task=false" >> $GITHUB_OUTPUT
 
+      - name: Install Claude Code
+        if: steps.analysis.outputs.skip_task != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code@latest
+
       - name: Generate task file with Claude
         if: steps.analysis.outputs.skip_task != 'true'
-        uses: anthropics/claude-code-base-action@beta
-        with:
-          prompt: |
-            Create a markdown task file at `${{ steps.analysis.outputs.task_filename }}` with the following content:
+        run: |
+          # Create prompt file
+          cat > task_prompt.txt <<'EOF'
+          Create a markdown task file at `${{ steps.analysis.outputs.task_filename }}` with the following content:
 
-            # Fix .unwrap() Usage in ${{ steps.analysis.outputs.selected_file }}
+          # Fix .unwrap() Usage in ${{ steps.analysis.outputs.selected_file }}
 
-            ## Task Description
-            Replace all `.unwrap()` calls in the file `${{ steps.analysis.outputs.selected_file }}` with proper error handling using the `?` operator.
+          ## Task Description
+          Replace all `.unwrap()` calls in the file `${{ steps.analysis.outputs.selected_file }}` with proper error handling using the `?` operator.
 
-            ## Requirements
-            1. Review the file `${{ steps.analysis.outputs.selected_file }}`
-            2. Identify all `.unwrap()` calls
-            3. Replace each `.unwrap()` with proper error propagation using `?`
-            4. Ensure the function signatures return appropriate `Result` types
-            5. Add proper error context where needed using `anyhow` or `thiserror`
-            6. Run `just test` to ensure all tests pass
-            7. Run `just lint` to ensure code quality
+          ## Requirements
+          1. Review the file `${{ steps.analysis.outputs.selected_file }}`
+          2. Identify all `.unwrap()` calls
+          3. Replace each `.unwrap()` with proper error propagation using `?`
+          4. Ensure the function signatures return appropriate `Result` types
+          5. Add proper error context where needed using `anyhow` or `thiserror`
+          6. Run `just test` to ensure all tests pass
+          7. Run `just lint` to ensure code quality
 
-            ## File to Fix
-            `${{ steps.analysis.outputs.selected_file }}`
+          ## File to Fix
+          `${{ steps.analysis.outputs.selected_file }}`
 
-            ## Completion Command
-            When the task is complete, run:
-            ```bash
-            para finish "refactor: Replace unwrap in ${{ steps.analysis.outputs.sanitized_filename }}" --branch "gardener/fix-unwrap-in-${{ steps.analysis.outputs.sanitized_filename }}"
-            ```
+          ## Completion Command
+          When the task is complete, run:
+          ```bash
+          para finish "refactor: Replace unwrap in ${{ steps.analysis.outputs.sanitized_filename }}" --branch "gardener/fix-unwrap-in-${{ steps.analysis.outputs.sanitized_filename }}"
+          ```
 
-            ## Success Criteria
-            - All `.unwrap()` calls removed from the target file
-            - Proper error handling implemented
-            - All tests pass (`just test`)
-            - Code passes linting (`just lint`)
-            - No breaking changes to public APIs
-          allowed_tools: "Write,Read"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          timeout_minutes: "5"
+          ## Success Criteria
+          - All `.unwrap()` calls removed from the target file
+          - Proper error handling implemented
+          - All tests pass (`just test`)
+          - Code passes linting (`just lint`)
+          - No breaking changes to public APIs
+          EOF
+
+          # Run Claude Code with your subscription
+          timeout 300 claude -p --allowedTools "Write,Read" < task_prompt.txt
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          CLAUDE_REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          CLAUDE_EXPIRES_AT: ${{ secrets.CLAUDE_EXPIRES_AT }}
 
       - name: Create pull request
         if: steps.analysis.outputs.skip_task != 'true'
