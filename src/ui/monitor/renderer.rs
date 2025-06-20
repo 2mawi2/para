@@ -63,7 +63,7 @@ fn create_dialog_style() -> Style {
     Style::default().fg(COLOR_WHITE)
 }
 
-fn create_control_buttons_line(confirm_text: &str, cancel_text: &str) -> Line {
+fn create_control_buttons_line<'a>(confirm_text: &'a str, cancel_text: &'a str) -> Line<'a> {
     Line::from(vec![
         Span::styled("[Enter]", Style::default().fg(COLOR_GREEN)),
         Span::raw(format!(" {} • ", confirm_text)),
@@ -129,10 +129,7 @@ impl MonitorRenderer {
                     true,
                 ),
                 Span::raw("                  "),
-                Span::styled(
-                    "Auto-refresh: 2s",
-                    Style::default().fg(COLOR_LIGHT_GRAY),
-                ),
+                Span::styled("Auto-refresh: 2s", Style::default().fg(COLOR_LIGHT_GRAY)),
             ]),
             Line::from("─".repeat(area.width as usize)),
         ];
@@ -212,9 +209,7 @@ impl MonitorRenderer {
 
     fn get_base_row_style(&self, is_selected: bool, is_stale: bool) -> Style {
         if is_selected {
-            Style::default()
-                .bg(COLOR_SELECTED_BG)
-                .fg(COLOR_WHITE)
+            Style::default().bg(COLOR_SELECTED_BG).fg(COLOR_WHITE)
         } else if is_stale {
             Style::default().fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
         } else {
@@ -248,7 +243,7 @@ impl MonitorRenderer {
                 let (text, color) = self.get_test_status_display(status, is_stale);
                 Cell::from(text).style(Style::default().fg(color))
             }
-            None => create_default_cell_for_none("-", is_stale)
+            None => create_default_cell_for_none("-", is_stale),
         }
     }
 
@@ -260,22 +255,12 @@ impl MonitorRenderer {
         let dimmed_color = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
 
         match status {
-            crate::core::status::TestStatus::Passed => (
-                "Passed",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    COLOR_GREEN
-                },
-            ),
-            crate::core::status::TestStatus::Failed => (
-                "Failed",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    COLOR_RED
-                },
-            ),
+            crate::core::status::TestStatus::Passed => {
+                ("Passed", if is_stale { dimmed_color } else { COLOR_GREEN })
+            }
+            crate::core::status::TestStatus::Failed => {
+                ("Failed", if is_stale { dimmed_color } else { COLOR_RED })
+            }
             crate::core::status::TestStatus::Unknown => (
                 "Unknown",
                 if is_stale {
@@ -294,7 +279,7 @@ impl MonitorRenderer {
                 let color = self.get_progress_color(pct, is_stale);
                 Cell::from(progress_bar).style(Style::default().fg(color))
             }
-            None => create_default_cell_for_none("░░░░░░░░ ─", is_stale)
+            None => create_default_cell_for_none("░░░░░░░░ ─", is_stale),
         }
     }
 
@@ -320,7 +305,7 @@ impl MonitorRenderer {
                 let (text, color) = self.get_confidence_display(level, is_stale);
                 Cell::from(text).style(Style::default().fg(color))
             }
-            None => create_default_cell_for_none("-", is_stale)
+            None => create_default_cell_for_none("-", is_stale),
         }
     }
 
@@ -332,30 +317,15 @@ impl MonitorRenderer {
         let dimmed_color = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
 
         match level {
-            crate::core::status::ConfidenceLevel::High => (
-                "High",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    COLOR_GREEN
-                },
-            ),
-            crate::core::status::ConfidenceLevel::Medium => (
-                "Medium",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    COLOR_ORANGE
-                },
-            ),
-            crate::core::status::ConfidenceLevel::Low => (
-                "Low",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    COLOR_RED
-                },
-            ),
+            crate::core::status::ConfidenceLevel::High => {
+                ("High", if is_stale { dimmed_color } else { COLOR_GREEN })
+            }
+            crate::core::status::ConfidenceLevel::Medium => {
+                ("Medium", if is_stale { dimmed_color } else { COLOR_ORANGE })
+            }
+            crate::core::status::ConfidenceLevel::Low => {
+                ("Low", if is_stale { dimmed_color } else { COLOR_RED })
+            }
         }
     }
 
@@ -622,18 +592,9 @@ mod tests {
         let renderer = MonitorRenderer::new(config);
 
         // Test completion colors
-        assert_eq!(
-            renderer.get_progress_color(100, false),
-            COLOR_GREEN
-        ); // Green for complete
-        assert_eq!(
-            renderer.get_progress_color(75, false),
-            COLOR_BLUE
-        ); // Blue for high progress
-        assert_eq!(
-            renderer.get_progress_color(25, false),
-            COLOR_ORANGE
-        ); // Orange for low progress
+        assert_eq!(renderer.get_progress_color(100, false), COLOR_GREEN); // Green for complete
+        assert_eq!(renderer.get_progress_color(75, false), COLOR_BLUE); // Blue for high progress
+        assert_eq!(renderer.get_progress_color(25, false), COLOR_ORANGE); // Orange for low progress
 
         // Test stale color override
         let dimmed = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
