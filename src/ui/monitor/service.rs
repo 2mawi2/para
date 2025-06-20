@@ -10,6 +10,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// Helper structure for agent status data
+#[derive(Debug, Default)]
+struct AgentStatusData {
+    pub test_status: Option<crate::core::status::TestStatus>,
+    pub confidence: Option<crate::core::status::ConfidenceLevel>,
+    pub todo_percentage: Option<u8>,
+    pub is_blocked: bool,
+    pub task: Option<String>,
+}
+
 pub struct SessionService {
     config: Config,
     activity_cache: ActivityCache,
@@ -28,89 +38,114 @@ impl SessionService {
     pub fn load_sessions(&self, show_stale: bool) -> Result<Vec<SessionInfo>> {
         let session_manager = SessionManager::new(&self.config);
         let sessions = session_manager.list_sessions()?;
+        let current_session = self.find_current_session(&session_manager)?;
 
         let mut session_infos = Vec::new();
-
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let current_session = session_manager
-            .find_session_by_path(&current_dir)
-            .unwrap_or(None);
-
         for session in sessions {
-            if matches!(session.status, CoreSessionStatus::Cancelled) {
-                continue;
+            if let Some(session_info) = self.process_session(session, show_stale)? {
+                session_infos.push(session_info);
             }
-            let last_activity = {
-                let path = session.worktree_path.clone();
-
-                if let Some(cached) = self.activity_cache.get(&path) {
-                    cached
-                } else {
-                    let detected = detect_last_activity(&path);
-                    self.activity_cache.set(path, detected);
-                    detected
-                }
-            }
-            .or(session.last_activity)
-            .unwrap_or(session.created_at);
-
-            let status = detect_session_status(&session, &last_activity);
-
-            let task = session.task_description.clone().unwrap_or_else(|| {
-                // Check cache first
-                let cache = self.task_cache.lock().unwrap();
-                if let Some(cached_task) = cache.get(&session.name) {
-                    cached_task.clone()
-                } else {
-                    drop(cache);
-                    let state_dir = Path::new(&self.config.directories.state_dir);
-                    let task_file = state_dir.join(format!("{}.task", session.name));
-                    let task = std::fs::read_to_string(task_file)
-                        .unwrap_or_else(|_| format!("Session: {}", &session.name));
-                    let mut cache = self.task_cache.lock().unwrap();
-                    cache.insert(session.name.clone(), task.clone());
-                    task
-                }
-            });
-
-            let state_dir = Path::new(&self.config.directories.state_dir);
-            let agent_status = Status::load(state_dir, &session.name).ok().flatten();
-
-            let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
-                if let Some(ref status) = agent_status {
-                    (
-                        Some(status.test_status.clone()),
-                        Some(status.confidence.clone()),
-                        status.todo_percentage(),
-                        status.is_blocked,
-                        Some(status.current_task.clone()),
-                    )
-                } else {
-                    (None, None, None, false, None)
-                };
-
-            let final_task = agent_task.unwrap_or(task);
-
-            let session_info = SessionInfo {
-                name: session.name.clone(),
-                branch: session.branch.clone(),
-                status,
-                last_activity,
-                task: final_task,
-                worktree_path: session.worktree_path.clone(),
-                test_status,
-                confidence,
-                todo_percentage,
-                is_blocked,
-            };
-
-            if !show_stale && matches!(session_info.status, SessionStatus::Stale) {
-                continue;
-            }
-
-            session_infos.push(session_info);
         }
 
+        self.sort_sessions(&mut session_infos, &current_session);
+        Ok(session_infos)
+    }
+
+    fn find_current_session(&self, session_manager: &SessionManager) -> Result<Option<crate::core::session::SessionState>> {
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Ok(session_manager.find_session_by_path(&current_dir).unwrap_or(None))
+    }
+
+    fn process_session(&self, session: crate::core::session::SessionState, show_stale: bool) -> Result<Option<SessionInfo>> {
+        if matches!(session.status, CoreSessionStatus::Cancelled) {
+            return Ok(None);
+        }
+
+        let last_activity = self.resolve_last_activity(&session)?;
+        let status = detect_session_status(&session, &last_activity);
+        
+        if !show_stale && matches!(status, SessionStatus::Stale) {
+            return Ok(None);
+        }
+
+        let task = self.resolve_task(&session)?;
+        let agent_data = self.resolve_agent_status(&session)?;
+        let final_task = agent_data.task.unwrap_or(task);
+
+        let session_info = SessionInfo {
+            name: session.name.clone(),
+            branch: session.branch.clone(),
+            status,
+            last_activity,
+            task: final_task,
+            worktree_path: session.worktree_path.clone(),
+            test_status: agent_data.test_status,
+            confidence: agent_data.confidence,
+            todo_percentage: agent_data.todo_percentage,
+            is_blocked: agent_data.is_blocked,
+        };
+
+        Ok(Some(session_info))
+    }
+
+    fn resolve_last_activity(&self, session: &crate::core::session::SessionState) -> Result<DateTime<Utc>> {
+        let path = session.worktree_path.clone();
+        
+        let detected_activity = if let Some(cached) = self.activity_cache.get(&path) {
+            cached
+        } else {
+            let detected = detect_last_activity(&path);
+            self.activity_cache.set(path, detected);
+            detected
+        };
+        
+        Ok(detected_activity
+            .or(session.last_activity)
+            .unwrap_or(session.created_at))
+    }
+
+    fn resolve_task(&self, session: &crate::core::session::SessionState) -> Result<String> {
+        if let Some(ref description) = session.task_description {
+            return Ok(description.clone());
+        }
+
+        // Check cache first
+        let cache = self.task_cache.lock().unwrap();
+        if let Some(cached_task) = cache.get(&session.name) {
+            return Ok(cached_task.clone());
+        }
+        drop(cache);
+
+        // Load from file and cache
+        let state_dir = Path::new(&self.config.directories.state_dir);
+        let task_file = state_dir.join(format!("{}.task", session.name));
+        let task = std::fs::read_to_string(task_file)
+            .unwrap_or_else(|_| format!("Session: {}", &session.name));
+        
+        let mut cache = self.task_cache.lock().unwrap();
+        cache.insert(session.name.clone(), task.clone());
+        
+        Ok(task)
+    }
+
+    fn resolve_agent_status(&self, session: &crate::core::session::SessionState) -> Result<AgentStatusData> {
+        let state_dir = Path::new(&self.config.directories.state_dir);
+        let agent_status = Status::load(state_dir, &session.name).ok().flatten();
+
+        Ok(if let Some(status) = agent_status {
+            AgentStatusData {
+                test_status: Some(status.test_status.clone()),
+                confidence: Some(status.confidence.clone()),
+                todo_percentage: status.todo_percentage(),
+                is_blocked: status.is_blocked,
+                task: Some(status.current_task.clone()),
+            }
+        } else {
+            AgentStatusData::default()
+        })
+    }
+
+    fn sort_sessions(&self, session_infos: &mut Vec<SessionInfo>, current_session: &Option<crate::core::session::SessionState>) {
         session_infos.sort_by(|a, b| {
             if let Some(ref current) = current_session {
                 if a.name == current.name {
@@ -122,8 +157,6 @@ impl SessionService {
             }
             b.last_activity.cmp(&a.last_activity)
         });
-
-        Ok(session_infos)
     }
 }
 

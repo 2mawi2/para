@@ -115,51 +115,8 @@ impl<'a> WorktreeManager<'a> {
 
     pub fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
         let output = execute_git_command(self.repo, &["worktree", "list", "--porcelain"])?;
-
-        let mut worktrees = Vec::new();
-        let mut current_worktree: Option<WorktreeInfo> = None;
-
-        for line in output.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                if let Some(worktree) = current_worktree.take() {
-                    worktrees.push(worktree);
-                }
-                continue;
-            }
-
-            if let Some(path_str) = line.strip_prefix("worktree ") {
-                current_worktree = Some(WorktreeInfo {
-                    path: PathBuf::from(path_str),
-                    branch: String::new(),
-                    commit: String::new(),
-                    is_bare: false,
-                });
-            } else if let Some(commit) = line.strip_prefix("HEAD ") {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.commit = commit.to_string();
-                }
-            } else if let Some(branch) = line.strip_prefix("branch ") {
-                if let Some(ref mut worktree) = current_worktree {
-                    let branch_name = branch.strip_prefix("refs/heads/").unwrap_or(branch);
-                    worktree.branch = branch_name.to_string();
-                }
-            } else if line == "bare" {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.is_bare = true;
-                }
-            } else if line == "detached" {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.branch = "HEAD".to_string();
-                }
-            }
-        }
-
-        if let Some(worktree) = current_worktree {
-            worktrees.push(worktree);
-        }
-
-        Ok(worktrees)
+        let mut parser = WorktreeParser::new();
+        parser.parse(&output)
     }
 
     pub fn validate_worktree(&self, path: &Path) -> Result<()> {
@@ -263,6 +220,92 @@ impl<'a> WorktreeManager<'a> {
         }
 
         Ok(())
+    }
+}
+
+/// Parser for git worktree porcelain output
+struct WorktreeParser {
+    worktrees: Vec<WorktreeInfo>,
+    current_worktree: Option<WorktreeInfo>,
+}
+
+impl WorktreeParser {
+    fn new() -> Self {
+        Self {
+            worktrees: Vec::new(),
+            current_worktree: None,
+        }
+    }
+
+    fn parse(&mut self, output: &str) -> Result<Vec<WorktreeInfo>> {
+        for line in output.lines() {
+            self.process_line(line.trim());
+        }
+        
+        // Add final worktree if it exists
+        self.finalize_current_worktree();
+        
+        Ok(std::mem::take(&mut self.worktrees))
+    }
+
+    fn process_line(&mut self, line: &str) {
+        if line.is_empty() {
+            self.finalize_current_worktree();
+            return;
+        }
+
+        if let Some(path_str) = line.strip_prefix("worktree ") {
+            self.start_new_worktree(path_str);
+        } else if let Some(commit) = line.strip_prefix("HEAD ") {
+            self.set_commit(commit);
+        } else if let Some(branch) = line.strip_prefix("branch ") {
+            self.set_branch(branch);
+        } else if line == "bare" {
+            self.set_bare();
+        } else if line == "detached" {
+            self.set_detached();
+        }
+    }
+
+    fn start_new_worktree(&mut self, path_str: &str) {
+        self.finalize_current_worktree();
+        self.current_worktree = Some(WorktreeInfo {
+            path: PathBuf::from(path_str),
+            branch: String::new(),
+            commit: String::new(),
+            is_bare: false,
+        });
+    }
+
+    fn set_commit(&mut self, commit: &str) {
+        if let Some(ref mut worktree) = self.current_worktree {
+            worktree.commit = commit.to_string();
+        }
+    }
+
+    fn set_branch(&mut self, branch: &str) {
+        if let Some(ref mut worktree) = self.current_worktree {
+            let branch_name = branch.strip_prefix("refs/heads/").unwrap_or(branch);
+            worktree.branch = branch_name.to_string();
+        }
+    }
+
+    fn set_bare(&mut self) {
+        if let Some(ref mut worktree) = self.current_worktree {
+            worktree.is_bare = true;
+        }
+    }
+
+    fn set_detached(&mut self) {
+        if let Some(ref mut worktree) = self.current_worktree {
+            worktree.branch = "HEAD".to_string();
+        }
+    }
+
+    fn finalize_current_worktree(&mut self) {
+        if let Some(worktree) = self.current_worktree.take() {
+            self.worktrees.push(worktree);
+        }
     }
 }
 

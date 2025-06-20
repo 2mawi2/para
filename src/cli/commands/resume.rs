@@ -8,7 +8,7 @@ use crate::utils::{ParaError, Result};
 use dialoguer::Select;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
     validate_resume_args(&args)?;
@@ -213,60 +213,95 @@ fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
 
 fn update_tasks_json_for_resume(path: &Path) -> Result<()> {
     let tasks_file = path.join(".vscode/tasks.json");
-
-    if tasks_file.exists() {
-        // Read existing tasks.json
-        let content = fs::read_to_string(&tasks_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-        // Check if it contains prompt file logic (from dispatch)
-        let has_prompt_file = content.contains(".claude_prompt_temp");
-
-        // Check if it already has the -c flag (and no prompt file)
-        if content.contains(" -c") && !has_prompt_file {
-            return Ok(()); // Already properly configured
-        }
-
-        let updated_content = if has_prompt_file {
-            // Remove the prompt file logic and add -c flag
-            // Replace the entire command line
-            content
-                .lines()
-                .map(|line| {
-                    if line.contains("\"command\":") && line.contains("claude_prompt_temp") {
-                        // Extract whether we have --dangerously-skip-permissions
-                        if line.contains("--dangerously-skip-permissions") {
-                            "      \"command\": \"claude --dangerously-skip-permissions -c\","
-                        } else {
-                            "      \"command\": \"claude -c\","
-                        }
-                    } else {
-                        line
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            // Just add -c flag to existing command
-            if content.contains("claude --dangerously-skip-permissions") {
-                content.replace(
-                    "claude --dangerously-skip-permissions",
-                    "claude --dangerously-skip-permissions -c",
-                )
-            } else if content.contains("\"claude\"") {
-                content.replace("\"claude\"", "\"claude -c\"")
-            } else {
-                // Look for other patterns
-                content.replace("\"command\": \"claude", "\"command\": \"claude -c")
-            }
-        };
-
-        // Write updated content back
-        fs::write(&tasks_file, updated_content)
-            .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))?;
+    
+    if !tasks_file.exists() {
+        return Ok(());
     }
 
-    Ok(())
+    let mut updater = TasksJsonUpdater::new(&tasks_file)?;
+    updater.update_for_resume()
+}
+
+/// Helper structure for updating tasks.json files
+struct TasksJsonUpdater {
+    file_path: PathBuf,
+    content: String,
+}
+
+impl TasksJsonUpdater {
+    fn new(file_path: &Path) -> Result<Self> {
+        let content = fs::read_to_string(file_path)
+            .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+        
+        Ok(Self {
+            file_path: file_path.to_path_buf(),
+            content,
+        })
+    }
+
+    fn update_for_resume(&mut self) -> Result<()> {
+        if self.is_already_configured() {
+            return Ok(());
+        }
+
+        self.transform_content();
+        self.write_updated_content()
+    }
+
+    fn is_already_configured(&self) -> bool {
+        // Already has -c flag and no prompt file logic
+        self.content.contains(" -c") && !self.has_prompt_file_logic()
+    }
+
+    fn has_prompt_file_logic(&self) -> bool {
+        self.content.contains(".claude_prompt_temp")
+    }
+
+    fn transform_content(&mut self) {
+        if self.has_prompt_file_logic() {
+            self.remove_prompt_file_logic();
+        } else {
+            self.add_continuation_flag();
+        }
+    }
+
+    fn remove_prompt_file_logic(&mut self) {
+        self.content = self.content
+            .lines()
+            .map(|line| self.transform_prompt_file_line(line))
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    fn transform_prompt_file_line(&self, line: &str) -> String {
+        if line.contains("\"command\":") && line.contains("claude_prompt_temp") {
+            if line.contains("--dangerously-skip-permissions") {
+                "      \"command\": \"claude --dangerously-skip-permissions -c\",".to_string()
+            } else {
+                "      \"command\": \"claude -c\",".to_string()
+            }
+        } else {
+            line.to_string()
+        }
+    }
+
+    fn add_continuation_flag(&mut self) {
+        if self.content.contains("claude --dangerously-skip-permissions") {
+            self.content = self.content.replace(
+                "claude --dangerously-skip-permissions",
+                "claude --dangerously-skip-permissions -c",
+            );
+        } else if self.content.contains("\"claude\"") {
+            self.content = self.content.replace("\"claude\"", "\"claude -c\"");
+        } else {
+            self.content = self.content.replace("\"command\": \"claude", "\"command\": \"claude -c");
+        }
+    }
+
+    fn write_updated_content(&self) -> Result<()> {
+        fs::write(&self.file_path, &self.content)
+            .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+    }
 }
 
 fn validate_resume_args(args: &ResumeArgs) -> Result<()> {

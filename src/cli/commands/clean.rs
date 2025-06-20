@@ -102,41 +102,63 @@ impl SessionCleaner {
     }
 
     fn find_orphaned_state_files(&self) -> Result<Vec<PathBuf>> {
-        let mut orphaned_files = Vec::new();
         let state_dir = PathBuf::from(&self.config.directories.state_dir);
-
+        
         if !state_dir.exists() {
-            return Ok(orphaned_files);
+            return Ok(Vec::new());
         }
 
+        let mut orphaned_files = Vec::new();
         for entry in fs::read_dir(&state_dir)? {
             let entry = entry?;
-            let path = entry.path();
-
-            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".state") {
-                    if let Some(session_id) = file_name.strip_suffix(".state") {
-                        let branch_name =
-                            format!("{}/{}", self.config.git.branch_prefix, session_id);
-
-                        if !self.git_service.branch_exists(&branch_name)? {
-                            orphaned_files.push(path.clone());
-
-                            // Also include related files (.prompt, .launch)
-                            for suffix in &[".prompt", ".launch"] {
-                                let related_file =
-                                    state_dir.join(format!("{}{}", session_id, suffix));
-                                if related_file.exists() {
-                                    orphaned_files.push(related_file);
-                                }
-                            }
-                        }
-                    }
-                }
+            if let Some(session_files) = self.process_state_file(&entry, &state_dir)? {
+                orphaned_files.extend(session_files);
             }
         }
 
         Ok(orphaned_files)
+    }
+
+    fn process_state_file(&self, entry: &fs::DirEntry, state_dir: &PathBuf) -> Result<Option<Vec<PathBuf>>> {
+        let path = entry.path();
+        let file_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name,
+            None => return Ok(None),
+        };
+
+        if !file_name.ends_with(".state") {
+            return Ok(None);
+        }
+
+        let session_id = match file_name.strip_suffix(".state") {
+            Some(id) => id,
+            None => return Ok(None),
+        };
+
+        if self.is_session_orphaned(session_id)? {
+            Ok(Some(self.collect_session_files(session_id, &path, state_dir)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn is_session_orphaned(&self, session_id: &str) -> Result<bool> {
+        let branch_name = format!("{}/{}", self.config.git.branch_prefix, session_id);
+        Ok(!self.git_service.branch_exists(&branch_name)?)
+    }
+
+    fn collect_session_files(&self, session_id: &str, state_file: &PathBuf, state_dir: &PathBuf) -> Vec<PathBuf> {
+        let mut files = vec![state_file.clone()];
+        
+        // Collect related files (.prompt, .launch)
+        for suffix in &[".prompt", ".launch"] {
+            let related_file = state_dir.join(format!("{}{}", session_id, suffix));
+            if related_file.exists() {
+                files.push(related_file);
+            }
+        }
+        
+        files
     }
 
     fn find_old_archives(&self) -> Result<Vec<String>> {
