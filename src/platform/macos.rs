@@ -30,14 +30,14 @@ impl IdeHandler for CursorHandler {
             panic!(
                 "CRITICAL: CursorHandler.close_window called from test environment! \
                  This indicates a test isolation failure. \
-                 Session: {}", 
+                 Session: {}",
                 session_info.original_id
             );
         }
         let script = self.generate_applescript(session_info);
         execute_applescript(&script)
     }
-    
+
     fn generate_applescript(&self, session_info: &SessionInfo) -> String {
         let search_fragment = match session_info.format_type {
             SessionNameFormat::Timestamp => {
@@ -49,7 +49,7 @@ impl IdeHandler for CursorHandler {
                 session_info.name.clone()
             }
         };
-        
+
         generate_applescript_template("Cursor", &search_fragment)
     }
 }
@@ -62,14 +62,14 @@ impl IdeHandler for VSCodeHandler {
             panic!(
                 "CRITICAL: VSCodeHandler.close_window called from test environment! \
                  This indicates a test isolation failure. \
-                 Session: {}", 
+                 Session: {}",
                 session_info.original_id
             );
         }
         let script = self.generate_applescript(session_info);
         execute_applescript(&script)
     }
-    
+
     fn generate_applescript(&self, session_info: &SessionInfo) -> String {
         // VS Code shows full worktree directory name in title
         let search_fragment = &session_info.original_id;
@@ -84,7 +84,7 @@ fn execute_applescript(script: &str) -> Result<()> {
              This indicates a test isolation failure."
         );
     }
-    
+
     let output = Command::new("osascript").arg("-e").arg(script).output()?;
 
     if !output.status.success() {
@@ -169,10 +169,10 @@ impl PlatformManager for MacOSPlatform {
 
         // Determine the actual IDE used by reading the launch file
         let actual_ide = self.determine_actual_ide(session_id, ide_name)?;
-        
+
         // Parse session information
         let session_info = self.parse_session_info(session_id)?;
-        
+
         // Get the appropriate IDE handler and close the window
         let ide_handler = self.get_ide_handler(&actual_ide)?;
         ide_handler.close_window(&session_info)
@@ -228,13 +228,16 @@ impl MacOSPlatform {
         match ide_name.to_lowercase().as_str() {
             "cursor" => Ok(Box::new(CursorHandler)),
             "code" | "vscode" => Ok(Box::new(VSCodeHandler)),
-            _ => Err(crate::utils::ParaError::ide_error(format!("Unsupported IDE: {}", ide_name))),
+            _ => Err(crate::utils::ParaError::ide_error(format!(
+                "Unsupported IDE: {}",
+                ide_name
+            ))),
         }
     }
 
     fn parse_session_info(&self, session_id: &str) -> Result<SessionInfo> {
         let timestamp_regex = regex::Regex::new(r"-\d{8}-\d{6}$").unwrap();
-        
+
         if timestamp_regex.is_match(session_id) {
             // Legacy timestamp format (e.g., "my-feature-20250615-123456")
             let name = timestamp_regex.replace(session_id, "").to_string();
@@ -252,7 +255,6 @@ impl MacOSPlatform {
             })
         }
     }
-
 
     #[cfg(test)]
     pub(crate) fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
@@ -274,7 +276,11 @@ impl MacOSPlatform {
     }
 
     #[cfg(test)]
-    pub(crate) fn format_search_fragment_from_session_info(session_info: &SessionInfo, ide_name: &str) -> String {
+    #[allow(dead_code)]
+    pub(crate) fn format_search_fragment_from_session_info(
+        session_info: &SessionInfo,
+        ide_name: &str,
+    ) -> String {
         if ide_name == "cursor" {
             // Cursor-specific window title handling
             match session_info.format_type {
@@ -294,6 +300,7 @@ impl MacOSPlatform {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn format_search_fragment(session_id: &str, ide_name: &str) -> String {
         // Legacy method for backward compatibility in tests
         let platform = MacOSPlatform;
@@ -302,6 +309,7 @@ impl MacOSPlatform {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn generate_applescript(app_name: &str, search_fragment: &str) -> String {
         format!(
             r#"
