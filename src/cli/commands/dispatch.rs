@@ -34,7 +34,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
                 .into_iter()
                 .map(|s| s.name)
                 .collect::<Vec<String>>();
-            generate_unique_name(&existing_sessions)
+            generate_unique_name(&existing_sessions)?
         }
     };
 

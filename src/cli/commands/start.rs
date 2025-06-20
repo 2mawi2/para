@@ -42,7 +42,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
                 .into_iter()
                 .map(|s| s.name)
                 .collect::<Vec<String>>();
-            Ok(generate_unique_name(&existing_sessions))
+            generate_unique_name(&existing_sessions)
         }
     }
 }
