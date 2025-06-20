@@ -50,4 +50,4 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
-          allowed_tools: "Edit,Read,Write,Glob,Grep,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test),Bash(cargo build),Bash(cargo check),Bash(cargo clippy),Bash(git diff),Bash(git log),Bash(git status),Bash(echo),Bash(cat),Bash(grep),Bash(which)"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just lint),Bash(just fmt),Bash(cargo test),Bash(cargo build),Bash(cargo check),Bash(cargo clippy),Bash(git diff),Bash(git log),Bash(git status),Bash(echo),Bash(cat),Bash(grep),Bash(which),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment"
