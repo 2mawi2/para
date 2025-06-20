@@ -77,26 +77,8 @@ jobs:
             **Git Commands:**
             - `git diff`, `git status` - Check your changes
             - `git log`, `git blame` - Investigate code history
-            - `git fetch origin main` - Get latest main branch
-            - `git merge origin/main` - Merge main into current branch
-            - `git add .` or `git add <file>` - Stage changes
-            - `git commit -m "message"` - Commit changes
-            - `git push` - Push changes to remote
-            
-            **Merge Conflict Resolution:**
-            When resolving merge conflicts:
-            1. Run `git fetch origin main` to get latest changes
-            2. Run `git merge origin/main` to attempt merge
-            3. If conflicts exist, git will mark them in files with:
-               <<<<<<< HEAD
-               [your changes]
-               =======
-               [main branch changes]
-               >>>>>>> origin/main
-            4. Edit conflicted files to resolve conflicts (remove markers, combine changes)
-            5. Run `git add .` to stage resolved files
-            6. Run `git commit -m "Resolve merge conflicts with main"`
-            7. Run tests to ensure everything still works
+            - `git fetch`, `git merge`, `git add`, `git commit`, `git push` - Version control operations
+            - `git rebase`, `git checkout`, `git reset`, `git stash` - Advanced git operations
             
             **File Operations:**
             - Edit, Read, Write, MultiEdit - Make code changes
