@@ -230,81 +230,9 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
     use crate::core::session::SessionState;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::process::Command;
+    use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
-
-    fn create_test_config(temp_dir: &Path) -> Config {
-        Config {
-            ide: crate::config::IdeConfig {
-                name: "test".to_string(),
-                command: "echo".to_string(),
-                user_data_dir: None,
-                wrapper: crate::config::WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
-                },
-            },
-            directories: crate::config::DirectoryConfig {
-                subtrees_dir: "subtrees".to_string(),
-                state_dir: temp_dir.join(".para_state").to_string_lossy().to_string(),
-            },
-            git: crate::config::GitConfig {
-                branch_prefix: "test".to_string(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: crate::config::SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: false,
-                auto_cleanup_days: Some(7),
-            },
-        }
-    }
-
-    fn setup_test_repo() -> (TempDir, PathBuf) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_path_buf();
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        (temp_dir, repo_path)
-    }
 
     #[test]
     fn test_finish_args_validation() {
@@ -346,9 +274,10 @@ mod tests {
 
     #[test]
     fn test_session_environment_validation() {
-        let (temp_dir, repo_path) = setup_test_repo();
-
-        let git_service = GitService::discover_from(&repo_path).expect("Failed to discover repo");
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
         let main_env = git_service
             .validate_session_environment(&git_service.repository().root)
@@ -358,7 +287,7 @@ mod tests {
             _ => panic!("Expected MainRepository environment, got: {:?}", main_env),
         }
 
-        let worktree_path = temp_dir.path().join("test-worktree");
+        let worktree_path = git_temp.path().join("test-worktree");
         git_service
             .create_worktree("test-branch", &worktree_path)
             .expect("Failed to create worktree");
@@ -376,9 +305,14 @@ mod tests {
 
     #[test]
     fn test_finish_integration_validation() {
-        let (temp_dir, repo_path) = setup_test_repo();
-        let config = create_test_config(temp_dir.path());
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         let session_state = SessionState::new(
             "test-session".to_string(),
@@ -400,11 +334,15 @@ mod tests {
     #[test]
     fn test_cleanup_session_state_fallback() {
         // Use setup_test_repo to create a proper git repository
-        let (_temp_dir, repo_path) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
         // Create config using the git repo path
-        let config = create_test_config(&repo_path);
+        let config = create_test_config_with_dir(&temp_dir);
         let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         // Create a session state that would normally be found by path
         let session_state = SessionState::new(
@@ -477,11 +415,15 @@ mod tests {
     #[test]
     fn test_cleanup_session_state_preserve_mode() {
         // Use setup_test_repo to create a proper git repository
-        let (_temp_dir, repo_path) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
-        let mut config = create_test_config(&repo_path);
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.preserve_on_finish = true; // Enable preserve mode for this test
         let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         let session_state = SessionState::new(
             "preserve-test-session".to_string(),
@@ -513,11 +455,15 @@ mod tests {
     #[test]
     fn test_session_lifecycle_transition_to_review() {
         // Test that finish command transitions sessions to Review status in preserve mode
-        let (_temp_dir, repo_path) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
-        let mut config = create_test_config(&repo_path);
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.preserve_on_finish = true;
         let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         let session_state = SessionState::new(
             "lifecycle-test-session".to_string(),
@@ -559,11 +505,15 @@ mod tests {
     fn test_session_lifecycle_worktree_cleanup_in_review() {
         // Test that when transitioning to Review status, worktree should be cleaned up
         // but session state should be preserved
-        let (_temp_dir, repo_path) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
-        let mut config = create_test_config(&repo_path);
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.preserve_on_finish = true;
         let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         let worktree_path = repo_path.join("test-worktree");
 
@@ -599,11 +549,15 @@ mod tests {
     #[test]
     fn test_session_lifecycle_always_review_status() {
         // Test that with preserve_on_finish = false, session is deleted entirely
-        let (_temp_dir, repo_path) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
-        let mut config = create_test_config(&repo_path);
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.preserve_on_finish = false; // No preservation
         let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
 
         let session_state = SessionState::new(
             "no-preserve-test".to_string(),

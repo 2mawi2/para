@@ -389,97 +389,10 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::process::Command;
+    use std::path::PathBuf;
     use tempfile::TempDir;
-
-    fn create_test_config() -> crate::config::Config {
-        let mut config = crate::config::defaults::default_config();
-        // Always use mock IDE commands in tests
-        config.ide.name = "test-ide".to_string();
-        config.ide.command = "echo".to_string();
-        config.ide.wrapper.command = "echo".to_string();
-        config
-    }
-
-    fn setup_test_repo() -> (TempDir, crate::core::git::GitService) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let service = crate::core::git::GitService::discover_from(repo_path)
-            .expect("Failed to discover repo");
-        (temp_dir, service)
-    }
-
-    struct TestEnvironmentGuard {
-        original_dir: std::path::PathBuf,
-    }
-
-    impl TestEnvironmentGuard {
-        fn new(
-            git_temp: &TempDir,
-            temp_dir: &TempDir,
-        ) -> std::result::Result<Self, std::io::Error> {
-            let original_dir = std::env::current_dir().unwrap_or_else(|_| {
-                git_temp
-                    .path()
-                    .parent()
-                    .unwrap_or_else(|| std::path::Path::new("/tmp"))
-                    .to_path_buf()
-            });
-
-            std::env::set_current_dir(git_temp.path())?;
-
-            // Create a mock config file for test isolation
-            let test_config_path = temp_dir.path().join("para_config.json");
-            let mock_config = create_test_config();
-            let config_json = serde_json::to_string_pretty(&mock_config).unwrap();
-            fs::write(&test_config_path, config_json).unwrap();
-
-            Ok(TestEnvironmentGuard { original_dir })
-        }
-    }
-
-    impl Drop for TestEnvironmentGuard {
-        fn drop(&mut self) {
-            if let Err(_e) = std::env::set_current_dir(&self.original_dir) {
-                let _ = std::env::set_current_dir("/tmp");
-            }
-        }
-    }
 
     fn create_mock_session_state(
         state_dir: &std::path::Path,
@@ -571,9 +484,7 @@ mod tests {
         let (_git_temp, git_service) = setup_test_repo();
 
         // Create config that points to our test state directory
-        let state_dir = temp_dir.path().join(".para_state");
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let sessions = list_active_sessions(&session_manager, &git_service)?;
@@ -589,13 +500,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
 
-        let repo_root = &git_service.repository().root;
-        let state_dir = repo_root.join(".para_state");
-
         // Create config that points to our test state directory
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
+        let state_dir = PathBuf::from(&config.directories.state_dir);
 
         // Create a simple directory for the worktree path - we just need to test listing
         let worktree_path = temp_dir.path().join("test-worktree");
@@ -632,9 +540,7 @@ mod tests {
         let (_git_temp, git_service) = setup_test_repo();
 
         // Create config that points to our test state directory
-        let state_dir = temp_dir.path().join(".para_state");
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         // Create some archived branches
@@ -686,7 +592,7 @@ mod tests {
 
         for session in &sessions {
             assert_eq!(session.status, SessionStatus::Archived);
-            assert!(session.branch.starts_with("para/archived/"));
+            assert!(session.branch.starts_with("test/archived/"));
         }
 
         Ok(())
@@ -700,9 +606,7 @@ mod tests {
         let (_git_temp, git_service) = setup_test_repo();
 
         // Create config that points to our test state directory
-        let state_dir = temp_dir.path().join(".para_state");
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         // Test the internal functions directly with proper git context
@@ -743,13 +647,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
 
-        let repo_root = &git_service.repository().root;
-        let state_dir = repo_root.join(".para_state");
-
         // Create config that points to our test state directory
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
+        let state_dir = PathBuf::from(&config.directories.state_dir);
 
         // Create a finished session
         fs::create_dir_all(&state_dir)?;
@@ -851,15 +752,12 @@ mod tests {
         let git_temp = TempDir::new().unwrap();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        let repo_root = &git_service.repository().root;
-        let state_dir = repo_root.join(".para_state");
+        let (_git_temp, _git_service) = setup_test_repo();
 
         // Create config that points to our test state directory
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
+        let state_dir = PathBuf::from(&config.directories.state_dir);
 
         // Create multiple session states with different statuses
         fs::create_dir_all(&state_dir)?;
@@ -989,9 +887,7 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
 
-        let state_dir = temp_dir.path().join(".para_state");
-        let mut config = create_test_config();
-        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         // Create archived branches

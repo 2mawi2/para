@@ -153,94 +153,28 @@ impl<'a> ArchiveManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
-    use std::fs;
-    use std::path::Path;
-    use std::process::Command;
+    use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
-
-    fn create_test_config(temp_dir: &Path) -> Config {
-        Config {
-            ide: IdeConfig {
-                name: "test".to_string(),
-                command: "echo".to_string(),
-                user_data_dir: None,
-                wrapper: WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
-                },
-            },
-            directories: DirectoryConfig {
-                subtrees_dir: temp_dir.join("subtrees").to_string_lossy().to_string(),
-                state_dir: temp_dir.join(".para_state").to_string_lossy().to_string(),
-            },
-            git: GitConfig {
-                branch_prefix: "test".to_string(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: false,
-                auto_cleanup_days: Some(7),
-            },
-        }
-    }
-
-    fn setup_test_repo() -> (TempDir, GitService, Config) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().join("repo");
-        fs::create_dir_all(&repo_path).expect("Failed to create repo dir");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let git_service = GitService::discover_from(&repo_path).expect("Failed to discover repo");
-        let config = create_test_config(temp_dir.path());
-
-        (temp_dir, git_service, config)
-    }
 
     #[test]
     fn test_archive_manager_creation() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let _archive_manager = ArchiveManager::new(&config, &git_service);
     }
 
     #[test]
     fn test_list_empty_archives() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
         let archives = archive_manager.list_archives().unwrap();
@@ -249,7 +183,12 @@ mod tests {
 
     #[test]
     fn test_timestamp_parsing() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
         let rfc3339 = archive_manager.parse_timestamp_to_rfc3339("20240301-120000");
@@ -258,7 +197,12 @@ mod tests {
 
     #[test]
     fn test_find_nonexistent_archive() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
         let result = archive_manager.find_archive("nonexistent");
@@ -268,7 +212,12 @@ mod tests {
 
     #[test]
     fn test_create_and_find_archive() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
 
@@ -295,7 +244,12 @@ mod tests {
 
     #[test]
     fn test_parse_timestamp_formats() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
         let valid_timestamp = archive_manager.parse_timestamp_to_rfc3339("20240301-120000");
@@ -307,7 +261,12 @@ mod tests {
 
     #[test]
     fn test_list_archives_sorted_by_date() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
 
@@ -340,7 +299,12 @@ mod tests {
     #[test]
     fn test_cancel_and_recover_session_integration() {
         // This test reproduces the real-world cancel/recover integration issue
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
 
@@ -388,7 +352,12 @@ mod tests {
 
     #[test]
     fn test_archive_limit_enforcement() {
-        let (_temp_dir, git_service, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
 
@@ -429,7 +398,12 @@ mod tests {
 
     #[test]
     fn test_auto_cleanup_disabled() {
-        let (_temp_dir, git_service, mut config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.auto_cleanup_days = None; // Disable cleanup
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
@@ -439,7 +413,12 @@ mod tests {
 
     #[test]
     fn test_auto_cleanup_old_archives() {
-        let (_temp_dir, git_service, mut config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.auto_cleanup_days = Some(1); // 1 day cleanup
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
@@ -498,7 +477,12 @@ mod tests {
 
     #[test]
     fn test_auto_cleanup_combined() {
-        let (_temp_dir, git_service, mut config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config_with_dir(&temp_dir);
         config.session.auto_cleanup_days = Some(1); // 1 day cleanup
         let archive_manager = ArchiveManager::new(&config, &git_service);
         let branch_manager = git_service.branch_manager();
