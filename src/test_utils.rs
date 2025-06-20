@@ -21,6 +21,18 @@ pub mod test_helpers {
         config
     }
 
+    pub fn create_test_config_with_dir(temp_dir: &TempDir) -> Config {
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees".to_string();
+        config.git.branch_prefix = "test".to_string();
+        config
+    }
+
     pub fn setup_test_repo() -> (TempDir, GitService) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
