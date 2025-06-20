@@ -1,128 +1,149 @@
-# Task 2: Add Autonomous Reviewer and Iteration Loop
+# TASK 2: Simple PR Review Iteration Loop
 
 ## Overview
-Enhance the autonomous system with a Reviewer agent that provides feedback on Gardener's work and creates a self-correction loop until the work meets quality standards.
 
-## Prerequisites
-Task 1 (Foundational Auditor & Gardener) must be fully implemented and working.
+Make the auto-review agent automatically trigger the PR assistant to fix issues, with a 3-iteration limit.
 
-## Acceptance Criteria
+## What We Want
 
-1. Gardener creates **Draft** PRs instead of ready PRs
-2. Draft PR creation triggers new `reviewer.yml` workflow
-3. Reviewer reads task requirements and code changes, posts comment ending with `[REVIEW_PASSED]` or `[REVIEW_FAILED]`
-4. If review passes: PR marked "Ready for Review", loop terminates
-5. If review fails: Gardener workflow re-triggered to fix issues
-6. Re-triggered Gardener uses reviewer feedback to fix work on same branch
-7. Updated branch re-triggers Reviewer, continuing loop
-8. Maximum 3 retries to prevent infinite loops
+1. **Auto-review finds issues** → automatically adds `@claude` comment
+2. **PR assistant fixes issues** → auto-review runs again  
+3. **Maximum 3 iterations** then stop
+4. **Works on all PRs** from 2mawi2
 
-## Implementation Requirements
+## Current Problem
 
-### Phase 1: Modify Gardener Workflow
+Auto-review gives feedback but doesn't automatically trigger fixes. You have to manually add `@claude` comments.
 
-**Update existing gardener.yml:**
-1. **Modify PR Creation:**
-   - Add `draft: true` to `peter-evans/create-pull-request` step
-   
-2. **Add New Trigger:**
-   - Add `workflow_run` trigger listening for `reviewer.yml` completion
-   
-3. **New Job: iterate-on-task**
-   - **Condition:** Only run if triggered by workflow_run AND reviewer conclusion was failure
-   - **Steps:**
-     - Checkout specific PR branch (`github.event.workflow_run.head_branch`)
-     - Download `pr-review-feedback` artifact using `actions/download-artifact`
-     - Run `claude-code-action` with iteration prompt:
-       - "Your previous work failed review. You MUST fix your code based on the feedback in `pr_review_feedback.txt`. The original requirements are in `[task_file]`."
-     - Agent works and runs `para finish` to commit fixes to same branch
-     - Push changes (automatically updates PR and re-triggers Reviewer)
+## Simple Solution
 
-### Phase 2: Implement Reviewer Workflow
+### 1. Track Iterations
+Add hidden comment to track iteration count:
+```html
+<!-- iteration-count: 2 -->
+```
 
-**Create .github/workflows/reviewer.yml:**
+### 2. Critical Review Guidelines
 
-**Triggers:**
-- `on: pull_request: types: [opened, synchronize]`
+The auto-review agent must focus on **critical issues that will actually cause bugs**. Here's exactly what to look for:
 
-**Conditions:**
-- Only run when `github.event.pull_request.draft == true`
-- Only run when head branch starts with `gardener/`
+#### **1. Verify It Actually Works**
+- **Trace the happy path**: Follow the main use case from entry to exit - does it do what it claims?
+- **Run relevant tests**: Not all tests, just the ones that prove THIS change works
+- **Check integration points**: Where does this code connect to existing code? Will those connections hold?
 
-**Job: review-pr**
-1. **Checkout:** Specific PR commit (`github.event.pull_request.head.sha`)
-2. **Extract Task:** Parse PR body to find original task file path
-3. **Review Step:**
-   - Use `grll/claude-code-action` to perform review
-   - Prompt: "You are an expert code reviewer. Review the code changes in this PR against the requirements in `[task_file]`. Conclude your review with either `[REVIEW_PASSED]` or `[REVIEW_FAILED]` on a new line."
-4. **Post Comment:** Use `gh pr comment` to post AI's full response
-5. **Conditional Actions:**
-   - **On Failure:** `if: contains(steps.claude_review.outputs.response, '[REVIEW_FAILED]')`
-     - Write review response to `pr_review_feedback.txt`
-     - Upload as artifact using `actions/upload-artifact` with name `pr-review-feedback`
-     - Add "needs-revision" label to PR
-   - **On Success:** `if: contains(steps.claude_review.outputs.response, '[REVIEW_PASSED]')`
-     - Use `gh pr ready` to mark PR as ready for human review
-     - Add "review-passed" label to PR
+#### **2. Find Real Bugs (Not Hypothetical Ones)**
+Focus on bugs that WILL happen, not those that COULD happen:
 
-### Phase 3: Task Cleanup Workflow
+- **Broken contracts**: Does it return null when the interface says non-null?
+- **State corruption**: Can this leave the system in an invalid state?
+- **Missing await/async**: Will this cause race conditions in actual use?
+- **Wrong error handling**: Does it catch and hide errors that should bubble up?
 
-**Create .github/workflows/cleanup-tasks.yml:**
+#### **3. Critical Business Logic Only**
+- **Money/billing**: Any calculation errors?
+- **User permissions**: Can users do things they shouldn't?
+- **Data integrity**: Will we lose or duplicate important records?
+- **Regulatory requirements**: Does this violate any compliance rules we must follow?
 
-**Triggers:**
-- `on: pull_request: types: [closed]`
+#### **4. Maintainability Red Flags**
+Only flag if it will actively cause bugs later:
 
-**Conditions:**
-- Only run if `github.event.pull_request.merged == true`
-- Only run if branch started with `gardener/`
+- **Misleading code**: Says it does X but actually does Y
+- **Hidden dependencies**: Side effects that aren't obvious
+- **Fragile assumptions**: Depends on undocumented behavior that will likely change
 
-**Job: cleanup-completed-task**
-1. Checkout main branch
-2. Parse merged PR body to find task file path
-3. Use `git mv` to move task file from `tasks/gardener-backlog/` to `tasks/gardener-done/`
-4. Commit and push change to main
-5. **Requires:** `secrets.GH_PAT_FOR_ACTIONS` to push to main
+#### **What to Ignore**
+- Code that works but could be "cleaner"
+- Performance unless there's measured proof of problems
+- Edge cases that require multiple unlikely things to align
+- Anything a linter/formatter would catch
 
-### Phase 4: Loop Control and Safety
+#### **Review Process**
+1. **First**: Run `just test` to ensure the PR doesn't break existing functionality
+2. **Then**: Focus on the 4 categories above in order of priority
+3. **Only trigger `@claude`** if you find issues that meet these criteria
+4. **Be specific**: Include exact file locations and concrete fix suggestions
 
-**Iteration Limits:**
-- Track retry count in PR labels or comments
-- Maximum 3 iterations before escalating to human review
-- Add timeout protection for long-running reviews
+### 3. Auto-Trigger Format
+When auto-review finds issues, automatically add this comment with specific format using the `mcp__github__add_pull_request_comment` tool:
 
-**Error Handling:**
-- Handle cases where task file is malformed
-- Handle cases where reviewer response is ambiguous
-- Graceful degradation when Claude API is unavailable
+**CRITICAL TOOL USAGE:**
+- Use `mcp__github__add_pull_request_comment` to add the @claude trigger comment
+- DO NOT use `mcp__github__add_issue_comment` - that's for issues, not PRs!
+- First use `mcp__github__get_pull_request_comments` to check existing iteration count
 
-## Testing Strategy
+```markdown
+@claude please fix these critical issues (iteration {N}/3):
 
-### Local Testing with Act
-1. Use `act` to test all three workflows locally
-2. Create sample scenarios:
-   - Successful review on first try
-   - Failed review requiring iteration
-   - Maximum retry scenarios
-3. Test artifact passing between workflows
-4. Verify proper branch and PR state management
+**Critical Issues Found:**
 
-### Integration Testing
-1. Test complete flow from Auditor → Gardener → Reviewer → Iteration
-2. Verify cleanup workflow properly archives completed tasks
-3. Test edge cases: malformed tasks, API failures, git conflicts
-4. Ensure no race conditions between workflows
+1. **Broken Contract** - Function returns null unexpectedly
+   - Location: src/core/session.rs:45
+   - Problem: `get_session()` can return None but interface expects Session
+   - Fix: Add proper error handling or change return type to Option<Session>
+
+2. **Missing Error Handling** - Errors being swallowed  
+   - Location: src/core/git.rs:78
+   - Problem: `.unwrap()` on user input will panic
+   - Fix: Use proper error handling with `?` operator or `map_err()`
+
+**Test Status:**
+- [x] Existing tests pass with `just test`
+- [x] Need to add tests for error cases above
+
+<!-- iteration-count: {N} -->
+```
+
+**Important**: Only trigger if you found issues matching the 4 critical categories above.
+
+### 4. Workflow Requirements
+
+**Auto-Review Workflow Must:**
+1. **Parse iteration count** from existing PR comments (look for `<!-- iteration-count: N -->`)
+2. **Run critical review** using the 4-category guidelines above
+3. **Only auto-trigger** if:
+   - Critical issues found (matching guidelines)
+   - AND current iteration < 3
+   - AND tests pass with `just test`
+4. **Add structured comment** with exact format above
+5. **Stop at iteration 3** with final review (no more auto-triggers)
+
+**PR Assistant Workflow Must:**
+1. **Detect auto-review triggers** (comments containing iteration count)
+2. **Parse structured issues** from the comment format
+3. **Fix each issue** with targeted changes
+4. **Run `just test`** to ensure fixes don't break anything
+5. **Commit changes** which will re-trigger auto-review
+
+**Critical**: Both workflows must handle the iteration counting correctly to prevent infinite loops.
+
+## Implementation Steps
+
+1. **Update auto-review workflow** with iteration tracking and critical review guidelines
+2. **Add auto-trigger logic** to post `@claude` comments when critical issues found  
+3. **Update PR assistant** to detect and parse auto-review triggers
+4. **Test** with a sample PR that has real bugs
 
 ## Success Criteria
-- Draft PRs automatically reviewed and iterated until passing quality checks
-- Human reviewers only see high-quality, pre-reviewed PRs
-- System handles failures gracefully with retry limits
-- Complete audit trail of all review iterations
-- Proper cleanup and archiving of completed tasks
 
-## Required Secrets
-- `CLAUDE_ACCESS_TOKEN`
-- `CLAUDE_REFRESH_TOKEN`
-- `CLAUDE_EXPIRES_AT`
-- `GH_PAT_FOR_ACTIONS` (for cleanup workflow)
+- [ ] Auto-review focuses on the 4 critical categories (verify it works, real bugs, business logic, maintainability red flags)
+- [ ] Auto-review automatically triggers PR assistant only when critical issues found
+- [ ] Iteration count tracked correctly (max 3)
+- [ ] PR assistant parses and fixes structured issues from auto-review
+- [ ] Works on all PRs from 2mawi2
+- [ ] No infinite loops - hard stop at 3 iterations
 
-When done: para finish "Add autonomous reviewer and iteration loop to gardener system" --branch feature/autonomous-gardener-reviewer
+## Timeline
+
+**1 week** for basic implementation and testing.
+
+---
+
+## Next Steps
+
+1. Review this simplified plan
+2. Start with iteration tracking
+3. Test on one PR to verify it works
+
+This creates the automatic feedback loop you want without overengineering the solution.
