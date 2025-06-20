@@ -24,25 +24,35 @@ impl ActivityCache {
     }
 
     pub fn get(&self, path: &PathBuf) -> Option<Option<DateTime<Utc>>> {
-        let entries = self.entries.lock().unwrap();
-        if let Some(entry) = entries.get(path) {
-            let age = Utc::now() - entry.cached_at;
-            if age < self.ttl {
-                return Some(entry.activity_time);
+        match self.entries.lock() {
+            Ok(entries) => {
+                if let Some(entry) = entries.get(path) {
+                    let age = Utc::now() - entry.cached_at;
+                    if age < self.ttl {
+                        return Some(entry.activity_time);
+                    }
+                }
+                None
+            }
+            Err(_) => {
+                // Mutex poisoned - return cache miss
+                None
             }
         }
-        None
     }
 
     pub fn set(&self, path: PathBuf, activity_time: Option<DateTime<Utc>>) {
-        let mut entries = self.entries.lock().unwrap();
-        entries.insert(
-            path,
-            CacheEntry {
-                activity_time,
-                cached_at: Utc::now(),
-            },
-        );
+        // Try to update cache, but don't fail if mutex is poisoned
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.insert(
+                path,
+                CacheEntry {
+                    activity_time,
+                    cached_at: Utc::now(),
+                },
+            );
+        }
+        // If mutex is poisoned, silently ignore - caching is not critical
     }
 }
 

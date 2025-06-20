@@ -58,17 +58,24 @@ impl SessionService {
 
             let task = session.task_description.clone().unwrap_or_else(|| {
                 // Check cache first
-                let cache = self.task_cache.lock().unwrap();
-                if let Some(cached_task) = cache.get(&session.name) {
-                    cached_task.clone()
+                let cached_task = match self.task_cache.lock() {
+                    Ok(cache) => cache.get(&session.name).cloned(),
+                    Err(_) => {
+                        // Mutex poisoned - continue without cache
+                        None
+                    }
+                };
+                if let Some(cached_task) = cached_task {
+                    cached_task
                 } else {
-                    drop(cache);
                     let state_dir = Path::new(&self.config.directories.state_dir);
                     let task_file = state_dir.join(format!("{}.task", session.name));
                     let task = std::fs::read_to_string(task_file)
                         .unwrap_or_else(|_| format!("Session: {}", &session.name));
-                    let mut cache = self.task_cache.lock().unwrap();
-                    cache.insert(session.name.clone(), task.clone());
+                    // Try to update cache, but don't fail if mutex is poisoned
+                    if let Ok(mut cache) = self.task_cache.lock() {
+                        cache.insert(session.name.clone(), task.clone());
+                    }
                     task
                 }
             });
@@ -263,7 +270,7 @@ mod tests {
 
         // First access should read from file
         {
-            let cache = service.task_cache.lock().unwrap();
+            let cache = service.task_cache.lock().expect("Test cache should not be poisoned");
             assert!(
                 !cache.contains_key("test-session"),
                 "Should not be cached initially"
@@ -272,7 +279,7 @@ mod tests {
 
         // Simulate the task loading logic
         let task = {
-            let cache = service.task_cache.lock().unwrap();
+            let cache = service.task_cache.lock().expect("Test cache should not be poisoned");
             if let Some(cached) = cache.get("test-session") {
                 cached.clone()
             } else {
@@ -282,7 +289,7 @@ mod tests {
                 let task = std::fs::read_to_string(task_file).unwrap();
 
                 // Cache it
-                let mut cache = service.task_cache.lock().unwrap();
+                let mut cache = service.task_cache.lock().expect("Test cache should not be poisoned");
                 cache.insert("test-session".to_string(), task.clone());
                 task
             }
@@ -292,7 +299,7 @@ mod tests {
 
         // Second access should use cache
         {
-            let cache = service.task_cache.lock().unwrap();
+            let cache = service.task_cache.lock().expect("Test cache should not be poisoned");
             assert!(cache.contains_key("test-session"), "Should be cached now");
             assert_eq!(cache.get("test-session").unwrap(), task_content);
         }
@@ -317,13 +324,13 @@ mod tests {
 
                 // Write to cache
                 {
-                    let mut cache = service_clone.task_cache.lock().unwrap();
+                    let mut cache = service_clone.task_cache.lock().expect("Test cache should not be poisoned");
                     cache.insert(task_name.clone(), task_content.clone());
                 }
 
                 // Read from cache
                 {
-                    let cache = service_clone.task_cache.lock().unwrap();
+                    let cache = service_clone.task_cache.lock().expect("Test cache should not be poisoned");
                     assert_eq!(cache.get(&task_name).unwrap(), &task_content);
                 }
             });
@@ -336,7 +343,7 @@ mod tests {
         }
 
         // Verify all entries are in cache
-        let cache = service.task_cache.lock().unwrap();
+        let cache = service.task_cache.lock().expect("Test cache should not be poisoned");
         for i in 0..10 {
             let task_name = format!("task-{}", i);
             assert!(cache.contains_key(&task_name));
