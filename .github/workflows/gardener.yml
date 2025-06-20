@@ -83,10 +83,11 @@ jobs:
                - Note classes with LCOM > 1 (indicates low cohesion)
                - Identify files with many functions (> 20)
             
-            3. For the most complex files, run: qlty metrics --functions <file>
-               - Find functions with cyclomatic complexity > 10
-               - Identify functions > 50 lines
-               - Look for functions with many parameters (> 5)
+            3. For function-level analysis, use the code smells from step 1
+               - The smells report already shows function complexity
+               - Look for "High total complexity" in specific functions
+               - Cross-reference with the files identified in step 2
+               - Read the actual code files to assess function length and parameters
             
             4. Run: qlty metrics --all --max-depth 2
                - Identify modules/directories with high overall complexity
@@ -151,9 +152,9 @@ jobs:
             - `qlty metrics --all --sort complexity --limit 20` - List most complex files
               * Shows: classes, functions, fields, cyclomatic complexity, LCOM, LOC
               * Focus on: complexity > 50, LOC > 300, LCOM > 1
-            - `qlty metrics --functions <file>` - Analyze specific file's functions
-              * Shows: per-function complexity and line counts
-              * Look for: functions > 50 lines, complexity > 10
+            - NOTE: For function-level details, use the smells report and Read tool
+              * The smells output includes function-level complexity
+              * Use Read tool to examine specific functions directly
             - `qlty metrics --all --max-depth 2` - Module-level complexity analysis
               * Helps identify architectural issues
             - `rm -rf .qlty/` - Clean up qlty files after analysis
@@ -179,9 +180,9 @@ jobs:
             
             **Analysis Workflow:**
             1. Initialize qlty first
-            2. Use qlty smells to find major issues
-            3. Use qlty metrics to quantify problems
-            4. Drill down into specific files with functions analysis
+            2. Use qlty smells to find major issues (includes function-level data)
+            3. Use qlty metrics to quantify problems at file level
+            4. Use Read tool to examine specific functions in detail
             5. Check test coverage for identified issues (use rg/grep to find test files)
             6. Create 3-5 diverse, high-impact issues that can be automatically tested
             7. Clean up .qlty directory when done
