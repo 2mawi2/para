@@ -49,7 +49,7 @@ Create unique fingerprints for each type of technical debt:
 
 ### 3. Workflow Updates
 
-#### Auditor Workflow Enhancement
+#### Gardener Workflow Enhancement
 
 1. **Pre-Analysis Step**: 
    - Fetch existing technical-debt-tracking.json
@@ -100,7 +100,7 @@ Create unique fingerprints for each type of technical debt:
    - Updates technical-debt-tracking.json based on actions
    - Commits changes automatically
 
-3. **Update Auditor Workflow**:
+3. **Update Gardener Workflow**:
    - Add step to make tracking file available
    - Update Claude prompt with tracking logic
    - Add post-processing to update tracking file
@@ -128,13 +128,13 @@ Create unique fingerprints for each type of technical debt:
 
 ## Example Workflow
 
-1. Auditor finds unwrap at line 145 in recovery.rs
+1. Gardener finds unwrap at line 145 in recovery.rs
 2. Generates fingerprint: `unwrap_in_file:src/core/session/recovery.rs:line:145`
 3. Checks tracking file - not found in ignored or active
 4. Creates issue #150
 5. Updates tracking file with active issue
 6. User reviews and closes as "not planned" 
 7. Tracking workflow moves to ignored_issues
-8. Next Auditor run skips this specific unwrap
+8. Next Gardener run skips this specific unwrap
 
 This approach gives users full control while maintaining automation efficiency.

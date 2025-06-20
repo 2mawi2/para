@@ -1,12 +1,12 @@
-# Task 1: Implement Foundational Autonomous Loop (Auditor & Gardener)
+# Task 1: Implement Foundational Autonomous Loop (Gardener)
 
 ## Overview
 Implement a two-stage autonomous system for technical debt remediation using GitHub Actions workflows and para dispatch commands.
 
 ## Acceptance Criteria
 
-1. Create a GitHub Actions workflow (`auditor.yml`) that runs on schedule to analyze codebase for technical debt
-2. Auditor opens PR to add task files to `tasks/gardener-backlog/` directory  
+1. Create a GitHub Actions workflow (`gardener.yml`) that runs on schedule to analyze codebase for technical debt
+2. Gardener opens PR to add task files to `tasks/gardener-backlog/` directory  
 3. When task proposal PR is merged, trigger `gardener.yml` workflow
 4. Gardener creates feature branch and uses `para dispatch` to perform work
 5. Gardener runs `para finish` to commit changes and create review branch
@@ -15,7 +15,7 @@ Implement a two-stage autonomous system for technical debt remediation using Git
 
 ## Implementation Requirements
 
-### Phase 1: Auditor Workflow (.github/workflows/auditor.yml)
+### Phase 1: Gardener Analysis Workflow (.github/workflows/gardener.yml)
 
 **Triggers:**
 - Schedule: `cron: '0 5 * * *'` (nightly)
@@ -36,11 +36,11 @@ Implement a two-stage autonomous system for technical debt remediation using Git
      - Required final command: `para finish "refactor: Replace unwrap in [filename]" --branch "gardener/fix-unwrap-in-[filename-sanitized]"`
 5. PR creation:
    - Use `peter-evans/create-pull-request`
-   - Title: "Auditor Proposal: New Tech Debt Task"
-   - Branch: `auditor/propose-task-${{ GITHUB.RUN_ID }}`
+   - Title: "Gardener Proposal: New Tech Debt Task"
+   - Branch: `gardener/propose-task-${{ GITHUB.RUN_ID }}`
    - Delete branch on merge
 
-### Phase 2: Gardener Workflow (.github/workflows/gardener.yml)
+### Phase 2: Gardener Worker Workflow (.github/workflows/gardener-worker.yml)
 
 **Triggers:**
 - Push to main branch with changes in `tasks/gardener-backlog/` path only
@@ -91,4 +91,4 @@ Before deploying workflows:
 - Verify proper branch creation and cleanup
 - Ensure idempotent behavior when re-running workflows
 
-When done: para finish "Implement foundational auditor and gardener autonomous loop" --branch feature/autonomous-gardener-foundation
+When done: para finish "Implement foundational gardener autonomous loop" --branch feature/autonomous-gardener-foundation
