@@ -10,6 +10,20 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
+#[derive(Debug, PartialEq)]
+enum TaskConfiguration {
+    HasPromptFile { has_skip_permissions: bool },
+    HasContinueFlag { has_skip_permissions: bool },
+    NeedsTransformation { has_skip_permissions: bool },
+}
+
+#[derive(Debug)]
+enum TaskTransformation {
+    RemovePromptFileAndAddContinue { has_skip_permissions: bool },
+    AddContinueFlag { has_skip_permissions: bool },
+    NoChange,
+}
+
 pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
     validate_resume_args(&args)?;
 
@@ -214,59 +228,119 @@ fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
 fn update_tasks_json_for_resume(path: &Path) -> Result<()> {
     let tasks_file = path.join(".vscode/tasks.json");
 
-    if tasks_file.exists() {
-        // Read existing tasks.json
-        let content = fs::read_to_string(&tasks_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-        // Check if it contains prompt file logic (from dispatch)
-        let has_prompt_file = content.contains(".claude_prompt_temp");
-
-        // Check if it already has the -c flag (and no prompt file)
-        if content.contains(" -c") && !has_prompt_file {
-            return Ok(()); // Already properly configured
-        }
-
-        let updated_content = if has_prompt_file {
-            // Remove the prompt file logic and add -c flag
-            // Replace the entire command line
-            content
-                .lines()
-                .map(|line| {
-                    if line.contains("\"command\":") && line.contains("claude_prompt_temp") {
-                        // Extract whether we have --dangerously-skip-permissions
-                        if line.contains("--dangerously-skip-permissions") {
-                            "      \"command\": \"claude --dangerously-skip-permissions -c\","
-                        } else {
-                            "      \"command\": \"claude -c\","
-                        }
-                    } else {
-                        line
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            // Just add -c flag to existing command
-            if content.contains("claude --dangerously-skip-permissions") {
-                content.replace(
-                    "claude --dangerously-skip-permissions",
-                    "claude --dangerously-skip-permissions -c",
-                )
-            } else if content.contains("\"claude\"") {
-                content.replace("\"claude\"", "\"claude -c\"")
-            } else {
-                // Look for other patterns
-                content.replace("\"command\": \"claude", "\"command\": \"claude -c")
-            }
-        };
-
-        // Write updated content back
-        fs::write(&tasks_file, updated_content)
-            .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))?;
+    if !tasks_file.exists() {
+        return Ok(());
     }
 
-    Ok(())
+    let config = detect_task_configuration(&tasks_file)?;
+    let transformation = determine_transformation(&config);
+    apply_transformation(&tasks_file, transformation)
+}
+
+fn detect_task_configuration(tasks_file: &Path) -> Result<TaskConfiguration> {
+    let content = fs::read_to_string(tasks_file)
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+
+    let has_prompt_file = content.contains(".claude_prompt_temp")
+        || (content.contains("$(cat") && content.contains("rm "));
+    let has_continue_flag = content.contains(" -c");
+    let has_skip_permissions = content.contains("--dangerously-skip-permissions");
+
+    if has_prompt_file {
+        Ok(TaskConfiguration::HasPromptFile {
+            has_skip_permissions,
+        })
+    } else if has_continue_flag {
+        Ok(TaskConfiguration::HasContinueFlag {
+            has_skip_permissions,
+        })
+    } else {
+        Ok(TaskConfiguration::NeedsTransformation {
+            has_skip_permissions,
+        })
+    }
+}
+
+fn determine_transformation(config: &TaskConfiguration) -> TaskTransformation {
+    match config {
+        TaskConfiguration::HasPromptFile {
+            has_skip_permissions,
+        } => TaskTransformation::RemovePromptFileAndAddContinue {
+            has_skip_permissions: *has_skip_permissions,
+        },
+        TaskConfiguration::HasContinueFlag { .. } => TaskTransformation::NoChange,
+        TaskConfiguration::NeedsTransformation {
+            has_skip_permissions,
+        } => TaskTransformation::AddContinueFlag {
+            has_skip_permissions: *has_skip_permissions,
+        },
+    }
+}
+
+fn apply_transformation(tasks_file: &Path, transformation: TaskTransformation) -> Result<()> {
+    match transformation {
+        TaskTransformation::NoChange => Ok(()),
+        TaskTransformation::RemovePromptFileAndAddContinue {
+            has_skip_permissions,
+        } => apply_remove_prompt_file_transformation(tasks_file, has_skip_permissions),
+        TaskTransformation::AddContinueFlag {
+            has_skip_permissions,
+        } => apply_add_continue_flag_transformation(tasks_file, has_skip_permissions),
+    }
+}
+
+fn apply_remove_prompt_file_transformation(
+    tasks_file: &Path,
+    has_skip_permissions: bool,
+) -> Result<()> {
+    let content = fs::read_to_string(tasks_file)
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+
+    let new_command = if has_skip_permissions {
+        "claude --dangerously-skip-permissions -c"
+    } else {
+        "claude -c"
+    };
+
+    let updated_content = content
+        .lines()
+        .map(|line| {
+            if line.contains("\"command\":")
+                && (line.contains("claude_prompt_temp")
+                    || (line.contains("$(cat") && line.contains("rm ")))
+            {
+                format!("      \"command\": \"{}\",", new_command)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    fs::write(tasks_file, updated_content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+}
+
+fn apply_add_continue_flag_transformation(
+    tasks_file: &Path,
+    has_skip_permissions: bool,
+) -> Result<()> {
+    let content = fs::read_to_string(tasks_file)
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+
+    let updated_content = if has_skip_permissions {
+        content.replace(
+            "claude --dangerously-skip-permissions",
+            "claude --dangerously-skip-permissions -c",
+        )
+    } else if content.contains("\"claude\"") {
+        content.replace("\"claude\"", "\"claude -c\"")
+    } else {
+        content.replace("\"command\": \"claude", "\"command\": \"claude -c")
+    };
+
+    fs::write(tasks_file, updated_content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
 }
 
 fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
