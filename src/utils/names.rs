@@ -83,8 +83,12 @@ const NOUNS: &[&str] = &[
 
 pub fn generate_friendly_name() -> String {
     let mut rng = rand::thread_rng();
-    let adjective = ADJECTIVES.choose(&mut rng).unwrap();
-    let noun = NOUNS.choose(&mut rng).unwrap();
+    let adjective = ADJECTIVES
+        .choose(&mut rng)
+        .expect("ADJECTIVES array should never be empty");
+    let noun = NOUNS
+        .choose(&mut rng)
+        .expect("NOUNS array should never be empty");
     format!("{}_{}", adjective, noun)
 }
 
@@ -148,10 +152,18 @@ pub fn validate_session_name(name: &str) -> Result<()> {
         .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
 
     if name.len() == 1 {
-        if !name.chars().next().unwrap().is_alphanumeric() {
+        if let Some(first_char) = name.chars().next() {
+            if !first_char.is_alphanumeric() {
+                return Err(ParaError::invalid_session_name(
+                    name,
+                    "Single character session name must be alphanumeric",
+                ));
+            }
+        } else {
+            // This should never happen since we checked name.len() == 1, but handle gracefully
             return Err(ParaError::invalid_session_name(
                 name,
-                "Single character session name must be alphanumeric",
+                "Unable to access first character of session name",
             ));
         }
     } else if !valid_regex.is_match(name) {
