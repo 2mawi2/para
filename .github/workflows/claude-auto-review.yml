@@ -52,10 +52,12 @@ jobs:
 
             **STEP 1: Requirements Verification (Acceptance Testing)**
             Before any other review, systematically verify requirements:
-            - Read the PR title, description, and any clarifying comments to understand what was requested
-            - Check if the code changes actually implement what was asked for
-            - If requirements are vague, infer them from the code changes and flag unclear specs
-            - Flag missing or incorrectly implemented requirements
+            - Read the PR title, description, and any clarifying comments
+            - **AUTOMATICALLY CHECK LINKED ISSUES**: Look for issue references (e.g., "Fixes #123", "Closes #456") and use mcp__github__get_issue to read the original requirements
+            - Compare the code changes against BOTH the PR description AND the original issue requirements
+            - If linked issues exist, prioritize their requirements as the authoritative source
+            - Check if the code changes actually implement what was asked for in the issue
+            - Flag missing or incorrectly implemented requirements from the original issue
             - Supporting changes that enable the main feature are fine; flag only unrelated additions
 
             **STEP 2: Verify It Actually Works**
@@ -122,17 +124,20 @@ jobs:
             **WORKFLOW:**
             1. Check iteration count in existing comments
             2. Run `just test` first to verify baseline functionality
-            3. STEP 1: Requirements verification - systematically check each requirement from PR description
+            3. STEP 1: Requirements verification:
+               - Parse PR for issue references and read linked issues with mcp__github__get_issue
+               - Systematically check each requirement from PR description AND original issues
             4. STEPS 2-5: Review using the remaining methodological approaches
-            5. If critical issues found (including missing requirements) AND iteration < 3: auto-trigger with structured comment
+            5. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
             6. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
             **Code Review Tools:**
             - mcp__github__get_pull_request_diff - View PR changes
             - mcp__github__get_pull_request_comments - Read existing PR comments (for iteration tracking)
+            - mcp__github__get_issue - Read linked issues for full context and original requirements
             - mcp__github__add_pull_request_comment - Add comments (for auto-trigger)
             - mcp__github__create_pending_pull_request_review - Start a review
             - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
@@ -170,9 +175,12 @@ jobs:
             
             **CRITICAL REVIEW PROCESS:**
             1. Run `just test` first to ensure the PR doesn't break existing functionality
-            2. **REQUIREMENTS VERIFICATION**: Systematically check each requirement from the PR description
+            2. **REQUIREMENTS VERIFICATION**: 
+               - Parse PR description for issue references (Fixes #N, Closes #N, etc.)
+               - Use mcp__github__get_issue to read linked issues for full context
+               - Systematically check each requirement from BOTH PR and original issues
             3. **METHODICAL REVIEW**: Apply the 5-step systematic approach focusing on critical issues
             4. Use mcp__github__create_pending_pull_request_review and related tools for inline feedback  
             5. Only auto-trigger if you find critical issues (including missing/incorrect requirements)
             
-            **Remember**: Missing or incorrectly implemented requirements are critical issues that should trigger fixes!
+            **Remember**: Missing or incorrectly implemented requirements from the original issue are critical issues that should trigger fixes!
