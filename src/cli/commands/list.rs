@@ -133,39 +133,80 @@ fn list_archived_sessions(
     let mut sessions = Vec::new();
     let mut seen_session_ids = std::collections::HashSet::new();
 
+    // Collect sessions from finished/cancelled session states
+    let finished_sessions = collect_finished_sessions(session_manager)?;
+    for session_info in finished_sessions {
+        seen_session_ids.insert(session_info.session_id.clone());
+        sessions.push(session_info);
+    }
+
+    // Collect sessions from archived branches (those not in session states)
+    let archived_branch_sessions =
+        collect_archived_branch_sessions(session_manager, git_service, &seen_session_ids)?;
+    sessions.extend(archived_branch_sessions);
+
+    // Sort sessions by last modified date
+    sort_sessions_by_date(&mut sessions);
+
+    Ok(sessions)
+}
+
+fn collect_finished_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
+    let mut sessions = Vec::new();
     let session_states = session_manager.list_sessions()?;
+
     for session_state in session_states {
         match session_state.status {
             UnifiedSessionStatus::Finished | UnifiedSessionStatus::Cancelled => {
-                seen_session_ids.insert(session_state.name.clone());
+                let has_uncommitted_changes =
+                    determine_uncommitted_changes(&session_state.worktree_path);
 
-                let has_uncommitted_changes = if session_state.worktree_path.exists() {
-                    if let Some(service) = git_service_for_path(&session_state.worktree_path) {
-                        service.has_uncommitted_changes().ok()
-                    } else {
-                        Some(false)
-                    }
-                } else {
-                    Some(false)
-                };
-
-                let session_info = SessionInfo {
-                    session_id: session_state.name.clone(),
-                    branch: session_state.branch.clone(),
-                    worktree_path: session_state.worktree_path.clone(),
-                    base_branch: "main".to_string(),
-                    merge_mode: "squash".to_string(),
-                    status: SessionStatus::Archived,
-                    last_modified: Some(session_state.created_at),
-                    has_uncommitted_changes,
-                    is_current: false,
-                };
+                let session_info =
+                    create_session_info_from_state(&session_state, has_uncommitted_changes);
                 sessions.push(session_info);
             }
             _ => {}
         }
     }
 
+    Ok(sessions)
+}
+
+fn determine_uncommitted_changes(worktree_path: &Path) -> Option<bool> {
+    if worktree_path.exists() {
+        if let Some(service) = git_service_for_path(worktree_path) {
+            service.has_uncommitted_changes().ok()
+        } else {
+            Some(false)
+        }
+    } else {
+        Some(false)
+    }
+}
+
+fn create_session_info_from_state(
+    session_state: &crate::core::session::SessionState,
+    has_uncommitted_changes: Option<bool>,
+) -> SessionInfo {
+    SessionInfo {
+        session_id: session_state.name.clone(),
+        branch: session_state.branch.clone(),
+        worktree_path: session_state.worktree_path.clone(),
+        base_branch: "main".to_string(),
+        merge_mode: "squash".to_string(),
+        status: SessionStatus::Archived,
+        last_modified: Some(session_state.created_at),
+        has_uncommitted_changes,
+        is_current: false,
+    }
+}
+
+fn collect_archived_branch_sessions(
+    session_manager: &SessionManager,
+    git_service: &GitService,
+    seen_session_ids: &std::collections::HashSet<String>,
+) -> Result<Vec<SessionInfo>> {
+    let mut sessions = Vec::new();
     let branch_manager = git_service.branch_manager();
     let branch_prefix = &session_manager.config().git.branch_prefix;
     let archived_branches = branch_manager.list_archived_branches(branch_prefix)?;
@@ -175,29 +216,35 @@ fn list_archived_sessions(
             extract_session_id_from_archived_branch(&branch_name, branch_prefix)
         {
             if !seen_session_ids.contains(&session_id) {
-                let session_info = SessionInfo {
-                    session_id: session_id.clone(),
-                    branch: branch_name.clone(),
-                    worktree_path: PathBuf::new(),
-                    base_branch: "unknown".to_string(),
-                    merge_mode: "unknown".to_string(),
-                    status: SessionStatus::Archived,
-                    last_modified: None,
-                    has_uncommitted_changes: None,
-                    is_current: false,
-                };
+                let session_info = create_session_info_from_branch(&session_id, &branch_name);
                 sessions.push(session_info);
             }
         }
     }
 
+    Ok(sessions)
+}
+
+fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> SessionInfo {
+    SessionInfo {
+        session_id: session_id.to_string(),
+        branch: branch_name.to_string(),
+        worktree_path: PathBuf::new(),
+        base_branch: "unknown".to_string(),
+        merge_mode: "unknown".to_string(),
+        status: SessionStatus::Archived,
+        last_modified: None,
+        has_uncommitted_changes: None,
+        is_current: false,
+    }
+}
+
+fn sort_sessions_by_date(sessions: &mut [SessionInfo]) {
     sessions.sort_by(|a, b| {
         b.last_modified
             .unwrap_or(DateTime::<Utc>::MIN_UTC)
             .cmp(&a.last_modified.unwrap_or(DateTime::<Utc>::MIN_UTC))
     });
-
-    Ok(sessions)
 }
 
 fn determine_unified_session_status(
