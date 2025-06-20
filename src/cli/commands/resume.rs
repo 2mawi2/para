@@ -6,6 +6,7 @@ use crate::core::ide::IdeManager;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
 use dialoguer::Select;
+use serde_json::Value;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -296,26 +297,30 @@ fn apply_remove_prompt_file_transformation(
     let content = fs::read_to_string(tasks_file)
         .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
 
+    let mut json: Value = serde_json::from_str(&content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
+
     let new_command = if has_skip_permissions {
         "claude --dangerously-skip-permissions -c"
     } else {
         "claude -c"
     };
 
-    let updated_content = content
-        .lines()
-        .map(|line| {
-            if line.contains("\"command\":")
-                && (line.contains("claude_prompt_temp")
-                    || (line.contains("$(cat") && line.contains("rm ")))
-            {
-                format!("      \"command\": \"{}\",", new_command)
-            } else {
-                line.to_string()
+    // Navigate to tasks array and update command fields
+    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
+        for task in tasks {
+            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
+                if command.contains(".claude_prompt_temp")
+                    || (command.contains("$(cat") && command.contains("rm "))
+                {
+                    task["command"] = Value::String(new_command.to_string());
+                }
             }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+        }
+    }
+
+    let updated_content = serde_json::to_string_pretty(&json)
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
 
     fs::write(tasks_file, updated_content)
         .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
@@ -328,16 +333,41 @@ fn apply_add_continue_flag_transformation(
     let content = fs::read_to_string(tasks_file)
         .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
 
-    let updated_content = if has_skip_permissions {
-        content.replace(
-            "claude --dangerously-skip-permissions",
-            "claude --dangerously-skip-permissions -c",
-        )
-    } else if content.contains("\"claude\"") {
-        content.replace("\"claude\"", "\"claude -c\"")
-    } else {
-        content.replace("\"command\": \"claude", "\"command\": \"claude -c")
-    };
+    let mut json: Value = serde_json::from_str(&content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
+
+    // Navigate to tasks array and update command fields
+    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
+        for task in tasks {
+            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
+                let updated_command = if has_skip_permissions {
+                    if command.contains("claude --dangerously-skip-permissions")
+                        && !command.contains("-c")
+                    {
+                        command.replace(
+                            "claude --dangerously-skip-permissions",
+                            "claude --dangerously-skip-permissions -c",
+                        )
+                    } else {
+                        command.to_string()
+                    }
+                } else if command == "claude" {
+                    "claude -c".to_string()
+                } else if command.starts_with("claude ") && !command.contains("-c") {
+                    command.replace("claude ", "claude -c ")
+                } else {
+                    command.to_string()
+                };
+
+                if updated_command != command {
+                    task["command"] = Value::String(updated_command);
+                }
+            }
+        }
+    }
+
+    let updated_content = serde_json::to_string_pretty(&json)
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
 
     fs::write(tasks_file, updated_content)
         .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
