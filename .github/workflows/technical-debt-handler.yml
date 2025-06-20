@@ -27,7 +27,7 @@ jobs:
       - name: Check for existing @claude comments
         id: check_comments
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "Checking for existing @claude comments on issue #${{ github.event.issue.number }}..."
           
@@ -40,7 +40,7 @@ jobs:
       - name: Add @claude comment if none exists
         if: steps.check_comments.outputs.has_claude_comment == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "No existing @claude comment found, adding one..."
           gh issue comment ${{ github.event.issue.number }} \
