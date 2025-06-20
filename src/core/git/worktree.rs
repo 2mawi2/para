@@ -116,37 +116,115 @@ impl<'a> WorktreeManager<'a> {
 
     pub fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
         let output = execute_git_command(self.repo, &["worktree", "list", "--porcelain"])?;
-        parse_worktree_output(&output)
+        WorktreePorcelainParser::parse(&output)
     }
 }
 
-fn parse_worktree_output(output: &str) -> Result<Vec<WorktreeInfo>> {
-    let mut worktrees = Vec::new();
-    let lines: Vec<&str> = output.lines().map(|line| line.trim()).collect();
+/// Dedicated parser for git worktree porcelain output
+struct WorktreePorcelainParser {
+    worktrees: Vec<WorktreeInfo>,
+    current_worktree: Option<WorktreeInfo>,
+}
 
-    let mut i = 0;
-    while i < lines.len() {
-        let block_start = i;
-
-        // Find the end of the current worktree block (empty line or end of input)
-        while i < lines.len() && !lines[i].is_empty() {
-            i += 1;
-        }
-
-        if i > block_start {
-            let block_lines = &lines[block_start..i];
-            if let Ok(worktree) = parse_worktree_block(block_lines) {
-                worktrees.push(worktree);
-            }
-        }
-
-        // Skip empty lines
-        while i < lines.len() && lines[i].is_empty() {
-            i += 1;
+impl WorktreePorcelainParser {
+    fn new() -> Self {
+        Self {
+            worktrees: Vec::new(),
+            current_worktree: None,
         }
     }
 
-    Ok(worktrees)
+    fn parse(porcelain_output: &str) -> Result<Vec<WorktreeInfo>> {
+        let mut parser = Self::new();
+        for line in porcelain_output.lines() {
+            parser.process_line(line.trim())?;
+        }
+        parser.finalize();
+        Ok(parser.worktrees)
+    }
+
+    fn process_line(&mut self, line: &str) -> Result<()> {
+        if line.is_empty() {
+            self.finish_current_worktree();
+        } else if line.starts_with("worktree ") {
+            self.process_worktree_line(line)?;
+        } else if line.starts_with("HEAD ") {
+            self.process_head_line(line)?;
+        } else if line.starts_with("branch ") {
+            self.process_branch_line(line)?;
+        } else if line == "bare" {
+            self.process_bare_line()?;
+        } else if line == "detached" {
+            self.process_detached_line()?;
+        }
+        // Ignore unknown lines
+        Ok(())
+    }
+
+    fn process_worktree_line(&mut self, line: &str) -> Result<()> {
+        self.finish_current_worktree();
+        
+        let path_str = line.strip_prefix("worktree ").ok_or_else(|| {
+            ParaError::git_operation(format!("Invalid worktree line: {}", line))
+        })?;
+
+        self.current_worktree = Some(WorktreeInfo {
+            path: PathBuf::from(path_str),
+            branch: String::new(),
+            commit: String::new(),
+            is_bare: false,
+        });
+        
+        Ok(())
+    }
+
+    fn process_head_line(&mut self, line: &str) -> Result<()> {
+        if let Some(ref mut worktree) = self.current_worktree {
+            if let Some(commit) = line.strip_prefix("HEAD ") {
+                worktree.commit = commit.to_string();
+            }
+        }
+        Ok(())
+    }
+
+    fn process_branch_line(&mut self, line: &str) -> Result<()> {
+        if let Some(ref mut worktree) = self.current_worktree {
+            if let Some(branch) = line.strip_prefix("branch ") {
+                let branch_name = branch.strip_prefix("refs/heads/").unwrap_or(branch);
+                worktree.branch = branch_name.to_string();
+            }
+        }
+        Ok(())
+    }
+
+    fn process_bare_line(&mut self) -> Result<()> {
+        if let Some(ref mut worktree) = self.current_worktree {
+            worktree.is_bare = true;
+        }
+        Ok(())
+    }
+
+    fn process_detached_line(&mut self) -> Result<()> {
+        if let Some(ref mut worktree) = self.current_worktree {
+            worktree.branch = "HEAD".to_string();
+        }
+        Ok(())
+    }
+
+    fn finish_current_worktree(&mut self) {
+        if let Some(worktree) = self.current_worktree.take() {
+            self.worktrees.push(worktree);
+        }
+    }
+
+    fn finalize(&mut self) {
+        self.finish_current_worktree();
+    }
+}
+
+// Keep old functions for compatibility with existing tests
+fn parse_worktree_output(output: &str) -> Result<Vec<WorktreeInfo>> {
+    WorktreePorcelainParser::parse(output)
 }
 
 fn parse_worktree_block(lines: &[&str]) -> Result<WorktreeInfo> {
@@ -154,25 +232,14 @@ fn parse_worktree_block(lines: &[&str]) -> Result<WorktreeInfo> {
         return Err(ParaError::git_operation("Empty worktree block".to_string()));
     }
 
-    // First line must be worktree path
-    let first_line = lines[0];
-    let path_str = first_line.strip_prefix("worktree ").ok_or_else(|| {
-        ParaError::git_operation(format!("Invalid worktree block: {}", first_line))
-    })?;
-
-    let mut worktree = WorktreeInfo {
-        path: PathBuf::from(path_str),
-        branch: String::new(),
-        commit: String::new(),
-        is_bare: false,
-    };
-
-    // Process remaining lines
-    for &line in &lines[1..] {
-        parse_worktree_line(line, &mut worktree)?;
+    let block_text = lines.join("\n");
+    let mut worktrees = WorktreePorcelainParser::parse(&block_text)?;
+    
+    if worktrees.is_empty() {
+        return Err(ParaError::git_operation("No valid worktree found in block".to_string()));
     }
-
-    Ok(worktree)
+    
+    Ok(worktrees.into_iter().next().unwrap())
 }
 
 fn parse_worktree_line(line: &str, worktree: &mut WorktreeInfo) -> Result<()> {
@@ -675,5 +742,187 @@ some-content
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/valid/path"));
         assert_eq!(worktrees[0].branch, "valid-branch");
+    }
+
+    // Parser-specific unit tests
+    #[test]
+    fn test_worktree_porcelain_parser_empty_input() {
+        let result = WorktreePorcelainParser::parse("").unwrap();
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_whitespace_only() {
+        let result = WorktreePorcelainParser::parse("   \n\n  \t\n   ").unwrap();
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_single_worktree() {
+        let input = "worktree /path/to/repo\nHEAD abc123def456\nbranch refs/heads/main";
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(worktrees[0].commit, "abc123def456");
+        assert_eq!(worktrees[0].branch, "main");
+        assert!(!worktrees[0].is_bare);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_multiple_worktrees() {
+        let input = r#"worktree /main
+HEAD abc123
+branch refs/heads/main
+
+worktree /feature
+HEAD def456
+branch feature-branch
+
+worktree /bare.git
+HEAD 789abc
+bare"#;
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 3);
+        
+        assert_eq!(worktrees[0].path, PathBuf::from("/main"));
+        assert_eq!(worktrees[0].branch, "main");
+        assert!(!worktrees[0].is_bare);
+        
+        assert_eq!(worktrees[1].path, PathBuf::from("/feature"));
+        assert_eq!(worktrees[1].branch, "feature-branch");
+        assert!(!worktrees[1].is_bare);
+        
+        assert_eq!(worktrees[2].path, PathBuf::from("/bare.git"));
+        assert_eq!(worktrees[2].branch, "");
+        assert!(worktrees[2].is_bare);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_detached_head() {
+        let input = "worktree /detached\nHEAD 987654321def\ndetached";
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/detached"));
+        assert_eq!(worktrees[0].commit, "987654321def");
+        assert_eq!(worktrees[0].branch, "HEAD");
+        assert!(!worktrees[0].is_bare);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_branch_without_prefix() {
+        let input = "worktree /test\nHEAD abc123\nbranch feature-no-prefix";
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].branch, "feature-no-prefix");
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_minimal_worktree() {
+        let input = "worktree /minimal";
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/minimal"));
+        assert_eq!(worktrees[0].commit, "");
+        assert_eq!(worktrees[0].branch, "");
+        assert!(!worktrees[0].is_bare);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_unknown_lines_ignored() {
+        let input = r#"worktree /test
+unknown-line-1
+HEAD abc123
+unknown-line-2
+branch main
+unknown-line-3"#;
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/test"));
+        assert_eq!(worktrees[0].commit, "abc123");
+        assert_eq!(worktrees[0].branch, "main");
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_extra_whitespace() {
+        let input = r#"
+  
+worktree /test  
+  HEAD abc123  
+  branch main  
+  
+
+worktree /test2
+HEAD def456
+branch feature
+
+
+  "#;
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 2);
+        assert_eq!(worktrees[0].path, PathBuf::from("/test"));
+        assert_eq!(worktrees[0].commit, "abc123");
+        assert_eq!(worktrees[0].branch, "main");
+        
+        assert_eq!(worktrees[1].path, PathBuf::from("/test2"));
+        assert_eq!(worktrees[1].commit, "def456");
+        assert_eq!(worktrees[1].branch, "feature");
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_invalid_worktree_line() {
+        let input = "invalid-worktree-line\nHEAD abc123";
+        let result = WorktreePorcelainParser::parse(input);
+        // Should not error, just ignore invalid lines
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_mixed_valid_invalid() {
+        let input = r#"invalid-line
+some-garbage
+
+worktree /valid
+HEAD abc123
+branch main
+
+more-garbage
+invalid-line
+
+worktree /valid2
+HEAD def456
+branch feature"#;
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 2);
+        assert_eq!(worktrees[0].path, PathBuf::from("/valid"));
+        assert_eq!(worktrees[0].branch, "main");
+        assert_eq!(worktrees[1].path, PathBuf::from("/valid2"));
+        assert_eq!(worktrees[1].branch, "feature");
+    }
+
+    #[test]
+    fn test_worktree_porcelain_parser_all_line_types() {
+        let input = r#"worktree /comprehensive-test
+HEAD 1234567890abcdef
+branch refs/heads/feature-branch
+bare
+detached"#;
+        let worktrees = WorktreePorcelainParser::parse(input).unwrap();
+        
+        assert_eq!(worktrees.len(), 1);
+        let worktree = &worktrees[0];
+        assert_eq!(worktree.path, PathBuf::from("/comprehensive-test"));
+        assert_eq!(worktree.commit, "1234567890abcdef");
+        // Last value wins for branch (detached overwrites feature-branch)
+        assert_eq!(worktree.branch, "HEAD");
+        assert!(worktree.is_bare);
     }
 }
