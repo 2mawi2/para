@@ -116,53 +116,80 @@ impl<'a> WorktreeManager<'a> {
 
     pub fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>> {
         let output = execute_git_command(self.repo, &["worktree", "list", "--porcelain"])?;
-
-        let mut worktrees = Vec::new();
-        let mut current_worktree: Option<WorktreeInfo> = None;
-
-        for line in output.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                if let Some(worktree) = current_worktree.take() {
-                    worktrees.push(worktree);
-                }
-                continue;
-            }
-
-            if let Some(path_str) = line.strip_prefix("worktree ") {
-                current_worktree = Some(WorktreeInfo {
-                    path: PathBuf::from(path_str),
-                    branch: String::new(),
-                    commit: String::new(),
-                    is_bare: false,
-                });
-            } else if let Some(commit) = line.strip_prefix("HEAD ") {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.commit = commit.to_string();
-                }
-            } else if let Some(branch) = line.strip_prefix("branch ") {
-                if let Some(ref mut worktree) = current_worktree {
-                    let branch_name = branch.strip_prefix("refs/heads/").unwrap_or(branch);
-                    worktree.branch = branch_name.to_string();
-                }
-            } else if line == "bare" {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.is_bare = true;
-                }
-            } else if line == "detached" {
-                if let Some(ref mut worktree) = current_worktree {
-                    worktree.branch = "HEAD".to_string();
-                }
-            }
-        }
-
-        if let Some(worktree) = current_worktree {
-            worktrees.push(worktree);
-        }
-
-        Ok(worktrees)
+        parse_worktree_output(&output)
     }
+}
 
+fn parse_worktree_output(output: &str) -> Result<Vec<WorktreeInfo>> {
+    let mut worktrees = Vec::new();
+    let lines: Vec<&str> = output.lines().map(|line| line.trim()).collect();
+    
+    let mut i = 0;
+    while i < lines.len() {
+        let block_start = i;
+        
+        // Find the end of the current worktree block (empty line or end of input)
+        while i < lines.len() && !lines[i].is_empty() {
+            i += 1;
+        }
+        
+        if i > block_start {
+            let block_lines = &lines[block_start..i];
+            if let Ok(worktree) = parse_worktree_block(block_lines) {
+                worktrees.push(worktree);
+            }
+        }
+        
+        // Skip empty lines
+        while i < lines.len() && lines[i].is_empty() {
+            i += 1;
+        }
+    }
+    
+    Ok(worktrees)
+}
+
+fn parse_worktree_block(lines: &[&str]) -> Result<WorktreeInfo> {
+    if lines.is_empty() {
+        return Err(ParaError::git_operation("Empty worktree block".to_string()));
+    }
+    
+    // First line must be worktree path
+    let first_line = lines[0];
+    let path_str = first_line.strip_prefix("worktree ")
+        .ok_or_else(|| ParaError::git_operation(format!("Invalid worktree block: {}", first_line)))?;
+    
+    let mut worktree = WorktreeInfo {
+        path: PathBuf::from(path_str),
+        branch: String::new(),
+        commit: String::new(),
+        is_bare: false,
+    };
+    
+    // Process remaining lines
+    for &line in &lines[1..] {
+        parse_worktree_line(line, &mut worktree)?;
+    }
+    
+    Ok(worktree)
+}
+
+fn parse_worktree_line(line: &str, worktree: &mut WorktreeInfo) -> Result<()> {
+    if let Some(commit) = line.strip_prefix("HEAD ") {
+        worktree.commit = commit.to_string();
+    } else if let Some(branch) = line.strip_prefix("branch ") {
+        let branch_name = branch.strip_prefix("refs/heads/").unwrap_or(branch);
+        worktree.branch = branch_name.to_string();
+    } else if line == "bare" {
+        worktree.is_bare = true;
+    } else if line == "detached" {
+        worktree.branch = "HEAD".to_string();
+    }
+    
+    Ok(())
+}
+
+impl<'a> WorktreeManager<'a> {
     pub fn validate_worktree(&self, path: &Path) -> Result<()> {
         if !path.exists() {
             return Err(ParaError::git_operation(format!(
