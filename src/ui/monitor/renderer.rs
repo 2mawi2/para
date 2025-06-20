@@ -11,6 +11,19 @@ use ratatui::{
 };
 use std::path::PathBuf;
 
+// Color constants to eliminate duplication
+const COLOR_GREEN: Color = Color::Rgb(34, 197, 94);
+const COLOR_RED: Color = Color::Rgb(239, 68, 68);
+const COLOR_BLUE: Color = Color::Rgb(99, 102, 241);
+const COLOR_GRAY: Color = Color::Rgb(107, 114, 128);
+const COLOR_WHITE: Color = Color::Rgb(255, 255, 255);
+const COLOR_LIGHT_GRAY: Color = Color::Rgb(156, 163, 175);
+const COLOR_BORDER: Color = Color::Rgb(75, 85, 99);
+const COLOR_SELECTED_BG: Color = Color::Rgb(30, 41, 59);
+const COLOR_NORMAL_TEXT: Color = Color::Rgb(229, 231, 235);
+const COLOR_ORANGE: Color = Color::Rgb(245, 158, 11);
+const COLOR_BLACK: Color = Color::Rgb(0, 0, 0);
+
 fn create_progress_bar(percentage: u8) -> String {
     const BAR_WIDTH: usize = 8;
     let filled = (percentage as f32 / 100.0 * BAR_WIDTH as f32).round() as usize;
@@ -29,6 +42,51 @@ fn create_progress_bar(percentage: u8) -> String {
     bar.push_str(&format!("{}%", percentage));
 
     bar
+}
+
+// Helper functions to eliminate dialog duplication
+fn create_dialog_area(f: &mut Frame, width: u16, height: u16) -> Rect {
+    let area = centered_rect(width, height, f.area());
+    f.render_widget(Clear, area);
+    area
+}
+
+fn create_dialog_block(title: &str, border_color: Color) -> Block {
+    Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(COLOR_BLACK))
+}
+
+fn create_dialog_style() -> Style {
+    Style::default().fg(COLOR_WHITE)
+}
+
+fn create_control_buttons_line<'a>(confirm_text: &'a str, cancel_text: &'a str) -> Line<'a> {
+    Line::from(vec![
+        Span::styled("[Enter]", Style::default().fg(COLOR_GREEN)),
+        Span::raw(format!(" {} • ", confirm_text)),
+        Span::styled("[Esc]", Style::default().fg(COLOR_RED)),
+        Span::raw(format!(" {}", cancel_text)),
+    ])
+}
+
+fn create_styled_span(text: &str, color: Color, bold: bool) -> Span {
+    let mut style = Style::default().fg(color);
+    if bold {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    Span::styled(text, style)
+}
+
+fn create_default_cell_for_none(default_text: &str, is_stale: bool) -> Cell {
+    let color = if is_stale {
+        crate::ui::monitor::types::SessionStatus::dimmed_text_color()
+    } else {
+        COLOR_GRAY
+    };
+    Cell::from(default_text).style(Style::default().fg(color))
 }
 
 pub struct MonitorRenderer {
@@ -65,23 +123,19 @@ impl MonitorRenderer {
     fn render_header(&self, f: &mut Frame, area: Rect) {
         let header_text = vec![
             Line::from(vec![
-                Span::styled(
+                create_styled_span(
                     "Para Monitor - Interactive Session Control",
-                    Style::default()
-                        .fg(Color::Rgb(255, 255, 255))
-                        .add_modifier(Modifier::BOLD),
+                    COLOR_WHITE,
+                    true,
                 ),
                 Span::raw("                  "),
-                Span::styled(
-                    "Auto-refresh: 2s",
-                    Style::default().fg(Color::Rgb(156, 163, 175)),
-                ),
+                Span::styled("Auto-refresh: 2s", Style::default().fg(COLOR_LIGHT_GRAY)),
             ]),
             Line::from("─".repeat(area.width as usize)),
         ];
 
         let header = Paragraph::new(header_text)
-            .style(Style::default().fg(Color::Rgb(75, 85, 99)))
+            .style(Style::default().fg(COLOR_BORDER))
             .alignment(Alignment::Left);
 
         f.render_widget(header, area);
@@ -113,7 +167,7 @@ impl MonitorRenderer {
         ])
         .style(
             Style::default()
-                .fg(Color::Rgb(156, 163, 175))
+                .fg(COLOR_LIGHT_GRAY)
                 .add_modifier(Modifier::BOLD),
         )
         .height(1)
@@ -155,13 +209,11 @@ impl MonitorRenderer {
 
     fn get_base_row_style(&self, is_selected: bool, is_stale: bool) -> Style {
         if is_selected {
-            Style::default()
-                .bg(Color::Rgb(30, 41, 59))
-                .fg(Color::Rgb(255, 255, 255))
+            Style::default().bg(COLOR_SELECTED_BG).fg(COLOR_WHITE)
         } else if is_stale {
             Style::default().fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color())
         } else {
-            Style::default().fg(Color::Rgb(229, 231, 235))
+            Style::default().fg(COLOR_NORMAL_TEXT)
         }
     }
 
@@ -173,7 +225,7 @@ impl MonitorRenderer {
         };
 
         let state_style = if session.is_blocked {
-            Style::default().fg(Color::Rgb(239, 68, 68))
+            Style::default().fg(COLOR_RED)
         } else {
             Style::default().fg(session.status.color())
         };
@@ -191,14 +243,7 @@ impl MonitorRenderer {
                 let (text, color) = self.get_test_status_display(status, is_stale);
                 Cell::from(text).style(Style::default().fg(color))
             }
-            None => {
-                let color = if is_stale {
-                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                } else {
-                    Color::Rgb(107, 114, 128)
-                };
-                Cell::from("-").style(Style::default().fg(color))
-            }
+            None => create_default_cell_for_none("-", is_stale),
         }
     }
 
@@ -210,28 +255,18 @@ impl MonitorRenderer {
         let dimmed_color = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
 
         match status {
-            crate::core::status::TestStatus::Passed => (
-                "Passed",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    Color::Rgb(34, 197, 94)
-                },
-            ),
-            crate::core::status::TestStatus::Failed => (
-                "Failed",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    Color::Rgb(239, 68, 68)
-                },
-            ),
+            crate::core::status::TestStatus::Passed => {
+                ("Passed", if is_stale { dimmed_color } else { COLOR_GREEN })
+            }
+            crate::core::status::TestStatus::Failed => {
+                ("Failed", if is_stale { dimmed_color } else { COLOR_RED })
+            }
             crate::core::status::TestStatus::Unknown => (
                 "Unknown",
                 if is_stale {
                     dimmed_color
                 } else {
-                    Color::Rgb(156, 163, 175)
+                    COLOR_LIGHT_GRAY
                 },
             ),
         }
@@ -244,14 +279,7 @@ impl MonitorRenderer {
                 let color = self.get_progress_color(pct, is_stale);
                 Cell::from(progress_bar).style(Style::default().fg(color))
             }
-            None => {
-                let color = if is_stale {
-                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                } else {
-                    Color::Rgb(107, 114, 128)
-                };
-                Cell::from("░░░░░░░░ ─").style(Style::default().fg(color))
-            }
+            None => create_default_cell_for_none("░░░░░░░░ ─", is_stale),
         }
     }
 
@@ -259,11 +287,11 @@ impl MonitorRenderer {
         if is_stale {
             crate::ui::monitor::types::SessionStatus::dimmed_text_color()
         } else if percentage == 100 {
-            Color::Rgb(34, 197, 94)
+            COLOR_GREEN
         } else if percentage >= 50 {
-            Color::Rgb(99, 102, 241)
+            COLOR_BLUE
         } else {
-            Color::Rgb(245, 158, 11)
+            COLOR_ORANGE
         }
     }
 
@@ -277,14 +305,7 @@ impl MonitorRenderer {
                 let (text, color) = self.get_confidence_display(level, is_stale);
                 Cell::from(text).style(Style::default().fg(color))
             }
-            None => {
-                let color = if is_stale {
-                    crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-                } else {
-                    Color::Rgb(107, 114, 128)
-                };
-                Cell::from("-").style(Style::default().fg(color))
-            }
+            None => create_default_cell_for_none("-", is_stale),
         }
     }
 
@@ -296,30 +317,15 @@ impl MonitorRenderer {
         let dimmed_color = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
 
         match level {
-            crate::core::status::ConfidenceLevel::High => (
-                "High",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    Color::Rgb(34, 197, 94)
-                },
-            ),
-            crate::core::status::ConfidenceLevel::Medium => (
-                "Medium",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    Color::Rgb(245, 158, 11)
-                },
-            ),
-            crate::core::status::ConfidenceLevel::Low => (
-                "Low",
-                if is_stale {
-                    dimmed_color
-                } else {
-                    Color::Rgb(239, 68, 68)
-                },
-            ),
+            crate::core::status::ConfidenceLevel::High => {
+                ("High", if is_stale { dimmed_color } else { COLOR_GREEN })
+            }
+            crate::core::status::ConfidenceLevel::Medium => {
+                ("Medium", if is_stale { dimmed_color } else { COLOR_ORANGE })
+            }
+            crate::core::status::ConfidenceLevel::Low => {
+                ("Low", if is_stale { dimmed_color } else { COLOR_RED })
+            }
         }
     }
 
@@ -340,7 +346,7 @@ impl MonitorRenderer {
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::BOTTOM)
-                .border_style(Style::default().fg(Color::Rgb(75, 85, 99))),
+                .border_style(Style::default().fg(COLOR_BORDER)),
         )
     }
 
@@ -376,34 +382,14 @@ impl MonitorRenderer {
             format!("{} • {} • ", selected_session, selected_branch)
         };
         let controls = vec![Line::from(vec![
-            Span::styled(session_info, Style::default().fg(Color::Rgb(156, 163, 175))),
-            Span::styled(
-                "[Enter]",
-                Style::default()
-                    .fg(Color::Rgb(99, 102, 241))
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(session_info, Style::default().fg(COLOR_LIGHT_GRAY)),
+            create_styled_span("[Enter]", COLOR_BLUE, true),
             Span::raw(" Resume • "),
-            Span::styled(
-                "[f]",
-                Style::default()
-                    .fg(Color::Rgb(99, 102, 241))
-                    .add_modifier(Modifier::BOLD),
-            ),
+            create_styled_span("[f]", COLOR_BLUE, true),
             Span::raw(" Finish • "),
-            Span::styled(
-                "[c]",
-                Style::default()
-                    .fg(Color::Rgb(99, 102, 241))
-                    .add_modifier(Modifier::BOLD),
-            ),
+            create_styled_span("[c]", COLOR_BLUE, true),
             Span::raw(" Cancel • "),
-            Span::styled(
-                "[q]",
-                Style::default()
-                    .fg(Color::Rgb(99, 102, 241))
-                    .add_modifier(Modifier::BOLD),
-            ),
+            create_styled_span("[q]", COLOR_BLUE, true),
             Span::raw(" Quit"),
         ])];
 
@@ -411,7 +397,7 @@ impl MonitorRenderer {
             .block(
                 Block::default()
                     .borders(Borders::TOP)
-                    .border_style(Style::default().fg(Color::Rgb(75, 85, 99))),
+                    .border_style(Style::default().fg(COLOR_BORDER)),
             )
             .alignment(Alignment::Left);
 
@@ -419,9 +405,7 @@ impl MonitorRenderer {
     }
 
     fn render_finish_prompt(&self, f: &mut Frame, state: &MonitorAppState) {
-        let area = centered_rect(60, 25, f.area());
-
-        f.render_widget(Clear, area);
+        let area = create_dialog_area(f, 60, 25);
 
         let input_text = if state.get_input().is_empty() {
             "Type your commit message..."
@@ -435,94 +419,57 @@ impl MonitorRenderer {
             Line::from(Span::styled(
                 input_text,
                 if state.get_input().is_empty() {
-                    Style::default().fg(Color::Rgb(107, 114, 128))
+                    Style::default().fg(COLOR_GRAY)
                 } else {
-                    Style::default().fg(Color::Rgb(255, 255, 255))
+                    Style::default().fg(COLOR_WHITE)
                 },
             )),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("[Enter]", Style::default().fg(Color::Rgb(34, 197, 94))),
-                Span::raw(" confirm • "),
-                Span::styled("[Esc]", Style::default().fg(Color::Rgb(239, 68, 68))),
-                Span::raw(" cancel"),
-            ]),
+            create_control_buttons_line("confirm", "cancel"),
         ])
-        .block(
-            Block::default()
-                .title(" Finish Session ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Rgb(99, 102, 241)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
-        )
-        .style(Style::default().fg(Color::Rgb(255, 255, 255)));
+        .block(create_dialog_block(" Finish Session ", COLOR_BLUE))
+        .style(create_dialog_style());
 
         f.render_widget(prompt, area);
     }
 
     fn render_cancel_confirm(&self, f: &mut Frame) {
-        let area = centered_rect(50, 20, f.area());
-
-        f.render_widget(Clear, area);
+        let area = create_dialog_area(f, 50, 20);
 
         let confirm = Paragraph::new(vec![
             Line::from("Cancel this session?"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("[Enter]", Style::default().fg(Color::Rgb(34, 197, 94))),
-                Span::raw(" confirm • "),
-                Span::styled("[Esc]", Style::default().fg(Color::Rgb(239, 68, 68))),
-                Span::raw(" cancel"),
-            ]),
+            create_control_buttons_line("confirm", "cancel"),
         ])
-        .block(
-            Block::default()
-                .title(" Confirm Cancel ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Rgb(239, 68, 68)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
-        )
-        .style(Style::default().fg(Color::Rgb(255, 255, 255)))
+        .block(create_dialog_block(" Confirm Cancel ", COLOR_RED))
+        .style(create_dialog_style())
         .alignment(Alignment::Center);
 
         f.render_widget(confirm, area);
     }
 
     fn render_error_dialog(&self, f: &mut Frame, state: &MonitorAppState) {
-        let area = centered_rect(60, 25, f.area());
-
-        f.render_widget(Clear, area);
+        let area = create_dialog_area(f, 60, 25);
 
         let error_message = state.error_message.as_deref().unwrap_or("Unknown error");
 
         let error_popup = Paragraph::new(vec![
             Line::from(vec![
-                Span::styled("⚠️  ", Style::default().fg(Color::Rgb(239, 68, 68))),
-                Span::styled(
-                    "Error",
-                    Style::default()
-                        .fg(Color::Rgb(239, 68, 68))
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled("⚠️  ", Style::default().fg(COLOR_RED)),
+                create_styled_span("Error", COLOR_RED, true),
             ]),
             Line::from(""),
             Line::from(Span::raw(error_message)),
             Line::from(""),
             Line::from(vec![
-                Span::styled("[Enter]", Style::default().fg(Color::Rgb(34, 197, 94))),
+                Span::styled("[Enter]", Style::default().fg(COLOR_GREEN)),
                 Span::raw(" or "),
-                Span::styled("[Esc]", Style::default().fg(Color::Rgb(34, 197, 94))),
+                Span::styled("[Esc]", Style::default().fg(COLOR_GREEN)),
                 Span::raw(" to dismiss"),
             ]),
         ])
-        .block(
-            Block::default()
-                .title(" Error ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Rgb(239, 68, 68)))
-                .style(Style::default().bg(Color::Rgb(0, 0, 0))),
-        )
-        .style(Style::default().fg(Color::Rgb(255, 255, 255)))
+        .block(create_dialog_block(" Error ", COLOR_RED))
+        .style(create_dialog_style())
         .alignment(Alignment::Center)
         .wrap(ratatui::widgets::Wrap { trim: true });
 
@@ -538,33 +485,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn create_test_config() -> Config {
-        // Create a minimal test config without using test_utils
-        Config {
-            ide: crate::config::IdeConfig {
-                name: "test".to_string(),
-                command: "echo".to_string(),
-                user_data_dir: None,
-                wrapper: crate::config::WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
-                },
-            },
-            directories: crate::config::DirectoryConfig {
-                subtrees_dir: "/tmp/subtrees".to_string(),
-                state_dir: "/tmp/.para_state".to_string(),
-            },
-            git: crate::config::GitConfig {
-                branch_prefix: "para".to_string(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: crate::config::SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: false,
-                auto_cleanup_days: Some(7),
-            },
-        }
+        crate::test_utils::test_helpers::create_test_config()
     }
 
     fn create_test_sessions() -> Vec<SessionInfo> {
@@ -650,8 +571,8 @@ mod tests {
 
         // Test selected style
         let selected_style = renderer.get_base_row_style(true, false);
-        assert_eq!(selected_style.bg, Some(Color::Rgb(30, 41, 59)));
-        assert_eq!(selected_style.fg, Some(Color::Rgb(255, 255, 255)));
+        assert_eq!(selected_style.bg, Some(COLOR_SELECTED_BG));
+        assert_eq!(selected_style.fg, Some(COLOR_WHITE));
 
         // Test stale style
         let stale_style = renderer.get_base_row_style(false, true);
@@ -662,7 +583,7 @@ mod tests {
 
         // Test normal style
         let normal_style = renderer.get_base_row_style(false, false);
-        assert_eq!(normal_style.fg, Some(Color::Rgb(229, 231, 235)));
+        assert_eq!(normal_style.fg, Some(COLOR_NORMAL_TEXT));
     }
 
     #[test]
@@ -671,18 +592,9 @@ mod tests {
         let renderer = MonitorRenderer::new(config);
 
         // Test completion colors
-        assert_eq!(
-            renderer.get_progress_color(100, false),
-            Color::Rgb(34, 197, 94)
-        ); // Green for complete
-        assert_eq!(
-            renderer.get_progress_color(75, false),
-            Color::Rgb(99, 102, 241)
-        ); // Blue for high progress
-        assert_eq!(
-            renderer.get_progress_color(25, false),
-            Color::Rgb(245, 158, 11)
-        ); // Orange for low progress
+        assert_eq!(renderer.get_progress_color(100, false), COLOR_GREEN); // Green for complete
+        assert_eq!(renderer.get_progress_color(75, false), COLOR_BLUE); // Blue for high progress
+        assert_eq!(renderer.get_progress_color(25, false), COLOR_ORANGE); // Orange for low progress
 
         // Test stale color override
         let dimmed = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
@@ -699,13 +611,13 @@ mod tests {
         let (text, color) =
             renderer.get_test_status_display(&crate::core::status::TestStatus::Passed, false);
         assert_eq!(text, "Passed");
-        assert_eq!(color, Color::Rgb(34, 197, 94));
+        assert_eq!(color, COLOR_GREEN);
 
         // Test failed status
         let (text, color) =
             renderer.get_test_status_display(&crate::core::status::TestStatus::Failed, false);
         assert_eq!(text, "Failed");
-        assert_eq!(color, Color::Rgb(239, 68, 68));
+        assert_eq!(color, COLOR_RED);
 
         // Test stale status override
         let (text, color) =
@@ -726,19 +638,19 @@ mod tests {
         let (text, color) =
             renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::High, false);
         assert_eq!(text, "High");
-        assert_eq!(color, Color::Rgb(34, 197, 94));
+        assert_eq!(color, COLOR_GREEN);
 
         // Test medium confidence
         let (text, color) =
             renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::Medium, false);
         assert_eq!(text, "Medium");
-        assert_eq!(color, Color::Rgb(245, 158, 11));
+        assert_eq!(color, COLOR_ORANGE);
 
         // Test low confidence
         let (text, color) =
             renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::Low, false);
         assert_eq!(text, "Low");
-        assert_eq!(color, Color::Rgb(239, 68, 68));
+        assert_eq!(color, COLOR_RED);
 
         // Test stale override
         let (text, color) =
