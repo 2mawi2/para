@@ -70,7 +70,26 @@ jobs:
             Create at most 3 issues per run to avoid overwhelming the team.
             Focus on the most impactful technical debt first.
           allowed_tools: |
-            Bash
+            Bash(gh issue create --title *)
+            Bash(gh issue list)
+            Bash(just test)
+            Bash(just lint)
+            Bash(cargo test)
+            Bash(cargo clippy)
+            Bash(git status)
+            Bash(git diff)
+            Bash(git log)
+            Bash(git blame)
+            Bash(rg *)
+            Bash(grep *)
+            Bash(find *)
+            Bash(ls)
+            Bash(ls *)
+            Bash(cat *)
+            Bash(head *)
+            Bash(tail *)
+            Bash(wc *)
+            Bash(pwd)
             Edit
             Read
             Write
