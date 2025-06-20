@@ -51,19 +51,28 @@ impl SessionService {
         Ok(session_infos)
     }
 
-    fn find_current_session(&self, session_manager: &SessionManager) -> Result<Option<crate::core::session::SessionState>> {
+    fn find_current_session(
+        &self,
+        session_manager: &SessionManager,
+    ) -> Result<Option<crate::core::session::SessionState>> {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Ok(session_manager.find_session_by_path(&current_dir).unwrap_or(None))
+        Ok(session_manager
+            .find_session_by_path(&current_dir)
+            .unwrap_or(None))
     }
 
-    fn process_session(&self, session: crate::core::session::SessionState, show_stale: bool) -> Result<Option<SessionInfo>> {
+    fn process_session(
+        &self,
+        session: crate::core::session::SessionState,
+        show_stale: bool,
+    ) -> Result<Option<SessionInfo>> {
         if matches!(session.status, CoreSessionStatus::Cancelled) {
             return Ok(None);
         }
 
         let last_activity = self.resolve_last_activity(&session)?;
         let status = detect_session_status(&session, &last_activity);
-        
+
         if !show_stale && matches!(status, SessionStatus::Stale) {
             return Ok(None);
         }
@@ -88,9 +97,12 @@ impl SessionService {
         Ok(Some(session_info))
     }
 
-    fn resolve_last_activity(&self, session: &crate::core::session::SessionState) -> Result<DateTime<Utc>> {
+    fn resolve_last_activity(
+        &self,
+        session: &crate::core::session::SessionState,
+    ) -> Result<DateTime<Utc>> {
         let path = session.worktree_path.clone();
-        
+
         let detected_activity = if let Some(cached) = self.activity_cache.get(&path) {
             cached
         } else {
@@ -98,7 +110,7 @@ impl SessionService {
             self.activity_cache.set(path, detected);
             detected
         };
-        
+
         Ok(detected_activity
             .or(session.last_activity)
             .unwrap_or(session.created_at))
@@ -121,14 +133,17 @@ impl SessionService {
         let task_file = state_dir.join(format!("{}.task", session.name));
         let task = std::fs::read_to_string(task_file)
             .unwrap_or_else(|_| format!("Session: {}", &session.name));
-        
+
         let mut cache = self.task_cache.lock().unwrap();
         cache.insert(session.name.clone(), task.clone());
-        
+
         Ok(task)
     }
 
-    fn resolve_agent_status(&self, session: &crate::core::session::SessionState) -> Result<AgentStatusData> {
+    fn resolve_agent_status(
+        &self,
+        session: &crate::core::session::SessionState,
+    ) -> Result<AgentStatusData> {
         let state_dir = Path::new(&self.config.directories.state_dir);
         let agent_status = Status::load(state_dir, &session.name).ok().flatten();
 
@@ -145,7 +160,11 @@ impl SessionService {
         })
     }
 
-    fn sort_sessions(&self, session_infos: &mut Vec<SessionInfo>, current_session: &Option<crate::core::session::SessionState>) {
+    fn sort_sessions(
+        &self,
+        session_infos: &mut [SessionInfo],
+        current_session: &Option<crate::core::session::SessionState>,
+    ) {
         session_infos.sort_by(|a, b| {
             if let Some(ref current) = current_session {
                 if a.name == current.name {

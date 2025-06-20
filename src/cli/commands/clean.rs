@@ -4,7 +4,7 @@ use crate::core::git::{GitOperations, GitService};
 use crate::utils::Result;
 use dialoguer::Confirm;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn execute(config: Config, args: CleanArgs) -> Result<()> {
     let git_service = GitService::discover()?;
@@ -103,7 +103,7 @@ impl SessionCleaner {
 
     fn find_orphaned_state_files(&self) -> Result<Vec<PathBuf>> {
         let state_dir = PathBuf::from(&self.config.directories.state_dir);
-        
+
         if !state_dir.exists() {
             return Ok(Vec::new());
         }
@@ -119,7 +119,11 @@ impl SessionCleaner {
         Ok(orphaned_files)
     }
 
-    fn process_state_file(&self, entry: &fs::DirEntry, state_dir: &PathBuf) -> Result<Option<Vec<PathBuf>>> {
+    fn process_state_file(
+        &self,
+        entry: &fs::DirEntry,
+        state_dir: &Path,
+    ) -> Result<Option<Vec<PathBuf>>> {
         let path = entry.path();
         let file_name = match path.file_name().and_then(|n| n.to_str()) {
             Some(name) => name,
@@ -136,7 +140,9 @@ impl SessionCleaner {
         };
 
         if self.is_session_orphaned(session_id)? {
-            Ok(Some(self.collect_session_files(session_id, &path, state_dir)))
+            Ok(Some(
+                self.collect_session_files(session_id, &path, state_dir),
+            ))
         } else {
             Ok(None)
         }
@@ -147,9 +153,14 @@ impl SessionCleaner {
         Ok(!self.git_service.branch_exists(&branch_name)?)
     }
 
-    fn collect_session_files(&self, session_id: &str, state_file: &PathBuf, state_dir: &PathBuf) -> Vec<PathBuf> {
-        let mut files = vec![state_file.clone()];
-        
+    fn collect_session_files(
+        &self,
+        session_id: &str,
+        state_file: &Path,
+        state_dir: &Path,
+    ) -> Vec<PathBuf> {
+        let mut files = vec![state_file.to_path_buf()];
+
         // Collect related files (.prompt, .launch)
         for suffix in &[".prompt", ".launch"] {
             let related_file = state_dir.join(format!("{}{}", session_id, suffix));
@@ -157,7 +168,7 @@ impl SessionCleaner {
                 files.push(related_file);
             }
         }
-        
+
         files
     }
 
