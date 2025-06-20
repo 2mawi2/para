@@ -562,4 +562,371 @@ mod tests {
             updated_content.contains("\"command\": \"claude --dangerously-skip-permissions -c\",")
         );
     }
+
+    // Unit tests for new refactored functions
+
+    #[test]
+    fn test_detect_task_configuration_has_prompt_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test prompt file detection with skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude --dangerously-skip-permissions \"$(cat '/path/.claude_prompt_temp'; rm '/path/.claude_prompt_temp')\""
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::HasPromptFile {
+                has_skip_permissions: true
+            }
+        );
+
+        // Test prompt file detection without skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude \"$(cat '/path/to/prompt'; rm '/path/to/prompt')\""
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::HasPromptFile {
+                has_skip_permissions: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_detect_task_configuration_has_continue_flag() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test continue flag detection with skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude --dangerously-skip-permissions -c"
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::HasContinueFlag {
+                has_skip_permissions: true
+            }
+        );
+
+        // Test continue flag detection without skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude -c"
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::HasContinueFlag {
+                has_skip_permissions: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_detect_task_configuration_needs_transformation() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test needs transformation with skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude --dangerously-skip-permissions"
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::NeedsTransformation {
+                has_skip_permissions: true
+            }
+        );
+
+        // Test needs transformation without skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude"
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::NeedsTransformation {
+                has_skip_permissions: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_determine_transformation() {
+        // Test HasPromptFile -> RemovePromptFileAndAddContinue
+        let config = TaskConfiguration::HasPromptFile {
+            has_skip_permissions: true,
+        };
+        let transformation = super::determine_transformation(&config);
+        matches!(
+            transformation,
+            TaskTransformation::RemovePromptFileAndAddContinue {
+                has_skip_permissions: true
+            }
+        );
+
+        let config = TaskConfiguration::HasPromptFile {
+            has_skip_permissions: false,
+        };
+        let transformation = super::determine_transformation(&config);
+        matches!(
+            transformation,
+            TaskTransformation::RemovePromptFileAndAddContinue {
+                has_skip_permissions: false
+            }
+        );
+
+        // Test HasContinueFlag -> NoChange
+        let config = TaskConfiguration::HasContinueFlag {
+            has_skip_permissions: true,
+        };
+        let transformation = super::determine_transformation(&config);
+        matches!(transformation, TaskTransformation::NoChange);
+
+        // Test NeedsTransformation -> AddContinueFlag
+        let config = TaskConfiguration::NeedsTransformation {
+            has_skip_permissions: false,
+        };
+        let transformation = super::determine_transformation(&config);
+        matches!(
+            transformation,
+            TaskTransformation::AddContinueFlag {
+                has_skip_permissions: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_apply_transformation_no_change() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        let content = r#"{"tasks":[{"command":"claude -c"}]}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let transformation = TaskTransformation::NoChange;
+        let result = super::apply_transformation(&tasks_file, transformation);
+        assert!(result.is_ok());
+
+        // File should remain unchanged
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert_eq!(updated_content, content);
+    }
+
+    #[test]
+    fn test_apply_remove_prompt_file_transformation() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with skip permissions
+        let content = r#"{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Claude Task",
+      "command": "claude --dangerously-skip-permissions \"$(cat '/tmp/.claude_prompt_temp'; rm '/tmp/.claude_prompt_temp')\""
+    },
+    {
+      "label": "Other Task", 
+      "command": "echo hello"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_remove_prompt_file_transformation(&tasks_file, true);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("claude --dangerously-skip-permissions -c"));
+        assert!(!updated_content.contains(".claude_prompt_temp"));
+        assert!(!updated_content.contains("$(cat"));
+        assert!(!updated_content.contains("rm '"));
+        assert!(updated_content.contains("echo hello")); // Other task unchanged
+
+        // Test without skip permissions
+        let content = r#"{
+  "tasks": [{
+    "command": "claude \"$(cat '/tmp/prompt'; rm '/tmp/prompt')\""
+  }]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("\"claude -c\""));
+    }
+
+    #[test]
+    fn test_apply_add_continue_flag_transformation() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with skip permissions
+        let content = r#"{
+  "tasks": [
+    {
+      "command": "claude --dangerously-skip-permissions"
+    },
+    {
+      "command": "claude --dangerously-skip-permissions some args"
+    },
+    {
+      "command": "echo hello"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, true);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("claude --dangerously-skip-permissions -c"));
+        assert!(updated_content.contains("claude --dangerously-skip-permissions -c some args"));
+        assert!(updated_content.contains("echo hello")); // Unchanged
+
+        // Test without skip permissions
+        let content = r#"{
+  "tasks": [
+    {
+      "command": "claude"
+    },
+    {
+      "command": "claude some args"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("\"claude -c\""));
+        assert!(updated_content.contains("\"claude -c some args\""));
+    }
+
+    #[test]
+    fn test_apply_add_continue_flag_transformation_idempotent() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test that already having -c flag doesn't add another one
+        let content = r#"{
+  "tasks": [
+    {
+      "command": "claude -c"
+    },
+    {
+      "command": "claude --dangerously-skip-permissions -c"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+        let original_content = fs::read_to_string(&tasks_file).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert_eq!(original_content, updated_content); // Should be unchanged
+    }
+
+    #[test]
+    fn test_transformation_with_malformed_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with malformed JSON
+        let content = r#"{ "tasks": [ invalid json }"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        // detect_task_configuration only does string matching, not JSON parsing
+        // So it should succeed but return NeedsTransformation
+        let result = super::detect_task_configuration(&tasks_file);
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            TaskConfiguration::NeedsTransformation {
+                has_skip_permissions: false
+            }
+        );
+
+        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        assert!(result.is_err());
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transformation_with_missing_tasks() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with JSON that has no tasks array
+        let content = r#"{ "version": "2.0.0" }"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        assert_eq!(
+            config,
+            TaskConfiguration::NeedsTransformation {
+                has_skip_permissions: false
+            }
+        );
+
+        // Transformations should handle missing tasks gracefully
+        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transformation_with_missing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("nonexistent.json");
+
+        let result = super::detect_task_configuration(&tasks_file);
+        assert!(result.is_err());
+
+        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        assert!(result.is_err());
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_err());
+    }
 }
