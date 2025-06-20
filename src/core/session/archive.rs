@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::core::git::GitService;
-use crate::utils::Result;
+use crate::utils::{ArchiveBranchParser, Result};
 use chrono::Utc;
 
 #[derive(Debug, Clone)]
@@ -122,28 +122,21 @@ impl<'a> ArchiveManager<'a> {
     }
 
     fn create_archive_entry(&self, archived_branch: &str) -> Result<Option<ArchiveEntry>> {
-        let archive_prefix = format!("{}/archived/", self.config.get_branch_prefix());
+        let archive_info = ArchiveBranchParser::parse_archive_branch(
+            archived_branch,
+            self.config.get_branch_prefix(),
+        )?;
 
-        if !archived_branch.starts_with(&archive_prefix) {
-            return Ok(None);
+        match archive_info {
+            Some(info) => {
+                let archived_at = self.parse_timestamp_to_rfc3339(&info.timestamp);
+                Ok(Some(ArchiveEntry {
+                    session_name: info.session_name,
+                    archived_at,
+                }))
+            }
+            None => Ok(None),
         }
-
-        let suffix = archived_branch.strip_prefix(&archive_prefix).unwrap();
-        let parts: Vec<&str> = suffix.split('/').collect();
-
-        if parts.len() != 2 {
-            return Ok(None);
-        }
-
-        let timestamp_str = parts[0];
-        let session_name = parts[1];
-
-        let archived_at = self.parse_timestamp_to_rfc3339(timestamp_str);
-
-        Ok(Some(ArchiveEntry {
-            session_name: session_name.to_string(),
-            archived_at,
-        }))
     }
 
     fn parse_timestamp_to_rfc3339(&self, timestamp: &str) -> String {

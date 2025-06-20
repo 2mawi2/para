@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::{SessionManager, SessionState};
-use crate::utils::{ParaError, Result};
+use crate::utils::{ArchiveBranchParser, ParaError, Result};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -262,30 +262,25 @@ impl<'a> SessionRecovery<'a> {
     }
 
     fn parse_archived_branch(&self, archived_branch: &str) -> Result<Option<RecoveryInfo>> {
-        let archive_prefix = format!("{}/archived/", self.config.get_branch_prefix());
+        let archive_info = ArchiveBranchParser::parse_archive_branch(
+            archived_branch,
+            self.config.get_branch_prefix(),
+        )?;
 
-        if !archived_branch.starts_with(&archive_prefix) {
-            return Ok(None);
+        match archive_info {
+            Some(info) => {
+                // Validate that the branch actually exists by checking its commit
+                let branch_manager = self.git_service.branch_manager();
+                let _commit_hash = branch_manager.get_branch_commit(archived_branch)?;
+
+                Ok(Some(RecoveryInfo {
+                    archived_branch: info.full_branch_name,
+                    original_session_name: info.session_name,
+                    archived_timestamp: info.timestamp,
+                }))
+            }
+            None => Ok(None),
         }
-
-        let suffix = archived_branch.strip_prefix(&archive_prefix).unwrap();
-        let parts: Vec<&str> = suffix.split('/').collect();
-
-        if parts.len() != 2 {
-            return Ok(None);
-        }
-
-        let timestamp = parts[0];
-        let session_name = parts[1];
-
-        let branch_manager = self.git_service.branch_manager();
-        let _commit_hash = branch_manager.get_branch_commit(archived_branch)?;
-
-        Ok(Some(RecoveryInfo {
-            archived_branch: archived_branch.to_string(),
-            original_session_name: session_name.to_string(),
-            archived_timestamp: timestamp.to_string(),
-        }))
     }
 
     fn get_target_worktree_path(&self, session_name: &str) -> PathBuf {
