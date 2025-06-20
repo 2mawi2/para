@@ -192,7 +192,8 @@ impl MacOSPlatform {
             if let Ok(contents) = std::fs::read_to_string(&launch_file) {
                 #[cfg(test)]
                 {
-                    Self::parse_launch_file_contents(&contents, ide_name)
+                    // In tests, use the test utility function
+                    crate::platform::tests::platform_tests::parse_launch_file_contents(&contents, ide_name)
                 }
                 #[cfg(not(test))]
                 {
@@ -253,25 +254,6 @@ impl MacOSPlatform {
                 original_id: session_id.to_string(),
                 format_type: SessionNameFormat::DockerStyle,
             })
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
-        if contents.contains("LAUNCH_METHOD=wrapper") {
-            // For wrapper mode, Claude Code runs inside Cursor/VS Code
-            if contents.contains("WRAPPER_IDE=cursor") {
-                "cursor".to_string()
-            } else if contents.contains("WRAPPER_IDE=code") {
-                "code".to_string()
-            } else {
-                // Default to configured IDE wrapper name
-                default_ide.to_string()
-            }
-        } else if let Some(line) = contents.lines().find(|l| l.starts_with("LAUNCH_IDE=")) {
-            line.split('=').nth(1).unwrap_or(default_ide).to_string()
-        } else {
-            default_ide.to_string()
         }
     }
 }

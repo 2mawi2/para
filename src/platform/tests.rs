@@ -1,6 +1,26 @@
 #[cfg(test)]
-mod platform_tests {
+pub mod platform_tests {
     use crate::platform::get_platform_manager;
+
+    /// Test utility function for parsing launch file contents
+    /// This is isolated to test code to avoid polluting production code with test-only logic
+    pub(crate) fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
+        if contents.contains("LAUNCH_METHOD=wrapper") {
+            // For wrapper mode, Claude Code runs inside Cursor/VS Code
+            if contents.contains("WRAPPER_IDE=cursor") {
+                "cursor".to_string()
+            } else if contents.contains("WRAPPER_IDE=code") {
+                "code".to_string()
+            } else {
+                // Default to configured IDE wrapper name
+                default_ide.to_string()
+            }
+        } else if let Some(line) = contents.lines().find(|l| l.starts_with("LAUNCH_IDE=")) {
+            line.split('=').nth(1).unwrap_or(default_ide).to_string()
+        } else {
+            default_ide.to_string()
+        }
+    }
 
     #[test]
     fn test_platform_manager_creation() {
@@ -35,42 +55,42 @@ mod platform_tests {
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_cursor() {
             let contents = "LAUNCH_METHOD=wrapper\nWRAPPER_IDE=cursor\nLAUNCH_IDE=claude";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "cursor");
         }
 
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_code() {
             let contents = "LAUNCH_METHOD=wrapper\nWRAPPER_IDE=code\nLAUNCH_IDE=claude";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "code");
         }
 
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_default() {
             let contents = "LAUNCH_METHOD=wrapper\nLAUNCH_IDE=claude";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
         #[test]
         fn test_parse_launch_file_contents_launch_ide() {
             let contents = "LAUNCH_IDE=cursor\nSOME_OTHER=value";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "cursor");
         }
 
         #[test]
         fn test_parse_launch_file_contents_empty() {
             let contents = "";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
         #[test]
         fn test_parse_launch_file_contents_no_ide_info() {
             let contents = "SOME_KEY=value\nANOTHER_KEY=value2";
-            let result = MacOSPlatform::parse_launch_file_contents(contents, "default");
+            let result = crate::platform::tests::parse_launch_file_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
