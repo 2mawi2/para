@@ -255,8 +255,6 @@ pub enum SessionEnvironment {
 mod tests {
     use super::*;
     use crate::test_utils::test_helpers::*;
-    use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn test_git_operations_trait() {

@@ -242,7 +242,6 @@ mod tests {
     use std::fs;
     use std::thread;
     use std::time::Duration as StdDuration;
-    use tempfile::TempDir;
 
     #[test]
     fn test_system_time_conversion() {

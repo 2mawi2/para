@@ -70,7 +70,6 @@ mod tests {
     use crate::core::git::branch::BranchManager;
     use crate::test_utils::test_helpers::*;
     use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn test_finish_session_simple() {

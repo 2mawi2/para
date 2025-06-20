@@ -159,8 +159,7 @@ impl<'a> BranchManager<'a> {
         GitValidator::validate_branch_name(name)
     }
 
-
-        /*let invalid_patterns = vec![
+    /*let invalid_patterns = vec![
             r"\.\.+",              // Contains ..
             r"^-",                 // Starts with -
             r"/$",                 // Ends with /
@@ -244,8 +243,6 @@ impl<'a> BranchManager<'a> {
 mod tests {
     use super::*;
     use crate::test_utils::test_helpers::*;
-    use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn test_create_and_delete_branch() {
