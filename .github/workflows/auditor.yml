@@ -32,8 +32,10 @@ jobs:
           # Install qlty non-interactively
           curl -sSL https://qlty.sh | bash
           
-          # Export qlty path for this job
-          echo "export PATH=\"$HOME/.qlty/bin:$PATH\"" >> $GITHUB_ENV
+          # Export qlty path for ALL subsequent steps using GITHUB_PATH
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+          
+          # Also set for current step
           export PATH="$HOME/.qlty/bin:$PATH"
           
           # Ensure .qlty is never committed
@@ -45,6 +47,9 @@ jobs:
           if [ ! -f ".qlty/qlty.toml" ]; then
             printf "n\nn\n" | $HOME/.qlty/bin/qlty init || true
           fi
+          
+          # Verify qlty is working
+          $HOME/.qlty/bin/qlty --version
 
       - name: Analyze codebase for technical debt
         uses: 2mawi2/claude-code-action-extended@main
@@ -117,7 +122,7 @@ jobs:
               * Expected improvement in metrics
             
             CLEANUP: After analysis, run: rm -rf .qlty/
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(printf \"n\\nn\\n\" | qlty init),Bash(qlty smells --all --no-snippets),Bash(qlty metrics --all --sort complexity --limit 20),Bash(qlty metrics --all --sort loc --limit 20),Bash(qlty metrics --all --max-depth 2),Bash(qlty metrics --all --max-depth 3),Bash(qlty metrics --functions *),Bash(rm -rf .qlty/)"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(printf \"n\\nn\\n\" | qlty init),Bash(qlty smells --all --no-snippets),Bash(qlty metrics --all --sort complexity --limit 20),Bash(qlty metrics --all --sort loc --limit 20),Bash(qlty metrics --all --max-depth 2),Bash(qlty metrics --all --max-depth 3),Bash(qlty metrics --functions *),Bash(rm -rf .qlty/),Bash(which qlty),Bash(qlty --version),Bash(echo $PATH),Bash(ls -la .github-issues/),Bash(mkdir -p .github-issues)"
           timeout_minutes: "30"
           custom_instructions: |
             You have been granted comprehensive tools for analyzing codebases for technical debt that impacts maintainability:
@@ -180,44 +185,47 @@ jobs:
             # List files for debugging
             ls -la .github-issues/
             
-            # Process each JSON file
-            for issue_file in .github-issues/*.json; do
-              if [ -f "$issue_file" ]; then
-                echo "Processing $issue_file..."
+            # Process each JSON file - using find to be more explicit
+            find .github-issues -name "*.json" -type f | while read issue_file; do
+              echo "Processing $issue_file..."
+              
+              # Display file contents for debugging
+              echo "File contents:"
+              cat "$issue_file"
+              
+              # Extract title and body from JSON
+              TITLE=$(jq -r '.title' "$issue_file")
+              BODY=$(jq -r '.body' "$issue_file")
+              
+              echo "Extracted title: $TITLE"
+              echo "Body length: ${#BODY}"
+              
+              # Check if title and body are valid
+              if [ -n "$TITLE" ] && [ "$TITLE" != "null" ] && [ -n "$BODY" ] && [ "$BODY" != "null" ]; then
+                # Create the issue
+                echo "Creating issue: $TITLE"
+                ISSUE_URL=$(gh issue create \
+                  --title "$TITLE" \
+                  --body "$BODY" \
+                  --label "technical-debt" \
+                  --repo ${{ github.repository }})
                 
-                # Display file contents for debugging
-                echo "File contents:"
-                cat "$issue_file"
+                echo "Issue created successfully: $ISSUE_URL"
                 
-                # Extract title and body from JSON
-                TITLE=$(jq -r '.title' "$issue_file")
-                BODY=$(jq -r '.body' "$issue_file")
+                # Extract issue number from URL
+                ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
                 
-                # Check if title and body are valid
-                if [ -n "$TITLE" ] && [ "$TITLE" != "null" ] && [ -n "$BODY" ] && [ "$BODY" != "null" ]; then
-                  # Create the issue
-                  echo "Creating issue: $TITLE"
-                  ISSUE_URL=$(gh issue create \
-                    --title "$TITLE" \
-                    --body "$BODY" \
-                    --label "technical-debt" \
-                    --repo ${{ github.repository }})
-                  
-                  echo "Issue created successfully: $ISSUE_URL"
-                  
-                  # Extract issue number from URL
-                  ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
-                  
-                  # Add @claude comment to trigger the PR assistant
-                  echo "Adding @claude comment to issue #$ISSUE_NUMBER..."
-                  gh issue comment "$ISSUE_NUMBER" \
-                    --body "@claude please fix this technical debt issue" \
-                    --repo ${{ github.repository }}
-                  
-                  echo "@claude comment added successfully"
-                else
-                  echo "Warning: Invalid JSON in $issue_file - skipping"
-                fi
+                # Add @claude comment to trigger the PR assistant
+                echo "Adding @claude comment to issue #$ISSUE_NUMBER..."
+                gh issue comment "$ISSUE_NUMBER" \
+                  --body "@claude please fix this technical debt issue" \
+                  --repo ${{ github.repository }}
+                
+                echo "@claude comment added successfully"
+              else
+                echo "Warning: Invalid JSON in $issue_file - skipping"
+                echo "Title was: '$TITLE'"
+                echo "Body null check: $BODY"
               fi
             done
           else
