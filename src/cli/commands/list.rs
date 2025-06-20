@@ -133,19 +133,16 @@ fn list_archived_sessions(
     let mut sessions = Vec::new();
     let mut seen_session_ids = std::collections::HashSet::new();
 
-    // Collect sessions from finished/cancelled session states
     let finished_sessions = collect_finished_sessions(session_manager)?;
     for session_info in finished_sessions {
         seen_session_ids.insert(session_info.session_id.clone());
         sessions.push(session_info);
     }
 
-    // Collect sessions from archived branches (those not in session states)
     let archived_branch_sessions =
         collect_archived_branch_sessions(session_manager, git_service, &seen_session_ids)?;
     sessions.extend(archived_branch_sessions);
 
-    // Sort sessions by last modified date
     sort_sessions_by_date(&mut sessions);
 
     Ok(sessions)
