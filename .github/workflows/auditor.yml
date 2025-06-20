@@ -30,7 +30,7 @@ jobs:
       - name: Install and initialize qlty
         run: |
           # Install qlty non-interactively
-          curl -sSL https://qlty.sh | bash -s -- --yes
+          curl -sSL https://qlty.sh | bash
           
           # Export qlty path for this job
           echo "export PATH=\"$HOME/.qlty/bin:$PATH\"" >> $GITHUB_ENV
