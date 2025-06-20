@@ -71,6 +71,8 @@ jobs:
             - Functions returning unexpected values, leaving inconsistent state
             - Missing error handling, concurrency issues, resource management problems
             - Logic errors in the main algorithm or workflow
+            - Missing tests for bug fixes (every bug fix should have a regression test)
+            - Missing tests for new features (all new code should be tested)
 
             **STEP 4: Critical Functionality Issues**
             - Does this code correctly implement its intended functionality?
@@ -97,6 +99,7 @@ jobs:
             Only auto-trigger (@claude comment) for these critical issues:
             - Test failures or compilation errors
             - Formatting issues (just fmt-check fails) - pipeline will reject the PR
+            - Missing tests for bug fixes or new features
             - Missing core requirements from PR description  
             - Bugs that will cause runtime failures or crashes
             - Security vulnerabilities or data corruption risks
