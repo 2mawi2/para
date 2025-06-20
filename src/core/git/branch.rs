@@ -159,40 +159,6 @@ impl<'a> BranchManager<'a> {
         GitValidator::validate_branch_name(name)
     }
 
-    /*let invalid_patterns = vec![
-            r"\.\.+",              // Contains ..
-            r"^-",                 // Starts with -
-            r"/$",                 // Ends with /
-            r"\x00",               // Contains null byte
-            r"[ \t]",              // Contains whitespace
-            r"[\x00-\x1f\x7f]",    // Contains control characters
-            r"~|\^|:|\\|\*|\?|\[", // Contains special Git characters
-            r"^@$",                // Exactly "@"
-            r"/\.",                // Contains "/.
-            r"\.\.",               // Contains ".."
-            r"@\{",                // Contains "@{"
-        ];
-
-        for pattern in invalid_patterns {
-            let regex = Regex::new(pattern)
-                .map_err(|e| ParaError::git_operation(format!("Regex error: {}", e)))?;
-            if regex.is_match(name) {
-                return Err(ParaError::git_operation(format!(
-                    "Invalid branch name '{}': contains invalid characters or patterns",
-                    name
-                )));
-            }
-        }
-
-        if name.starts_with("refs/") {
-            return Err(ParaError::git_operation(
-                "Branch name cannot start with 'refs/'".to_string(),
-            ));
-        }
-
-        Ok(())
-    }*/
-
     pub fn generate_unique_branch_name(&self, base_name: &str) -> Result<String> {
         self.validate_branch_name(base_name)?;
 
