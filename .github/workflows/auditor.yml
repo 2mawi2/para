@@ -112,6 +112,9 @@ jobs:
             - Focus on different types of debt (don't create 5 duplication issues)
             - Prioritize by impact on development velocity
             - Each issue should be actionable with clear refactoring steps
+            - CRITICAL: Each issue must be independently solvable without touching the same files
+            - Avoid overlapping refactorings - developers should be able to work on all issues in parallel
+            - If two issues would require changes to the same file, combine them or choose the higher priority one
             
             For each issue, create a JSON file in .github-issues/ with:
             - Clear title describing the maintainability problem
