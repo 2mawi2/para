@@ -402,4 +402,278 @@ mod tests {
 
         assert!(manager.is_worktree_path(&worktree_path));
     }
+
+    // Unit tests for the new parsing functions
+
+    #[test]
+    fn test_parse_worktree_line() {
+        let mut worktree = WorktreeInfo {
+            path: PathBuf::from("/test/path"),
+            branch: String::new(),
+            commit: String::new(),
+            is_bare: false,
+        };
+
+        // Test HEAD line
+        parse_worktree_line("HEAD abc123def456", &mut worktree).unwrap();
+        assert_eq!(worktree.commit, "abc123def456");
+
+        // Test branch line with refs/heads/ prefix
+        parse_worktree_line("branch refs/heads/main", &mut worktree).unwrap();
+        assert_eq!(worktree.branch, "main");
+
+        // Test branch line without refs/heads/ prefix
+        worktree.branch.clear();
+        parse_worktree_line("branch feature-branch", &mut worktree).unwrap();
+        assert_eq!(worktree.branch, "feature-branch");
+
+        // Test bare line
+        parse_worktree_line("bare", &mut worktree).unwrap();
+        assert!(worktree.is_bare);
+
+        // Test detached line
+        worktree.branch.clear();
+        parse_worktree_line("detached", &mut worktree).unwrap();
+        assert_eq!(worktree.branch, "HEAD");
+
+        // Test unknown line (should not error or modify anything)
+        let original_commit = worktree.commit.clone();
+        let original_branch = worktree.branch.clone();
+        let original_bare = worktree.is_bare;
+        parse_worktree_line("unknown-line-type something", &mut worktree).unwrap();
+        assert_eq!(worktree.commit, original_commit);
+        assert_eq!(worktree.branch, original_branch);
+        assert_eq!(worktree.is_bare, original_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_block_main_worktree() {
+        let lines = vec![
+            "worktree /path/to/repo",
+            "HEAD abc123def456",
+            "branch refs/heads/main",
+        ];
+        let worktree = parse_worktree_block(&lines).unwrap();
+
+        assert_eq!(worktree.path, PathBuf::from("/path/to/repo"));
+        assert_eq!(worktree.commit, "abc123def456");
+        assert_eq!(worktree.branch, "main");
+        assert!(!worktree.is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_block_feature_branch() {
+        let lines = vec![
+            "worktree /path/to/feature",
+            "HEAD def456abc123",
+            "branch feature-branch",
+        ];
+        let worktree = parse_worktree_block(&lines).unwrap();
+
+        assert_eq!(worktree.path, PathBuf::from("/path/to/feature"));
+        assert_eq!(worktree.commit, "def456abc123");
+        assert_eq!(worktree.branch, "feature-branch");
+        assert!(!worktree.is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_block_bare() {
+        let lines = vec!["worktree /path/to/bare.git", "HEAD 123456789abc", "bare"];
+        let worktree = parse_worktree_block(&lines).unwrap();
+
+        assert_eq!(worktree.path, PathBuf::from("/path/to/bare.git"));
+        assert_eq!(worktree.commit, "123456789abc");
+        assert_eq!(worktree.branch, "");
+        assert!(worktree.is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_block_detached() {
+        let lines = vec![
+            "worktree /path/to/detached",
+            "HEAD 987654321def",
+            "detached",
+        ];
+        let worktree = parse_worktree_block(&lines).unwrap();
+
+        assert_eq!(worktree.path, PathBuf::from("/path/to/detached"));
+        assert_eq!(worktree.commit, "987654321def");
+        assert_eq!(worktree.branch, "HEAD");
+        assert!(!worktree.is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_block_empty() {
+        let lines: Vec<&str> = vec![];
+        let result = parse_worktree_block(&lines);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Empty worktree block"));
+    }
+
+    #[test]
+    fn test_parse_worktree_block_invalid_first_line() {
+        let lines = vec!["invalid-first-line", "HEAD abc123def456"];
+        let result = parse_worktree_block(&lines);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid worktree block"));
+    }
+
+    #[test]
+    fn test_parse_worktree_block_minimal() {
+        let lines = vec!["worktree /minimal/path"];
+        let worktree = parse_worktree_block(&lines).unwrap();
+
+        assert_eq!(worktree.path, PathBuf::from("/minimal/path"));
+        assert_eq!(worktree.commit, "");
+        assert_eq!(worktree.branch, "");
+        assert!(!worktree.is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_single() {
+        let output = "worktree /path/to/repo\nHEAD abc123def456\nbranch refs/heads/main\n";
+        let worktrees = parse_worktree_output(output).unwrap();
+
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(worktrees[0].commit, "abc123def456");
+        assert_eq!(worktrees[0].branch, "main");
+        assert!(!worktrees[0].is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_multiple() {
+        let output = r#"worktree /path/to/repo
+HEAD abc123def456
+branch refs/heads/main
+
+worktree /path/to/feature
+HEAD def456abc123
+branch feature-branch
+
+worktree /path/to/bare.git
+HEAD 123456789abc
+bare
+"#;
+        let worktrees = parse_worktree_output(output).unwrap();
+
+        assert_eq!(worktrees.len(), 3);
+
+        // Main worktree
+        assert_eq!(worktrees[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(worktrees[0].branch, "main");
+        assert!(!worktrees[0].is_bare);
+
+        // Feature worktree
+        assert_eq!(worktrees[1].path, PathBuf::from("/path/to/feature"));
+        assert_eq!(worktrees[1].branch, "feature-branch");
+        assert!(!worktrees[1].is_bare);
+
+        // Bare worktree
+        assert_eq!(worktrees[2].path, PathBuf::from("/path/to/bare.git"));
+        assert_eq!(worktrees[2].branch, "");
+        assert!(worktrees[2].is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_empty() {
+        let output = "";
+        let worktrees = parse_worktree_output(output).unwrap();
+        assert_eq!(worktrees.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_whitespace_only() {
+        let output = "   \n\n  \t\n   ";
+        let worktrees = parse_worktree_output(output).unwrap();
+        assert_eq!(worktrees.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_with_extra_empty_lines() {
+        let output = r#"
+
+worktree /path/to/repo
+HEAD abc123def456
+branch refs/heads/main
+
+
+
+worktree /path/to/feature
+HEAD def456abc123
+branch feature-branch
+
+
+"#;
+        let worktrees = parse_worktree_output(output).unwrap();
+
+        assert_eq!(worktrees.len(), 2);
+        assert_eq!(worktrees[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(worktrees[1].path, PathBuf::from("/path/to/feature"));
+    }
+
+    #[test]
+    fn test_parse_worktree_output_mixed_scenarios() {
+        let output = r#"worktree /path/to/main
+HEAD abc123def456
+branch refs/heads/main
+
+worktree /path/to/detached
+HEAD 987654321def
+detached
+
+worktree /path/to/feature
+HEAD def456abc123
+branch feature-without-prefix
+
+worktree /path/to/bare.git
+HEAD 123456789abc
+bare
+"#;
+        let worktrees = parse_worktree_output(output).unwrap();
+
+        assert_eq!(worktrees.len(), 4);
+
+        // Main branch
+        assert_eq!(worktrees[0].branch, "main");
+        assert!(!worktrees[0].is_bare);
+
+        // Detached HEAD
+        assert_eq!(worktrees[1].branch, "HEAD");
+        assert!(!worktrees[1].is_bare);
+
+        // Feature branch without refs/heads/
+        assert_eq!(worktrees[2].branch, "feature-without-prefix");
+        assert!(!worktrees[2].is_bare);
+
+        // Bare repository
+        assert_eq!(worktrees[3].branch, "");
+        assert!(worktrees[3].is_bare);
+    }
+
+    #[test]
+    fn test_parse_worktree_output_invalid_blocks_skipped() {
+        let output = r#"invalid-block-without-worktree-prefix
+HEAD abc123def456
+
+worktree /valid/path
+HEAD def456abc123
+branch valid-branch
+
+another-invalid-block
+some-content
+"#;
+        let worktrees = parse_worktree_output(output).unwrap();
+
+        // Should only parse the valid block and skip invalid ones
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].path, PathBuf::from("/valid/path"));
+        assert_eq!(worktrees[0].branch, "valid-branch");
+    }
 }
