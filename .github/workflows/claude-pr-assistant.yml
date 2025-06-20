@@ -90,15 +90,56 @@ jobs:
             - mcp__github_file_ops__update_claude_comment - Update your comment with progress
             - mcp__github__create_pending_pull_request_review - Create PR reviews
             
-            **WORKFLOW REQUIREMENTS:**
-            1. Make your code changes
-            2. Run `just fmt` to fix any formatting issues
-            3. Run `just test` - MUST pass with "All Rust checks passed!"
-               - IMPORTANT: Always use `just test` without any arguments (no filters)
-               - Do NOT use `just test worktree` or `cargo test specific_test`
-               - The full test suite must pass for PR approval
-            4. Run `just lint` separately - MUST show NO warnings or errors
-            5. Only commit if BOTH commands succeed
-            6. If any test or lint fails, fix the issues and repeat steps 3-4
+            **TEST-DRIVEN DEVELOPMENT (SIMPLE RULES):**
             
-            Remember: The pipeline enforces these checks. A PR with failing tests or lints will be automatically rejected!
+            **For Bug Fixes:**
+            1. Write a test that reproduces the bug (it should FAIL)
+            2. Fix the bug
+            3. Test should now PASS
+            4. No fix without a test!
+            
+            **For New Features:**
+            1. Think through the feature and write comprehensive tests (they should FAIL)
+            2. Tests should cover: happy path, error cases, edge cases
+            3. Implement the complete feature to make all tests PASS
+            4. If you realize you missed a case, add the test before coding it
+            
+            **For Refactoring:**
+            1. Ensure tests exist and PASS before touching any code
+            2. If no tests exist, write them first
+            3. Refactor
+            4. All tests must still PASS
+            
+            **WHAT TO TEST:**
+            - Business logic and algorithms (not UI/hardware)
+            - Error cases and edge conditions
+            - Public APIs and their contracts
+            - Code with cyclomatic complexity
+            
+            **HOW TO TEST:**
+            - Tests must be independent (no shared state)
+            - Keep tests simple and focused on one thing
+            - If you need many mocks, refactor the code instead
+            - Test names should describe what they test
+            
+            **WHERE TO PUT TESTS:**
+            - Unit tests: Same file in `#[cfg(test)] mod tests { ... }`
+            - Integration tests: `tests/` directory
+            - Test helpers: Extract to reduce duplication
+            
+            **WORKFLOW:**
+            1. Write tests FIRST
+            2. Run tests - they should FAIL
+            3. Write code to make tests PASS
+            4. Delete any code not used by tests
+            5. Run `just fmt`
+            6. Run `just test` - MUST pass
+            7. Run `just lint` - MUST pass
+            8. Only then commit
+            
+            **CRITICAL:**
+            - No production code without a failing test first
+            - Think about the whole feature, not just one test
+            - Avoid writing code that isn't actually used
+            - Tests failing? Fix the code, not the test
+            - Pipeline will reject if tests or lints fail!
