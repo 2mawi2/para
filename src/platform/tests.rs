@@ -19,7 +19,10 @@ mod platform_tests {
 
     #[cfg(target_os = "macos")]
     mod macos_tests {
-        use crate::platform::{macos::MacOSPlatform, PlatformManager};
+        use crate::platform::{
+            macos::{IdeHandler, MacOSPlatform},
+            PlatformManager,
+        };
 
         #[test]
         #[should_panic(expected = "CRITICAL: close_ide_window called from test environment!")]
