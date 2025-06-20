@@ -221,9 +221,8 @@ mod tests {
     use super::*;
     use crate::core::git::GitOperations;
     use crate::test_utils::test_helpers::*;
+    use filetime::{set_file_mtime, FileTime};
     use std::fs;
-    use std::thread;
-    use std::time::Duration as StdDuration;
 
     #[test]
     fn test_system_time_conversion() {
@@ -265,8 +264,10 @@ mod tests {
 
         // Make a change to an existing file
         let readme_path = git_temp.path().join("README.md");
-        thread::sleep(StdDuration::from_millis(1100)); // Ensure different timestamp
         fs::write(&readme_path, "# Test Repository\n\nModified content").unwrap();
+
+        // Set modification time to current time (ensures it's after initial commit)
+        set_file_mtime(&readme_path, FileTime::now()).unwrap();
 
         // Should detect the modification time of the changed file
         let activity = detect_last_activity(git_temp.path()).unwrap();
@@ -286,9 +287,11 @@ mod tests {
         let (git_temp, _git_service) = setup_test_repo();
 
         // Create a new untracked file
-        thread::sleep(StdDuration::from_millis(1100)); // Ensure different timestamp
         let new_file = git_temp.path().join("new_file.txt");
         fs::write(&new_file, "New content").unwrap();
+
+        // Set modification time to current time
+        set_file_mtime(&new_file, FileTime::now()).unwrap();
 
         // Should detect the new file's modification time
         let activity = detect_last_activity(git_temp.path()).unwrap();
@@ -307,9 +310,11 @@ mod tests {
         let (git_temp, _git_service) = setup_test_repo();
 
         // Create and stage a new file
-        thread::sleep(StdDuration::from_millis(1100)); // Ensure different timestamp
         let new_file = git_temp.path().join("staged.txt");
         fs::write(&new_file, "Staged content").unwrap();
+
+        // Set modification time to current time
+        set_file_mtime(&new_file, FileTime::now()).unwrap();
 
         Command::new("git")
             .current_dir(git_temp.path())
@@ -334,29 +339,33 @@ mod tests {
         let (git_temp, _git_service) = setup_test_repo();
 
         // Create multiple files with different timestamps
+        let base_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         let file1 = git_temp.path().join("file1.txt");
         fs::write(&file1, "Content 1").unwrap();
-
-        thread::sleep(StdDuration::from_millis(1100));
+        set_file_mtime(&file1, FileTime::from_unix_time(base_time as i64 - 3, 0)).unwrap();
 
         let file2 = git_temp.path().join("file2.txt");
         fs::write(&file2, "Content 2").unwrap();
-
-        thread::sleep(StdDuration::from_millis(1100));
+        set_file_mtime(&file2, FileTime::from_unix_time(base_time as i64 - 2, 0)).unwrap();
 
         // Modify the README (newest change)
         let readme = git_temp.path().join("README.md");
         fs::write(&readme, "# Modified README").unwrap();
+        set_file_mtime(&readme, FileTime::from_unix_time(base_time as i64, 0)).unwrap();
 
         // Should return the most recent modification time (README)
         let activity = detect_last_activity(git_temp.path()).unwrap();
-        let now = Utc::now();
-        let diff = now - activity;
+        let expected_time = DateTime::from_timestamp(base_time as i64, 0).unwrap();
+        let diff = (activity - expected_time).num_seconds().abs();
 
         assert!(
-            diff.num_seconds() < 5,
-            "Expected activity from most recent file change, but was {} seconds ago",
-            diff.num_seconds()
+            diff < 2,
+            "Expected activity from most recent file change (README), diff was {} seconds",
+            diff
         );
     }
 
@@ -383,10 +392,21 @@ mod tests {
         let initial_activity = detect_last_activity(git_temp.path()).unwrap();
 
         // Create ignored files (should not affect activity)
-        thread::sleep(StdDuration::from_millis(1100));
         fs::write(git_temp.path().join("test.log"), "Log content").unwrap();
         fs::create_dir(git_temp.path().join("temp")).unwrap();
         fs::write(git_temp.path().join("temp/file.txt"), "Temp content").unwrap();
+
+        // Set these files to have recent timestamps
+        let future_time = FileTime::from_unix_time(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64
+                + 10,
+            0,
+        );
+        set_file_mtime(git_temp.path().join("test.log"), future_time).unwrap();
+        set_file_mtime(git_temp.path().join("temp/file.txt"), future_time).unwrap();
 
         // Activity should still be the last commit (ignored files don't count)
         let activity_after_ignored = detect_last_activity(git_temp.path()).unwrap();
@@ -409,9 +429,11 @@ mod tests {
             .expect("Failed to create worktree");
 
         // Make a change in the worktree
-        thread::sleep(StdDuration::from_millis(1100));
         let worktree_file = worktree_path.join("worktree_file.txt");
         fs::write(&worktree_file, "Worktree content").unwrap();
+
+        // Set modification time to current time
+        set_file_mtime(&worktree_file, FileTime::now()).unwrap();
 
         // Activity detection should work in the worktree
         let activity = detect_last_activity(&worktree_path).unwrap();
