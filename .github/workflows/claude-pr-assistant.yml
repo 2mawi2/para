@@ -51,3 +51,48 @@ jobs:
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git log),Bash(git status),Bash(git show),Bash(git branch),Bash(git rev-parse),Bash(git blame),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+          custom_instructions: |
+            You have been granted tools for editing files and running Rust/just commands for testing and validating your changes:
+            
+            **CRITICAL REQUIREMENTS:**
+            ⚠️ The GitHub Actions pipeline will FAIL if tests or lints don't pass!
+            ⚠️ You MUST ensure BOTH `just test` AND `just lint` pass with NO errors before committing!
+            ⚠️ If either command fails, you have NOT completed your task successfully!
+            
+            **Testing & Validation Commands:**
+            - `just test` - Run comprehensive tests (formatting + tests + linting) - MUST BE GREEN
+            - `just test <pattern>` - Run specific tests matching a pattern
+            - `just lint` - Run clippy linting - MUST SHOW NO ERRORS
+            - `just fmt` - Format code automatically (run this if formatting fails)
+            - `just fmt-check` - Check if code is properly formatted
+            - `just build` - Build debug binary
+            - `just build-release` - Build optimized release binary
+            
+            **Cargo Commands (if needed):**
+            - `cargo test <pattern>` - Run specific Rust tests
+            - `cargo clippy` - Run linting with detailed suggestions
+            - `cargo fmt` - Fix formatting issues automatically
+            
+            **Git Commands:**
+            - `git diff`, `git status` - Check your changes
+            - `git log`, `git blame` - Investigate code history
+            
+            **File Operations:**
+            - Edit, Read, Write, MultiEdit - Make code changes
+            - Glob, Grep, LS - Search and explore the codebase
+            - rg (ripgrep) - Fast pattern searching
+            
+            **GitHub Integration:**
+            - mcp__github_file_ops__commit_files - Commit your changes
+            - mcp__github_file_ops__update_claude_comment - Update your comment with progress
+            - mcp__github__create_pending_pull_request_review - Create PR reviews
+            
+            **WORKFLOW REQUIREMENTS:**
+            1. Make your code changes
+            2. Run `just fmt` to fix any formatting issues
+            3. Run `just test` - MUST pass with "All Rust checks passed!"
+            4. Run `just lint` separately - MUST show NO warnings or errors
+            5. Only commit if BOTH commands succeed
+            6. If any test or lint fails, fix the issues and repeat steps 3-4
+            
+            Remember: The pipeline enforces these checks. A PR with failing tests or lints will be automatically rejected!

@@ -90,6 +90,36 @@ jobs:
             Create only 1 issue per run to focus on fixing it completely.
             Choose the most critical technical debt issue you find.
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail)"
+          custom_instructions: |
+            You have been granted tools for comprehensive codebase analysis:
+            
+            **Code Analysis Tools:**
+            - `just lint` - Run clippy to find code quality issues
+            - `just test` - Check test coverage and identify untested code
+            - `just status` - Get project status overview
+            - `cargo clippy -- -W clippy::all` - Detailed linting with all warnings
+            - `cargo test --no-run` - Check which tests exist
+            
+            **Pattern Searching:**
+            - `rg "unwrap\(\)|expect\("` - Find unsafe error handling
+            - `rg "TODO|FIXME|HACK"` - Find marked technical debt
+            - `rg "panic!"` - Find explicit panics
+            - `grep -r "clone()" --include="*.rs"` - Find potential performance issues
+            
+            **Code Metrics:**
+            - `wc -l src/**/*.rs` - Count lines of code
+            - `find . -name "*.rs" -type f | wc -l` - Count Rust files
+            - `git log --oneline --since="6 months ago" --grep="fix"` - Find bugfix patterns
+            - `git blame` - Identify frequently changed code
+            
+            **File Exploration:**
+            - Glob, Grep, LS - Navigate codebase structure
+            - Read, MultiEdit - Examine code in detail
+            - `head -20`, `tail -20` - Quick file previews
+            
+            Start with `just lint` and `just test` to get an overview of code quality.
+            Use `rg` to search for specific patterns of technical debt.
+            Focus on finding the most critical issue that impacts code reliability or maintainability.
           timeout_minutes: "30"
       
       - name: Create GitHub issues from analysis
