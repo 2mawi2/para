@@ -1,6 +1,6 @@
 use super::repository::{execute_git_command, execute_git_command_with_status, GitRepository};
+use super::validation::GitValidator;
 use crate::utils::error::{ParaError, Result};
-use regex::Regex;
 
 #[derive(Debug, Clone)]
 pub struct BranchInfo {
@@ -156,17 +156,11 @@ impl<'a> BranchManager<'a> {
     }
 
     pub fn validate_branch_name(&self, name: &str) -> Result<()> {
-        if name.is_empty() {
-            return Err(ParaError::git_operation(
-                "Branch name cannot be empty".to_string(),
-            ));
-        }
+        GitValidator::validate_branch_name(name)
+    }
 
-        if name.len() > 250 {
-            return Err(ParaError::git_operation("Branch name too long".to_string()));
-        }
 
-        let invalid_patterns = vec![
+        /*let invalid_patterns = vec![
             r"\.\.+",              // Contains ..
             r"^-",                 // Starts with -
             r"/$",                 // Ends with /
@@ -198,7 +192,7 @@ impl<'a> BranchManager<'a> {
         }
 
         Ok(())
-    }
+    }*/
 
     pub fn generate_unique_branch_name(&self, base_name: &str) -> Result<String> {
         self.validate_branch_name(base_name)?;
@@ -249,57 +243,17 @@ impl<'a> BranchManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::process::Command;
     use tempfile::TempDir;
-
-    fn setup_test_repo() -> (TempDir, GitRepository) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let repo = GitRepository::discover_from(repo_path).expect("Failed to discover repo");
-        (temp_dir, repo)
-    }
 
     #[test]
     fn test_create_and_delete_branch() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = BranchManager::new(git_service.repository());
 
-        let initial_branch = repo
+        let initial_branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
 
@@ -311,12 +265,15 @@ mod tests {
             .branch_exists("test-branch")
             .expect("Failed to check if branch exists"));
 
-        let current_branch = repo
+        let current_branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
         assert_eq!(current_branch, "test-branch");
 
-        repo.checkout_branch(&initial_branch)
+        git_service
+            .repository()
+            .checkout_branch(&initial_branch)
             .expect("Failed to checkout initial branch");
 
         manager
@@ -330,10 +287,11 @@ mod tests {
 
     #[test]
     fn test_archive_and_restore_branch() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = BranchManager::new(git_service.repository());
 
-        let initial_branch = repo
+        let initial_branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
 
@@ -341,7 +299,9 @@ mod tests {
             .create_branch("feature-branch", &initial_branch)
             .expect("Failed to create branch");
 
-        repo.checkout_branch(&initial_branch)
+        git_service
+            .repository()
+            .checkout_branch(&initial_branch)
             .expect("Failed to checkout initial branch");
 
         let archived_name = manager
@@ -372,10 +332,11 @@ mod tests {
 
     #[test]
     fn test_list_archived_branches() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = BranchManager::new(git_service.repository());
 
-        let initial_branch = repo
+        let initial_branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
 
@@ -386,7 +347,9 @@ mod tests {
             .create_branch("test2", &initial_branch)
             .expect("Failed to create branch");
 
-        repo.checkout_branch(&initial_branch)
+        git_service
+            .repository()
+            .checkout_branch(&initial_branch)
             .expect("Failed to checkout initial branch");
 
         manager
@@ -409,8 +372,8 @@ mod tests {
 
     #[test]
     fn test_validate_branch_name() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = BranchManager::new(git_service.repository());
 
         assert!(manager.validate_branch_name("valid-branch").is_ok());
         assert!(manager.validate_branch_name("feature/test").is_ok());
@@ -439,10 +402,11 @@ mod tests {
 
     #[test]
     fn test_generate_unique_branch_name() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = BranchManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = BranchManager::new(git_service.repository());
 
-        let initial_branch = repo
+        let initial_branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
 

@@ -238,67 +238,31 @@ fn sanitize_commit_message(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup_test_repo() -> (TempDir, GitRepository) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let repo = GitRepository::discover_from(repo_path).expect("Failed to discover repo");
-        (temp_dir, repo)
-    }
-
     #[test]
     fn test_repository_discovery() {
-        let (temp_dir, repo) = setup_test_repo();
-        assert_eq!(repo.root, temp_dir.path().canonicalize().unwrap());
-        assert!(repo.git_dir.exists());
+        let (temp_dir, git_service) = setup_test_repo();
+        assert_eq!(
+            git_service.repository().root,
+            temp_dir.path().canonicalize().unwrap()
+        );
+        assert!(git_service.repository().git_dir.exists());
     }
 
     #[test]
     fn test_repository_validation() {
-        let (_temp_dir, repo) = setup_test_repo();
-        assert!(repo.validate().is_ok());
+        let (_temp_dir, git_service) = setup_test_repo();
+        assert!(git_service.repository().validate().is_ok());
     }
 
     #[test]
     fn test_get_current_branch() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let branch = repo
+        let (_temp_dir, git_service) = setup_test_repo();
+        let branch = git_service
+            .repository()
             .get_current_branch()
             .expect("Failed to get current branch");
         assert!(branch == "main");
@@ -306,8 +270,9 @@ mod tests {
 
     #[test]
     fn test_clean_working_tree() {
-        let (_temp_dir, repo) = setup_test_repo();
-        assert!(repo
+        let (_temp_dir, git_service) = setup_test_repo();
+        assert!(git_service
+            .repository()
             .is_clean_working_tree()
             .expect("Failed to check clean state"));
     }
@@ -321,23 +286,25 @@ mod tests {
 
     #[test]
     fn test_has_uncommitted_changes() {
-        let (temp_dir, repo) = setup_test_repo();
+        let (temp_dir, git_service) = setup_test_repo();
 
-        assert!(!repo
+        assert!(!git_service
+            .repository()
             .has_uncommitted_changes()
             .expect("Failed to check changes"));
 
         fs::write(temp_dir.path().join("test.txt"), "test content")
             .expect("Failed to write test file");
 
-        assert!(repo
+        assert!(git_service
+            .repository()
             .has_uncommitted_changes()
             .expect("Failed to check changes"));
     }
 
     #[test]
     fn test_stage_all_changes_with_nested_repo() {
-        let (temp_dir, repo) = setup_test_repo();
+        let (temp_dir, git_service) = setup_test_repo();
 
         // Create a normal file
         fs::write(temp_dir.path().join("normal.txt"), "normal content")
@@ -354,7 +321,7 @@ mod tests {
             .expect("Failed to init nested repo");
 
         // Try to stage all changes - should fail with clear error
-        let result = repo.stage_all_changes();
+        let result = git_service.repository().stage_all_changes();
         assert!(result.is_err());
 
         let error_message = result.unwrap_err().to_string();
@@ -373,23 +340,23 @@ mod tests {
         fs::remove_dir_all(&nested_repo_path).expect("Failed to remove nested repo");
 
         // Now staging should work
-        assert!(repo.stage_all_changes().is_ok());
+        assert!(git_service.repository().stage_all_changes().is_ok());
     }
 
     #[test]
     fn test_stage_all_changes_normal_operation() {
-        let (temp_dir, repo) = setup_test_repo();
+        let (temp_dir, git_service) = setup_test_repo();
 
         // Create some normal files
         fs::write(temp_dir.path().join("file1.txt"), "content1").expect("Failed to write file1");
         fs::write(temp_dir.path().join("file2.txt"), "content2").expect("Failed to write file2");
 
         // Staging should work normally
-        assert!(repo.stage_all_changes().is_ok());
+        assert!(git_service.repository().stage_all_changes().is_ok());
 
         // Verify files are staged
-        let status =
-            execute_git_command(&repo, &["status", "--porcelain"]).expect("Failed to get status");
+        let status = execute_git_command(git_service.repository(), &["status", "--porcelain"])
+            .expect("Failed to get status");
         assert!(status.contains("A  file1.txt"));
         assert!(status.contains("A  file2.txt"));
     }

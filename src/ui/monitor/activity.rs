@@ -238,52 +238,11 @@ fn system_time_to_datetime(time: SystemTime) -> Option<DateTime<Utc>> {
 mod tests {
     use super::*;
     use crate::core::git::GitOperations;
-    use crate::core::git::GitService;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
     use std::thread;
     use std::time::Duration as StdDuration;
     use tempfile::TempDir;
-
-    fn setup_test_repo() -> (TempDir, GitService) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let service = GitService::discover_from(repo_path).expect("Failed to discover repo");
-        (temp_dir, service)
-    }
 
     #[test]
     fn test_system_time_conversion() {
