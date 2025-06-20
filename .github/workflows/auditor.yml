@@ -181,7 +181,7 @@ jobs:
             ls -la .github-issues/
             
             # Process each JSON file
-            for issue_file in .github-issues/issue_*.json; do
+            for issue_file in .github-issues/*.json; do
               if [ -f "$issue_file" ]; then
                 echo "Processing $issue_file..."
                 
@@ -193,26 +193,31 @@ jobs:
                 TITLE=$(jq -r '.title' "$issue_file")
                 BODY=$(jq -r '.body' "$issue_file")
                 
-                # Create the issue
-                echo "Creating issue: $TITLE"
-                ISSUE_URL=$(gh issue create \
-                  --title "$TITLE" \
-                  --body "$BODY" \
-                  --label "technical-debt" \
-                  --repo ${{ github.repository }})
-                
-                echo "Issue created successfully: $ISSUE_URL"
-                
-                # Extract issue number from URL
-                ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
-                
-                # Add @claude comment to trigger the PR assistant
-                echo "Adding @claude comment to issue #$ISSUE_NUMBER..."
-                gh issue comment "$ISSUE_NUMBER" \
-                  --body "@claude please fix this technical debt issue" \
-                  --repo ${{ github.repository }}
-                
-                echo "@claude comment added successfully"
+                # Check if title and body are valid
+                if [ -n "$TITLE" ] && [ "$TITLE" != "null" ] && [ -n "$BODY" ] && [ "$BODY" != "null" ]; then
+                  # Create the issue
+                  echo "Creating issue: $TITLE"
+                  ISSUE_URL=$(gh issue create \
+                    --title "$TITLE" \
+                    --body "$BODY" \
+                    --label "technical-debt" \
+                    --repo ${{ github.repository }})
+                  
+                  echo "Issue created successfully: $ISSUE_URL"
+                  
+                  # Extract issue number from URL
+                  ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
+                  
+                  # Add @claude comment to trigger the PR assistant
+                  echo "Adding @claude comment to issue #$ISSUE_NUMBER..."
+                  gh issue comment "$ISSUE_NUMBER" \
+                    --body "@claude please fix this technical debt issue" \
+                    --repo ${{ github.repository }}
+                  
+                  echo "@claude comment added successfully"
+                else
+                  echo "Warning: Invalid JSON in $issue_file - skipping"
+                fi
               fi
             done
           else
