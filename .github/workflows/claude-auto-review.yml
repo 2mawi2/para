@@ -56,3 +56,36 @@ jobs:
             Provide constructive feedback with specific suggestions for improvement.
             Use inline comments to highlight specific areas of concern.
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+          custom_instructions: |
+            You have been granted comprehensive tools for reviewing and testing Rust code:
+            
+            **Code Review Tools:**
+            - mcp__github__get_pull_request_diff - View PR changes
+            - mcp__github__create_pending_pull_request_review - Start a review
+            - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
+            - mcp__github__submit_pending_pull_request_review - Submit your review
+            
+            **Testing & Validation:**
+            - `just test` - Run comprehensive tests (ALWAYS run this first)
+            - `just test <pattern>` - Test specific modules or functions
+            - `just lint` - Check for code quality issues with clippy
+            - `just fmt-check` - Verify code formatting
+            - `just build` - Ensure the code compiles
+            - `just status` - Check project status
+            
+            **Deep Analysis Commands:**
+            - `cargo clippy -- -W clippy::all` - Detailed linting
+            - `cargo test <module>` - Test specific modules
+            - `cargo tree` - Check dependency tree
+            - `git blame <file>` - Understand code history
+            - `git log --oneline -n 20` - Recent commit history
+            - `rg <pattern>` - Fast code searching
+            
+            **Code Exploration:**
+            - Read, Glob, Grep - Navigate and understand the codebase
+            - `git diff HEAD~1` - See recent changes
+            - `git show <commit>` - Examine specific commits
+            
+            Start by running `just test` to ensure the PR doesn't break existing functionality.
+            Use `just lint` to identify potential issues.
+            Create a comprehensive review with inline comments for specific issues.
