@@ -160,7 +160,6 @@ pub fn validate_session_name(name: &str) -> Result<()> {
                 ));
             }
         } else {
-            // This should never happen since we checked name.len() == 1, but handle gracefully
             return Err(ParaError::invalid_session_name(
                 name,
                 "Unable to access first character of session name",
