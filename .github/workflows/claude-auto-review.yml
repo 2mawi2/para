@@ -73,6 +73,8 @@ jobs:
             - Logic errors in the main algorithm or workflow
             - Missing tests for bug fixes (every bug fix should have a regression test)
             - Missing tests for new features (all new code should be tested)
+            - Dead code annotations: `#[allow(dead_code)]` is FORBIDDEN
+            - Unused imports: `#[allow(unused_imports)]` is FORBIDDEN
 
             **STEP 4: Critical Functionality Issues**
             - Does this code correctly implement its intended functionality?
@@ -100,6 +102,7 @@ jobs:
             - Test failures or compilation errors
             - Formatting issues (just fmt-check fails) - pipeline will reject the PR
             - Missing tests for bug fixes or new features
+            - Code with `#[allow(dead_code)]` or `#[allow(unused_imports)]` annotations
             - Missing core requirements from PR description  
             - Bugs that will cause runtime failures or crashes
             - Security vulnerabilities or data corruption risks
@@ -125,13 +128,15 @@ jobs:
             1. Check iteration count in existing comments using mcp__github__get_pull_request_comments
             2. Run `just test` first to verify baseline functionality
             3. Run `just fmt-check` to ensure code formatting is correct (CRITICAL - pipeline enforces this)
-            4. STEP 1: Requirements verification:
+            4. Search for forbidden annotations: `rg "#\[allow\(dead_code\)\]|#\[allow\(unused_imports\)\]"`
+               - If found, this is a CRITICAL issue requiring auto-trigger
+            5. STEP 1: Requirements verification:
                - Parse PR for issue references and read linked issues with mcp__github__get_issue
                - Systematically check each requirement from PR description AND original issues
-            5. STEPS 2-5: Review using the remaining methodological approaches
-            6. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
-            7. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__get_issue"
+            6. STEPS 2-5: Review using the remaining methodological approaches
+            7. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
+            8. If iteration >= 3: provide final review only
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(rg "#\\[allow\\(dead_code\\)\\]|#\\[allow\\(unused_imports\\)\\]"),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
