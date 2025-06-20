@@ -70,7 +70,7 @@ fn recover_specific_session(
                     {
                         return Ok(());
                     }
-                    
+
                     RecoveryOptions {
                         force_overwrite: true,
                         preserve_original_name: true,
@@ -204,8 +204,12 @@ fn list_recoverable_sessions(
                         preserve_original_name: true,
                     };
 
-                    let result = session_recovery.recover_session(selected_session, force_options)?;
-                    println!("✅ Session '{}' force recovered successfully", result.session_name);
+                    let result =
+                        session_recovery.recover_session(selected_session, force_options)?;
+                    println!(
+                        "✅ Session '{}' force recovered successfully",
+                        result.session_name
+                    );
                     display_recovery_result(&result);
                 }
             }
@@ -214,7 +218,6 @@ fn list_recoverable_sessions(
 
     Ok(())
 }
-
 
 fn validate_recover_args(args: &RecoverArgs) -> Result<()> {
     if let Some(ref session) = args.session {
@@ -237,8 +240,13 @@ mod tests {
 
     fn create_test_config_with_dir(temp_dir: &TempDir) -> Config {
         let mut config = create_test_config();
-        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
-        config.directories.subtrees_dir = temp_dir.path().join("subtrees").to_string_lossy().to_string();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees".to_string();
+        config.git.branch_prefix = "test".to_string();
         config
     }
 
@@ -248,7 +256,7 @@ mod tests {
         let git_temp = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
-        
+
         let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
@@ -284,7 +292,7 @@ mod tests {
         let git_temp = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
-        
+
         let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
@@ -331,7 +339,7 @@ mod tests {
         let git_temp = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let (_git_temp, git_service) = setup_test_repo();
-        
+
         let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
