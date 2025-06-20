@@ -40,27 +40,105 @@ jobs:
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
           direct_prompt: |
-            Please review this pull request and provide comprehensive feedback.
+            You are conducting a critical auto-review with iteration tracking. Your job is to find issues that will ACTUALLY cause bugs, not theoretical problems.
 
-            Focus on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security implications
-            - Test coverage
-            - Documentation updates if needed
+            **ITERATION TRACKING:**
+            1. Check existing PR comments for `<!-- iteration-count: N -->` to find current iteration
+            2. If iteration >= 3: provide final review only, do NOT add @claude comment
+            3. If iteration < 3 AND critical issues found: auto-trigger with structured comment
+            4. When checking previous iterations, focus on whether issues were actually resolved
 
-            Important: If you find any issues, please run 'just test' to verify the code passes all tests.
-            You can also run 'just lint' to check for linting issues.
+            **CRITICAL REVIEW GUIDELINES - Use this systematic 5-step approach:**
 
-            Provide constructive feedback with specific suggestions for improvement.
-            Use inline comments to highlight specific areas of concern.
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+            **STEP 1: Requirements Verification (Acceptance Testing)**
+            Before any other review, systematically verify requirements:
+            - Read the PR title, description, and any clarifying comments
+            - **AUTOMATICALLY CHECK LINKED ISSUES**: Look for issue references (e.g., "Fixes #123", "Closes #456") and use mcp__github__get_issue to read the original requirements
+            - Compare the code changes against BOTH the PR description AND the original issue requirements
+            - If linked issues exist, prioritize their requirements as the authoritative source
+            - Check if the code changes actually implement what was asked for in the issue
+            - Flag missing or incorrectly implemented requirements from the original issue
+            - Supporting changes that enable the main feature are fine; flag only unrelated additions
+
+            **STEP 2: Verify It Actually Works**
+            - Run `just test` first - if tests fail, that's a critical issue
+            - Trace the main execution path and check integration points
+            - Focus on direct dependencies and files that import/call the changed code
+
+            **STEP 3: Find Real Bugs (Not Hypothetical Ones)**
+            Look for defects that WILL cause failures in normal usage:
+            - Functions returning unexpected values, leaving inconsistent state
+            - Missing error handling, concurrency issues, resource management problems
+            - Logic errors in the main algorithm or workflow
+
+            **STEP 4: Critical Functionality Issues**
+            - Does this code correctly implement its intended functionality?
+            - Will this break existing user workflows?
+            - Are there data consistency issues?
+
+            **STEP 5: Maintainability Red Flags That Cause Future Bugs**
+            Only flag patterns that will actively cause bugs later:
+            - Code that lies about what it does (misleading names/interfaces)
+            - Hidden side effects or fragile assumptions about external state
+
+            **IGNORE:**
+            - Code that works but could be "cleaner"
+            - Performance issues without measured proof of problems
+            - Complex edge cases requiring multiple unlikely conditions
+            - Style issues that linters/formatters would catch
+            
+            **USE YOUR JUDGMENT:**
+            - When uncertain about domain-specific decisions, explain your reasoning
+            - Focus on changes that directly impact the user or system reliability
+            - Give benefit of the doubt for intentional design choices
+
+            **AUTO-TRIGGER CRITERIA:**
+            Only auto-trigger (@claude comment) for these critical issues:
+            - Test failures or compilation errors
+            - Missing core requirements from PR description  
+            - Bugs that will cause runtime failures or crashes
+            - Security vulnerabilities or data corruption risks
+            
+            For minor issues, provide feedback in review only (no @claude comment).
+
+            **AUTO-TRIGGER FORMAT:**
+            If critical issues found AND iteration < 3, add this exact comment:
+
+            ```
+            @claude please fix these critical issues (iteration {N+1}/3):
+
+            **Critical Issues Found:**
+
+            1. **[Category]** - [Brief description]
+               - Location: [file]:[line]
+               - Problem: [Specific issue]
+               - Fix: [Concrete suggestion]
+
+            **Test Status:**
+            - [x] Existing tests pass with `just test`
+            - [x] Need to add tests for error cases above
+
+            <!-- iteration-count: {N+1} -->
+            ```
+
+            **WORKFLOW:**
+            1. Check iteration count in existing comments
+            2. Run `just test` first to verify baseline functionality
+            3. STEP 1: Requirements verification:
+               - Parse PR for issue references and read linked issues with mcp__github__get_issue
+               - Systematically check each requirement from PR description AND original issues
+            4. STEPS 2-5: Review using the remaining methodological approaches
+            5. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
+            6. If iteration >= 3: provide final review only
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
             **Code Review Tools:**
             - mcp__github__get_pull_request_diff - View PR changes
+            - mcp__github__get_pull_request_comments - Read existing PR comments (for iteration tracking)
+            - mcp__github__get_issue - Read linked issues for full context and original requirements
+            - mcp__github__add_pull_request_comment - Add comments (for auto-trigger)
             - mcp__github__create_pending_pull_request_review - Start a review
             - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
             - mcp__github__submit_pending_pull_request_review - Submit your review
@@ -86,6 +164,23 @@ jobs:
             - `git diff HEAD~1` - See recent changes
             - `git show <commit>` - Examine specific commits
             
-            Start by running `just test` to ensure the PR doesn't break existing functionality.
-            Use `just lint` to identify potential issues.
-            Create a comprehensive review with inline comments for specific issues.
+            **ITERATION TRACKING WORKFLOW:**
+            1. Use mcp__github__get_pull_request_comments to read existing comments
+            2. Look for `<!-- iteration-count: N -->` in comment bodies to determine current iteration
+            3. If no iteration found, start at iteration 0
+            4. If iteration >= 3, provide final review only (no auto-trigger)
+            5. If critical issues found AND iteration < 3:
+               - Use mcp__github__add_pull_request_comment with the structured format
+               - Include `<!-- iteration-count: {N+1} -->` in your comment
+            
+            **CRITICAL REVIEW PROCESS:**
+            1. Run `just test` first to ensure the PR doesn't break existing functionality
+            2. **REQUIREMENTS VERIFICATION**: 
+               - Parse PR description for issue references (Fixes #N, Closes #N, etc.)
+               - Use mcp__github__get_issue to read linked issues for full context
+               - Systematically check each requirement from BOTH PR and original issues
+            3. **METHODICAL REVIEW**: Apply the 5-step systematic approach focusing on critical issues
+            4. Use mcp__github__create_pending_pull_request_review and related tools for inline feedback  
+            5. Only auto-trigger if you find critical issues (including missing/incorrect requirements)
+            
+            **Remember**: Missing or incorrectly implemented requirements from the original issue are critical issues that should trigger fixes!
