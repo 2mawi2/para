@@ -11,7 +11,8 @@ jobs:
     if: github.event.pull_request.user.login == '2mawi2'
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
+      issues: write
       id-token: write
     steps:
       - name: Checkout repository
@@ -36,6 +37,7 @@ jobs:
           claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
           direct_prompt: |
             Please review this pull request and provide comprehensive feedback.
