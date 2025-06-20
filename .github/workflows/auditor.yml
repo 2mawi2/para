@@ -62,28 +62,28 @@ jobs:
             
             SETUP PHASE:
             1. qlty should already be initialized from the workflow setup
-            2. If you get "No qlty config found", run: printf "n\nn\n" | $HOME/.qlty/bin/qlty init
-            3. Use full path for qlty commands: $HOME/.qlty/bin/qlty
+            2. If you get "No qlty config found", run: printf "n\nn\n" | qlty init
+            3. qlty is available in PATH - just use 'qlty' commands directly
             
             ANALYSIS WORKFLOW:
-            1. Run: $HOME/.qlty/bin/qlty smells --all --no-snippets
+            1. Run: qlty smells --all --no-snippets
                - Look for "High total complexity" (count > 50)
                - Find "Deeply nested control flow" (level > 4)
                - Identify duplication with high mass scores (mass > 200)
                - Note functions with high complexity (count > 20)
             
-            2. Run: $HOME/.qlty/bin/qlty metrics --all --sort complexity --limit 20
+            2. Run: qlty metrics --all --sort complexity --limit 20
                - Focus on files with complexity > 50
                - Check for files with > 300 LOC
                - Note classes with LCOM > 1 (indicates low cohesion)
                - Identify files with many functions (> 20)
             
-            3. For the most complex files, run: $HOME/.qlty/bin/qlty metrics --functions <file>
+            3. For the most complex files, run: qlty metrics --functions <file>
                - Find functions with cyclomatic complexity > 10
                - Identify functions > 50 lines
                - Look for functions with many parameters (> 5)
             
-            4. Run: $HOME/.qlty/bin/qlty metrics --all --max-depth 2
+            4. Run: qlty metrics --all --max-depth 2
                - Identify modules/directories with high overall complexity
                - Find areas of the codebase that need architectural improvements
             
@@ -117,23 +117,23 @@ jobs:
               * Expected improvement in metrics
             
             CLEANUP: After analysis, run: rm -rf .qlty/
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(printf \"n\\nn\\n\" | $HOME/.qlty/bin/qlty init),Bash($HOME/.qlty/bin/qlty smells --all --no-snippets),Bash($HOME/.qlty/bin/qlty metrics --all --sort complexity --limit 20),Bash($HOME/.qlty/bin/qlty metrics --all --sort loc --limit 20),Bash($HOME/.qlty/bin/qlty metrics --all --max-depth 2),Bash($HOME/.qlty/bin/qlty metrics --all --max-depth 3),Bash($HOME/.qlty/bin/qlty metrics --functions *),Bash(rm -rf .qlty/)"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(printf \"n\\nn\\n\" | qlty init),Bash(qlty smells --all --no-snippets),Bash(qlty metrics --all --sort complexity --limit 20),Bash(qlty metrics --all --sort loc --limit 20),Bash(qlty metrics --all --max-depth 2),Bash(qlty metrics --all --max-depth 3),Bash(qlty metrics --functions *),Bash(rm -rf .qlty/)"
           timeout_minutes: "30"
           custom_instructions: |
             You have been granted comprehensive tools for analyzing codebases for technical debt that impacts maintainability:
             
             **Qlty Code Quality Tools (PRIMARY ANALYSIS TOOLS):**
-            - `printf "n\nn\n" | $HOME/.qlty/bin/qlty init` - Initialize qlty if needed (answers no to both prompts)
-            - `$HOME/.qlty/bin/qlty smells --all --no-snippets` - Find duplication, complexity, and code smells
+            - `printf "n\nn\n" | qlty init` - Initialize qlty if needed (answers no to both prompts)
+            - `qlty smells --all --no-snippets` - Find duplication, complexity, and code smells
               * Shows: complexity counts, nesting levels, duplication mass scores
               * Example: "High total complexity (count = 79)" or "Found 177 lines of similar code"
-            - `$HOME/.qlty/bin/qlty metrics --all --sort complexity --limit 20` - List most complex files
+            - `qlty metrics --all --sort complexity --limit 20` - List most complex files
               * Shows: classes, functions, fields, cyclomatic complexity, LCOM, LOC
               * Focus on: complexity > 50, LOC > 300, LCOM > 1
-            - `$HOME/.qlty/bin/qlty metrics --functions <file>` - Analyze specific file's functions
+            - `qlty metrics --functions <file>` - Analyze specific file's functions
               * Shows: per-function complexity and line counts
               * Look for: functions > 50 lines, complexity > 10
-            - `$HOME/.qlty/bin/qlty metrics --all --max-depth 2` - Module-level complexity analysis
+            - `qlty metrics --all --max-depth 2` - Module-level complexity analysis
               * Helps identify architectural issues
             - `rm -rf .qlty/` - Clean up qlty files after analysis
             
