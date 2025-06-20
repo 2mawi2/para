@@ -37,6 +37,22 @@ jobs:
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
         id: branch
 
+      - name: Pre-configure Claude tool permissions
+        run: |
+          mkdir -p /home/runner/.claude
+          cat > /home/runner/.claude/settings.json << 'EOF'
+          {
+            "mcp": {
+              "enableAllProjectMcpServers": true
+            },
+            "permissions": {
+              "allowedTools": [
+                "Bash", "Edit", "MultiEdit", "Glob", "Grep", "LS", "Read", "Write", "TodoRead", "TodoWrite"
+              ]
+            }
+          }
+          EOF
+
       - name: Fix technical debt issue
         uses: 2mawi2/claude-code-action-extended@main
         with:
