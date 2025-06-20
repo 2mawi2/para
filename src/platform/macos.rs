@@ -224,7 +224,7 @@ impl MacOSPlatform {
         Ok(actual_ide)
     }
 
-    fn get_ide_handler(&self, ide_name: &str) -> Result<Box<dyn IdeHandler>> {
+    pub(crate) fn get_ide_handler(&self, ide_name: &str) -> Result<Box<dyn IdeHandler>> {
         match ide_name.to_lowercase().as_str() {
             "cursor" => Ok(Box::new(CursorHandler)),
             "code" | "vscode" => Ok(Box::new(VSCodeHandler)),
@@ -235,7 +235,7 @@ impl MacOSPlatform {
         }
     }
 
-    fn parse_session_info(&self, session_id: &str) -> Result<SessionInfo> {
+    pub(crate) fn parse_session_info(&self, session_id: &str) -> Result<SessionInfo> {
         let timestamp_regex = regex::Regex::new(r"-\d{8}-\d{6}$").unwrap();
 
         if timestamp_regex.is_match(session_id) {
