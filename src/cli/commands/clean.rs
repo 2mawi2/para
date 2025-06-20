@@ -102,68 +102,134 @@ impl SessionCleaner {
     }
 
     fn find_orphaned_state_files(&self) -> Result<Vec<PathBuf>> {
-        let mut orphaned_files = Vec::new();
         let state_dir = PathBuf::from(&self.config.directories.state_dir);
 
         if !state_dir.exists() {
-            return Ok(orphaned_files);
+            return Ok(Vec::new());
         }
 
-        for entry in fs::read_dir(&state_dir)? {
-            let entry = entry?;
-            let path = entry.path();
+        let mut orphaned_files = Vec::new();
+        let state_files = self.scan_state_directory(&state_dir)?;
 
-            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".state") {
-                    if let Some(session_id) = file_name.strip_suffix(".state") {
-                        let branch_name =
-                            format!("{}/{}", self.config.git.branch_prefix, session_id);
+        for state_file in state_files {
+            let session_id = self.extract_session_id(&state_file)?;
 
-                        if !self.git_service.branch_exists(&branch_name)? {
-                            orphaned_files.push(path.clone());
-
-                            // Also include related files (.prompt, .launch)
-                            for suffix in &[".prompt", ".launch"] {
-                                let related_file =
-                                    state_dir.join(format!("{}{}", session_id, suffix));
-                                if related_file.exists() {
-                                    orphaned_files.push(related_file);
-                                }
-                            }
-                        }
-                    }
-                }
+            if self.is_session_orphaned(&session_id)? {
+                orphaned_files.push(state_file.clone());
+                orphaned_files.extend(self.find_related_files(&state_dir, &session_id));
             }
         }
 
         Ok(orphaned_files)
     }
 
+    fn scan_state_directory(&self, state_dir: &std::path::Path) -> Result<Vec<PathBuf>> {
+        let mut state_files = Vec::new();
+
+        for entry in fs::read_dir(state_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if self.is_state_file(&path) {
+                state_files.push(path);
+            }
+        }
+
+        Ok(state_files)
+    }
+
+    fn is_state_file(&self, path: &std::path::Path) -> bool {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .map(|name| name.ends_with(".state"))
+            .unwrap_or(false)
+    }
+
+    fn extract_session_id(&self, state_file: &std::path::Path) -> Result<String> {
+        let file_name = state_file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| crate::utils::ParaError::invalid_args("Invalid state file name"))?;
+
+        let session_id = file_name.strip_suffix(".state").ok_or_else(|| {
+            crate::utils::ParaError::invalid_args("State file must end with .state")
+        })?;
+
+        Ok(session_id.to_string())
+    }
+
+    fn is_session_orphaned(&self, session_id: &str) -> Result<bool> {
+        let branch_name = format!("{}/{}", self.config.git.branch_prefix, session_id);
+        Ok(!self.git_service.branch_exists(&branch_name)?)
+    }
+
+    fn find_related_files(&self, state_dir: &std::path::Path, session_id: &str) -> Vec<PathBuf> {
+        let mut related_files = Vec::new();
+
+        for suffix in &[".prompt", ".launch"] {
+            let related_file = state_dir.join(format!("{}{}", session_id, suffix));
+            if related_file.exists() {
+                related_files.push(related_file);
+            }
+        }
+
+        related_files
+    }
+
     fn find_old_archives(&self) -> Result<Vec<String>> {
+        let cleanup_days = match self.config.session.auto_cleanup_days {
+            Some(days) => days,
+            None => return Ok(Vec::new()),
+        };
+
+        let cutoff_date = chrono::Utc::now() - chrono::Duration::days(cleanup_days as i64);
+        let archived_branches = self
+            .git_service
+            .branch_manager()
+            .list_archived_branches(&self.config.git.branch_prefix)?;
+
         let mut old_archives = Vec::new();
 
-        if let Some(cleanup_days) = self.config.session.auto_cleanup_days {
-            let cutoff_date = chrono::Utc::now() - chrono::Duration::days(cleanup_days as i64);
-            let archived_branches = self
-                .git_service
-                .branch_manager()
-                .list_archived_branches(&self.config.git.branch_prefix)?;
-
-            for branch in archived_branches {
-                // Extract timestamp from branch name: prefix/archived/TIMESTAMP/name
-                if let Some(timestamp_part) = branch.split('/').nth(2) {
-                    if let Ok(branch_time) =
-                        chrono::NaiveDateTime::parse_from_str(timestamp_part, "%Y%m%d-%H%M%S")
-                    {
-                        if branch_time.and_utc() < cutoff_date {
-                            old_archives.push(branch);
-                        }
-                    }
-                }
+        for branch in archived_branches {
+            if self.is_archive_older_than_cutoff(&branch, cutoff_date)? {
+                old_archives.push(branch);
             }
         }
 
         Ok(old_archives)
+    }
+
+    fn is_archive_older_than_cutoff(
+        &self,
+        branch: &str,
+        cutoff_date: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool> {
+        let timestamp_part = self.extract_archive_timestamp(branch)?;
+        let branch_time = self.parse_archive_timestamp(&timestamp_part)?;
+        Ok(branch_time.and_utc() < cutoff_date)
+    }
+
+    fn extract_archive_timestamp(&self, branch: &str) -> Result<String> {
+        // Extract timestamp from branch name: prefix/archived/TIMESTAMP/name
+        branch
+            .split('/')
+            .nth(2)
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                crate::utils::ParaError::invalid_args(format!(
+                    "Invalid archived branch format: {}",
+                    branch
+                ))
+            })
+    }
+
+    fn parse_archive_timestamp(&self, timestamp: &str) -> Result<chrono::NaiveDateTime> {
+        chrono::NaiveDateTime::parse_from_str(timestamp, "%Y%m%d-%H%M%S").map_err(|e| {
+            crate::utils::ParaError::invalid_args(format!(
+                "Invalid timestamp format '{}': {}",
+                timestamp, e
+            ))
+        })
     }
 
     fn show_dry_run_report(&self, plan: &CleanupPlan) {
