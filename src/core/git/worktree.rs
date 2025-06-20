@@ -1,4 +1,5 @@
 use super::repository::{execute_git_command, execute_git_command_with_status, GitRepository};
+use super::validation::GitValidator;
 use crate::utils::error::{ParaError, Result};
 use std::path::{Path, PathBuf};
 
@@ -226,98 +227,24 @@ impl<'a> WorktreeManager<'a> {
     }
 
     fn validate_branch_name(&self, branch_name: &str) -> Result<()> {
-        if branch_name.is_empty() {
-            return Err(ParaError::git_operation(
-                "Branch name cannot be empty".to_string(),
-            ));
-        }
-
-        if branch_name.contains("..")
-            || branch_name.starts_with('-')
-            || branch_name.ends_with('/')
-            || branch_name.contains('\0')
-            || branch_name.contains(' ')
-        {
-            return Err(ParaError::git_operation(format!(
-                "Invalid branch name: {}",
-                branch_name
-            )));
-        }
-
-        Ok(())
+        GitValidator::validate_branch_name(branch_name)
     }
 
     fn validate_worktree_path(&self, path: &Path) -> Result<()> {
-        if path == self.repo.root {
-            return Err(ParaError::git_operation(
-                "Cannot create worktree at repository root".to_string(),
-            ));
-        }
-
-        if let Ok(canonical_path) = path.canonicalize() {
-            if canonical_path == self.repo.root {
-                return Err(ParaError::git_operation(
-                    "Cannot create worktree at repository root (canonical path)".to_string(),
-                ));
-            }
-        }
-
-        Ok(())
+        GitValidator::validate_worktree_path(path, &self.repo.root)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::process::Command;
-    use tempfile::TempDir;
-
-    fn setup_test_repo() -> (TempDir, GitRepository) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let repo = GitRepository::discover_from(repo_path).expect("Failed to discover repo");
-        (temp_dir, repo)
-    }
 
     #[test]
     fn test_create_and_remove_worktree() {
-        let (temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
         let worktree_path = temp_dir.path().join("feature-worktree");
 
@@ -342,12 +269,12 @@ mod tests {
 
     #[test]
     fn test_list_worktrees() {
-        let (temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
         let worktrees = manager.list_worktrees().expect("Failed to list worktrees");
         assert_eq!(worktrees.len(), 1);
-        assert_eq!(worktrees[0].path, repo.root);
+        assert_eq!(worktrees[0].path, git_service.repository().root);
 
         let worktree_path = temp_dir.path().join("test-worktree");
         manager
@@ -366,8 +293,8 @@ mod tests {
 
     #[test]
     fn test_find_worktree_by_branch() {
-        let (temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
         let worktree_path = temp_dir.path().join("find-test");
         manager
@@ -401,8 +328,8 @@ mod tests {
 
     #[test]
     fn test_invalid_branch_names() {
-        let (_temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (_temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
         let test_cases = vec!["", "branch..name", "-invalid", "invalid/", "branch name"];
 
@@ -418,8 +345,8 @@ mod tests {
 
     #[test]
     fn test_worktree_validation() {
-        let (temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
         let nonexistent_path = temp_dir.path().join("nonexistent");
         assert!(manager.validate_worktree(&nonexistent_path).is_err());
@@ -428,15 +355,17 @@ mod tests {
         fs::write(&file_path, "content").expect("Failed to write file");
         assert!(manager.validate_worktree(&file_path).is_err());
 
-        assert!(manager.validate_worktree(&repo.root).is_ok());
+        assert!(manager
+            .validate_worktree(&git_service.repository().root)
+            .is_ok());
     }
 
     #[test]
     fn test_is_worktree_path() {
-        let (temp_dir, repo) = setup_test_repo();
-        let manager = WorktreeManager::new(&repo);
+        let (temp_dir, git_service) = setup_test_repo();
+        let manager = WorktreeManager::new(git_service.repository());
 
-        assert!(!manager.is_worktree_path(&repo.root));
+        assert!(!manager.is_worktree_path(&git_service.repository().root));
 
         let worktree_path = temp_dir.path().join("worktree-test");
         manager
