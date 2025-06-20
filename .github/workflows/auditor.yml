@@ -87,8 +87,8 @@ jobs:
             2. Create the directory first: Use Write tool to create .github-issues/.gitkeep
             3. Then write each issue as a separate JSON file
             
-            Create at most 3 issues per run to avoid overwhelming the team.
-            Focus on the most impactful technical debt first.
+            Create only 1 issue per run to focus on fixing it completely.
+            Choose the most critical technical debt issue you find.
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite"
           timeout_minutes: "30"
       
