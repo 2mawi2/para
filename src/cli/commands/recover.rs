@@ -238,18 +238,6 @@ mod tests {
     use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
 
-    fn create_test_config_with_dir(temp_dir: &TempDir) -> Config {
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para_state")
-            .to_string_lossy()
-            .to_string();
-        config.directories.subtrees_dir = "subtrees".to_string();
-        config.git.branch_prefix = "test".to_string();
-        config
-    }
-
     #[test]
     fn test_recover_active_session_healthy() {
         let temp_dir = TempDir::new().unwrap();
