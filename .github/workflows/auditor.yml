@@ -128,17 +128,6 @@ jobs:
                   --repo ${{ github.repository }})
                 
                 echo "Issue created successfully: $ISSUE_URL"
-                
-                # Extract issue number from URL
-                ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
-                
-                # Add @claude comment to trigger PR assistant
-                echo "Adding @claude comment to issue #$ISSUE_NUMBER"
-                gh issue comment "$ISSUE_NUMBER" \
-                  --body "@claude please fix this technical debt issue" \
-                  --repo ${{ github.repository }}
-                
-                echo "@claude comment added successfully"
               fi
             done
           else
