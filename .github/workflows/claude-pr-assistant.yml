@@ -29,7 +29,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Install dependencies
         run: |
@@ -50,7 +51,7 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git log),Bash(git status),Bash(git show),Bash(git branch),Bash(git rev-parse),Bash(git blame),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git status),Bash(git status *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch *),Bash(git rev-parse),Bash(git rev-parse *),Bash(git blame),Bash(git blame *),Bash(git fetch),Bash(git fetch *),Bash(git merge),Bash(git merge *),Bash(git add),Bash(git add *),Bash(git commit),Bash(git commit *),Bash(git push),Bash(git push *),Bash(git pull),Bash(git pull *),Bash(git rebase),Bash(git rebase *),Bash(git checkout),Bash(git checkout *),Bash(git reset),Bash(git reset *),Bash(git stash),Bash(git stash *),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
           custom_instructions: |
             You have been granted tools for editing files and running Rust/just commands for testing and validating your changes:
             
@@ -76,6 +77,26 @@ jobs:
             **Git Commands:**
             - `git diff`, `git status` - Check your changes
             - `git log`, `git blame` - Investigate code history
+            - `git fetch origin main` - Get latest main branch
+            - `git merge origin/main` - Merge main into current branch
+            - `git add .` or `git add <file>` - Stage changes
+            - `git commit -m "message"` - Commit changes
+            - `git push` - Push changes to remote
+            
+            **Merge Conflict Resolution:**
+            When resolving merge conflicts:
+            1. Run `git fetch origin main` to get latest changes
+            2. Run `git merge origin/main` to attempt merge
+            3. If conflicts exist, git will mark them in files with:
+               <<<<<<< HEAD
+               [your changes]
+               =======
+               [main branch changes]
+               >>>>>>> origin/main
+            4. Edit conflicted files to resolve conflicts (remove markers, combine changes)
+            5. Run `git add .` to stage resolved files
+            6. Run `git commit -m "Resolve merge conflicts with main"`
+            7. Run tests to ensure everything still works
             
             **File Operations:**
             - Edit, Read, Write, MultiEdit - Make code changes
