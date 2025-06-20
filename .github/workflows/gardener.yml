@@ -67,7 +67,28 @@ jobs:
             - Add tests if necessary
             - Use `git add -A && git commit -m "fix: [description] (closes #${{ github.event.issue.number }})"` for the commit
           allowed_tools: |
-            Bash
+            Bash(gh issue comment --issue *)
+            Bash(just test)
+            Bash(just lint)
+            Bash(just fmt)
+            Bash(just build)
+            Bash(cargo test)
+            Bash(cargo build)
+            Bash(cargo check)
+            Bash(cargo clippy)
+            Bash(cargo fmt)
+            Bash(git add *)
+            Bash(git commit -m *)
+            Bash(git status)
+            Bash(git diff)
+            Bash(git log)
+            Bash(rg *)
+            Bash(grep *)
+            Bash(ls)
+            Bash(ls *)
+            Bash(cat *)
+            Bash(echo *)
+            Bash(pwd)
             Edit
             Read
             Write
