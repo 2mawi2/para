@@ -151,92 +151,9 @@ fn validate_cancel_args(args: &CancelArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
-    };
-    use crate::core::git::GitRepository;
     use crate::core::session::SessionState;
-    use std::fs;
-    use std::path::Path;
-    use std::process::Command;
+    use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
-
-    fn create_test_config(temp_dir: &Path) -> Config {
-        Config {
-            ide: IdeConfig {
-                name: "test".to_string(),
-                command: "echo".to_string(),
-                user_data_dir: None,
-                wrapper: WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
-                },
-            },
-            directories: DirectoryConfig {
-                subtrees_dir: temp_dir.join("subtrees").to_string_lossy().to_string(),
-                state_dir: temp_dir.join(".para_state").to_string_lossy().to_string(),
-            },
-            git: GitConfig {
-                branch_prefix: "para".to_string(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: false,
-                auto_cleanup_days: Some(7),
-            },
-        }
-    }
-
-    fn setup_test_repo() -> (TempDir, GitRepository, Config) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path();
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let repo = GitRepository::discover_from(repo_path).expect("Failed to discover repo");
-        let config = create_test_config(temp_dir.path());
-
-        // Pre-create directories that SessionManager might need
-        fs::create_dir_all(repo_path.join(".para")).expect("Failed to create .para directory");
-        fs::create_dir_all(&config.directories.state_dir)
-            .expect("Failed to create state directory");
-
-        (temp_dir, repo, config)
-    }
 
     #[test]
     fn test_validate_cancel_args_valid() {
@@ -261,16 +178,18 @@ mod tests {
 
     #[test]
     fn test_detect_session_name_explicit() {
-        let (_temp_dir, repo, config) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
 
-        let git_service =
-            GitService::discover_from(&repo.root).expect("Failed to create git service");
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let session_state = SessionState::new(
             "test-session".to_string(),
             "test-branch".to_string(),
-            repo.root.join("test-worktree"),
+            git_service.repository().root.join("test-worktree"),
         );
         session_manager
             .save_state(&session_state)
@@ -287,9 +206,12 @@ mod tests {
 
     #[test]
     fn test_detect_session_name_nonexistent() {
-        let (_temp_dir, repo, config) = setup_test_repo();
-        let git_service =
-            GitService::discover_from(&repo.root).expect("Failed to create git service");
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs {
@@ -303,14 +225,18 @@ mod tests {
 
     #[test]
     fn test_detect_session_name_from_main_repo() {
-        let (_temp_dir, repo, config) = setup_test_repo();
-        let git_service =
-            GitService::discover_from(&repo.root).expect("Failed to create git service");
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs { session: None };
 
-        std::env::set_current_dir(&repo.root).expect("Failed to change to repo root");
+        std::env::set_current_dir(&git_service.repository().root)
+            .expect("Failed to change to repo root");
 
         let result = detect_session_name(&args, &git_service, &session_manager);
         assert!(result.is_err());
@@ -319,9 +245,12 @@ mod tests {
 
     #[test]
     fn test_detect_session_name_invalid_directory() {
-        let (_temp_dir, repo, config) = setup_test_repo();
-        let git_service =
-            GitService::discover_from(&repo.root).expect("Failed to create git service");
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
         let args = CancelArgs { session: None };
