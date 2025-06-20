@@ -102,7 +102,7 @@ jobs:
             For minor issues, provide feedback in review only (no @claude comment).
 
             **AUTO-TRIGGER FORMAT:**
-            If critical issues found AND iteration < 3, add this exact comment:
+            If critical issues found AND iteration < 3, add this exact comment using mcp__github__add_pull_request_comment:
 
             ```
             @claude please fix these critical issues (iteration {N+1}/3):
@@ -122,7 +122,7 @@ jobs:
             ```
 
             **WORKFLOW:**
-            1. Check iteration count in existing comments
+            1. Check iteration count in existing comments using mcp__github__get_pull_request_comments
             2. Run `just test` first to verify baseline functionality
             3. STEP 1: Requirements verification:
                - Parse PR for issue references and read linked issues with mcp__github__get_issue
@@ -138,10 +138,16 @@ jobs:
             - mcp__github__get_pull_request_diff - View PR changes
             - mcp__github__get_pull_request_comments - Read existing PR comments (for iteration tracking)
             - mcp__github__get_issue - Read linked issues for full context and original requirements
-            - mcp__github__add_pull_request_comment - Add comments (for auto-trigger)
+            - mcp__github__add_pull_request_comment - Add comments (for auto-trigger - USE THIS!)
             - mcp__github__create_pending_pull_request_review - Start a review
             - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
             - mcp__github__submit_pending_pull_request_review - Submit your review
+            
+            **CRITICAL: Auto-Trigger Workflow**
+            When you find critical issues and need to trigger the PR assistant:
+            1. First check existing comments with mcp__github__get_pull_request_comments to find iteration count
+            2. Use mcp__github__add_pull_request_comment to add your @claude trigger comment
+            3. DO NOT use mcp__github__add_issue_comment - this is for issues, not PRs!
             
             **Testing & Validation:**
             - `just test` - Run comprehensive tests (ALWAYS run this first)
