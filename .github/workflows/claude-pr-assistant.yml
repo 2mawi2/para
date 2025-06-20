@@ -94,6 +94,9 @@ jobs:
             1. Make your code changes
             2. Run `just fmt` to fix any formatting issues
             3. Run `just test` - MUST pass with "All Rust checks passed!"
+               - IMPORTANT: Always use `just test` without any arguments (no filters)
+               - Do NOT use `just test worktree` or `cargo test specific_test`
+               - The full test suite must pass for PR approval
             4. Run `just lint` separately - MUST show NO warnings or errors
             5. Only commit if BOTH commands succeed
             6. If any test or lint fails, fix the issues and repeat steps 3-4

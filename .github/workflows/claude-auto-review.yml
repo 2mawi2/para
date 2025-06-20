@@ -102,24 +102,19 @@ jobs:
             For minor issues, provide feedback in review only (no @claude comment).
 
             **AUTO-TRIGGER FORMAT:**
-            If critical issues found AND iteration < 3, add this exact comment using mcp__github__add_pull_request_comment:
+            If critical issues found AND iteration < 3, create a JSON file at `.github-triggers/auto-trigger.json` with this structure:
 
+            ```json
+            {
+              "iteration": {N+1},
+              "comment": "@claude please fix these critical issues (iteration {N+1}/3):\n\n**Critical Issues Found:**\n\n1. **[Category]** - [Brief description]\n   - Location: [file]:[line]\n   - Problem: [Specific issue]\n   - Fix: [Concrete suggestion]\n\n**Test Status:**\n- [x] Existing tests pass with `just test`\n- [x] Need to add tests for error cases above\n\n<!-- iteration-count: {N+1} -->"
+            }
             ```
-            @claude please fix these critical issues (iteration {N+1}/3):
 
-            **Critical Issues Found:**
-
-            1. **[Category]** - [Brief description]
-               - Location: [file]:[line]
-               - Problem: [Specific issue]
-               - Fix: [Concrete suggestion]
-
-            **Test Status:**
-            - [x] Existing tests pass with `just test`
-            - [x] Need to add tests for error cases above
-
-            <!-- iteration-count: {N+1} -->
-            ```
+            IMPORTANT: 
+            1. First create the directory: `mkdir -p .github-triggers`
+            2. Write this JSON to `.github-triggers/auto-trigger.json` using the Write tool
+            3. The GitHub Actions workflow will detect this file and post the comment
 
             **WORKFLOW:**
             1. Check iteration count in existing comments using mcp__github__get_pull_request_comments
@@ -130,7 +125,7 @@ jobs:
             4. STEPS 2-5: Review using the remaining methodological approaches
             5. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
             6. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),WebFetch(domain:github.com),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
@@ -138,7 +133,7 @@ jobs:
             - mcp__github__get_pull_request_diff - View PR changes
             - mcp__github__get_pull_request_comments - Read existing PR comments (for iteration tracking)
             - mcp__github__get_issue - Read linked issues for full context and original requirements
-            - mcp__github__add_pull_request_comment - Add comments (for auto-trigger - USE THIS!)
+            - Write - Create .github-triggers/auto-trigger.json file for triggering PR assistant
             - mcp__github__create_pending_pull_request_review - Start a review
             - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
             - mcp__github__submit_pending_pull_request_review - Submit your review
@@ -146,8 +141,9 @@ jobs:
             **CRITICAL: Auto-Trigger Workflow**
             When you find critical issues and need to trigger the PR assistant:
             1. First check existing comments with mcp__github__get_pull_request_comments to find iteration count
-            2. Use mcp__github__add_pull_request_comment to add your @claude trigger comment
-            3. DO NOT use mcp__github__add_issue_comment - this is for issues, not PRs!
+            2. Create directory: `mkdir -p .github-triggers` (use Bash tool)
+            3. Write your trigger JSON to `.github-triggers/auto-trigger.json` using the Write tool
+            4. The workflow will automatically post this as a PR comment
             
             **Testing & Validation:**
             - `just test` - Run comprehensive tests (ALWAYS run this first)
@@ -176,8 +172,8 @@ jobs:
             3. If no iteration found, start at iteration 0
             4. If iteration >= 3, provide final review only (no auto-trigger)
             5. If critical issues found AND iteration < 3:
-               - Use mcp__github__add_pull_request_comment with the structured format
-               - Include `<!-- iteration-count: {N+1} -->` in your comment
+               - Create `.github-triggers/` directory and write JSON file
+               - JSON must include both iteration number and formatted comment
             
             **CRITICAL REVIEW PROCESS:**
             1. Run `just test` first to ensure the PR doesn't break existing functionality
@@ -190,3 +186,31 @@ jobs:
             5. Only auto-trigger if you find critical issues (including missing/incorrect requirements)
             
             **Remember**: Missing or incorrectly implemented requirements from the original issue are critical issues that should trigger fixes!
+      
+      - name: Post Auto-Trigger Comment if Needed
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          # Check if Claude created an auto-trigger JSON file
+          if [ -f ".github-triggers/auto-trigger.json" ]; then
+            echo "Auto-trigger JSON found, posting comment..."
+            
+            # Extract the comment from JSON
+            COMMENT_BODY=$(jq -r '.comment' .github-triggers/auto-trigger.json)
+            ITERATION=$(jq -r '.iteration' .github-triggers/auto-trigger.json)
+            
+            echo "Posting iteration $ITERATION comment..."
+            
+            # Post the comment to the PR
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "$COMMENT_BODY" \
+              --repo ${{ github.repository }}
+            
+            echo "Comment posted successfully"
+            
+            # Clean up the directory
+            rm -rf .github-triggers/
+          else
+            echo "No auto-trigger file found, skipping comment"
+          fi
