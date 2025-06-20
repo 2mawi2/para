@@ -97,7 +97,7 @@ fn execute_applescript(script: &str) -> Result<()> {
     Ok(())
 }
 
-fn generate_applescript_template(app_name: &str, search_fragment: &str) -> String {
+pub(crate) fn generate_applescript_template(app_name: &str, search_fragment: &str) -> String {
     format!(
         r#"
 on run argv
@@ -273,92 +273,5 @@ impl MacOSPlatform {
         } else {
             default_ide.to_string()
         }
-    }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(crate) fn format_search_fragment_from_session_info(
-        session_info: &SessionInfo,
-        ide_name: &str,
-    ) -> String {
-        if ide_name == "cursor" {
-            // Cursor-specific window title handling
-            match session_info.format_type {
-                SessionNameFormat::Timestamp => {
-                    // Legacy format: use parsed name without timestamp
-                    session_info.name.clone()
-                }
-                SessionNameFormat::DockerStyle => {
-                    // Docker-style format: use as-is
-                    session_info.name.clone()
-                }
-            }
-        } else {
-            // VS Code shows full worktree directory name in title - use original session ID
-            session_info.original_id.clone()
-        }
-    }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(crate) fn format_search_fragment(session_id: &str, ide_name: &str) -> String {
-        // Legacy method for backward compatibility in tests
-        let platform = MacOSPlatform;
-        let session_info = platform.parse_session_info(session_id).unwrap();
-        Self::format_search_fragment_from_session_info(&session_info, ide_name)
-    }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(crate) fn generate_applescript(app_name: &str, search_fragment: &str) -> String {
-        format!(
-            r#"
-on run argv
-  set appName to "{app_name}"
-  set windowTitleFragment to "{search_fragment}"
-  
-  log "AppleScript started for app: " & appName & " with title fragment: " & windowTitleFragment
-  
-  tell application "System Events"
-    if not (exists process appName) then
-      log "Error: Application process '" & appName & "' is not running."
-      return "Application not running."
-    end if
-    
-    tell process appName
-      try
-        set targetWindows to (every window whose name contains windowTitleFragment)
-      on error errMsg
-        log "Error: Could not get windows from " & appName & ". " & errMsg
-        return "Error getting windows."
-      end try
-
-      if (count of targetWindows) is 0 then
-        log "Failure: No window found with title containing '" & windowTitleFragment & "'"
-        return "No matching window found."
-      end if
-      
-      set targetWindow to item 1 of targetWindows
-      
-      log "Success: Found window: '" & (name of targetWindow) & "'"
-      
-      perform action "AXRaise" of targetWindow
-      delay 0.2
-      
-      try
-        click (button 1 of targetWindow)
-        return "Successfully sent close command to window."
-      on error
-         log "Error: Could not click the close button. The window may not be standard."
-         return "Could not click close button."
-      end try
-
-    end tell
-  end tell
-end run
-        "#,
-            app_name = app_name,
-            search_fragment = search_fragment
-        )
     }
 }

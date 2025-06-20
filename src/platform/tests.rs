@@ -73,35 +73,50 @@ mod platform_tests {
 
         #[test]
         fn test_format_search_fragment_cursor_with_timestamp() {
-            let session_id = "my-feature-20250615-123456";
-            let result = MacOSPlatform::format_search_fragment(session_id, "cursor");
-            assert_eq!(result, "my-feature");
+            let platform = MacOSPlatform;
+            let session_info = platform
+                .parse_session_info("my-feature-20250615-123456")
+                .unwrap();
+            let handler = crate::platform::macos::CursorHandler;
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"my-feature\""));
         }
 
         #[test]
         fn test_format_search_fragment_cursor_docker_style() {
-            let session_id = "eager_phoenix";
-            let result = MacOSPlatform::format_search_fragment(session_id, "cursor");
-            assert_eq!(result, "eager_phoenix");
+            let platform = MacOSPlatform;
+            let session_info = platform.parse_session_info("eager_phoenix").unwrap();
+            let handler = crate::platform::macos::CursorHandler;
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"eager_phoenix\""));
         }
 
         #[test]
         fn test_format_search_fragment_vscode_preserves_full_name() {
-            let session_id = "my-feature-20250615-123456";
-            let result = MacOSPlatform::format_search_fragment(session_id, "code");
-            assert_eq!(result, "my-feature-20250615-123456");
+            let platform = MacOSPlatform;
+            let session_info = platform
+                .parse_session_info("my-feature-20250615-123456")
+                .unwrap();
+            let handler = crate::platform::macos::VSCodeHandler;
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
 
         #[test]
         fn test_format_search_fragment_other_ide_preserves_full_name() {
-            let session_id = "my-feature-20250615-123456";
-            let result = MacOSPlatform::format_search_fragment(session_id, "other");
-            assert_eq!(result, "my-feature-20250615-123456");
+            let platform = MacOSPlatform;
+            let session_info = platform
+                .parse_session_info("my-feature-20250615-123456")
+                .unwrap();
+            let handler = crate::platform::macos::VSCodeHandler; // Default to VSCode behavior for non-cursor IDEs
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
 
         #[test]
         fn test_generate_applescript_contains_expected_elements() {
-            let script = MacOSPlatform::generate_applescript("Cursor", "my-feature");
+            use crate::platform::macos::generate_applescript_template;
+            let script = generate_applescript_template("Cursor", "my-feature");
 
             // Verify key elements are present in the generated script
             assert!(script.contains("set appName to \"Cursor\""));
@@ -114,8 +129,9 @@ mod platform_tests {
 
         #[test]
         fn test_generate_applescript_different_app_names() {
-            let script_cursor = MacOSPlatform::generate_applescript("Cursor", "session");
-            let script_code = MacOSPlatform::generate_applescript("Code", "session");
+            use crate::platform::macos::generate_applescript_template;
+            let script_cursor = generate_applescript_template("Cursor", "session");
+            let script_code = generate_applescript_template("Code", "session");
 
             assert!(script_cursor.contains("set appName to \"Cursor\""));
             assert!(script_code.contains("set appName to \"Code\""));
@@ -123,8 +139,9 @@ mod platform_tests {
 
         #[test]
         fn test_generate_applescript_different_search_fragments() {
-            let script1 = MacOSPlatform::generate_applescript("Cursor", "feature-branch");
-            let script2 = MacOSPlatform::generate_applescript("Cursor", "eager_phoenix");
+            use crate::platform::macos::generate_applescript_template;
+            let script1 = generate_applescript_template("Cursor", "feature-branch");
+            let script2 = generate_applescript_template("Cursor", "eager_phoenix");
 
             assert!(script1.contains("set windowTitleFragment to \"feature-branch\""));
             assert!(script2.contains("set windowTitleFragment to \"eager_phoenix\""));
@@ -133,36 +150,52 @@ mod platform_tests {
         #[test]
         fn test_parse_session_info_timestamp_format() {
             let platform = MacOSPlatform;
-            let result = platform.parse_session_info("my-feature-20250615-123456").unwrap();
-            
+            let result = platform
+                .parse_session_info("my-feature-20250615-123456")
+                .unwrap();
+
             assert_eq!(result.name, "my-feature");
             assert_eq!(result.original_id, "my-feature-20250615-123456");
-            assert_eq!(result.format_type, crate::platform::macos::SessionNameFormat::Timestamp);
+            assert_eq!(
+                result.format_type,
+                crate::platform::macos::SessionNameFormat::Timestamp
+            );
         }
 
         #[test]
         fn test_parse_session_info_docker_format() {
             let platform = MacOSPlatform;
             let result = platform.parse_session_info("eager_phoenix").unwrap();
-            
+
             assert_eq!(result.name, "eager_phoenix");
             assert_eq!(result.original_id, "eager_phoenix");
-            assert_eq!(result.format_type, crate::platform::macos::SessionNameFormat::DockerStyle);
+            assert_eq!(
+                result.format_type,
+                crate::platform::macos::SessionNameFormat::DockerStyle
+            );
         }
 
         #[test]
         fn test_parse_session_info_complex_names() {
             let platform = MacOSPlatform;
-            
+
             // Test with complex Docker-style name
             let result1 = platform.parse_session_info("fix-issue-123_branch").unwrap();
             assert_eq!(result1.name, "fix-issue-123_branch");
-            assert_eq!(result1.format_type, crate::platform::macos::SessionNameFormat::DockerStyle);
-            
+            assert_eq!(
+                result1.format_type,
+                crate::platform::macos::SessionNameFormat::DockerStyle
+            );
+
             // Test with timestamp that has dashes in feature name
-            let result2 = platform.parse_session_info("fix-bug-123-20250615-123456").unwrap();
+            let result2 = platform
+                .parse_session_info("fix-bug-123-20250615-123456")
+                .unwrap();
             assert_eq!(result2.name, "fix-bug-123");
-            assert_eq!(result2.format_type, crate::platform::macos::SessionNameFormat::Timestamp);
+            assert_eq!(
+                result2.format_type,
+                crate::platform::macos::SessionNameFormat::Timestamp
+            );
         }
 
         #[test]
@@ -190,17 +223,19 @@ mod platform_tests {
 
         #[test]
         fn test_cursor_handler_applescript_generation() {
-            use crate::platform::macos::{CursorHandler, IdeHandler, SessionInfo, SessionNameFormat};
-            
+            use crate::platform::macos::{
+                CursorHandler, IdeHandler, SessionInfo, SessionNameFormat,
+            };
+
             let handler = CursorHandler;
-            
+
             // Test timestamp format
             let session_info = SessionInfo {
                 name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
                 format_type: SessionNameFormat::Timestamp,
             };
-            
+
             let script = handler.generate_applescript(&session_info);
             assert!(script.contains("set appName to \"Cursor\""));
             assert!(script.contains("set windowTitleFragment to \"my-feature\""));
@@ -208,17 +243,19 @@ mod platform_tests {
 
         #[test]
         fn test_vscode_handler_applescript_generation() {
-            use crate::platform::macos::{VSCodeHandler, IdeHandler, SessionInfo, SessionNameFormat};
-            
+            use crate::platform::macos::{
+                IdeHandler, SessionInfo, SessionNameFormat, VSCodeHandler,
+            };
+
             let handler = VSCodeHandler;
-            
+
             // Test that VS Code uses original_id for window matching
             let session_info = SessionInfo {
                 name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
                 format_type: SessionNameFormat::Timestamp,
             };
-            
+
             let script = handler.generate_applescript(&session_info);
             assert!(script.contains("set appName to \"Code\""));
             assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
@@ -226,39 +263,45 @@ mod platform_tests {
 
         #[test]
         fn test_format_search_fragment_from_session_info_cursor() {
-            use crate::platform::macos::{SessionInfo, SessionNameFormat};
-            
+            use crate::platform::macos::{
+                CursorHandler, IdeHandler, SessionInfo, SessionNameFormat,
+            };
+
             // Test Cursor with timestamp format
             let session_info = SessionInfo {
                 name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
                 format_type: SessionNameFormat::Timestamp,
             };
-            let result = MacOSPlatform::format_search_fragment_from_session_info(&session_info, "cursor");
-            assert_eq!(result, "my-feature");
-            
+            let handler = CursorHandler;
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"my-feature\""));
+
             // Test Cursor with Docker format
             let session_info2 = SessionInfo {
                 name: "eager_phoenix".to_string(),
                 original_id: "eager_phoenix".to_string(),
                 format_type: SessionNameFormat::DockerStyle,
             };
-            let result2 = MacOSPlatform::format_search_fragment_from_session_info(&session_info2, "cursor");
-            assert_eq!(result2, "eager_phoenix");
+            let script2 = handler.generate_applescript(&session_info2);
+            assert!(script2.contains("set windowTitleFragment to \"eager_phoenix\""));
         }
 
         #[test]
         fn test_format_search_fragment_from_session_info_vscode() {
-            use crate::platform::macos::{SessionInfo, SessionNameFormat};
-            
+            use crate::platform::macos::{
+                IdeHandler, SessionInfo, SessionNameFormat, VSCodeHandler,
+            };
+
             // Test VS Code uses original_id regardless of format
             let session_info = SessionInfo {
                 name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
                 format_type: SessionNameFormat::Timestamp,
             };
-            let result = MacOSPlatform::format_search_fragment_from_session_info(&session_info, "code");
-            assert_eq!(result, "my-feature-20250615-123456");
+            let handler = VSCodeHandler;
+            let script = handler.generate_applescript(&session_info);
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
     }
 }
