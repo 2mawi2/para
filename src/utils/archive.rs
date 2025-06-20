@@ -1,6 +1,5 @@
 use crate::utils::{ParaError, Result};
 
-/// Represents parsed information from an archive branch name
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArchiveBranchInfo {
     pub timestamp: String,
@@ -8,34 +7,22 @@ pub struct ArchiveBranchInfo {
     pub full_branch_name: String,
 }
 
-/// Utility for parsing archive branch names with format: {prefix}/archived/{timestamp}/{session_name}
 pub struct ArchiveBranchParser;
 
 impl ArchiveBranchParser {
-    /// Parse an archive branch name and extract its components
-    ///
-    /// Expected format: {branch_prefix}/archived/{timestamp}/{session_name}
-    ///
-    /// Returns:
-    /// - Ok(Some(ArchiveBranchInfo)) if parsing succeeds
-    /// - Ok(None) if the branch name doesn't match the archive format
-    /// - Err(ParaError) if the branch name matches the format but is malformed
     pub fn parse_archive_branch(
         branch_name: &str,
         branch_prefix: &str,
     ) -> Result<Option<ArchiveBranchInfo>> {
         let archive_prefix = format!("{}/archived/", branch_prefix);
 
-        // Check if this is an archive branch at all
         if !branch_name.starts_with(&archive_prefix) {
             return Ok(None);
         }
 
-        // Extract the suffix after the archive prefix
         let suffix = branch_name.strip_prefix(&archive_prefix).unwrap();
         let parts: Vec<&str> = suffix.split('/').collect();
 
-        // Archive format should be: timestamp/session_name
         if parts.len() != 2 {
             return Err(ParaError::InvalidArgs {
                 message: format!(
@@ -48,7 +35,6 @@ impl ArchiveBranchParser {
         let timestamp = parts[0];
         let session_name = parts[1];
 
-        // Basic validation
         if timestamp.is_empty() {
             return Err(ParaError::InvalidArgs {
                 message: format!("Empty timestamp in archived branch: '{}'", branch_name),
@@ -207,7 +193,6 @@ mod tests {
 
     #[test]
     fn test_parse_archive_branch_with_slashes_in_timestamp() {
-        // Edge case: what if timestamp somehow contains slashes?
         let branch_name = "para/archived/2024/03/01-120000/my-session";
         let branch_prefix = "para";
 
