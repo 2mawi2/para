@@ -116,12 +116,25 @@ jobs:
             - Avoid overlapping refactorings - developers should be able to work on all issues in parallel
             - If two issues would require changes to the same file, combine them or choose the higher priority one
             
+            TESTABILITY REQUIREMENTS:
+            - ONLY create issues for code that can be automatically tested
+            - DO NOT create issues for:
+              * Configuration files or setup code
+              * UI/UX code requiring manual testing
+              * Platform-specific code that can't be tested in CI
+              * Build scripts or deployment code
+            - For each issue, check if the code has existing tests:
+              * If YES: Include "Ready for refactoring" in the issue
+              * If NO: Issue must start with "Add tests for X before refactoring"
+            
             For each issue, create a JSON file in .github-issues/ with:
             - Clear title describing the maintainability problem
             - Detailed body explaining:
               * Current metrics (complexity, LOC, duplication mass, etc.)
+              * Test coverage status (existing tests or need to add tests first)
+              * If tests needed: Specific test cases to add before refactoring
               * Why this slows down development
-              * Concrete refactoring approach
+              * Concrete refactoring approach (after tests are in place)
               * Expected improvement in metrics
             
             CLEANUP: After analysis, run: rm -rf .qlty/
@@ -169,10 +182,17 @@ jobs:
             2. Use qlty smells to find major issues
             3. Use qlty metrics to quantify problems
             4. Drill down into specific files with functions analysis
-            5. Create 3-5 diverse, high-impact issues
-            6. Clean up .qlty directory when done
+            5. Check test coverage for identified issues (use rg/grep to find test files)
+            6. Create 3-5 diverse, high-impact issues that can be automatically tested
+            7. Clean up .qlty directory when done
             
-            Focus on technical debt that makes code hard to change, not theoretical issues.
+            **Test Coverage Requirements:**
+            - Use `rg "test.*function_name"` or `grep -r "function_name" src/` to find existing tests
+            - Only create issues for code that can be unit tested
+            - Skip UI rendering, platform-specific, or configuration code
+            - If code lacks tests, the issue MUST require adding tests first
+            
+            Focus on technical debt that makes code hard to change AND can be safely refactored with automated testing.
       
       - name: Create GitHub issues from analysis
         if: always()
