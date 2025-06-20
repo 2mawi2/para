@@ -123,29 +123,29 @@ impl<'a> WorktreeManager<'a> {
 fn parse_worktree_output(output: &str) -> Result<Vec<WorktreeInfo>> {
     let mut worktrees = Vec::new();
     let lines: Vec<&str> = output.lines().map(|line| line.trim()).collect();
-    
+
     let mut i = 0;
     while i < lines.len() {
         let block_start = i;
-        
+
         // Find the end of the current worktree block (empty line or end of input)
         while i < lines.len() && !lines[i].is_empty() {
             i += 1;
         }
-        
+
         if i > block_start {
             let block_lines = &lines[block_start..i];
             if let Ok(worktree) = parse_worktree_block(block_lines) {
                 worktrees.push(worktree);
             }
         }
-        
+
         // Skip empty lines
         while i < lines.len() && lines[i].is_empty() {
             i += 1;
         }
     }
-    
+
     Ok(worktrees)
 }
 
@@ -153,24 +153,25 @@ fn parse_worktree_block(lines: &[&str]) -> Result<WorktreeInfo> {
     if lines.is_empty() {
         return Err(ParaError::git_operation("Empty worktree block".to_string()));
     }
-    
+
     // First line must be worktree path
     let first_line = lines[0];
-    let path_str = first_line.strip_prefix("worktree ")
-        .ok_or_else(|| ParaError::git_operation(format!("Invalid worktree block: {}", first_line)))?;
-    
+    let path_str = first_line.strip_prefix("worktree ").ok_or_else(|| {
+        ParaError::git_operation(format!("Invalid worktree block: {}", first_line))
+    })?;
+
     let mut worktree = WorktreeInfo {
         path: PathBuf::from(path_str),
         branch: String::new(),
         commit: String::new(),
         is_bare: false,
     };
-    
+
     // Process remaining lines
     for &line in &lines[1..] {
         parse_worktree_line(line, &mut worktree)?;
     }
-    
+
     Ok(worktree)
 }
 
@@ -185,7 +186,7 @@ fn parse_worktree_line(line: &str, worktree: &mut WorktreeInfo) -> Result<()> {
     } else if line == "detached" {
         worktree.branch = "HEAD".to_string();
     }
-    
+
     Ok(())
 }
 
