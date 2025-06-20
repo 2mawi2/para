@@ -1,0 +1,28 @@
+name: Technical Debt Handler
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  trigger-claude:
+    runs-on: ubuntu-latest
+    # Only trigger for technical-debt issues created by github-actions
+    if: |
+      contains(github.event.issue.labels.*.name, 'technical-debt') &&
+      github.event.issue.user.login == 'github-actions[bot]'
+    permissions:
+      issues: write
+    
+    steps:
+      - name: Wait for issue to be fully processed
+        run: sleep 5
+        
+      - name: Add @claude comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Adding @claude comment to issue #${{ github.event.issue.number }}"
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "@claude please fix this technical debt issue" \
+            --repo ${{ github.repository }}
