@@ -27,22 +27,6 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
-      - name: Pre-configure Claude tool permissions
-        run: |
-          mkdir -p /home/runner/.claude
-          cat > /home/runner/.claude/settings.json << 'EOF'
-          {
-            "mcp": {
-              "enableAllProjectMcpServers": true
-            },
-            "permissions": {
-              "allowedTools": [
-                "Bash", "Edit", "MultiEdit", "Glob", "Grep", "LS", "Read", "Write", "TodoRead", "TodoWrite"
-              ]
-            }
-          }
-          EOF
-
       - name: Analyze codebase for technical debt
         uses: 2mawi2/claude-code-action-extended@main
         with:
@@ -90,37 +74,58 @@ jobs:
             Create only 1 issue per run to focus on fixing it completely.
             Choose the most critical technical debt issue you find.
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail)"
-          custom_instructions: |
-            You have been granted tools for comprehensive codebase analysis:
-            
-            **Code Analysis Tools:**
-            - `just lint` - Run clippy to find code quality issues
-            - `just test` - Check test coverage and identify untested code
-            - `just status` - Get project status overview
-            - `cargo clippy -- -W clippy::all` - Detailed linting with all warnings
-            - `cargo test --no-run` - Check which tests exist
-            
-            **Pattern Searching:**
-            - `rg "unwrap\(\)|expect\("` - Find unsafe error handling
-            - `rg "TODO|FIXME|HACK"` - Find marked technical debt
-            - `rg "panic!"` - Find explicit panics
-            - `grep -r "clone()" --include="*.rs"` - Find potential performance issues
-            
-            **Code Metrics:**
-            - `wc -l src/**/*.rs` - Count lines of code
-            - `find . -name "*.rs" -type f | wc -l` - Count Rust files
-            - `git log --oneline --since="6 months ago" --grep="fix"` - Find bugfix patterns
-            - `git blame` - Identify frequently changed code
-            
-            **File Exploration:**
-            - Glob, Grep, LS - Navigate codebase structure
-            - Read, MultiEdit - Examine code in detail
-            - `head -20`, `tail -20` - Quick file previews
-            
-            Start with `just lint` and `just test` to get an overview of code quality.
-            Use `rg` to search for specific patterns of technical debt.
-            Focus on finding the most critical issue that impacts code reliability or maintainability.
           timeout_minutes: "30"
+          custom_instructions: |
+            You have been granted comprehensive tools for analyzing this Rust codebase for technical debt:
+            
+            **Available Tools Overview:**
+            - Edit, Read, Write, MultiEdit - File manipulation and code examination
+            - Glob, Grep, LS - File searching and directory navigation
+            - TodoRead, TodoWrite - Task tracking (optional for your analysis workflow)
+            - Bash commands - Run various analysis and testing commands
+            
+            **Code Quality Analysis:**
+            - `just lint` - Run clippy to find code quality issues and potential bugs
+            - `just test` - Run all tests to check coverage and identify untested code
+            - `just test <pattern>` - Run specific tests to verify functionality
+            - `just status` - Get overall project status and health
+            - `cargo clippy -- -W clippy::all` - Detailed linting with all warnings enabled
+            - `cargo test --no-run` - List which tests exist without running them
+            
+            **Technical Debt Pattern Searching:**
+            - `rg "unwrap\(\)|expect\("` - Find unsafe error handling that can panic
+            - `rg "TODO|FIXME|HACK|XXX"` - Find marked technical debt comments
+            - `rg "panic!"` - Find explicit panic calls
+            - `rg "clone\(\)" --type rust` - Find potential performance issues from cloning
+            - `rg "unsafe"` - Find unsafe code blocks
+            - `grep -r "// @" --include="*.rs"` - Find developer annotations
+            
+            **Code Metrics and History:**
+            - `wc -l src/**/*.rs` - Count total lines of code
+            - `find . -name "*.rs" -type f | wc -l` - Count number of Rust files
+            - `git log --oneline --since="6 months ago" --grep="fix"` - Find recent bug patterns
+            - `git log --oneline --grep="revert"` - Find reverted changes indicating problems
+            - `git blame <file>` - Identify frequently changed/problematic code
+            - `git shortlog -sn --since="3 months ago"` - See contributor activity
+            
+            **File System Navigation:**
+            - `ls -la` - List directory contents
+            - `cat <file>` - Read entire files
+            - `head -50 <file>` - Preview file beginnings
+            - `tail -50 <file>` - Preview file endings
+            - Glob patterns like "src/**/*.rs" - Find files by pattern
+            - Grep for searching file contents
+            
+            **Recommended Analysis Workflow:**
+            1. Start with `just status` to understand project structure
+            2. Run `just lint` to identify immediate code quality issues
+            3. Run `just test` to check test coverage
+            4. Use `rg` commands to search for specific technical debt patterns
+            5. Examine problem areas with Read/Edit tools
+            6. Use git history to understand problem evolution
+            7. Create detailed issue for the most critical finding
+            
+            Remember: You're looking for the MOST CRITICAL technical debt that impacts reliability, maintainability, or security.
       
       - name: Create GitHub issues from analysis
         if: always()
