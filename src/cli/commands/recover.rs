@@ -37,85 +37,110 @@ fn recover_specific_session(
 ) -> Result<()> {
     let session_recovery = SessionRecovery::new(config, git_service, session_manager);
 
-    // Try to recover the session, handling both active and archived sessions
-    let recovery_options = if is_non_interactive() {
-        RecoveryOptions {
-            force_overwrite: true,
-            preserve_original_name: true,
-        }
-    } else {
-        // Check for conflicts first to provide user feedback
-        if !session_recovery.is_active_session(session_name) {
-            match session_recovery.validate_recovery(session_name) {
-                Ok(validation) if !validation.can_recover => {
-                    println!(
-                        "❌ Cannot recover session '{}' due to conflicts:",
-                        session_name
-                    );
-                    for conflict in &validation.conflicts {
-                        println!("  • {}", conflict);
-                    }
-                    if !validation.warnings.is_empty() {
-                        println!("Warnings:");
-                        for warning in &validation.warnings {
-                            println!("  ⚠ {}", warning);
-                        }
-                    }
-
-                    if !Confirm::new()
-                        .with_prompt("Force recovery anyway?")
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false)
-                    {
-                        return Ok(());
-                    }
-
-                    RecoveryOptions {
-                        force_overwrite: true,
-                        preserve_original_name: true,
-                    }
-                }
-                Ok(validation) => {
-                    if !validation.warnings.is_empty() {
-                        println!("⚠ Warnings for session '{}':", session_name);
-                        for warning in &validation.warnings {
-                            println!("  • {}", warning);
-                        }
-                    }
-
-                    if !Confirm::new()
-                        .with_prompt(format!("Recover session '{}'?", session_name))
-                        .default(true)
-                        .interact()
-                        .unwrap_or(false)
-                    {
-                        return Ok(());
-                    }
-
-                    RecoveryOptions {
-                        force_overwrite: false,
-                        preserve_original_name: true,
-                    }
-                }
-                Err(_) => {
-                    return Err(ParaError::session_not_found(format!(
-                        "No session found for '{}'",
-                        session_name
-                    )));
-                }
-            }
-        } else {
-            RecoveryOptions {
-                force_overwrite: false,
-                preserve_original_name: true,
-            }
-        }
+    let recovery_options = match determine_recovery_options(&session_recovery, session_name)? {
+        Some(options) => options,
+        None => return Ok(()), // User cancelled recovery
     };
 
     let result = session_recovery.recover_session_unified(session_name, recovery_options)?;
     display_recovery_result(&result);
     Ok(())
+}
+
+fn determine_recovery_options(
+    session_recovery: &SessionRecovery,
+    session_name: &str,
+) -> Result<Option<RecoveryOptions>> {
+    if is_non_interactive() {
+        return Ok(Some(RecoveryOptions {
+            force_overwrite: true,
+            preserve_original_name: true,
+        }));
+    }
+
+    if session_recovery.is_active_session(session_name) {
+        return Ok(Some(RecoveryOptions {
+            force_overwrite: false,
+            preserve_original_name: true,
+        }));
+    }
+
+    handle_inactive_session_recovery(session_recovery, session_name)
+}
+
+fn handle_inactive_session_recovery(
+    session_recovery: &SessionRecovery,
+    session_name: &str,
+) -> Result<Option<RecoveryOptions>> {
+    match session_recovery.validate_recovery(session_name) {
+        Ok(validation) if !validation.can_recover => {
+            handle_conflicted_recovery(validation, session_name)
+        }
+        Ok(validation) => handle_recoverable_session(validation, session_name),
+        Err(_) => Err(ParaError::session_not_found(format!(
+            "No session found for '{}'",
+            session_name
+        ))),
+    }
+}
+
+fn handle_conflicted_recovery(
+    validation: crate::core::session::recovery::RecoveryValidation,
+    session_name: &str,
+) -> Result<Option<RecoveryOptions>> {
+    println!(
+        "❌ Cannot recover session '{}' due to conflicts:",
+        session_name
+    );
+    for conflict in &validation.conflicts {
+        println!("  • {}", conflict);
+    }
+    if !validation.warnings.is_empty() {
+        println!("Warnings:");
+        for warning in &validation.warnings {
+            println!("  ⚠ {}", warning);
+        }
+    }
+
+    if !Confirm::new()
+        .with_prompt("Force recovery anyway?")
+        .default(false)
+        .interact()
+        .unwrap_or(false)
+    {
+        return Ok(None); // User cancelled
+    }
+
+    Ok(Some(RecoveryOptions {
+        force_overwrite: true,
+        preserve_original_name: true,
+    }))
+}
+
+fn handle_recoverable_session(
+    validation: crate::core::session::recovery::RecoveryValidation,
+    session_name: &str,
+) -> Result<Option<RecoveryOptions>> {
+    if !validation.warnings.is_empty() {
+        println!("⚠ Warnings for session '{}':", session_name);
+        for warning in &validation.warnings {
+            println!("  • {}", warning);
+        }
+    }
+
+    if !Confirm::new()
+        .with_prompt(format!("Recover session '{}'?", session_name))
+        .default(true)
+        .interact()
+        .unwrap_or(false)
+    {
+        return Ok(None); // User cancelled
+    }
+
+    Ok(Some(RecoveryOptions {
+        force_overwrite: false,
+        preserve_original_name: true,
+    }))
 }
 
 fn display_recovery_result(result: &crate::core::session::recovery::RecoveryResult) {
