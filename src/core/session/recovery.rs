@@ -52,6 +52,69 @@ impl<'a> SessionRecovery<'a> {
         }
     }
 
+    pub fn recover_active_session(&self, session_name: &str) -> Result<RecoveryResult> {
+        let session_state = self.session_manager.load_state(session_name)?;
+
+        // Check if worktree exists
+        let worktree_exists = session_state.worktree_path.exists();
+        let branch_exists = self.git_service
+            .branch_manager()
+            .branch_exists(&session_state.branch)?;
+
+        if worktree_exists && branch_exists {
+            return Ok(RecoveryResult {
+                session_name: session_name.to_string(),
+                branch_name: session_state.branch,
+                worktree_path: session_state.worktree_path,
+            });
+        }
+
+        // Need to recover missing worktree
+        if !worktree_exists && branch_exists {
+            // Ensure parent directory exists
+            if let Some(parent) = session_state.worktree_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            // Create worktree
+            self.git_service
+                .worktree_manager()
+                .create_worktree(&session_state.branch, &session_state.worktree_path)?;
+
+            return Ok(RecoveryResult {
+                session_name: session_name.to_string(),
+                branch_name: session_state.branch,
+                worktree_path: session_state.worktree_path,
+            });
+        } else if !branch_exists {
+            return Err(ParaError::session_not_found(format!(
+                "Session '{}' has missing branch '{}' - cannot recover",
+                session_name, session_state.branch
+            )));
+        }
+
+        // If worktree exists but there might be other issues
+        Ok(RecoveryResult {
+            session_name: session_name.to_string(),
+            branch_name: session_state.branch,
+            worktree_path: session_state.worktree_path,
+        })
+    }
+
+    pub fn is_active_session(&self, session_name: &str) -> bool {
+        self.session_manager.session_exists(session_name)
+    }
+
+    pub fn recover_session_unified(&self, session_name: &str, options: RecoveryOptions) -> Result<RecoveryResult> {
+        // First check if this is an active session that needs recovery
+        if self.is_active_session(session_name) {
+            return self.recover_active_session(session_name);
+        }
+
+        // If not an active session, try archived session recovery
+        self.recover_session(session_name, options)
+    }
+
     pub fn list_recoverable_sessions(&self) -> Result<Vec<RecoveryInfo>> {
         let archived_branches = self
             .git_service
@@ -239,89 +302,26 @@ pub struct RecoveryValidation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::path::Path;
-    use std::process::Command;
     use tempfile::TempDir;
 
-    fn create_test_config(temp_dir: &Path) -> Config {
-        Config {
-            ide: IdeConfig {
-                name: "test".to_string(),
-                command: "echo".to_string(),
-                user_data_dir: None,
-                wrapper: WrapperConfig {
-                    enabled: false,
-                    name: String::new(),
-                    command: String::new(),
-                },
-            },
-            directories: DirectoryConfig {
-                subtrees_dir: temp_dir.join("subtrees").to_string_lossy().to_string(),
-                state_dir: temp_dir.join(".para_state").to_string_lossy().to_string(),
-            },
-            git: GitConfig {
-                branch_prefix: "test".to_string(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".to_string(),
-                preserve_on_finish: false,
-                auto_cleanup_days: Some(7),
-            },
-        }
-    }
-
-    fn setup_test_repo() -> (TempDir, GitService, Config, SessionManager) {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().join("repo");
-        fs::create_dir_all(&repo_path).expect("Failed to create repo dir");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
-        fs::write(repo_path.join("README.md"), "# Test Repository")
-            .expect("Failed to write README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(&repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
-
-        let git_service = GitService::discover_from(&repo_path).expect("Failed to discover repo");
-        let config = create_test_config(temp_dir.path());
-        let session_manager = SessionManager::new(&config);
-
-        (temp_dir, git_service, config, session_manager)
+    fn create_test_config_with_dir(temp_dir: &TempDir) -> Config {
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+        config.directories.subtrees_dir = temp_dir.path().join("subtrees").to_string_lossy().to_string();
+        config
     }
 
     #[test]
     fn test_recovery_info_parsing() {
-        let (_temp_dir, git_service, config, session_manager) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
 
         let archived_branch = "test/archived/20240301-120000/my-session";
@@ -344,7 +344,13 @@ mod tests {
 
     #[test]
     fn test_recovery_validation() {
-        let (_temp_dir, git_service, config, session_manager) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
 
         let validation = recovery.validate_recovery("nonexistent-session");
@@ -353,7 +359,13 @@ mod tests {
 
     #[test]
     fn test_target_worktree_path() {
-        let (_temp_dir, git_service, config, session_manager) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
 
         let path = recovery.get_target_worktree_path("my-session");
@@ -362,7 +374,13 @@ mod tests {
 
     #[test]
     fn test_full_recovery_workflow() {
-        let (_temp_dir, git_service, config, session_manager) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
         let branch_manager = git_service.branch_manager();
 
@@ -378,12 +396,12 @@ mod tests {
         .unwrap();
 
         let repo_path = &git_service.repository().root;
-        Command::new("git")
+        std::process::Command::new("git")
             .current_dir(repo_path)
             .args(["add", "test-file.txt"])
             .status()
             .unwrap();
-        Command::new("git")
+        std::process::Command::new("git")
             .current_dir(repo_path)
             .args(["commit", "-m", "Add test file"])
             .status()
@@ -422,7 +440,13 @@ mod tests {
 
     #[test]
     fn test_recovery_validation_with_conflicts() {
-        let (_temp_dir, git_service, config, session_manager) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
         let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
         let branch_manager = git_service.branch_manager();
 
@@ -449,7 +473,7 @@ mod tests {
         let session_state = crate::core::session::SessionState::new(
             "conflict-session".to_string(),
             "conflict-session".to_string(),
-            _temp_dir.path().join("test-worktree"),
+            temp_dir.path().join("test-worktree"),
         );
         session_manager.save_state(&session_state).unwrap();
 
@@ -460,5 +484,47 @@ mod tests {
             .conflicts
             .iter()
             .any(|c| c.contains("already exists")));
+    }
+
+    #[test]
+    fn test_unified_recovery_active_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+        
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
+        let recovery = SessionRecovery::new(&config, &git_service, &session_manager);
+
+        // Create an active session
+        let session_name = "test-unified-active";
+        let worktree_path = temp_dir.path().join("worktree");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session_state = SessionState::new(
+            session_name.to_string(),
+            "test-branch".to_string(),
+            worktree_path.clone(),
+        );
+
+        session_manager.save_state(&session_state).unwrap();
+
+        // Create the branch
+        let initial_branch = git_service.repository().get_current_branch().unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("test-branch", &initial_branch)
+            .unwrap();
+
+        // Test unified recovery - should use active session recovery
+        let options = RecoveryOptions {
+            force_overwrite: false,
+            preserve_original_name: true,
+        };
+
+        let result = recovery.recover_session_unified(session_name, options).unwrap();
+        assert_eq!(result.session_name, session_name);
+        assert_eq!(result.branch_name, "test-branch");
     }
 }
