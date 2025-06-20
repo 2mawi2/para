@@ -14,26 +14,20 @@ pub fn detect_last_activity(worktree_path: &Path) -> Option<DateTime<Utc>> {
 
     // Tier 1: Quick check of git internal files for activity hints
     if let Some(git_time) = check_git_internal_files(worktree_path) {
-        latest_time = Some(git_time);
+        update_latest_datetime(&mut latest_time, git_time);
     }
 
     // Tier 2: Check for actual changes using efficient git plumbing commands
     // This should always run to get the most accurate time
     if let Some(change_time) = get_latest_change_time_efficient(worktree_path) {
-        match latest_time {
-            None => latest_time = Some(change_time),
-            Some(current) if change_time > current => latest_time = Some(change_time),
-            _ => {}
-        }
+        update_latest_datetime(&mut latest_time, change_time);
     }
 
     // If we have any activity time, return it
-    if latest_time.is_some() {
-        return latest_time;
-    }
-
-    // Tier 3: No changes, fall back to last commit time
-    get_last_commit_time(worktree_path)
+    latest_time.or_else(|| {
+        // Tier 3: No changes, fall back to last commit time
+        get_last_commit_time(worktree_path)
+    })
 }
 
 /// Tier 1: Check git internal files for quick activity detection
@@ -51,14 +45,8 @@ fn check_git_internal_files(worktree_path: &Path) -> Option<DateTime<Utc>> {
     ];
 
     for file in &activity_files {
-        if let Ok(metadata) = std::fs::metadata(file) {
-            if let Ok(modified) = metadata.modified() {
-                match latest_time {
-                    None => latest_time = Some(modified),
-                    Some(current) if modified > current => latest_time = Some(modified),
-                    _ => {}
-                }
-            }
+        if let Some(modified) = get_file_modification_time(file) {
+            update_latest_time(&mut latest_time, modified);
         }
     }
 
@@ -90,25 +78,17 @@ fn get_latest_change_time_efficient(worktree_path: &Path) -> Option<DateTime<Utc
 
     // Check unstaged changes
     if let Some(time) = get_unstaged_changes_time(worktree_path) {
-        latest_time = Some(time);
+        update_latest_time(&mut latest_time, time);
     }
 
     // Check staged changes (might be older than unstaged)
     if let Some(time) = get_staged_changes_time(worktree_path) {
-        match latest_time {
-            None => latest_time = Some(time),
-            Some(current) if time > current => latest_time = Some(time),
-            _ => {}
-        }
+        update_latest_time(&mut latest_time, time);
     }
 
     // Check untracked files
     if let Some(time) = get_untracked_files_time(worktree_path) {
-        match latest_time {
-            None => latest_time = Some(time),
-            Some(current) if time > current => latest_time = Some(time),
-            _ => {}
-        }
+        update_latest_time(&mut latest_time, time);
     }
 
     latest_time.and_then(system_time_to_datetime)
@@ -126,27 +106,7 @@ fn get_unstaged_changes_time(worktree_path: &Path) -> Option<SystemTime> {
         return None;
     }
 
-    let mut latest: Option<SystemTime> = None;
-    for line in output
-        .stdout
-        .split(|&b| b == b'\n')
-        .filter(|l| !l.is_empty())
-    {
-        if let Ok(filename) = std::str::from_utf8(line) {
-            let filepath = worktree_path.join(filename);
-            if let Ok(metadata) = std::fs::metadata(&filepath) {
-                if let Ok(modified) = metadata.modified() {
-                    match latest {
-                        None => latest = Some(modified),
-                        Some(current) if modified > current => latest = Some(modified),
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-
-    latest
+    process_git_output_for_latest_time(worktree_path, &output.stdout)
 }
 
 /// Get modification time of staged changes
@@ -185,27 +145,7 @@ fn get_untracked_files_time(worktree_path: &Path) -> Option<SystemTime> {
         return None;
     }
 
-    let mut latest: Option<SystemTime> = None;
-    for line in output
-        .stdout
-        .split(|&b| b == b'\n')
-        .filter(|l| !l.is_empty())
-    {
-        if let Ok(filename) = std::str::from_utf8(line) {
-            let filepath = worktree_path.join(filename);
-            if let Ok(metadata) = std::fs::metadata(&filepath) {
-                if let Ok(modified) = metadata.modified() {
-                    match latest {
-                        None => latest = Some(modified),
-                        Some(current) if modified > current => latest = Some(modified),
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-
-    latest
+    process_git_output_for_latest_time(worktree_path, &output.stdout)
 }
 
 /// Get the last commit time
@@ -224,6 +164,48 @@ fn get_last_commit_time(worktree_path: &Path) -> Option<DateTime<Utc>> {
             .and_then(|ts| DateTime::from_timestamp(ts, 0))
     } else {
         None
+    }
+}
+
+/// Process git command output to find latest file modification time
+fn process_git_output_for_latest_time(worktree_path: &Path, output: &[u8]) -> Option<SystemTime> {
+    let mut latest: Option<SystemTime> = None;
+
+    for line in output.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
+        let filename = match std::str::from_utf8(line) {
+            Ok(name) => name,
+            Err(_) => continue, // Skip invalid UTF-8 filenames
+        };
+        let filepath = worktree_path.join(filename);
+
+        if let Some(modified) = get_file_modification_time(&filepath) {
+            update_latest_time(&mut latest, modified);
+        }
+    }
+
+    latest
+}
+
+/// Get file modification time safely
+fn get_file_modification_time(file_path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(file_path).ok()?.modified().ok()
+}
+
+/// Update latest time if the new time is more recent
+fn update_latest_time(latest: &mut Option<SystemTime>, new_time: SystemTime) {
+    match latest {
+        None => *latest = Some(new_time),
+        Some(current) if new_time > *current => *latest = Some(new_time),
+        _ => {}
+    }
+}
+
+/// Update latest DateTime if the new time is more recent
+fn update_latest_datetime(latest: &mut Option<DateTime<Utc>>, new_time: DateTime<Utc>) {
+    match latest {
+        None => *latest = Some(new_time),
+        Some(current) if new_time > *current => *latest = Some(new_time),
+        _ => {}
     }
 }
 
