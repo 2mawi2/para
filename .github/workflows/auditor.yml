@@ -2,7 +2,7 @@ name: Auditor - Technical Debt Analysis
 
 on:
   schedule:
-    - cron: '0 8,14,20 * * *'  # Three times daily at 8 AM, 2 PM, and 8 PM UTC
+    - cron: '0 9 * * *'  # Once daily at 9 AM UTC
   workflow_dispatch:
 
 jobs:
@@ -27,6 +27,17 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      - name: Install and initialize qlty
+        run: |
+          # Install qlty
+          curl https://qlty.sh | bash
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+          
+          # Ensure .qlty is never committed
+          if ! grep -q "^\.qlty/" .gitignore 2>/dev/null; then
+            echo ".qlty/" >> .gitignore
+          fi
+
       - name: Analyze codebase for technical debt
         uses: 2mawi2/claude-code-action-extended@main
         with:
@@ -37,95 +48,115 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            You are a code auditor tasked with finding technical debt in this Rust codebase.
+            You are a senior software architect focused on finding technical debt that impacts code maintainability and changeability.
             
-            Please analyze the codebase comprehensively to identify technical debt, including but not limited to:
-            - Error handling issues (unwrap, expect, panic)
-            - Code duplication
-            - Complex functions that need refactoring
-            - Missing tests
-            - Outdated dependencies
-            - Performance bottlenecks
-            - Security vulnerabilities
-            - Poor naming or unclear code
-            - Missing documentation
-            - Architectural issues
+            OBJECTIVE: Find real technical debt that makes the codebase hard to change, understand, or extend. Focus on issues that actually slow down development.
             
-            Use all available tools to:
-            1. Explore the codebase structure
-            2. Read and analyze code files
-            3. Run tests to understand coverage
-            4. Check for linting issues
-            5. Analyze git history for problematic areas
+            SETUP PHASE:
+            1. Run: yes | qlty init
+               - This will initialize qlty and create necessary config files
+            2. Verify .qlty/ is in .gitignore (it should be added automatically)
             
-            For each significant technical debt item found:
-            1. Write the issue details to a JSON file in the workspace:
-               - Create directory: .github-issues/
-               - Filename: .github-issues/issue_1.json, issue_2.json, etc.
-               - JSON format:
-                 {
-                   "title": "Clear title describing the problem",
-                   "body": "Detailed description including:\n- What the issue is\n- Why it's important to fix\n- Code examples if relevant\n- Suggested approach for fixing",
-                   "labels": ["technical-debt"]
-                 }
-            2. Create the directory first: Use Write tool to create .github-issues/.gitkeep
-            3. Then write each issue as a separate JSON file
+            ANALYSIS WORKFLOW:
+            1. Run: qlty smells --all --no-snippets
+               - Look for "High total complexity" (count > 50)
+               - Find "Deeply nested control flow" (level > 4)
+               - Identify duplication with high mass scores (mass > 200)
+               - Note functions with high complexity (count > 20)
             
-            Create only 1 issue per run to focus on fixing it completely.
-            Choose the most critical technical debt issue you find.
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail)"
+            2. Run: qlty metrics --all --sort complexity --limit 20
+               - Focus on files with complexity > 50
+               - Check for files with > 300 LOC
+               - Note classes with LCOM > 1 (indicates low cohesion)
+               - Identify files with many functions (> 20)
+            
+            3. For the most complex files, run: qlty metrics --functions <file>
+               - Find functions with cyclomatic complexity > 10
+               - Identify functions > 50 lines
+               - Look for functions with many parameters (> 5)
+            
+            4. Run: qlty metrics --all --max-depth 2
+               - Identify modules/directories with high overall complexity
+               - Find areas of the codebase that need architectural improvements
+            
+            PRIORITIZE THESE ISSUES (in order of impact):
+            1. Massive code duplication (> 150 lines repeated across files)
+            2. God classes/modules (files > 500 LOC with > 20 methods)
+            3. Functions with cyclomatic complexity > 20
+            4. Deeply nested code (nesting level > 4)
+            5. Low cohesion (LCOM > 1) in large classes
+            6. Long parameter lists (> 5 parameters)
+            
+            IGNORE THESE:
+            - Simple unwrap() on static data or tests
+            - TODO/FIXME comments
+            - Performance optimizations
+            - Generated code or external dependencies
+            - Test files (unless they're > 1000 lines)
+            - Minor naming issues
+            
+            CREATE 3-5 ISSUES:
+            - Focus on different types of debt (don't create 5 duplication issues)
+            - Prioritize by impact on development velocity
+            - Each issue should be actionable with clear refactoring steps
+            
+            For each issue, create a JSON file in .github-issues/ with:
+            - Clear title describing the maintainability problem
+            - Detailed body explaining:
+              * Current metrics (complexity, LOC, duplication mass, etc.)
+              * Why this slows down development
+              * Concrete refactoring approach
+              * Expected improvement in metrics
+            
+            CLEANUP: After analysis, run: rm -rf .qlty/
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just lint),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo clippy),Bash(cargo clippy *),Bash(git log),Bash(git log *),Bash(git blame),Bash(git shortlog),Bash(rg),Bash(grep),Bash(find),Bash(wc),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(yes | qlty init),Bash(qlty smells --all --no-snippets),Bash(qlty metrics --all --sort complexity --limit 20),Bash(qlty metrics --all --sort loc --limit 20),Bash(qlty metrics --all --max-depth 2),Bash(qlty metrics --all --max-depth 3),Bash(qlty metrics --functions *),Bash(rm -rf .qlty/)"
           timeout_minutes: "30"
           custom_instructions: |
-            You have been granted comprehensive tools for analyzing this Rust codebase for technical debt:
+            You have been granted comprehensive tools for analyzing codebases for technical debt that impacts maintainability:
             
-            **Available Tools Overview:**
-            - Edit, Read, Write, MultiEdit - File manipulation and code examination
-            - Glob, Grep, LS - File searching and directory navigation
-            - TodoRead, TodoWrite - Task tracking (optional for your analysis workflow)
-            - Bash commands - Run various analysis and testing commands
+            **Qlty Code Quality Tools (PRIMARY ANALYSIS TOOLS):**
+            - `yes | qlty init` - Initialize qlty (auto-answers prompts)
+            - `qlty smells --all --no-snippets` - Find duplication, complexity, and code smells
+              * Shows: complexity counts, nesting levels, duplication mass scores
+              * Example: "High total complexity (count = 79)" or "Found 177 lines of similar code"
+            - `qlty metrics --all --sort complexity --limit 20` - List most complex files
+              * Shows: classes, functions, fields, cyclomatic complexity, LCOM, LOC
+              * Focus on: complexity > 50, LOC > 300, LCOM > 1
+            - `qlty metrics --functions <file>` - Analyze specific file's functions
+              * Shows: per-function complexity and line counts
+              * Look for: functions > 50 lines, complexity > 10
+            - `qlty metrics --all --max-depth 2` - Module-level complexity analysis
+              * Helps identify architectural issues
+            - `rm -rf .qlty/` - Clean up qlty files after analysis
             
-            **Code Quality Analysis:**
-            - `just lint` - Run clippy to find code quality issues and potential bugs
-            - `just test` - Run all tests to check coverage and identify untested code
-            - `just test <pattern>` - Run specific tests to verify functionality
-            - `just status` - Get overall project status and health
-            - `cargo clippy -- -W clippy::all` - Detailed linting with all warnings enabled
-            - `cargo test --no-run` - List which tests exist without running them
+            **Traditional Analysis Tools:**
+            - `just lint` - Run clippy for Rust-specific issues
+            - `just test` - Check test coverage
+            - `rg` and `grep` - Search for specific patterns
+            - `find`, `wc`, `ls` - File system analysis
+            - Git commands - History and blame analysis
             
-            **Technical Debt Pattern Searching:**
-            - `rg "unwrap\(\)|expect\("` - Find unsafe error handling that can panic
-            - `rg "TODO|FIXME|HACK|XXX"` - Find marked technical debt comments
-            - `rg "panic!"` - Find explicit panic calls
-            - `rg "clone\(\)" --type rust` - Find potential performance issues from cloning
-            - `rg "unsafe"` - Find unsafe code blocks
-            - `grep -r "// @" --include="*.rs"` - Find developer annotations
+            **File Manipulation:**
+            - Edit, Read, Write, MultiEdit - Examine code in detail
+            - Glob, Grep, LS - Navigate codebase
             
-            **Code Metrics and History:**
-            - `wc -l src/**/*.rs` - Count total lines of code
-            - `find . -name "*.rs" -type f | wc -l` - Count number of Rust files
-            - `git log --oneline --since="6 months ago" --grep="fix"` - Find recent bug patterns
-            - `git log --oneline --grep="revert"` - Find reverted changes indicating problems
-            - `git blame <file>` - Identify frequently changed/problematic code
-            - `git shortlog -sn --since="3 months ago"` - See contributor activity
+            **Key Metrics to Focus On:**
+            - Complexity > 50 = needs refactoring
+            - Functions > 50 lines = violates single responsibility
+            - Files > 300 LOC = poor module boundaries
+            - Duplication mass > 200 = significant copy-paste
+            - LCOM > 1 = low cohesion (unrelated responsibilities)
+            - Nesting level > 4 = hard to understand
             
-            **File System Navigation:**
-            - `ls -la` - List directory contents
-            - `cat <file>` - Read entire files
-            - `head -50 <file>` - Preview file beginnings
-            - `tail -50 <file>` - Preview file endings
-            - Glob patterns like "src/**/*.rs" - Find files by pattern
-            - Grep for searching file contents
+            **Analysis Workflow:**
+            1. Initialize qlty first
+            2. Use qlty smells to find major issues
+            3. Use qlty metrics to quantify problems
+            4. Drill down into specific files with functions analysis
+            5. Create 3-5 diverse, high-impact issues
+            6. Clean up .qlty directory when done
             
-            **Recommended Analysis Workflow:**
-            1. Start with `just status` to understand project structure
-            2. Run `just lint` to identify immediate code quality issues
-            3. Run `just test` to check test coverage
-            4. Use `rg` commands to search for specific technical debt patterns
-            5. Examine problem areas with Read/Edit tools
-            6. Use git history to understand problem evolution
-            7. Create detailed issue for the most critical finding
-            
-            Remember: You're looking for the MOST CRITICAL technical debt that impacts reliability, maintainability, or security.
+            Focus on technical debt that makes code hard to change, not theoretical issues.
       
       - name: Create GitHub issues from analysis
         if: always()
