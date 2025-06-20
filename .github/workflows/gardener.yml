@@ -1,4 +1,4 @@
-name: Auditor - Technical Debt Analysis
+name: Gardener - Technical Debt Analysis
 
 on:
   schedule:
@@ -252,7 +252,7 @@ jobs:
               fi
             done
           else
-            echo "No issues directory found - the auditor may not have found any technical debt"
+            echo "No issues directory found - the gardener may not have found any technical debt"
             echo "Current directory contents:"
             ls -la
           fi
