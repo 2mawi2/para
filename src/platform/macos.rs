@@ -9,12 +9,12 @@ impl PlatformManager for MacOSPlatform {
         // Runtime check: This method should NEVER be called from tests
         // Tests should use mock IDE commands or cfg!(test) guards to prevent reaching this code
         if cfg!(test) {
-            panic!(
-                "CRITICAL: close_ide_window called from test environment! \
+            return Err(crate::utils::ParaError::ide_error(format!(
+                "IDE window operations not supported in test environment. \
                  This indicates a test isolation failure. \
                  Session: {}, IDE: {}",
                 session_id, ide_name
-            );
+            )));
         }
 
         // Only works on macOS with osascript

@@ -81,15 +81,15 @@ const NOUNS: &[&str] = &[
     "pepper", "salt", "lemon", "lime", "orange", "apple", "cherry", "berry", "grape", "peach",
 ];
 
-pub fn generate_friendly_name() -> String {
+pub fn generate_friendly_name() -> Result<String> {
     let mut rng = rand::thread_rng();
     let adjective = ADJECTIVES
         .choose(&mut rng)
-        .expect("ADJECTIVES array should never be empty");
+        .ok_or_else(|| ParaError::config_error("Name generation failed: adjectives list empty"))?;
     let noun = NOUNS
         .choose(&mut rng)
-        .expect("NOUNS array should never be empty");
-    format!("{}_{}", adjective, noun)
+        .ok_or_else(|| ParaError::config_error("Name generation failed: nouns list empty"))?;
+    Ok(format!("{}_{}", adjective, noun))
 }
 
 pub fn generate_timestamp() -> String {
@@ -101,15 +101,15 @@ pub fn generate_friendly_branch_name(prefix: &str, session_name: &str) -> String
     format!("{}/{}", prefix, session_name)
 }
 
-pub fn generate_unique_name(existing_names: &[String]) -> String {
+pub fn generate_unique_name(existing_names: &[String]) -> Result<String> {
     let mut attempts = 0;
     let max_attempts = 50; // Reduced since we have 6000+ combinations
 
     // First, try to find a unique name without any suffix
     loop {
-        let name = generate_friendly_name();
+        let name = generate_friendly_name()?;
         if !existing_names.contains(&name) {
-            return name;
+            return Ok(name);
         }
 
         attempts += 1;
@@ -120,17 +120,17 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
 
     // If we can't find a unique name, try with small random suffixes
     for suffix in 1..100 {
-        let name = generate_friendly_name();
+        let name = generate_friendly_name()?;
         let candidate = format!("{}_{}", name, suffix);
         if !existing_names.contains(&candidate) {
-            return candidate;
+            return Ok(candidate);
         }
     }
 
     // Final fallback: use timestamp suffix
-    let name = generate_friendly_name();
+    let name = generate_friendly_name()?;
     let timestamp = generate_timestamp();
-    format!("{}_{}", name, timestamp)
+    Ok(format!("{}_{}", name, timestamp))
 }
 
 pub fn validate_session_name(name: &str) -> Result<()> {
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_generate_friendly_name() {
-        let name = generate_friendly_name();
+        let name = generate_friendly_name().unwrap();
         assert!(name.contains('_'));
         assert!(name.len() > 3);
 
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_generate_unique_name() {
         let existing = vec!["used_name".to_string(), "another_used".to_string()];
-        let unique = generate_unique_name(&existing);
+        let unique = generate_unique_name(&existing).unwrap();
         assert!(!existing.contains(&unique));
         assert!(unique.contains('_'));
     }
@@ -262,7 +262,7 @@ mod tests {
     fn test_generate_unique_name_no_collisions() {
         // Test with empty list - should generate clean name
         let existing = vec![];
-        let unique = generate_unique_name(&existing);
+        let unique = generate_unique_name(&existing).unwrap();
         assert!(unique.contains('_'));
         assert!(!unique.contains('-')); // Should be Docker-style without timestamp
 
@@ -283,7 +283,7 @@ mod tests {
         // Add a specific collision to test
         existing.push("eager_alpha".to_string());
 
-        let unique = generate_unique_name(&existing);
+        let unique = generate_unique_name(&existing).unwrap();
         assert!(!existing.contains(&unique));
         assert!(unique.contains('_'));
 
@@ -300,7 +300,7 @@ mod tests {
 
         // First generate many unique names to test clean generation
         for _ in 0..10 {
-            let name = generate_unique_name(&existing);
+            let name = generate_unique_name(&existing).unwrap();
             assert!(!existing.contains(&name));
             existing.push(name);
         }
