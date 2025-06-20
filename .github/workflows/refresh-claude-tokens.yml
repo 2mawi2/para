@@ -1,0 +1,108 @@
+name: Refresh Claude OAuth Tokens
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every 6 hours to ensure tokens don't expire
+    - cron: '0 */6 * * *'
+
+jobs:
+  refresh-tokens:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check token expiration
+        id: check-expiry
+        env:
+          CLAUDE_EXPIRES_AT: ${{ secrets.CLAUDE_EXPIRES_AT }}
+        run: |
+          if [ -z "$CLAUDE_EXPIRES_AT" ]; then
+            echo "No expiry time set, skipping refresh"
+            echo "needs_refresh=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if token expires within next hour
+          EXPIRES_TIMESTAMP=$(date -d "$CLAUDE_EXPIRES_AT" +%s 2>/dev/null || echo 0)
+          CURRENT_TIMESTAMP=$(date +%s)
+          BUFFER_SECONDS=3600  # 1 hour buffer
+          
+          if [ $((EXPIRES_TIMESTAMP - CURRENT_TIMESTAMP)) -lt $BUFFER_SECONDS ]; then
+            echo "Token expires soon or has expired, refresh needed"
+            echo "needs_refresh=true" >> $GITHUB_OUTPUT
+          else
+            echo "Token still valid for more than 1 hour"
+            echo "needs_refresh=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify about manual refresh requirement
+        if: steps.check-expiry.outputs.needs_refresh == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔄 Claude OAuth Token Refresh Required',
+              body: `## Action Required: Claude OAuth Token Expired or Expiring Soon
+
+The Claude OAuth access token has expired or will expire within the next hour.
+
+### To refresh the tokens:
+
+1. On your local machine with Claude Code installed, run:
+   \`\`\`bash
+   just refresh-claude-secrets
+   \`\`\`
+
+2. This will:
+   - Extract fresh tokens from your Claude Code installation
+   - Update the GitHub repository secrets automatically
+
+### Why is this needed?
+
+Claude's OAuth access tokens have short expiration times. Until we implement automatic refresh using the refresh token, manual updates are required.
+
+### Automated Workflows Affected:
+- Claude PR Assistant
+- Claude Auto Review
+- Auditor workflows
+
+This issue will auto-close when tokens are refreshed.`,
+              labels: ['maintenance', 'claude-oauth']
+            });
+            
+            console.log(`Created issue #${issue.data.number} for token refresh`);
+
+      - name: Close previous token refresh issues
+        if: steps.check-expiry.outputs.needs_refresh == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'claude-oauth',
+              state: 'open'
+            });
+            
+            for (const issue of issues.data) {
+              if (issue.title.includes('Claude OAuth Token Refresh Required')) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '✅ Claude OAuth tokens have been refreshed successfully.'
+                });
+                
+                console.log(`Closed issue #${issue.number}`);
+              }
+            }
