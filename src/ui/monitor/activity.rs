@@ -170,28 +170,25 @@ fn get_last_commit_time(worktree_path: &Path) -> Option<DateTime<Utc>> {
 /// Process git command output to find latest file modification time
 fn process_git_output_for_latest_time(worktree_path: &Path, output: &[u8]) -> Option<SystemTime> {
     let mut latest: Option<SystemTime> = None;
-    
+
     for line in output.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
         let filename = match std::str::from_utf8(line) {
             Ok(name) => name,
             Err(_) => continue, // Skip invalid UTF-8 filenames
         };
         let filepath = worktree_path.join(filename);
-        
+
         if let Some(modified) = get_file_modification_time(&filepath) {
             update_latest_time(&mut latest, modified);
         }
     }
-    
+
     latest
 }
 
 /// Get file modification time safely
 fn get_file_modification_time(file_path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(file_path)
-        .ok()?
-        .modified()
-        .ok()
+    std::fs::metadata(file_path).ok()?.modified().ok()
 }
 
 /// Update latest time if the new time is more recent
