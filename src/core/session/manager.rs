@@ -181,6 +181,20 @@ impl SessionManager {
             return Ok(Vec::new());
         }
 
+        let session_files = self.collect_session_files()?;
+
+        let sessions = session_files
+            .iter()
+            .filter_map(|path| self.process_session_file(path).unwrap_or(None))
+            .collect::<Vec<_>>();
+
+        let mut sessions = sessions;
+        sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        crate::utils::debug_log(&format!("Found {} sessions", sessions.len()));
+        Ok(sessions)
+    }
+
+    fn collect_session_files(&self) -> Result<Vec<PathBuf>> {
         let entries = match fs::read_dir(&self.state_dir) {
             Ok(entries) => entries,
             Err(e) => {
@@ -189,7 +203,7 @@ impl SessionManager {
             }
         };
 
-        let mut sessions = Vec::new();
+        let mut session_files = Vec::new();
 
         for entry in entries {
             let entry = match entry {
@@ -201,29 +215,40 @@ impl SessionManager {
             };
 
             let path = entry.path();
-
             if path.is_file() && path.extension().is_some_and(|ext| ext == "state") {
-                if let Some(stem) = path.file_stem() {
-                    if let Some(session_name) = stem.to_str() {
-                        crate::utils::debug_log(&format!("Loading session: {}", session_name));
-                        match self.load_state(session_name) {
-                            Ok(state) => sessions.push(state),
-                            Err(e) => {
-                                crate::utils::debug_log(&format!(
-                                    "Failed to load session {}: {}",
-                                    session_name, e
-                                ));
-                                continue;
-                            }
-                        }
-                    }
-                }
+                session_files.push(path);
             }
         }
 
-        sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        crate::utils::debug_log(&format!("Found {} sessions", sessions.len()));
-        Ok(sessions)
+        Ok(session_files)
+    }
+
+    fn extract_session_name(&self, path: &Path) -> Result<Option<String>> {
+        let Some(stem) = path.file_stem() else {
+            return Ok(None);
+        };
+
+        let Some(session_name) = stem.to_str() else {
+            return Ok(None);
+        };
+
+        Ok(Some(session_name.to_string()))
+    }
+
+    fn process_session_file(&self, path: &Path) -> Result<Option<SessionState>> {
+        let Some(session_name) = self.extract_session_name(path)? else {
+            return Ok(None);
+        };
+
+        crate::utils::debug_log(&format!("Loading session: {}", session_name));
+
+        match self.load_state(&session_name) {
+            Ok(state) => Ok(Some(state)),
+            Err(e) => {
+                crate::utils::debug_log(&format!("Failed to load session {}: {}", session_name, e));
+                Ok(None)
+            }
+        }
     }
 
     pub fn find_session_by_path(&self, path: &Path) -> Result<Option<SessionState>> {
