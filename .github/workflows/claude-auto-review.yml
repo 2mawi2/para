@@ -181,7 +181,8 @@ jobs:
             7. STEPS 2-5: Review using the remaining methodological approaches
             8. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
             9. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff"
+          
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
