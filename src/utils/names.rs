@@ -133,67 +133,110 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
     format!("{}_{}", name, timestamp)
 }
 
-pub fn validate_session_name(name: &str) -> Result<()> {
-    if name.is_empty() {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name cannot be empty",
-        ));
+struct SessionNameValidator;
+
+impl SessionNameValidator {
+    pub fn validate(name: &str) -> Result<()> {
+        let validations = [
+            Self::validate_not_empty,
+            Self::validate_length,
+            Self::validate_single_char,
+            Self::validate_format,
+            Self::validate_edge_chars,
+            Self::validate_consecutive_chars,
+        ];
+        
+        for validation in validations {
+            validation(name)?;
+        }
+        Ok(())
     }
-
-    if name.len() > 100 {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name cannot be longer than 100 characters",
-        ));
-    }
-
-    let valid_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
-        .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
-
-    if name.len() == 1 {
-        if let Some(first_char) = name.chars().next() {
-            if !first_char.is_alphanumeric() {
-                return Err(ParaError::invalid_session_name(
-                    name,
-                    "Single character session name must be alphanumeric",
-                ));
-            }
-        } else {
+    
+    fn validate_not_empty(name: &str) -> Result<()> {
+        if name.is_empty() {
             return Err(ParaError::invalid_session_name(
                 name,
-                "Unable to access first character of session name",
+                "Session name cannot be empty",
             ));
         }
-    } else if !valid_regex.is_match(name) {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name must start and end with alphanumeric characters and contain only letters, numbers, hyphens, and underscores"
-        ));
+        Ok(())
     }
-
-    if name.starts_with('-') || name.ends_with('-') {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name cannot start or end with a hyphen",
-        ));
+    
+    fn validate_length(name: &str) -> Result<()> {
+        if name.len() > 100 {
+            return Err(ParaError::invalid_session_name(
+                name,
+                "Session name cannot be longer than 100 characters",
+            ));
+        }
+        Ok(())
     }
-
-    if name.starts_with('_') || name.ends_with('_') {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name cannot start or end with an underscore",
-        ));
+    
+    fn validate_single_char(name: &str) -> Result<()> {
+        if name.len() == 1 {
+            if let Some(first_char) = name.chars().next() {
+                if !first_char.is_alphanumeric() {
+                    return Err(ParaError::invalid_session_name(
+                        name,
+                        "Single character session name must be alphanumeric",
+                    ));
+                }
+            } else {
+                return Err(ParaError::invalid_session_name(
+                    name,
+                    "Unable to access first character of session name",
+                ));
+            }
+        }
+        Ok(())
     }
-
-    if name.contains("__") || name.contains("--") {
-        return Err(ParaError::invalid_session_name(
-            name,
-            "Session name cannot contain consecutive underscores or hyphens",
-        ));
+    
+    fn validate_format(name: &str) -> Result<()> {
+        if name.len() > 1 {
+            let valid_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
+                .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
+            
+            if !valid_regex.is_match(name) {
+                return Err(ParaError::invalid_session_name(
+                    name,
+                    "Session name must start and end with alphanumeric characters and contain only letters, numbers, hyphens, and underscores"
+                ));
+            }
+        }
+        Ok(())
     }
+    
+    fn validate_edge_chars(name: &str) -> Result<()> {
+        if name.starts_with('-') || name.ends_with('-') {
+            return Err(ParaError::invalid_session_name(
+                name,
+                "Session name cannot start or end with a hyphen",
+            ));
+        }
+        
+        if name.starts_with('_') || name.ends_with('_') {
+            return Err(ParaError::invalid_session_name(
+                name,
+                "Session name cannot start or end with an underscore",
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    fn validate_consecutive_chars(name: &str) -> Result<()> {
+        if name.contains("__") || name.contains("--") {
+            return Err(ParaError::invalid_session_name(
+                name,
+                "Session name cannot contain consecutive underscores or hyphens",
+            ));
+        }
+        Ok(())
+    }
+}
 
-    Ok(())
+pub fn validate_session_name(name: &str) -> Result<()> {
+    SessionNameValidator::validate(name)
 }
 
 #[cfg(test)]
