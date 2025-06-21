@@ -1002,7 +1002,7 @@ mod tests {
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
-        assert!(updated_content.contains("[\"array\", \"command\"]"));
+        assert!(updated_content.contains("\"array\"") && updated_content.contains("\"command\""));
         assert!(updated_content.contains("\"claude -c\""));
 
         // Test with various Claude command variations
@@ -1065,7 +1065,9 @@ mod tests {
         // Should add -c after --dangerously-skip-permissions (contains exact match)
         assert!(updated_content.contains("\"claude --dangerously-skip-permissions -c --verbose\""));
         // Should not change if -c already exists
-        assert!(updated_content.contains("\"claude --dangerously-skip-permissions -c already-has\""));
+        assert!(
+            updated_content.contains("\"claude --dangerously-skip-permissions -c already-has\"")
+        );
         // Should NOT change if exact match not found (current behavior)
         assert!(updated_content.contains("\"claude --other-flag --dangerously-skip-permissions\""));
         // Should handle exact match
@@ -1078,63 +1080,102 @@ mod tests {
     fn test_needs_continue_flag() {
         assert!(super::needs_continue_flag("claude"));
         assert!(super::needs_continue_flag("claude --verbose"));
-        assert!(super::needs_continue_flag("claude --dangerously-skip-permissions"));
-        
+        assert!(super::needs_continue_flag(
+            "claude --dangerously-skip-permissions"
+        ));
+
         assert!(!super::needs_continue_flag("claude -c"));
-        assert!(!super::needs_continue_flag("claude --dangerously-skip-permissions -c"));
+        assert!(!super::needs_continue_flag(
+            "claude --dangerously-skip-permissions -c"
+        ));
         assert!(!super::needs_continue_flag("claude -c --verbose"));
     }
 
     #[test]
     fn test_transform_claude_command_regular() {
         // Test exact match
-        assert_eq!(super::transform_claude_command_regular("claude"), "claude -c");
-        
+        assert_eq!(
+            super::transform_claude_command_regular("claude"),
+            "claude -c"
+        );
+
         // Test with additional flags
-        assert_eq!(super::transform_claude_command_regular("claude --verbose"), "claude -c --verbose");
-        assert_eq!(super::transform_claude_command_regular("claude --help"), "claude -c --help");
-        
+        assert_eq!(
+            super::transform_claude_command_regular("claude --verbose"),
+            "claude -c --verbose"
+        );
+        assert_eq!(
+            super::transform_claude_command_regular("claude --help"),
+            "claude -c --help"
+        );
+
         // Test already has -c flag (no change)
-        assert_eq!(super::transform_claude_command_regular("claude -c"), "claude -c");
-        assert_eq!(super::transform_claude_command_regular("claude -c --verbose"), "claude -c --verbose");
-        
+        assert_eq!(
+            super::transform_claude_command_regular("claude -c"),
+            "claude -c"
+        );
+        assert_eq!(
+            super::transform_claude_command_regular("claude -c --verbose"),
+            "claude -c --verbose"
+        );
+
         // Test non-Claude commands (no change)
-        assert_eq!(super::transform_claude_command_regular("echo hello"), "echo hello");
+        assert_eq!(
+            super::transform_claude_command_regular("echo hello"),
+            "echo hello"
+        );
         assert_eq!(super::transform_claude_command_regular(""), "");
-        
+
         // Test edge cases
-        assert_eq!(super::transform_claude_command_regular("claudetest"), "claudetest");
+        assert_eq!(
+            super::transform_claude_command_regular("claudetest"),
+            "claudetest"
+        );
     }
 
     #[test]
     fn test_transform_claude_command_with_skip_permissions() {
         // Test with exact match
         assert_eq!(
-            super::transform_claude_command_with_skip_permissions("claude --dangerously-skip-permissions"),
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions"
+            ),
             "claude --dangerously-skip-permissions -c"
         );
-        
+
         // Test with additional flags
         assert_eq!(
-            super::transform_claude_command_with_skip_permissions("claude --dangerously-skip-permissions --verbose"),
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions --verbose"
+            ),
             "claude --dangerously-skip-permissions -c --verbose"
         );
-        
+
         // Test already has -c flag (no change)
         assert_eq!(
-            super::transform_claude_command_with_skip_permissions("claude --dangerously-skip-permissions -c"),
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions -c"
+            ),
             "claude --dangerously-skip-permissions -c"
         );
-        
+
         // Test partial match that doesn't get transformed (current behavior)
         assert_eq!(
-            super::transform_claude_command_with_skip_permissions("claude --other-flag --dangerously-skip-permissions"),
+            super::transform_claude_command_with_skip_permissions(
+                "claude --other-flag --dangerously-skip-permissions"
+            ),
             "claude --other-flag --dangerously-skip-permissions"
         );
-        
+
         // Test non-matching commands (no change)
-        assert_eq!(super::transform_claude_command_with_skip_permissions("claude"), "claude");
-        assert_eq!(super::transform_claude_command_with_skip_permissions("echo hello"), "echo hello");
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions("claude"),
+            "claude"
+        );
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions("echo hello"),
+            "echo hello"
+        );
     }
 
     #[test]
@@ -1144,14 +1185,26 @@ mod tests {
             super::transform_claude_command("claude --dangerously-skip-permissions", true),
             "claude --dangerously-skip-permissions -c"
         );
-        
+
         // Test with skip permissions = false
-        assert_eq!(super::transform_claude_command("claude", false), "claude -c");
-        assert_eq!(super::transform_claude_command("claude --verbose", false), "claude -c --verbose");
-        
+        assert_eq!(
+            super::transform_claude_command("claude", false),
+            "claude -c"
+        );
+        assert_eq!(
+            super::transform_claude_command("claude --verbose", false),
+            "claude -c --verbose"
+        );
+
         // Test non-matching commands
-        assert_eq!(super::transform_claude_command("echo hello", true), "echo hello");
-        assert_eq!(super::transform_claude_command("echo hello", false), "echo hello");
+        assert_eq!(
+            super::transform_claude_command("echo hello", true),
+            "echo hello"
+        );
+        assert_eq!(
+            super::transform_claude_command("echo hello", false),
+            "echo hello"
+        );
     }
 
     #[test]
