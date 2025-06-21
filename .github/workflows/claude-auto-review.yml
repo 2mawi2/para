@@ -3,16 +3,22 @@ name: Claude Auto Review
 on:
   pull_request:
     types: [opened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
 
 jobs:
   auto-review:
     runs-on: ubuntu-latest
     # Prevent concurrent runs on the same PR to avoid race conditions
     concurrency:
-      group: claude-pr-${{ github.event.pull_request.number }}
+      group: claude-pr-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
       cancel-in-progress: false
-    # Only review PRs created by 2mawi2
-    if: github.event.pull_request.user.login == '2mawi2'
+    # Only review PRs created by 2mawi2 (skip for manual triggers)
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.user.login == '2mawi2'
     permissions:
       contents: read
       pull-requests: write
@@ -253,7 +259,7 @@ jobs:
             echo "Posting iteration $ITERATION comment..."
             
             # Post the comment to the PR
-            gh pr comment ${{ github.event.pull_request.number }} \
+            gh pr comment ${{ github.event.pull_request.number || github.event.inputs.pr_number }} \
               --body "$COMMENT_BODY" \
               --repo ${{ github.repository }}
             
