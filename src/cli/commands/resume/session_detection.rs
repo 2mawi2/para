@@ -185,4 +185,3 @@ fn list_and_select_session(
 
     Ok(())
 }
-
