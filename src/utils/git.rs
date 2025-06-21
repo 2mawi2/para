@@ -1,3 +1,4 @@
+use crate::core::git::GitService;
 use crate::utils::{ParaError, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -76,6 +77,51 @@ pub fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
         .map_err(|e| ParaError::git_error(format!("Failed to canonicalize repository root: {}", e)))
 }
 
+/// Utility for listing and processing archived branches with shared filtering logic
+pub struct BranchLister<'a> {
+    git_service: &'a GitService,
+    branch_prefix: String,
+}
+
+impl<'a> BranchLister<'a> {
+    pub fn new(git_service: &'a GitService, branch_prefix: &str) -> Self {
+        Self {
+            git_service,
+            branch_prefix: branch_prefix.to_string(),
+        }
+    }
+
+    /// List archived branches and apply a parser function to each branch
+    /// Returns a sorted vector of parsed results (sorted by timestamp descending)
+    pub fn list_archived_branches_with_parser<T, F>(&self, parser: F) -> Result<Vec<T>>
+    where
+        F: Fn(&str) -> Result<Option<T>>,
+        T: HasTimestamp,
+    {
+        let archived_branches = self
+            .git_service
+            .branch_manager()
+            .list_archived_branches(&self.branch_prefix)?;
+
+        let mut entries = Vec::new();
+
+        for archived_branch in archived_branches {
+            if let Some(entry) = parser(&archived_branch)? {
+                entries.push(entry);
+            }
+        }
+
+        // Sort by timestamp in descending order (most recent first)
+        entries.sort_by(|a, b| b.get_timestamp().cmp(a.get_timestamp()));
+        Ok(entries)
+    }
+}
+
+/// Trait for types that have a timestamp field for sorting
+pub trait HasTimestamp {
+    fn get_timestamp(&self) -> &str;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +193,158 @@ mod tests {
             // Since we canonicalize the path, it should not contain ".." or other relative components
             assert!(!repo_root.to_string_lossy().contains(".."));
         }
+    }
+
+    // Test types for BranchLister tests
+    #[derive(Debug, Clone)]
+    struct TestArchiveEntry {
+        name: String,
+        timestamp: String,
+    }
+
+    impl HasTimestamp for TestArchiveEntry {
+        fn get_timestamp(&self) -> &str {
+            &self.timestamp
+        }
+    }
+
+    #[test]
+    fn test_branch_lister_empty_list() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let branch_lister = BranchLister::new(&git_service, "test");
+
+        let parser = |_branch: &str| -> Result<Option<TestArchiveEntry>> {
+            // No branches to parse in empty repo
+            Ok(None)
+        };
+
+        let entries = branch_lister.list_archived_branches_with_parser(parser).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_branch_lister_with_archived_branches() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let branch_manager = git_service.branch_manager();
+        let initial_branch = git_service.repository().get_current_branch().unwrap();
+        
+        // Create some archived branches
+        let archived_branches = vec![
+            "test/archived/20240301-120000/session-1",
+            "test/archived/20240302-130000/session-2", 
+            "test/archived/20240303-140000/session-3",
+        ];
+
+        for branch in &archived_branches {
+            branch_manager.create_branch(branch, &initial_branch).unwrap();
+        }
+
+        let branch_lister = BranchLister::new(&git_service, "test");
+
+        let parser = |branch: &str| -> Result<Option<TestArchiveEntry>> {
+            // Simple parser that extracts session name and timestamp
+            if let Some(parts) = branch.split('/').collect::<Vec<_>>().get(2..) {
+                if parts.len() >= 2 {
+                    return Ok(Some(TestArchiveEntry {
+                        name: parts[1].to_string(),
+                        timestamp: parts[0].to_string(),
+                    }));
+                }
+            }
+            Ok(None)
+        };
+
+        let entries = branch_lister.list_archived_branches_with_parser(parser).unwrap();
+        
+        // Should have 3 entries
+        assert_eq!(entries.len(), 3);
+        
+        // Should be sorted by timestamp descending (most recent first)
+        assert_eq!(entries[0].timestamp, "20240303-140000");
+        assert_eq!(entries[1].timestamp, "20240302-130000");
+        assert_eq!(entries[2].timestamp, "20240301-120000");
+        
+        // Check session names
+        assert_eq!(entries[0].name, "session-3");
+        assert_eq!(entries[1].name, "session-2");
+        assert_eq!(entries[2].name, "session-1");
+    }
+
+    #[test]
+    fn test_branch_lister_with_parser_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let branch_manager = git_service.branch_manager();
+        let initial_branch = git_service.repository().get_current_branch().unwrap();
+        
+        // Create an archived branch
+        branch_manager.create_branch("test/archived/20240301-120000/session-1", &initial_branch).unwrap();
+
+        let branch_lister = BranchLister::new(&git_service, "test");
+
+        let parser = |_branch: &str| -> Result<Option<TestArchiveEntry>> {
+            // Parser that always fails
+            Err(ParaError::git_error("Parser error".to_string()))
+        };
+
+        let result = branch_lister.list_archived_branches_with_parser(parser);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_branch_lister_with_partial_parsing() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let branch_manager = git_service.branch_manager();
+        let initial_branch = git_service.repository().get_current_branch().unwrap();
+        
+        // Create some archived branches
+        let archived_branches = vec![
+            "test/archived/20240301-120000/session-1",
+            "test/archived/invalid-format/session-2", // This should be skipped
+            "test/archived/20240303-140000/session-3",
+        ];
+
+        for branch in &archived_branches {
+            branch_manager.create_branch(branch, &initial_branch).unwrap();
+        }
+
+        let branch_lister = BranchLister::new(&git_service, "test");
+
+        let parser = |branch: &str| -> Result<Option<TestArchiveEntry>> {
+            // Parser that only accepts valid timestamps
+            if let Some(parts) = branch.split('/').collect::<Vec<_>>().get(2..) {
+                if parts.len() >= 2 && parts[0].len() == 15 && parts[0].contains('-') {
+                    return Ok(Some(TestArchiveEntry {
+                        name: parts[1].to_string(),
+                        timestamp: parts[0].to_string(),
+                    }));
+                }
+            }
+            Ok(None) // Skip invalid formats
+        };
+
+        let entries = branch_lister.list_archived_branches_with_parser(parser).unwrap();
+        
+        // Should have 2 entries (invalid format skipped)
+        assert_eq!(entries.len(), 2);
+        
+        // Should be sorted by timestamp descending
+        assert_eq!(entries[0].timestamp, "20240303-140000");
+        assert_eq!(entries[1].timestamp, "20240301-120000");
     }
 }
