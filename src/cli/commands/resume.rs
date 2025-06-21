@@ -1,428 +1,28 @@
-use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
-use crate::core::git::{GitOperations, GitService, SessionEnvironment};
-use crate::core::ide::IdeManager;
-use crate::core::session::{SessionManager, SessionStatus};
-use crate::utils::{ParaError, Result};
-use dialoguer::Select;
-use serde_json::Value;
-use std::env;
-use std::fs;
-use std::path::Path;
+use crate::core::git::GitService;
+use crate::core::session::SessionManager;
+use crate::utils::Result;
 
-#[derive(Debug, PartialEq)]
-enum TaskConfiguration {
-    HasPromptFile { has_skip_permissions: bool },
-    HasContinueFlag { has_skip_permissions: bool },
-    NeedsTransformation { has_skip_permissions: bool },
-}
+mod orchestrator;
+mod session_detector;
+mod task_transformer;
 
-#[derive(Debug)]
-enum TaskTransformation {
-    RemovePromptFileAndAddContinue { has_skip_permissions: bool },
-    AddContinueFlag { has_skip_permissions: bool },
-    NoChange,
-}
+use orchestrator::ResumeOrchestrator;
 
 pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
-    validate_resume_args(&args)?;
-
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
-
-    match args.session {
-        Some(session_name) => resume_specific_session(&config, &git_service, &session_name),
-        None => detect_and_resume_session(&config, &git_service, &session_manager),
-    }
+    
+    let orchestrator = ResumeOrchestrator::new(&config, &git_service, &session_manager);
+    orchestrator.execute(&args)
 }
 
-fn resume_specific_session(
-    config: &Config,
-    git_service: &GitService,
-    session_name: &str,
-) -> Result<()> {
-    let session_manager = SessionManager::new(config);
-
-    if session_manager.session_exists(session_name) {
-        let mut session_state = session_manager.load_state(session_name)?;
-
-        if !session_state.worktree_path.exists() {
-            let branch_to_match = session_state.branch.clone();
-            if let Some(wt) = git_service
-                .list_worktrees()?
-                .into_iter()
-                .find(|w| w.branch == branch_to_match)
-            {
-                session_state.worktree_path = wt.path.clone();
-                session_manager.save_state(&session_state)?;
-            } else if let Some(wt) = git_service.list_worktrees()?.into_iter().find(|w| {
-                w.path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n.starts_with(session_name))
-                    .unwrap_or(false)
-            }) {
-                session_state.worktree_path = wt.path.clone();
-                session_manager.save_state(&session_state)?;
-            } else {
-                return Err(ParaError::session_not_found(format!(
-                    "Session '{}' exists but worktree path '{}' not found",
-                    session_name,
-                    session_state.worktree_path.display()
-                )));
-            }
-        }
-
-        // Ensure CLAUDE.local.md exists for the session
-        create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
-
-        launch_ide_for_session(config, &session_state.worktree_path)?;
-        println!("✅ Resumed session '{}'", session_name);
-    } else {
-        // Fallback: maybe the state file was timestamped (e.g. test4_20250611-XYZ)
-        if let Some(candidate) = session_manager
-            .list_sessions()?
-            .into_iter()
-            .find(|s| s.name.starts_with(session_name))
-        {
-            // recurse with the full name
-            return resume_specific_session(config, git_service, &candidate.name);
-        }
-        // original branch/path heuristic
-        let worktrees = git_service.list_worktrees()?;
-        let matching_worktree = worktrees
-            .iter()
-            .find(|wt| {
-                wt.branch.contains(session_name)
-                    || wt
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .map(|name| name.contains(session_name))
-                        .unwrap_or(false)
-            })
-            .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
-
-        // Try to find session name from matching worktree
-        if let Some(session_name) = session_manager
-            .list_sessions()?
-            .into_iter()
-            .find(|s| {
-                s.worktree_path == matching_worktree.path || s.branch == matching_worktree.branch
-            })
-            .map(|s| s.name)
-        {
-            create_claude_local_md(&matching_worktree.path, &session_name)?;
-        } else {
-            // Fallback: use session name from search
-            create_claude_local_md(&matching_worktree.path, session_name)?;
-        }
-
-        launch_ide_for_session(config, &matching_worktree.path)?;
-        println!(
-            "✅ Resumed session at '{}'",
-            matching_worktree.path.display()
-        );
-    }
-
-    Ok(())
-}
-
-fn detect_and_resume_session(
-    config: &Config,
-    git_service: &GitService,
-    session_manager: &SessionManager,
-) -> Result<()> {
-    let current_dir = env::current_dir()?;
-
-    match git_service.validate_session_environment(&current_dir)? {
-        SessionEnvironment::Worktree { branch, .. } => {
-            println!("Current directory is a worktree for branch: {}", branch);
-
-            // Try to find session name from current directory or branch
-            if let Some(session_name) = session_manager
-                .list_sessions()?
-                .into_iter()
-                .find(|s| s.worktree_path == current_dir || s.branch == branch)
-                .map(|s| s.name)
-            {
-                create_claude_local_md(&current_dir, &session_name)?;
-            }
-
-            launch_ide_for_session(config, &current_dir)?;
-            println!("✅ Resumed current session");
-            Ok(())
-        }
-        SessionEnvironment::MainRepository => {
-            println!("Current directory is the main repository");
-            list_and_select_session(config, git_service, session_manager)
-        }
-        SessionEnvironment::Invalid => {
-            println!("Current directory is not part of a para session");
-            list_and_select_session(config, git_service, session_manager)
-        }
-    }
-}
-
-fn list_and_select_session(
-    config: &Config,
-    _git_service: &GitService,
-    session_manager: &SessionManager,
-) -> Result<()> {
-    let sessions = session_manager.list_sessions()?;
-    let active_sessions: Vec<_> = sessions
-        .into_iter()
-        .filter(|s| matches!(s.status, SessionStatus::Active))
-        .collect();
-
-    if active_sessions.is_empty() {
-        println!("No active sessions found.");
-        return Ok(());
-    }
-
-    println!("Active sessions:");
-    for (i, session) in active_sessions.iter().enumerate() {
-        println!("  {}: {} ({})", i + 1, session.name, session.branch);
-    }
-
-    let selection = Select::new()
-        .with_prompt("Select session to resume")
-        .items(&active_sessions.iter().map(|s| &s.name).collect::<Vec<_>>())
-        .interact();
-
-    if let Ok(index) = selection {
-        let session = &active_sessions[index];
-
-        if !session.worktree_path.exists() {
-            return Err(ParaError::session_not_found(format!(
-                "Session '{}' exists but worktree path '{}' not found",
-                session.name,
-                session.worktree_path.display()
-            )));
-        }
-
-        // Ensure CLAUDE.local.md exists for the session
-        create_claude_local_md(&session.worktree_path, &session.name)?;
-
-        launch_ide_for_session(config, &session.worktree_path)?;
-        println!("✅ Resumed session '{}'", session.name);
-    }
-
-    Ok(())
-}
-
-fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
-    let ide_manager = IdeManager::new(config);
-
-    // For Claude Code in wrapper mode, always use continuation flag when resuming
-    if config.ide.name == "claude" && config.ide.wrapper.enabled {
-        println!("▶ resuming Claude Code session with conversation continuation...");
-        // Update existing tasks.json to include -c flag
-        update_tasks_json_for_resume(path)?;
-        ide_manager.launch_with_options(path, false, true)
-    } else {
-        ide_manager.launch(path, false)
-    }
-}
-
-fn update_tasks_json_for_resume(path: &Path) -> Result<()> {
-    let tasks_file = path.join(".vscode/tasks.json");
-
-    if !tasks_file.exists() {
-        return Ok(());
-    }
-
-    let config = detect_task_configuration(&tasks_file)?;
-    let transformation = determine_transformation(&config);
-    apply_transformation(&tasks_file, transformation)
-}
-
-fn detect_task_configuration(tasks_file: &Path) -> Result<TaskConfiguration> {
-    let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-    let has_prompt_file = content.contains(".claude_prompt_temp")
-        || (content.contains("$(cat") && content.contains("rm "));
-    let has_continue_flag = content.contains(" -c");
-    let has_skip_permissions = content.contains("--dangerously-skip-permissions");
-
-    if has_prompt_file {
-        Ok(TaskConfiguration::HasPromptFile {
-            has_skip_permissions,
-        })
-    } else if has_continue_flag {
-        Ok(TaskConfiguration::HasContinueFlag {
-            has_skip_permissions,
-        })
-    } else {
-        Ok(TaskConfiguration::NeedsTransformation {
-            has_skip_permissions,
-        })
-    }
-}
-
-fn determine_transformation(config: &TaskConfiguration) -> TaskTransformation {
-    match config {
-        TaskConfiguration::HasPromptFile {
-            has_skip_permissions,
-        } => TaskTransformation::RemovePromptFileAndAddContinue {
-            has_skip_permissions: *has_skip_permissions,
-        },
-        TaskConfiguration::HasContinueFlag { .. } => TaskTransformation::NoChange,
-        TaskConfiguration::NeedsTransformation {
-            has_skip_permissions,
-        } => TaskTransformation::AddContinueFlag {
-            has_skip_permissions: *has_skip_permissions,
-        },
-    }
-}
-
-fn apply_transformation(tasks_file: &Path, transformation: TaskTransformation) -> Result<()> {
-    match transformation {
-        TaskTransformation::NoChange => Ok(()),
-        TaskTransformation::RemovePromptFileAndAddContinue {
-            has_skip_permissions,
-        } => apply_remove_prompt_file_transformation(tasks_file, has_skip_permissions),
-        TaskTransformation::AddContinueFlag {
-            has_skip_permissions,
-        } => apply_add_continue_flag_transformation(tasks_file, has_skip_permissions),
-    }
-}
-
-fn apply_remove_prompt_file_transformation(
-    tasks_file: &Path,
-    has_skip_permissions: bool,
-) -> Result<()> {
-    let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-    let mut json: Value = serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
-
-    let new_command = if has_skip_permissions {
-        "claude --dangerously-skip-permissions -c"
-    } else {
-        "claude -c"
-    };
-
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
-                if command.contains(".claude_prompt_temp")
-                    || (command.contains("$(cat") && command.contains("rm "))
-                {
-                    task["command"] = Value::String(new_command.to_string());
-                }
-            }
-        }
-    }
-
-    let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
-
-    fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
-}
-
-/// Loads and parses a tasks.json file
-fn load_tasks_json(tasks_file: &Path) -> Result<Value> {
-    let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-    serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))
-}
-
-/// Saves a JSON value to a tasks.json file with pretty formatting
-fn save_tasks_json(tasks_file: &Path, json: Value) -> Result<()> {
-    let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
-
-    fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
-}
-
-/// Checks if a command needs the continue flag added
-fn needs_continue_flag(command: &str) -> bool {
-    !command.contains("-c")
-}
-
-/// Transforms a Claude command to include the continue flag
-fn transform_claude_command(command: &str, has_skip_permissions: bool) -> String {
-    if has_skip_permissions {
-        transform_claude_command_with_skip_permissions(command)
-    } else {
-        transform_claude_command_regular(command)
-    }
-}
-
-/// Transforms Claude commands with --dangerously-skip-permissions flag
-fn transform_claude_command_with_skip_permissions(command: &str) -> String {
-    if command.contains("claude --dangerously-skip-permissions") && needs_continue_flag(command) {
-        command.replace(
-            "claude --dangerously-skip-permissions",
-            "claude --dangerously-skip-permissions -c",
-        )
-    } else {
-        command.to_string()
-    }
-}
-
-/// Transforms regular Claude commands (without --dangerously-skip-permissions)
-fn transform_claude_command_regular(command: &str) -> String {
-    if command == "claude" {
-        "claude -c".to_string()
-    } else if command.starts_with("claude ") && needs_continue_flag(command) {
-        command.replace("claude ", "claude -c ")
-    } else {
-        command.to_string()
-    }
-}
-
-fn apply_add_continue_flag_transformation(
-    tasks_file: &Path,
-    has_skip_permissions: bool,
-) -> Result<()> {
-    let mut json = load_tasks_json(tasks_file)?;
-
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command_value) = task.get_mut("command") {
-                // Only transform string commands, preserve arrays and other types unchanged
-                if let Some(command_str) = command_value.as_str() {
-                    let updated_command =
-                        transform_claude_command(command_str, has_skip_permissions);
-
-                    if updated_command != command_str {
-                        *command_value = Value::String(updated_command);
-                    }
-                }
-                // Arrays and other non-string values are left unchanged
-            }
-        }
-    }
-
-    save_tasks_json(tasks_file, json)
-}
-
-fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
-    if let Some(ref session) = args.session {
-        if session.is_empty() {
-            return Err(ParaError::invalid_args(
-                "Session identifier cannot be empty",
-            ));
-        }
-    }
-
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::task_transformer::{TaskConfiguration, TaskTransformation, TaskTransformer};
     use crate::config::{
         Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
@@ -521,8 +121,12 @@ mod tests {
         );
         session_manager.save_state(&state).unwrap();
 
-        // now resume with base name
-        super::resume_specific_session(&config, &git_service, "test4").unwrap();
+        // now resume with base name using the new orchestrator
+        let orchestrator = ResumeOrchestrator::new(&config, &git_service, &session_manager);
+        let args = crate::cli::parser::ResumeArgs {
+            session: Some("test4".to_string()),
+        };
+        orchestrator.execute(&args).unwrap();
     }
 
     #[test]
@@ -548,8 +152,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, original_content).unwrap();
 
-        // Update the tasks.json
-        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+        // Update the tasks.json using TaskTransformer
+        let task_transformer = TaskTransformer::new();
+        task_transformer.update_tasks_json_for_resume(temp_dir.path()).unwrap();
 
         // Check it was updated
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -557,7 +162,7 @@ mod tests {
         assert!(!updated_content.contains("claude --dangerously-skip-permissions \""));
 
         // Test idempotency - running again shouldn't change it
-        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+        task_transformer.update_tasks_json_for_resume(temp_dir.path()).unwrap();
         let content_after_second_update = fs::read_to_string(&tasks_file).unwrap();
         assert_eq!(updated_content, content_after_second_update);
     }
@@ -585,8 +190,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, original_content).unwrap();
 
-        // Update the tasks.json
-        super::update_tasks_json_for_resume(temp_dir.path()).unwrap();
+        // Update the tasks.json using TaskTransformer
+        let task_transformer = TaskTransformer::new();
+        task_transformer.update_tasks_json_for_resume(temp_dir.path()).unwrap();
 
         // Check prompt file logic was removed and -c flag added
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -613,7 +219,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let task_transformer = TaskTransformer::new();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::HasPromptFile {
@@ -629,7 +236,7 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::HasPromptFile {
@@ -651,7 +258,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let task_transformer = TaskTransformer::new();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::HasContinueFlag {
@@ -667,7 +275,7 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::HasContinueFlag {
@@ -689,7 +297,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let task_transformer = TaskTransformer::new();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::NeedsTransformation {
@@ -705,7 +314,7 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::NeedsTransformation {
@@ -716,11 +325,13 @@ mod tests {
 
     #[test]
     fn test_determine_transformation() {
+        let task_transformer = TaskTransformer::new();
+        
         // Test HasPromptFile -> RemovePromptFileAndAddContinue
         let config = TaskConfiguration::HasPromptFile {
             has_skip_permissions: true,
         };
-        let transformation = super::determine_transformation(&config);
+        let transformation = task_transformer.determine_transformation(&config);
         matches!(
             transformation,
             TaskTransformation::RemovePromptFileAndAddContinue {
@@ -731,7 +342,7 @@ mod tests {
         let config = TaskConfiguration::HasPromptFile {
             has_skip_permissions: false,
         };
-        let transformation = super::determine_transformation(&config);
+        let transformation = task_transformer.determine_transformation(&config);
         matches!(
             transformation,
             TaskTransformation::RemovePromptFileAndAddContinue {
@@ -743,14 +354,14 @@ mod tests {
         let config = TaskConfiguration::HasContinueFlag {
             has_skip_permissions: true,
         };
-        let transformation = super::determine_transformation(&config);
+        let transformation = task_transformer.determine_transformation(&config);
         matches!(transformation, TaskTransformation::NoChange);
 
         // Test NeedsTransformation -> AddContinueFlag
         let config = TaskConfiguration::NeedsTransformation {
             has_skip_permissions: false,
         };
-        let transformation = super::determine_transformation(&config);
+        let transformation = task_transformer.determine_transformation(&config);
         matches!(
             transformation,
             TaskTransformation::AddContinueFlag {
@@ -767,8 +378,9 @@ mod tests {
         let content = r#"{"tasks":[{"command":"claude -c"}]}"#;
         fs::write(&tasks_file, content).unwrap();
 
+        let task_transformer = TaskTransformer::new();
         let transformation = TaskTransformation::NoChange;
-        let result = super::apply_transformation(&tasks_file, transformation);
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         // File should remain unchanged
@@ -797,7 +409,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_remove_prompt_file_transformation(&tasks_file, true);
+        let task_transformer = TaskTransformer::new();
+        let transformation = TaskTransformation::RemovePromptFileAndAddContinue { has_skip_permissions: true };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -815,7 +429,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::RemovePromptFileAndAddContinue { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -843,7 +458,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, true);
+        let task_transformer = TaskTransformer::new();
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: true };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -864,7 +481,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -891,7 +509,9 @@ mod tests {
         fs::write(&tasks_file, content).unwrap();
         let original_content = fs::read_to_string(&tasks_file).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let task_transformer = TaskTransformer::new();
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -909,7 +529,8 @@ mod tests {
 
         // detect_task_configuration only does string matching, not JSON parsing
         // So it should succeed but return NeedsTransformation
-        let result = super::detect_task_configuration(&tasks_file);
+        let task_transformer = TaskTransformer::new();
+        let result = task_transformer.detect_task_configuration(&tasks_file);
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
@@ -918,10 +539,12 @@ mod tests {
             }
         );
 
-        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::RemovePromptFileAndAddContinue { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_err());
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_err());
     }
 
@@ -934,7 +557,8 @@ mod tests {
         let content = r#"{ "version": "2.0.0" }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let config = super::detect_task_configuration(&tasks_file).unwrap();
+        let task_transformer = TaskTransformer::new();
+        let config = task_transformer.detect_task_configuration(&tasks_file).unwrap();
         assert_eq!(
             config,
             TaskConfiguration::NeedsTransformation {
@@ -943,10 +567,12 @@ mod tests {
         );
 
         // Transformations should handle missing tasks gracefully
-        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::RemovePromptFileAndAddContinue { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
     }
 
@@ -955,13 +581,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let tasks_file = temp_dir.path().join("nonexistent.json");
 
-        let result = super::detect_task_configuration(&tasks_file);
+        let task_transformer = TaskTransformer::new();
+        let result = task_transformer.detect_task_configuration(&tasks_file);
         assert!(result.is_err());
 
-        let result = super::apply_remove_prompt_file_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::RemovePromptFileAndAddContinue { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_err());
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_err());
     }
 
@@ -983,7 +612,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let task_transformer = TaskTransformer::new();
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -1003,7 +634,8 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: false };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
@@ -1063,7 +695,9 @@ mod tests {
 }"#;
         fs::write(&tasks_file, content).unwrap();
 
-        let result = super::apply_add_continue_flag_transformation(&tasks_file, true);
+        let task_transformer = TaskTransformer::new();
+        let transformation = TaskTransformation::AddContinueFlag { has_skip_permissions: true };
+        let result = task_transformer.apply_transformation(&tasks_file, transformation);
         assert!(result.is_ok());
 
         let updated_content = fs::read_to_string(&tasks_file).unwrap();
