@@ -1,3 +1,4 @@
+pub mod launch_file_parser;
 pub mod macos;
 #[cfg(test)]
 mod tests;
