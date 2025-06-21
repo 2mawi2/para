@@ -26,20 +26,42 @@ impl SessionService {
     }
 
     pub fn load_sessions(&self, show_stale: bool) -> Result<Vec<SessionInfo>> {
+        let (sessions, current_session) = self.load_base_sessions()?;
+        let sessions = self.enrich_with_activity(sessions)?;
+        let sessions = self.enrich_with_tasks(sessions)?;
+        let sessions = self.enrich_with_agent_status(sessions)?;
+        let sessions = self.apply_filtering_and_sorting(sessions, show_stale, &current_session)?;
+        Ok(sessions)
+    }
+
+    fn load_base_sessions(
+        &self,
+    ) -> Result<(
+        Vec<crate::core::session::SessionState>,
+        Option<crate::core::session::SessionState>,
+    )> {
         let session_manager = SessionManager::new(&self.config);
         let sessions = session_manager.list_sessions()?;
-
-        let mut session_infos = Vec::new();
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let current_session = session_manager
             .find_session_by_path(&current_dir)
             .unwrap_or(None);
 
+        Ok((sessions, current_session))
+    }
+
+    fn enrich_with_activity(
+        &self,
+        sessions: Vec<crate::core::session::SessionState>,
+    ) -> Result<Vec<(crate::core::session::SessionState, SessionInfo)>> {
+        let mut enriched_sessions = Vec::new();
+
         for session in sessions {
             if matches!(session.status, CoreSessionStatus::Cancelled) {
                 continue;
             }
+
             let last_activity = {
                 let path = session.worktree_path.clone();
 
@@ -56,6 +78,32 @@ impl SessionService {
 
             let status = detect_session_status(&session, &last_activity);
 
+            let session_info = SessionInfo {
+                name: session.name.clone(),
+                branch: session.branch.clone(),
+                status,
+                last_activity,
+                task: format!("Session: {}", &session.name), // Will be properly set in enrich_with_tasks
+                worktree_path: session.worktree_path.clone(),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
+            };
+
+            enriched_sessions.push((session, session_info));
+        }
+
+        Ok(enriched_sessions)
+    }
+
+    fn enrich_with_tasks(
+        &self,
+        session_pairs: Vec<(crate::core::session::SessionState, SessionInfo)>,
+    ) -> Result<Vec<SessionInfo>> {
+        let mut session_infos = Vec::new();
+
+        for (session, mut session_info) in session_pairs {
             let task = session.task_description.clone().unwrap_or_else(|| {
                 // Check cache first
                 let cache = self.task_cache.lock().unwrap();
@@ -73,8 +121,18 @@ impl SessionService {
                 }
             });
 
-            let state_dir = Path::new(&self.config.directories.state_dir);
-            let agent_status = Status::load(state_dir, &session.name).ok().flatten();
+            session_info.task = task;
+            session_infos.push(session_info);
+        }
+
+        Ok(session_infos)
+    }
+
+    fn enrich_with_agent_status(&self, mut sessions: Vec<SessionInfo>) -> Result<Vec<SessionInfo>> {
+        let state_dir = Path::new(&self.config.directories.state_dir);
+
+        for session_info in &mut sessions {
+            let agent_status = Status::load(state_dir, &session_info.name).ok().flatten();
 
             let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
                 if let Some(ref status) = agent_status {
@@ -89,29 +147,33 @@ impl SessionService {
                     (None, None, None, false, None)
                 };
 
-            let final_task = agent_task.unwrap_or(task);
-
-            let session_info = SessionInfo {
-                name: session.name.clone(),
-                branch: session.branch.clone(),
-                status,
-                last_activity,
-                task: final_task,
-                worktree_path: session.worktree_path.clone(),
-                test_status,
-                confidence,
-                todo_percentage,
-                is_blocked,
-            };
-
-            if !show_stale && matches!(session_info.status, SessionStatus::Stale) {
-                continue;
+            // Agent task takes priority over session task
+            if let Some(agent_task) = agent_task {
+                session_info.task = agent_task;
             }
 
-            session_infos.push(session_info);
+            session_info.test_status = test_status;
+            session_info.confidence = confidence;
+            session_info.todo_percentage = todo_percentage;
+            session_info.is_blocked = is_blocked;
         }
 
-        session_infos.sort_by(|a, b| {
+        Ok(sessions)
+    }
+
+    fn apply_filtering_and_sorting(
+        &self,
+        mut sessions: Vec<SessionInfo>,
+        show_stale: bool,
+        current_session: &Option<crate::core::session::SessionState>,
+    ) -> Result<Vec<SessionInfo>> {
+        // Filter out stale sessions if requested
+        if !show_stale {
+            sessions.retain(|session_info| !matches!(session_info.status, SessionStatus::Stale));
+        }
+
+        // Sort by current session first, then by last activity
+        sessions.sort_by(|a, b| {
             if let Some(ref current) = current_session {
                 if a.name == current.name {
                     return std::cmp::Ordering::Less;
@@ -123,7 +185,7 @@ impl SessionService {
             b.last_activity.cmp(&a.last_activity)
         });
 
-        Ok(session_infos)
+        Ok(sessions)
     }
 }
 
