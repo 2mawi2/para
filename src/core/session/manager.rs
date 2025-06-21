@@ -174,23 +174,47 @@ impl SessionManager {
     }
 
     pub fn list_sessions(&self) -> Result<Vec<SessionState>> {
+        crate::utils::debug_log("Listing sessions");
+
         if !self.state_dir.exists() {
+            crate::utils::debug_log("State directory does not exist");
             return Ok(Vec::new());
         }
 
-        let entries = fs::read_dir(&self.state_dir)?;
+        let entries = match fs::read_dir(&self.state_dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                crate::utils::debug_log(&format!("Failed to read state directory: {}", e));
+                return Ok(Vec::new());
+            }
+        };
+
         let mut sessions = Vec::new();
 
         for entry in entries {
-            let entry = entry?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    crate::utils::debug_log(&format!("Failed to read directory entry: {}", e));
+                    continue;
+                }
+            };
+
             let path = entry.path();
 
             if path.is_file() && path.extension().is_some_and(|ext| ext == "state") {
                 if let Some(stem) = path.file_stem() {
                     if let Some(session_name) = stem.to_str() {
+                        crate::utils::debug_log(&format!("Loading session: {}", session_name));
                         match self.load_state(session_name) {
                             Ok(state) => sessions.push(state),
-                            Err(_) => continue,
+                            Err(e) => {
+                                crate::utils::debug_log(&format!(
+                                    "Failed to load session {}: {}",
+                                    session_name, e
+                                ));
+                                continue;
+                            }
                         }
                     }
                 }
@@ -198,27 +222,28 @@ impl SessionManager {
         }
 
         sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        crate::utils::debug_log(&format!("Found {} sessions", sessions.len()));
         Ok(sessions)
     }
 
     pub fn find_session_by_path(&self, path: &Path) -> Result<Option<SessionState>> {
+        crate::utils::debug_log(&format!("Finding session by path: {}", path.display()));
         let sessions = self.list_sessions()?;
-        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let normalized_path = crate::utils::safe_resolve_path(path);
 
         for session in sessions {
-            let session_canonical = session
-                .worktree_path
-                .canonicalize()
-                .unwrap_or_else(|_| session.worktree_path.clone());
+            let session_normalized = crate::utils::safe_resolve_path(&session.worktree_path);
 
-            if canonical_path == session_canonical
-                || canonical_path.starts_with(&session_canonical)
-                || session_canonical.starts_with(&canonical_path)
+            if normalized_path == session_normalized
+                || normalized_path.starts_with(&session_normalized)
+                || session_normalized.starts_with(&normalized_path)
             {
+                crate::utils::debug_log(&format!("Found matching session: {}", session.name));
                 return Ok(Some(session));
             }
         }
 
+        crate::utils::debug_log("No matching session found");
         Ok(None)
     }
 

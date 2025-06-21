@@ -44,7 +44,12 @@ _para_complete_sessions() {
     local sessions
     # Avoid recursive calls during completion generation
     if command -v para >/dev/null 2>&1 && [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
-        sessions=$(para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1; then
+            sessions=$(timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        else
+            sessions=$(PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        fi
         if [[ -n "$sessions" ]]; then
             COMPREPLY=($(compgen -W "$sessions" -- "$1"))
         fi
@@ -55,7 +60,12 @@ _para_complete_archived_sessions() {
     local sessions
     # Avoid recursive calls during completion generation
     if command -v para >/dev/null 2>&1 && [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
-        sessions=$(para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1; then
+            sessions=$(timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        else
+            sessions=$(PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' || true)
+        fi
         if [[ -n "$sessions" ]]; then
             COMPREPLY=($(compgen -W "$sessions" -- "$1"))
         fi
@@ -169,7 +179,12 @@ _para_sessions() {
     local sessions
     # Avoid recursive calls during completion generation
     if [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
-        sessions=(${(f)"$(para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1; then
+            sessions=(${(f)"$(timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        else
+            sessions=(${(f)"$(PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        fi
         _describe 'active sessions' sessions
     fi
 }
@@ -178,7 +193,12 @@ _para_archived_sessions() {
     local sessions
     # Avoid recursive calls during completion generation
     if [[ -z "$PARA_COMPLETION_SCRIPT" ]]; then
-        sessions=(${(f)"$(para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1; then
+            sessions=(${(f)"$(timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        else
+            sessions=(${(f)"$(PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | grep -o '^[a-zA-Z0-9_-]*' 2>/dev/null || true)"})
+        fi
         _describe 'archived sessions' sessions
     fi
 }
@@ -302,14 +322,24 @@ compdef _para para
 function __para_sessions
     # Avoid recursive calls during completion generation
     if test -z "$PARA_COMPLETION_SCRIPT"
-        para list --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1
+            timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        else
+            PARA_COMPLETION_SCRIPT=1 para list --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        end
     end
 end
 
 function __para_archived_sessions
     # Avoid recursive calls during completion generation
     if test -z "$PARA_COMPLETION_SCRIPT"
-        para list --archived --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        # Use timeout to prevent hanging on file system operations
+        if command -v timeout >/dev/null 2>&1
+            timeout 2 env PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        else
+            PARA_COMPLETION_SCRIPT=1 para list --archived --quiet 2>/dev/null | string match -r '^[a-zA-Z0-9_-]*' 2>/dev/null
+        end
     end
 end
 
