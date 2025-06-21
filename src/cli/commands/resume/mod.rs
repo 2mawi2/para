@@ -9,7 +9,6 @@ mod session_detection;
 mod task_transformation;
 mod validation;
 
-use execution::launch_ide_for_session;
 use session_detection::{detect_and_resume_session, resume_specific_session};
 use validation::validate_resume_args;
 
@@ -326,7 +325,10 @@ mod tests {
         let result = execute(config, args_copy);
         // Should not fail due to validation (will fail due to missing session)
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParaError::SessionNotFound { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ParaError::SessionNotFound { .. }
+        ));
 
         // Test invalid args - empty session name
         let args = ResumeArgs {
@@ -336,6 +338,9 @@ mod tests {
         let result = execute(config, args);
         assert!(result.is_err());
         // Should fail due to validation
-        assert!(!matches!(result.unwrap_err(), ParaError::SessionNotFound { .. }));
+        assert!(!matches!(
+            result.unwrap_err(),
+            ParaError::SessionNotFound { .. }
+        ));
     }
 }

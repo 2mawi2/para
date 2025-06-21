@@ -1,4 +1,4 @@
-// This file was moved to resume_modules/validation.rs
+use crate::cli::parser::ResumeArgs;
 use crate::utils::{ParaError, Result};
 
 /// Validates resume command arguments
