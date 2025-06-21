@@ -62,7 +62,7 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo fmt --all -- --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git status),Bash(git status *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch *),Bash(git rev-parse),Bash(git rev-parse *),Bash(git blame),Bash(git blame *),Bash(git fetch),Bash(git fetch *),Bash(git merge),Bash(git merge *),Bash(git add),Bash(git add *),Bash(git commit),Bash(git commit *),Bash(git push),Bash(git push *),Bash(git pull),Bash(git pull *),Bash(git rebase),Bash(git rebase *),Bash(git checkout),Bash(git checkout *),Bash(git reset),Bash(git reset *),Bash(git stash),Bash(git stash *),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__add_pull_request_comment,mcp__github__get_pull_request_comments,mcp__github__get_issue"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash"
           custom_instructions: |
             You have been granted tools for editing files and running Rust/just commands for testing and validating your changes:
             
@@ -72,41 +72,8 @@ jobs:
                1. `just fmt-check` OR `cargo fmt --all -- --check` - MUST pass (no formatting issues)
                2. `just test` - MUST pass (all tests green)
                3. `just lint` - MUST pass (no clippy warnings/errors)
+               4. `cargo fmt --all -- --check` - MUST pass (no formatting issues or warnings)
             ⚠️ If ANY of these commands fail, you have NOT completed your task successfully!
-            ⚠️ The pipeline specifically runs `cargo fmt --all -- --check` and will reject unformatted code!
-            
-            **Testing & Validation Commands (MUST RUN IN THIS ORDER):**
-            1. `just fmt-check` OR `cargo fmt --all -- --check` - Check formatting FIRST
-               - If this fails, run `just fmt` OR `cargo fmt` to fix formatting
-            2. `just test` - Run comprehensive tests - MUST BE GREEN
-            3. `just lint` - Run clippy linting - MUST SHOW NO ERRORS
-            
-            **Other Commands:**
-            - `just test <pattern>` - Run specific tests matching a pattern
-            - `just build` - Build debug binary
-            - `just build-release` - Build optimized release binary
-            
-            **Cargo Commands (if needed):**
-            - `cargo test <pattern>` - Run specific Rust tests
-            - `cargo clippy` - Run linting with detailed suggestions
-            - `cargo fmt` - Fix formatting issues automatically
-            
-            **Git Commands:**
-            - `git diff`, `git status` - Check your changes
-            - `git log`, `git blame` - Investigate code history
-            - `git fetch`, `git merge`, `git add`, `git commit`, `git push` - Version control operations
-            - `git rebase`, `git checkout`, `git reset`, `git stash` - Advanced git operations
-            
-            **File Operations:**
-            - Edit, Read, Write, MultiEdit - Make code changes
-            - Glob, Grep, LS - Search and explore the codebase
-            - rg (ripgrep) - Fast pattern searching
-            
-            **GitHub Integration:**
-            - mcp__github_file_ops__commit_files - Commit your changes
-            - mcp__github_file_ops__update_claude_comment - Update progress in your comment (used by action infrastructure)
-            - mcp__github__add_pull_request_comment - Add comments to the PR/issue
-            - mcp__github__create_pending_pull_request_review - Create PR reviews
             
             **TEST-DRIVEN DEVELOPMENT (SIMPLE RULES):**
             
