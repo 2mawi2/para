@@ -1,12 +1,14 @@
 use crate::utils::error::Result;
 use std::path::{Path, PathBuf};
 
+pub mod archive_branch_iterator;
 pub mod branch;
 pub mod finish;
 pub mod repository;
 pub mod validation;
 pub mod worktree;
 
+pub use archive_branch_iterator::{ArchiveBranchIterator, HasTimestamp};
 pub use branch::{BranchInfo, BranchManager};
 pub use finish::{FinishManager, FinishRequest, FinishResult};
 pub use repository::GitRepository;

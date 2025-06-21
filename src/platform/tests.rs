@@ -1,25 +1,14 @@
 #[cfg(test)]
 pub mod platform_tests {
-    use crate::platform::get_platform_manager;
+    use crate::platform::{
+        get_platform_manager, launch_file_parser::parse_ide_from_launch_contents,
+    };
 
     /// Test utility function for parsing launch file contents
-    /// This is isolated to test code to avoid polluting production code with test-only logic
+    /// Uses the shared launch file parser utility to avoid duplication
+    #[allow(dead_code)]
     pub(crate) fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
-        if contents.contains("LAUNCH_METHOD=wrapper") {
-            // For wrapper mode, Claude Code runs inside Cursor/VS Code
-            if contents.contains("WRAPPER_IDE=cursor") {
-                "cursor".to_string()
-            } else if contents.contains("WRAPPER_IDE=code") {
-                "code".to_string()
-            } else {
-                // Default to configured IDE wrapper name
-                default_ide.to_string()
-            }
-        } else if let Some(line) = contents.lines().find(|l| l.starts_with("LAUNCH_IDE=")) {
-            line.split('=').nth(1).unwrap_or(default_ide).to_string()
-        } else {
-            default_ide.to_string()
-        }
+        parse_ide_from_launch_contents(contents, default_ide)
     }
 
     #[test]

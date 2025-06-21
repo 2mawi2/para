@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::core::git::GitService;
+use crate::core::git::{ArchiveBranchIterator, GitService, HasTimestamp};
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{ArchiveBranchParser, ParaError, Result};
 use std::path::PathBuf;
@@ -24,6 +24,12 @@ pub struct RecoveryInfo {
     pub archived_branch: String,
     pub original_session_name: String,
     pub archived_timestamp: String,
+}
+
+impl HasTimestamp for RecoveryInfo {
+    fn timestamp(&self) -> &str {
+        &self.archived_timestamp
+    }
 }
 
 #[derive(Debug)]
@@ -121,21 +127,9 @@ impl<'a> SessionRecovery<'a> {
     }
 
     pub fn list_recoverable_sessions(&self) -> Result<Vec<RecoveryInfo>> {
-        let archived_branches = self
-            .git_service
-            .branch_manager()
-            .list_archived_branches(self.config.get_branch_prefix())?;
-
-        let mut recovery_infos = Vec::new();
-
-        for archived_branch in archived_branches {
-            if let Some(info) = self.parse_archived_branch(&archived_branch)? {
-                recovery_infos.push(info);
-            }
-        }
-
-        recovery_infos.sort_by(|a, b| b.archived_timestamp.cmp(&a.archived_timestamp));
-        Ok(recovery_infos)
+        let iterator = ArchiveBranchIterator::new(self.git_service, self.config);
+        iterator
+            .list_archived_entries(|archived_branch| self.parse_archived_branch(archived_branch))
     }
 
     pub fn recover_session(
