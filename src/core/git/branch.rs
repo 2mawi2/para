@@ -2,6 +2,11 @@ use super::repository::{execute_git_command, execute_git_command_with_status, Gi
 use super::validation::GitValidator;
 use crate::utils::error::{ParaError, Result};
 
+/// Trait for types that have a timestamp field for sorting archived branches
+pub trait HasTimestamp {
+    fn get_timestamp(&self) -> &str;
+}
+
 #[derive(Debug, Clone)]
 pub struct BranchInfo {
     pub name: String,
@@ -180,6 +185,26 @@ impl<'a> BranchManager<'a> {
 
     pub fn get_branch_commit(&self, branch: &str) -> Result<String> {
         execute_git_command(self.repo, &["rev-parse", branch])
+    }
+
+    /// Common utility for processing archived branches with a custom processor function.
+    /// This eliminates code duplication between archive listing and recovery operations.
+    pub fn process_archived_branches<T, F>(&self, prefix: &str, processor: F) -> Result<Vec<T>>
+    where
+        F: Fn(&str) -> Result<Option<T>>,
+        T: HasTimestamp,
+    {
+        let archived_branches = self.list_archived_branches(prefix)?;
+
+        let mut entries = Vec::new();
+        for archived_branch in archived_branches {
+            if let Some(entry) = processor(&archived_branch)? {
+                entries.push(entry);
+            }
+        }
+
+        entries.sort_by(|a, b| b.get_timestamp().cmp(a.get_timestamp()));
+        Ok(entries)
     }
 
     fn parse_branch_line(&self, line: &str) -> Result<Option<BranchInfo>> {

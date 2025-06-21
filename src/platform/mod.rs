@@ -4,6 +4,26 @@ mod tests;
 
 use crate::utils::Result;
 
+/// Shared utility for parsing launch file contents across platform implementations.
+/// This eliminates code duplication between production and test code.
+pub fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
+    if contents.contains("LAUNCH_METHOD=wrapper") {
+        // For wrapper mode, Claude Code runs inside Cursor/VS Code
+        if contents.contains("WRAPPER_IDE=cursor") {
+            "cursor".to_string()
+        } else if contents.contains("WRAPPER_IDE=code") {
+            "code".to_string()
+        } else {
+            // Default to configured IDE wrapper name
+            default_ide.to_string()
+        }
+    } else if let Some(line) = contents.lines().find(|l| l.starts_with("LAUNCH_IDE=")) {
+        line.split('=').nth(1).unwrap_or(default_ide).to_string()
+    } else {
+        default_ide.to_string()
+    }
+}
+
 pub trait PlatformManager {
     fn close_ide_window(&self, session_id: &str, ide_name: &str) -> Result<()>;
 }

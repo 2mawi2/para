@@ -1,4 +1,4 @@
-use super::PlatformManager;
+use super::{parse_launch_file_contents, PlatformManager};
 use crate::utils::Result;
 use std::process::Command;
 
@@ -172,33 +172,7 @@ impl MacOSPlatform {
         let actual_ide = if launch_file.exists() {
             // Try to read the actual IDE used from launch file
             if let Ok(contents) = std::fs::read_to_string(&launch_file) {
-                #[cfg(test)]
-                {
-                    // In tests, use the test utility function
-                    crate::platform::tests::platform_tests::parse_launch_file_contents(
-                        &contents, ide_name,
-                    )
-                }
-                #[cfg(not(test))]
-                {
-                    if contents.contains("LAUNCH_METHOD=wrapper") {
-                        // For wrapper mode, Claude Code runs inside Cursor/VS Code
-                        if contents.contains("WRAPPER_IDE=cursor") {
-                            "cursor".to_string()
-                        } else if contents.contains("WRAPPER_IDE=code") {
-                            "code".to_string()
-                        } else {
-                            // Default to configured IDE wrapper name
-                            ide_name.to_string()
-                        }
-                    } else if let Some(line) =
-                        contents.lines().find(|l| l.starts_with("LAUNCH_IDE="))
-                    {
-                        line.split('=').nth(1).unwrap_or(ide_name).to_string()
-                    } else {
-                        ide_name.to_string()
-                    }
-                }
+                parse_launch_file_contents(&contents, ide_name)
             } else {
                 ide_name.to_string()
             }

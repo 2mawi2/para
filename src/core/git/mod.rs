@@ -7,7 +7,7 @@ pub mod repository;
 pub mod validation;
 pub mod worktree;
 
-pub use branch::{BranchInfo, BranchManager};
+pub use branch::{BranchInfo, BranchManager, HasTimestamp};
 pub use finish::{FinishManager, FinishRequest, FinishResult};
 pub use repository::GitRepository;
 pub use worktree::{WorktreeInfo, WorktreeManager};
