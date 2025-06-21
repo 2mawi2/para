@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::core::git::GitService;
+use crate::core::git::{ArchiveBranchIterator, GitService, HasTimestamp};
 use crate::utils::{ArchiveBranchParser, Result};
 use chrono::Utc;
 
@@ -7,6 +7,12 @@ use chrono::Utc;
 pub struct ArchiveEntry {
     pub session_name: String,
     pub archived_at: String,
+}
+
+impl HasTimestamp for ArchiveEntry {
+    fn timestamp(&self) -> &str {
+        &self.archived_at
+    }
 }
 
 pub struct ArchiveManager<'a> {
@@ -23,21 +29,8 @@ impl<'a> ArchiveManager<'a> {
     }
 
     pub fn list_archives(&self) -> Result<Vec<ArchiveEntry>> {
-        let archived_branches = self
-            .git_service
-            .branch_manager()
-            .list_archived_branches(self.config.get_branch_prefix())?;
-
-        let mut entries = Vec::new();
-
-        for archived_branch in archived_branches {
-            if let Some(entry) = self.create_archive_entry(&archived_branch)? {
-                entries.push(entry);
-            }
-        }
-
-        entries.sort_by(|a, b| b.archived_at.cmp(&a.archived_at));
-        Ok(entries)
+        let iterator = ArchiveBranchIterator::new(self.git_service, self.config);
+        iterator.list_archived_entries(|archived_branch| self.create_archive_entry(archived_branch))
     }
 
     pub fn cleanup_old_archives(&self) -> Result<usize> {
