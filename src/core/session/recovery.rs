@@ -1,7 +1,8 @@
 use crate::config::Config;
 use crate::core::git::GitService;
+use crate::core::session::archive_common::ArchiveBranchOperations;
 use crate::core::session::{SessionManager, SessionState};
-use crate::utils::{ArchiveBranchParser, ParaError, Result};
+use crate::utils::{ParaError, Result};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,7 @@ pub struct SessionRecovery<'a> {
     config: &'a Config,
     git_service: &'a GitService,
     session_manager: &'a SessionManager,
+    archive_ops: ArchiveBranchOperations<'a>,
 }
 
 impl<'a> SessionRecovery<'a> {
@@ -45,10 +47,12 @@ impl<'a> SessionRecovery<'a> {
         git_service: &'a GitService,
         session_manager: &'a SessionManager,
     ) -> Self {
+        let archive_ops = ArchiveBranchOperations::new(config, git_service);
         Self {
             config,
             git_service,
             session_manager,
+            archive_ops,
         }
     }
 
@@ -121,10 +125,7 @@ impl<'a> SessionRecovery<'a> {
     }
 
     pub fn list_recoverable_sessions(&self) -> Result<Vec<RecoveryInfo>> {
-        let archived_branches = self
-            .git_service
-            .branch_manager()
-            .list_archived_branches(self.config.get_branch_prefix())?;
+        let archived_branches = self.archive_ops.list_archived_branches()?;
 
         let mut recovery_infos = Vec::new();
 
@@ -262,16 +263,14 @@ impl<'a> SessionRecovery<'a> {
     }
 
     fn parse_archived_branch(&self, archived_branch: &str) -> Result<Option<RecoveryInfo>> {
-        let archive_info = ArchiveBranchParser::parse_archive_branch(
-            archived_branch,
-            self.config.get_branch_prefix(),
-        )?;
+        let archive_info = self.archive_ops.parse_archive_branch(archived_branch)?;
 
         match archive_info {
             Some(info) => {
                 // Validate that the branch actually exists by checking its commit
-                let branch_manager = self.git_service.branch_manager();
-                let _commit_hash = branch_manager.get_branch_commit(archived_branch)?;
+                if !self.archive_ops.validate_archived_branch(archived_branch)? {
+                    return Ok(None);
+                }
 
                 Ok(Some(RecoveryInfo {
                     archived_branch: info.full_branch_name,

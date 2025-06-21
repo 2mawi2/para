@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::core::git::GitService;
-use crate::utils::{ArchiveBranchParser, Result};
-use chrono::Utc;
+use crate::core::session::archive_common::ArchiveBranchOperations;
+use crate::utils::Result;
 
 #[derive(Debug, Clone)]
 pub struct ArchiveEntry {
@@ -12,21 +12,21 @@ pub struct ArchiveEntry {
 pub struct ArchiveManager<'a> {
     config: &'a Config,
     git_service: &'a GitService,
+    archive_ops: ArchiveBranchOperations<'a>,
 }
 
 impl<'a> ArchiveManager<'a> {
     pub fn new(config: &'a Config, git_service: &'a GitService) -> Self {
+        let archive_ops = ArchiveBranchOperations::new(config, git_service);
         Self {
             config,
             git_service,
+            archive_ops,
         }
     }
 
     pub fn list_archives(&self) -> Result<Vec<ArchiveEntry>> {
-        let archived_branches = self
-            .git_service
-            .branch_manager()
-            .list_archived_branches(self.config.get_branch_prefix())?;
+        let archived_branches = self.archive_ops.list_archived_branches()?;
 
         let mut entries = Vec::new();
 
@@ -52,11 +52,9 @@ impl<'a> ArchiveManager<'a> {
         for archive in archives {
             if let Ok(archived_date) = chrono::DateTime::parse_from_rfc3339(&archive.archived_at) {
                 if archived_date.with_timezone(&chrono::Utc) < cutoff_date {
-                    let archive_branch_name = format!(
-                        "{}/archived/{}/{}",
-                        self.config.get_branch_prefix(),
-                        archived_date.format("%Y%m%d-%H%M%S"),
-                        archive.session_name
+                    let archive_branch_name = self.archive_ops.create_archive_branch_name(
+                        &archive.session_name,
+                        &archived_date.format("%Y%m%d-%H%M%S").to_string(),
                     );
 
                     if self
@@ -86,11 +84,9 @@ impl<'a> ArchiveManager<'a> {
 
         for archive in archives_to_remove {
             if let Ok(archived_date) = chrono::DateTime::parse_from_rfc3339(&archive.archived_at) {
-                let archive_branch_name = format!(
-                    "{}/archived/{}/{}",
-                    self.config.get_branch_prefix(),
-                    archived_date.format("%Y%m%d-%H%M%S"),
-                    archive.session_name
+                let archive_branch_name = self.archive_ops.create_archive_branch_name(
+                    &archive.session_name,
+                    &archived_date.format("%Y%m%d-%H%M%S").to_string(),
                 );
 
                 if self
@@ -114,14 +110,11 @@ impl<'a> ArchiveManager<'a> {
     }
 
     fn create_archive_entry(&self, archived_branch: &str) -> Result<Option<ArchiveEntry>> {
-        let archive_info = ArchiveBranchParser::parse_archive_branch(
-            archived_branch,
-            self.config.get_branch_prefix(),
-        )?;
+        let archive_info = self.archive_ops.parse_archive_branch(archived_branch)?;
 
         match archive_info {
             Some(info) => {
-                let archived_at = self.parse_timestamp_to_rfc3339(&info.timestamp);
+                let archived_at = self.archive_ops.parse_timestamp_to_rfc3339(&info.timestamp);
                 Ok(Some(ArchiveEntry {
                     session_name: info.session_name,
                     archived_at,
@@ -129,16 +122,6 @@ impl<'a> ArchiveManager<'a> {
             }
             None => Ok(None),
         }
-    }
-
-    fn parse_timestamp_to_rfc3339(&self, timestamp: &str) -> String {
-        if timestamp.len() == 15 {
-            if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(timestamp, "%Y%m%d-%H%M%S") {
-                return dt.and_utc().to_rfc3339();
-            }
-        }
-
-        Utc::now().to_rfc3339()
     }
 }
 
@@ -183,7 +166,9 @@ mod tests {
         let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
-        let rfc3339 = archive_manager.parse_timestamp_to_rfc3339("20240301-120000");
+        let rfc3339 = archive_manager
+            .archive_ops
+            .parse_timestamp_to_rfc3339("20240301-120000");
         assert!(rfc3339.contains("2024-03-01T12:00:00"));
     }
 
@@ -197,10 +182,14 @@ mod tests {
         let config = create_test_config_with_dir(&temp_dir);
         let archive_manager = ArchiveManager::new(&config, &git_service);
 
-        let valid_timestamp = archive_manager.parse_timestamp_to_rfc3339("20240301-120000");
+        let valid_timestamp = archive_manager
+            .archive_ops
+            .parse_timestamp_to_rfc3339("20240301-120000");
         assert!(valid_timestamp.contains("2024-03-01T12:00:00"));
 
-        let invalid_timestamp = archive_manager.parse_timestamp_to_rfc3339("invalid");
+        let invalid_timestamp = archive_manager
+            .archive_ops
+            .parse_timestamp_to_rfc3339("invalid");
         assert!(chrono::DateTime::parse_from_rfc3339(&invalid_timestamp).is_ok());
     }
 

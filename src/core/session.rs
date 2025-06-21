@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod archive_common;
 pub mod manager;
 pub mod recovery;
 pub mod state;
