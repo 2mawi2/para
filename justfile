@@ -16,20 +16,25 @@ build:
 build-release:
     cargo build --release
 
+# Build TypeScript MCP server
+build-ts:
+    @echo "📦 Building TypeScript MCP server..."
+    @cd mcp-server-ts && npm install && npm run build
+
 # Install para CLI and MCP server
-install: build-release
+install: build-release build-ts
     @echo "🚀 Installing Para binaries..."
     @mkdir -p ~/.local/bin
     @cp target/release/para ~/.local/bin/para
     @echo "✅ Para CLI binary installed to ~/.local/bin/para"
     @# Check if MCP server exists before copying
-    @if [ -f "mcp-server-ts/build/para-mcp-server.js" ]; then \
+    @if [ -f "mcp-server-ts/build/para-mcp-server-new.js" ]; then \
         echo "📦 Installing MCP server..."; \
-        cp mcp-server-ts/build/para-mcp-server.js ~/.local/bin/para-mcp-server; \
+        cp mcp-server-ts/build/para-mcp-server-new.js ~/.local/bin/para-mcp-server; \
         chmod +x ~/.local/bin/para-mcp-server; \
         echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"; \
     else \
-        echo "⚠️  MCP server not found. Run 'cd mcp-server-ts && npm install && npm run build' to build it"; \
+        echo "⚠️  MCP server not found. Run 'just build-ts' to build it"; \
     fi
     @echo ""
     @echo "🔧 Next steps:"
@@ -74,7 +79,7 @@ mcp-setup: install
     @echo "  para mcp init --cursor       # Setup for Cursor"
     @echo "  para mcp init --vscode       # Setup for VS Code"
 
-# Run comprehensive Rust tests (formatting + tests + linting)
+# Run comprehensive tests (Rust + TypeScript: formatting + tests + linting)
 test *FILTER:
     #!/bin/bash
     set -euo pipefail
@@ -86,10 +91,10 @@ test *FILTER:
         exit 0
     fi
     
-    echo "🧪 Running all Rust checks..."
+    echo "🧪 Running all checks (Rust + TypeScript)..."
     
-    # Format first
-    printf "   Format: "
+    # Rust Format first
+    printf "   Rust Format: "
     if cargo fmt --all --quiet 2>/dev/null; then
         echo "✅ formatted"
     else
@@ -97,8 +102,8 @@ test *FILTER:
         exit 1
     fi
     
-    # Tests
-    printf "   Tests: "
+    # Rust Tests
+    printf "   Rust Tests: "
     if test_output=$(cargo test --message-format=short 2>&1); then
         if echo "$test_output" | grep -q "test result:"; then
             summary=$(echo "$test_output" | grep "test result:" | tail -1 | sed 's/test result: //')
@@ -112,8 +117,42 @@ test *FILTER:
         exit 1
     fi
     
-    # Clippy linting
-    printf "   Linting: "
+    # TypeScript Tests
+    printf "   TypeScript Tests: "
+    if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then
+        cd mcp-server-ts
+        
+        # Check if node_modules exists, install if needed
+        if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-lock.json" ]; then
+            printf "\n      Installing dependencies... "
+            if npm install --silent >/dev/null 2>&1; then
+                printf "✅\n      "
+            else
+                echo "❌ Failed to install dependencies"
+                exit 1
+            fi
+        fi
+        
+        if ts_test_output=$(npm test 2>&1); then
+            # Extract test summary from Jest output
+            if echo "$ts_test_output" | grep -q "Tests:"; then
+                summary=$(echo "$ts_test_output" | grep "Tests:" | tail -1 | sed 's/Tests:[[:space:]]*//')
+                echo "✅ $summary"
+            else
+                echo "✅ passed"
+            fi
+        else
+            echo "❌ FAILED"
+            echo "$ts_test_output" | grep -E "(FAIL|Error:|✕)" | head -10
+            exit 1
+        fi
+        cd ..
+    else
+        echo "⚠️  skipped (mcp-server-ts not found)"
+    fi
+    
+    # Rust Clippy linting
+    printf "   Rust Linting: "
     if cargo clippy --all-targets --all-features -- -W clippy::all >/dev/null 2>&1; then
         echo "✅ clean"
     else
@@ -122,7 +161,7 @@ test *FILTER:
         exit 1
     fi
     
-    echo "🎉 All Rust checks passed!"
+    echo "🎉 All checks passed (Rust + TypeScript)!"
 
 # Run only Rust tests (no formatting/linting)
 test-only *FILTER:
@@ -180,6 +219,7 @@ status:
     @echo "Development tools:"
     @command -v git >/dev/null 2>&1 && echo "  ✅ git" || echo "  ❌ git"
     @command -v just >/dev/null 2>&1 && echo "  ✅ just" || echo "  ❌ just"
+    @command -v npm >/dev/null 2>&1 && echo "  ✅ npm" || echo "  ❌ npm"
     @echo ""
     @echo "Git hooks:"
     @[ -f .git/hooks/pre-commit ] && echo "  ✅ pre-commit" || echo "  ❌ pre-commit"
@@ -188,7 +228,10 @@ status:
     @echo "Binary status:"
     @[ -f target/debug/para ] && echo "  ✅ debug CLI binary built" || echo "  ❌ debug CLI binary not found"
     @[ -f target/release/para ] && echo "  ✅ release CLI binary built" || echo "  ❌ release CLI binary not found"
-    @[ -f mcp-server-ts/build/para-mcp-server.js ] && echo "  ✅ MCP server built" || echo "  ❌ MCP server not found (build with: cd mcp-server-ts && npm install && npm run build)"
+    @[ -f mcp-server-ts/build/para-mcp-server-new.js ] && echo "  ✅ MCP server built" || echo "  ❌ MCP server not found (run: just build-ts)"
+    @echo ""
+    @echo "TypeScript status:"
+    @[ -d mcp-server-ts/node_modules ] && echo "  ✅ dependencies installed" || echo "  ❌ dependencies not installed (run: just build-ts)"
 
 # Development workflow setup
 dev-setup: setup-hooks test
@@ -197,7 +240,8 @@ dev-setup: setup-hooks test
     @echo "💡 Available development commands:"
     @echo "   just build          - Build debug binary"
     @echo "   just build-release  - Build release binary"
-    @echo "   just test           - Run comprehensive tests"
+    @echo "   just build-ts       - Build TypeScript MCP server"
+    @echo "   just test           - Run comprehensive tests (Rust + TypeScript)"
     @echo "   just test [filter]  - Run specific tests"
     @echo "   just lint           - Run clippy linting"
     @echo "   just fmt            - Format code"
