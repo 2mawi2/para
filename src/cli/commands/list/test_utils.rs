@@ -40,10 +40,7 @@ pub mod test_helpers {
 
     /// Create a mock session state with improved parameter handling.
     /// This replaces the old 6-parameter function with a cleaner struct-based approach.
-    pub fn create_test_session_state(
-        state_dir: &Path,
-        params: SessionParams,
-    ) -> Result<()> {
+    pub fn create_test_session_state(state_dir: &Path, params: SessionParams) -> Result<()> {
         fs::create_dir_all(state_dir)?;
 
         // Create a proper SessionState and serialize it to JSON
