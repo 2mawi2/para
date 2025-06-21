@@ -326,51 +326,86 @@ fn apply_remove_prompt_file_transformation(
         .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
 }
 
-fn apply_add_continue_flag_transformation(
-    tasks_file: &Path,
-    has_skip_permissions: bool,
-) -> Result<()> {
+/// Loads and parses a tasks.json file
+fn load_tasks_json(tasks_file: &Path) -> Result<Value> {
     let content = fs::read_to_string(tasks_file)
         .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
 
-    let mut json: Value = serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
+    serde_json::from_str(&content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))
+}
 
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
-                let updated_command = if has_skip_permissions {
-                    if command.contains("claude --dangerously-skip-permissions")
-                        && !command.contains("-c")
-                    {
-                        command.replace(
-                            "claude --dangerously-skip-permissions",
-                            "claude --dangerously-skip-permissions -c",
-                        )
-                    } else {
-                        command.to_string()
-                    }
-                } else if command == "claude" {
-                    "claude -c".to_string()
-                } else if command.starts_with("claude ") && !command.contains("-c") {
-                    command.replace("claude ", "claude -c ")
-                } else {
-                    command.to_string()
-                };
-
-                if updated_command != command {
-                    task["command"] = Value::String(updated_command);
-                }
-            }
-        }
-    }
-
+/// Saves a JSON value to a tasks.json file with pretty formatting
+fn save_tasks_json(tasks_file: &Path, json: Value) -> Result<()> {
     let updated_content = serde_json::to_string_pretty(&json)
         .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
 
     fs::write(tasks_file, updated_content)
         .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+}
+
+/// Checks if a command needs the continue flag added
+fn needs_continue_flag(command: &str) -> bool {
+    !command.contains("-c")
+}
+
+/// Transforms a Claude command to include the continue flag
+fn transform_claude_command(command: &str, has_skip_permissions: bool) -> String {
+    if has_skip_permissions {
+        transform_claude_command_with_skip_permissions(command)
+    } else {
+        transform_claude_command_regular(command)
+    }
+}
+
+/// Transforms Claude commands with --dangerously-skip-permissions flag
+fn transform_claude_command_with_skip_permissions(command: &str) -> String {
+    if command.contains("claude --dangerously-skip-permissions") && needs_continue_flag(command) {
+        command.replace(
+            "claude --dangerously-skip-permissions",
+            "claude --dangerously-skip-permissions -c",
+        )
+    } else {
+        command.to_string()
+    }
+}
+
+/// Transforms regular Claude commands (without --dangerously-skip-permissions)
+fn transform_claude_command_regular(command: &str) -> String {
+    if command == "claude" {
+        "claude -c".to_string()
+    } else if command.starts_with("claude ") && needs_continue_flag(command) {
+        command.replace("claude ", "claude -c ")
+    } else {
+        command.to_string()
+    }
+}
+
+fn apply_add_continue_flag_transformation(
+    tasks_file: &Path,
+    has_skip_permissions: bool,
+) -> Result<()> {
+    let mut json = load_tasks_json(tasks_file)?;
+
+    // Navigate to tasks array and update command fields
+    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
+        for task in tasks {
+            if let Some(command_value) = task.get_mut("command") {
+                // Only transform string commands, preserve arrays and other types unchanged
+                if let Some(command_str) = command_value.as_str() {
+                    let updated_command =
+                        transform_claude_command(command_str, has_skip_permissions);
+
+                    if updated_command != command_str {
+                        *command_value = Value::String(updated_command);
+                    }
+                }
+                // Arrays and other non-string values are left unchanged
+            }
+        }
+    }
+
+    save_tasks_json(tasks_file, json)
 }
 
 fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
@@ -927,6 +962,306 @@ mod tests {
         assert!(result.is_err());
 
         let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_apply_add_continue_flag_transformation_edge_cases() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with empty command string
+        let content = r#"{
+  "tasks": [
+    {
+      "command": ""
+    },
+    {
+      "command": "claude"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("\"command\": \"\""));
+        assert!(updated_content.contains("\"claude -c\""));
+
+        // Test with non-string command field
+        let content = r#"{
+  "tasks": [
+    {
+      "command": ["array", "command"]
+    },
+    {
+      "command": "claude"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("\"array\"") && updated_content.contains("\"command\""));
+        assert!(updated_content.contains("\"claude -c\""));
+
+        // Test with various Claude command variations
+        let content = r#"{
+  "tasks": [
+    {
+      "command": "claude --help"
+    },
+    {
+      "command": "claude --verbose --other-flag"
+    },
+    {
+      "command": "claude -c --already-has-flag"
+    },
+    {
+      "command": "other-command"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, false);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        assert!(updated_content.contains("\"claude -c --help\""));
+        assert!(updated_content.contains("\"claude -c --verbose --other-flag\""));
+        assert!(updated_content.contains("\"claude -c --already-has-flag\""));
+        assert!(updated_content.contains("\"other-command\""));
+    }
+
+    #[test]
+    fn test_apply_add_continue_flag_transformation_complex_skip_permissions() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test various combinations with skip permissions
+        let content = r#"{
+  "tasks": [
+    {
+      "command": "claude --dangerously-skip-permissions --verbose"
+    },
+    {
+      "command": "claude --dangerously-skip-permissions -c already-has"
+    },
+    {
+      "command": "claude --other-flag --dangerously-skip-permissions"
+    },
+    {
+      "command": "claude --dangerously-skip-permissions"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, content).unwrap();
+
+        let result = super::apply_add_continue_flag_transformation(&tasks_file, true);
+        assert!(result.is_ok());
+
+        let updated_content = fs::read_to_string(&tasks_file).unwrap();
+        // Should add -c after --dangerously-skip-permissions (contains exact match)
+        assert!(updated_content.contains("\"claude --dangerously-skip-permissions -c --verbose\""));
+        // Should not change if -c already exists
+        assert!(
+            updated_content.contains("\"claude --dangerously-skip-permissions -c already-has\"")
+        );
+        // Should NOT change if exact match not found (current behavior)
+        assert!(updated_content.contains("\"claude --other-flag --dangerously-skip-permissions\""));
+        // Should handle exact match
+        assert!(updated_content.contains("\"claude --dangerously-skip-permissions -c\""));
+    }
+
+    // Tests for helper functions
+
+    #[test]
+    fn test_needs_continue_flag() {
+        assert!(super::needs_continue_flag("claude"));
+        assert!(super::needs_continue_flag("claude --verbose"));
+        assert!(super::needs_continue_flag(
+            "claude --dangerously-skip-permissions"
+        ));
+
+        assert!(!super::needs_continue_flag("claude -c"));
+        assert!(!super::needs_continue_flag(
+            "claude --dangerously-skip-permissions -c"
+        ));
+        assert!(!super::needs_continue_flag("claude -c --verbose"));
+    }
+
+    #[test]
+    fn test_transform_claude_command_regular() {
+        // Test exact match
+        assert_eq!(
+            super::transform_claude_command_regular("claude"),
+            "claude -c"
+        );
+
+        // Test with additional flags
+        assert_eq!(
+            super::transform_claude_command_regular("claude --verbose"),
+            "claude -c --verbose"
+        );
+        assert_eq!(
+            super::transform_claude_command_regular("claude --help"),
+            "claude -c --help"
+        );
+
+        // Test already has -c flag (no change)
+        assert_eq!(
+            super::transform_claude_command_regular("claude -c"),
+            "claude -c"
+        );
+        assert_eq!(
+            super::transform_claude_command_regular("claude -c --verbose"),
+            "claude -c --verbose"
+        );
+
+        // Test non-Claude commands (no change)
+        assert_eq!(
+            super::transform_claude_command_regular("echo hello"),
+            "echo hello"
+        );
+        assert_eq!(super::transform_claude_command_regular(""), "");
+
+        // Test edge cases
+        assert_eq!(
+            super::transform_claude_command_regular("claudetest"),
+            "claudetest"
+        );
+    }
+
+    #[test]
+    fn test_transform_claude_command_with_skip_permissions() {
+        // Test with exact match
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions"
+            ),
+            "claude --dangerously-skip-permissions -c"
+        );
+
+        // Test with additional flags
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions --verbose"
+            ),
+            "claude --dangerously-skip-permissions -c --verbose"
+        );
+
+        // Test already has -c flag (no change)
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions(
+                "claude --dangerously-skip-permissions -c"
+            ),
+            "claude --dangerously-skip-permissions -c"
+        );
+
+        // Test partial match that doesn't get transformed (current behavior)
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions(
+                "claude --other-flag --dangerously-skip-permissions"
+            ),
+            "claude --other-flag --dangerously-skip-permissions"
+        );
+
+        // Test non-matching commands (no change)
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions("claude"),
+            "claude"
+        );
+        assert_eq!(
+            super::transform_claude_command_with_skip_permissions("echo hello"),
+            "echo hello"
+        );
+    }
+
+    #[test]
+    fn test_transform_claude_command() {
+        // Test with skip permissions = true
+        assert_eq!(
+            super::transform_claude_command("claude --dangerously-skip-permissions", true),
+            "claude --dangerously-skip-permissions -c"
+        );
+
+        // Test with skip permissions = false
+        assert_eq!(
+            super::transform_claude_command("claude", false),
+            "claude -c"
+        );
+        assert_eq!(
+            super::transform_claude_command("claude --verbose", false),
+            "claude -c --verbose"
+        );
+
+        // Test non-matching commands
+        assert_eq!(
+            super::transform_claude_command("echo hello", true),
+            "echo hello"
+        );
+        assert_eq!(
+            super::transform_claude_command("echo hello", false),
+            "echo hello"
+        );
+    }
+
+    #[test]
+    fn test_load_and_save_tasks_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        // Test with valid JSON
+        let original_content = r#"{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test Task",
+      "command": "claude"
+    }
+  ]
+}"#;
+        fs::write(&tasks_file, original_content).unwrap();
+
+        // Load JSON
+        let json = super::load_tasks_json(&tasks_file).unwrap();
+        assert!(json.get("version").is_some());
+        assert!(json.get("tasks").is_some());
+
+        // Save JSON back
+        let result = super::save_tasks_json(&tasks_file, json);
+        assert!(result.is_ok());
+
+        // Verify it can be read again
+        let content_after_save = fs::read_to_string(&tasks_file).unwrap();
+        assert!(content_after_save.contains("\"version\""));
+        assert!(content_after_save.contains("\"tasks\""));
+        assert!(content_after_save.contains("\"claude\""));
+    }
+
+    #[test]
+    fn test_load_tasks_json_with_invalid_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("nonexistent.json");
+
+        let result = super::load_tasks_json(&tasks_file);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_tasks_json_with_invalid_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join("tasks.json");
+
+        fs::write(&tasks_file, "{ invalid json }").unwrap();
+
+        let result = super::load_tasks_json(&tasks_file);
         assert!(result.is_err());
     }
 }
