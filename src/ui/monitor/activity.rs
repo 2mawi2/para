@@ -493,4 +493,379 @@ mod tests {
             );
         }
     }
+
+    // COMPREHENSIVE ACTIVITY TESTS - PHASE 1
+    // These tests cover activity detection algorithms, timestamp tracking,
+    // state transitions, and persistence of activity data
+
+    #[test]
+    fn test_activity_detection_algorithm_priority() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Create files with different timestamps to test priority
+        let base_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Oldest: git internal file
+        let git_dir = find_git_dir(git_temp.path());
+        let index_path = git_dir.join("index");
+        if index_path.exists() {
+            set_file_mtime(
+                &index_path,
+                FileTime::from_unix_time(base_time as i64 - 60, 0),
+            )
+            .unwrap();
+        }
+
+        // Middle: untracked file
+        let untracked_file = git_temp.path().join("untracked.txt");
+        fs::write(&untracked_file, "Untracked content").unwrap();
+        set_file_mtime(
+            &untracked_file,
+            FileTime::from_unix_time(base_time as i64 - 30, 0),
+        )
+        .unwrap();
+
+        // Newest: modified tracked file
+        let readme_path = git_temp.path().join("README.md");
+        fs::write(&readme_path, "# Modified README").unwrap();
+        set_file_mtime(&readme_path, FileTime::from_unix_time(base_time as i64, 0)).unwrap();
+
+        // Should return the most recent activity (modified tracked file)
+        let activity = detect_last_activity(git_temp.path()).unwrap();
+        let expected_time = DateTime::from_timestamp(base_time as i64, 0).unwrap();
+        let diff = (activity - expected_time).num_seconds().abs();
+
+        assert!(
+            diff < 2,
+            "Should detect most recent activity (README), diff was {} seconds",
+            diff
+        );
+    }
+
+    #[test]
+    fn test_activity_detection_file_priority_ordering() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Test that the algorithm correctly prioritizes newer files over older ones
+        let base_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create multiple files with different timestamps
+        let old_file = git_temp.path().join("old_file.txt");
+        fs::write(&old_file, "Old content").unwrap();
+        set_file_mtime(
+            &old_file,
+            FileTime::from_unix_time(base_time as i64 - 100, 0),
+        )
+        .unwrap();
+
+        let medium_file = git_temp.path().join("medium_file.txt");
+        fs::write(&medium_file, "Medium content").unwrap();
+        set_file_mtime(
+            &medium_file,
+            FileTime::from_unix_time(base_time as i64 - 50, 0),
+        )
+        .unwrap();
+
+        let new_file = git_temp.path().join("new_file.txt");
+        fs::write(&new_file, "New content").unwrap();
+        set_file_mtime(&new_file, FileTime::from_unix_time(base_time as i64, 0)).unwrap();
+
+        // Should return the newest file's timestamp
+        let activity = detect_last_activity(git_temp.path()).unwrap();
+        let expected_time = DateTime::from_timestamp(base_time as i64, 0).unwrap();
+        let diff = (activity - expected_time).num_seconds().abs();
+
+        assert!(
+            diff < 2,
+            "Should detect most recent file activity, diff was {} seconds",
+            diff
+        );
+    }
+
+    #[test]
+    fn test_timestamp_tracking_edge_cases() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Test with file timestamps in the future
+        let future_file = git_temp.path().join("future_file.txt");
+        fs::write(&future_file, "From the future").unwrap();
+
+        let future_time = std::time::SystemTime::now() + std::time::Duration::from_secs(3600); // 1 hour in future
+        set_file_mtime(&future_file, FileTime::from(future_time)).unwrap();
+
+        let activity = detect_last_activity(git_temp.path());
+        assert!(
+            activity.is_some(),
+            "Should handle future timestamps gracefully"
+        );
+
+        // Test with file timestamps in the distant past
+        let past_file = git_temp.path().join("ancient_file.txt");
+        fs::write(&past_file, "From the past").unwrap();
+        set_file_mtime(&past_file, FileTime::from_unix_time(0, 0)).unwrap(); // Unix epoch
+
+        let activity_with_past = detect_last_activity(git_temp.path());
+        assert!(
+            activity_with_past.is_some(),
+            "Should handle ancient timestamps"
+        );
+
+        // Should prefer the newer file (future_file or recent git activity)
+        if let Some(detected_time) = activity_with_past {
+            assert!(
+                detected_time.timestamp() > 0,
+                "Should not be stuck at unix epoch"
+            );
+        }
+    }
+
+    #[test]
+    fn test_activity_detection_with_symlinks() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Create a target file
+        let target_file = git_temp.path().join("target.txt");
+        fs::write(&target_file, "Target content").unwrap();
+
+        // Create a symlink (if supported by the platform)
+        let symlink_path = git_temp.path().join("symlink.txt");
+        if std::os::unix::fs::symlink(&target_file, &symlink_path).is_ok() {
+            // Update target file timestamp
+            set_file_mtime(&target_file, FileTime::now()).unwrap();
+
+            let activity = detect_last_activity(git_temp.path());
+            assert!(activity.is_some(), "Should handle symlinks gracefully");
+
+            // Should detect activity from the target file
+            if let Some(time) = activity {
+                let now = Utc::now();
+                let diff = now - time;
+                assert!(
+                    diff.num_seconds() < 5,
+                    "Should detect recent activity through symlinks"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_activity_detection_race_conditions() {
+        use std::thread;
+        use std::time::Duration;
+
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Simulate concurrent file operations
+        let temp_path = git_temp.path().to_path_buf();
+        let handles: Vec<_> = (0..3)
+            .map(|i| {
+                let path = temp_path.clone();
+                thread::spawn(move || {
+                    let file_path = path.join(format!("concurrent_{}.txt", i));
+                    fs::write(&file_path, format!("Content {}", i)).unwrap();
+                    set_file_mtime(&file_path, FileTime::now()).unwrap();
+
+                    // Small delay to simulate real concurrent operations
+                    thread::sleep(Duration::from_millis(10));
+
+                    detect_last_activity(&path)
+                })
+            })
+            .collect();
+
+        // Collect results from all threads
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+
+        // All should succeed
+        for (i, result) in results.iter().enumerate() {
+            assert!(result.is_some(), "Thread {} should detect activity", i);
+        }
+
+        // Final check should still work
+        let final_activity = detect_last_activity(git_temp.path());
+        assert!(final_activity.is_some(), "Should handle concurrent access");
+    }
+
+    #[test]
+    fn test_activity_persistence_and_caching() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Test that activity detection is consistent across multiple calls
+        let first_call = detect_last_activity(git_temp.path());
+        let second_call = detect_last_activity(git_temp.path());
+
+        assert_eq!(
+            first_call, second_call,
+            "Multiple calls should return same result for unchanged repo"
+        );
+
+        // Add a small delay to ensure clear time separation
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Make a change with explicit future timestamp
+        let test_file = git_temp.path().join("cache_test.txt");
+        fs::write(&test_file, "Cache test content").unwrap();
+
+        let future_time = std::time::SystemTime::now() + std::time::Duration::from_secs(1);
+        set_file_mtime(&test_file, FileTime::from(future_time)).unwrap();
+
+        let after_change = detect_last_activity(git_temp.path());
+        assert!(
+            after_change.is_some()
+                && first_call.is_some()
+                && after_change.unwrap() > first_call.unwrap(),
+            "Should detect new activity after change: after_change={:?}, first_call={:?}",
+            after_change,
+            first_call
+        );
+
+        // Multiple calls after change should still be consistent
+        let after_change_2 = detect_last_activity(git_temp.path());
+        assert_eq!(
+            after_change, after_change_2,
+            "Should be consistent after change"
+        );
+    }
+
+    #[test]
+    fn test_git_dir_detection_edge_cases() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Test with regular repository
+        let git_dir = find_git_dir(git_temp.path());
+        assert!(
+            git_dir.join("HEAD").exists(),
+            "Should find regular .git directory"
+        );
+
+        // Test with non-git directory
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let non_git_dir = find_git_dir(temp_dir.path());
+        assert_eq!(
+            non_git_dir,
+            temp_dir.path().join(".git"),
+            "Should return .git path even if it doesn't exist"
+        );
+    }
+
+    #[test]
+    fn test_file_modification_time_error_handling() {
+        use std::path::PathBuf;
+
+        // Test with non-existent file
+        let nonexistent = PathBuf::from("/nonexistent/file.txt");
+        let result = get_file_modification_time(&nonexistent);
+        assert!(
+            result.is_none(),
+            "Should handle non-existent files gracefully"
+        );
+
+        // Test with valid file
+        let (git_temp, _git_service) = setup_test_repo();
+        let readme_path = git_temp.path().join("README.md");
+        let result = get_file_modification_time(&readme_path);
+        assert!(
+            result.is_some(),
+            "Should get modification time for existing file"
+        );
+    }
+
+    #[test]
+    fn test_update_latest_time_logic() {
+        let mut latest: Option<SystemTime> = None;
+        let base_time = SystemTime::now();
+        let earlier_time = base_time - std::time::Duration::from_secs(60);
+        let later_time = base_time + std::time::Duration::from_secs(60);
+
+        // First update (None -> Some)
+        update_latest_time(&mut latest, base_time);
+        assert_eq!(latest, Some(base_time));
+
+        // Update with earlier time (should not change)
+        update_latest_time(&mut latest, earlier_time);
+        assert_eq!(latest, Some(base_time));
+
+        // Update with later time (should change)
+        update_latest_time(&mut latest, later_time);
+        assert_eq!(latest, Some(later_time));
+    }
+
+    #[test]
+    fn test_update_latest_datetime_logic() {
+        let mut latest: Option<DateTime<Utc>> = None;
+        let base_time = Utc::now();
+        let earlier_time = base_time - chrono::Duration::minutes(10);
+        let later_time = base_time + chrono::Duration::minutes(10);
+
+        // First update (None -> Some)
+        update_latest_datetime(&mut latest, base_time);
+        assert_eq!(latest, Some(base_time));
+
+        // Update with earlier time (should not change)
+        update_latest_datetime(&mut latest, earlier_time);
+        assert_eq!(latest, Some(base_time));
+
+        // Update with later time (should change)
+        update_latest_datetime(&mut latest, later_time);
+        assert_eq!(latest, Some(later_time));
+    }
+
+    #[test]
+    fn test_activity_detection_performance_with_many_files() {
+        let (git_temp, _git_service) = setup_test_repo();
+
+        // Create many files to test performance and correctness
+        let base_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let mut newest_time = base_time;
+
+        // Create 10 files with different timestamps
+        for i in 0..10 {
+            let file_path = git_temp.path().join(format!("file_{}.txt", i));
+            fs::write(&file_path, format!("Content {}", i)).unwrap();
+
+            let file_time = base_time + i as u64;
+            set_file_mtime(&file_path, FileTime::from_unix_time(file_time as i64, 0)).unwrap();
+
+            if file_time > newest_time {
+                newest_time = file_time;
+            }
+        }
+
+        // Should detect the newest file's timestamp
+        let activity = detect_last_activity(git_temp.path()).unwrap();
+        let expected_time = DateTime::from_timestamp(newest_time as i64, 0).unwrap();
+        let diff = (activity - expected_time).num_seconds().abs();
+
+        assert!(
+            diff < 2,
+            "Should find newest file among many: expected {:?}, got {:?}, diff {} seconds",
+            expected_time,
+            activity,
+            diff
+        );
+
+        // Test should complete quickly (performance check)
+        let start = std::time::Instant::now();
+        let _second_call = detect_last_activity(git_temp.path());
+        let duration = start.elapsed();
+
+        assert!(
+            duration.as_millis() < 1000,
+            "Activity detection should be reasonably fast even with many files: took {:?}",
+            duration
+        );
+    }
 }

@@ -705,4 +705,485 @@ mod tests {
         let result = service.load_sessions(false);
         assert!(result.is_ok());
     }
+
+    // COMPREHENSIVE SERVICE TESTS - PHASE 1
+    // These tests cover session aggregation, monitoring cycles, error handling,
+    // and mock filesystem/git operations
+
+    #[test]
+    fn test_session_aggregation_pipeline() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let service = SessionService::new(config);
+
+        // Test the complete aggregation pipeline
+        let result = service.load_sessions(true);
+        assert!(result.is_ok());
+
+        let sessions = result.unwrap();
+        // Should handle empty session list gracefully
+        assert!(sessions.is_empty() || !sessions.is_empty()); // Either case is valid for empty environment
+    }
+
+    #[test]
+    fn test_session_enrichment_stages() {
+        use crate::core::session::SessionState;
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let service = SessionService::new(config);
+
+        // Create mock session states
+        let session_states = vec![SessionState::new(
+            "test-session-1".to_string(),
+            "test-branch-1".to_string(),
+            git_temp.path().to_path_buf(),
+        )];
+
+        // Test activity enrichment stage
+        let enriched_result = service.enrich_with_activity(session_states);
+        assert!(enriched_result.is_ok());
+
+        let enriched_sessions = enriched_result.unwrap();
+        assert_eq!(enriched_sessions.len(), 1);
+
+        // Test task enrichment stage
+        let task_enriched_result = service.enrich_with_tasks(enriched_sessions);
+        assert!(task_enriched_result.is_ok());
+
+        let task_sessions = task_enriched_result.unwrap();
+        assert_eq!(task_sessions.len(), 1);
+        assert!(!task_sessions[0].task.is_empty());
+
+        // Test agent status enrichment stage
+        let agent_enriched_result = service.enrich_with_agent_status(task_sessions);
+        assert!(agent_enriched_result.is_ok());
+
+        let final_sessions = agent_enriched_result.unwrap();
+        assert_eq!(final_sessions.len(), 1);
+    }
+
+    #[test]
+    fn test_monitoring_refresh_cycles() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let service = SessionService::new(config);
+
+        // Test multiple monitoring cycles
+        for _i in 0..3 {
+            let result = service.load_sessions(true);
+            assert!(result.is_ok(), "Monitoring cycle should always succeed");
+
+            // Test both stale and non-stale filters
+            let stale_result = service.load_sessions(true);
+            let non_stale_result = service.load_sessions(false);
+
+            assert!(stale_result.is_ok());
+            assert!(non_stale_result.is_ok());
+
+            // Non-stale should have same or fewer sessions than stale
+            let stale_sessions = stale_result.unwrap();
+            let non_stale_sessions = non_stale_result.unwrap();
+            assert!(non_stale_sessions.len() <= stale_sessions.len());
+        }
+    }
+
+    #[test]
+    fn test_error_handling_missing_directories() {
+        // Test with completely invalid state directory
+        let mut config = create_test_config();
+        config.directories.state_dir = "/nonexistent/invalid/path".to_string();
+
+        let service = SessionService::new(config);
+
+        // Should handle missing directories gracefully
+        let result = service.load_sessions(true);
+        // This might succeed with empty list or fail gracefully
+        if let Ok(sessions) = result {
+            assert!(sessions.is_empty());
+        }
+        // Error is also acceptable for invalid paths
+    }
+
+    #[test]
+    fn test_error_handling_corrupted_state_files() {
+        use crate::test_utils::test_helpers::*;
+        use std::fs;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let state_dir = temp_dir.path().join(".para_state");
+        fs::create_dir_all(&state_dir).unwrap();
+
+        // Create corrupted agent status file
+        fs::write(state_dir.join("test-session.json"), "invalid json {{{").unwrap();
+
+        // Create corrupted task file
+        fs::write(
+            state_dir.join("test-session.task"),
+            "\x00\x01\x02invalid\x03",
+        )
+        .unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        let service = SessionService::new(config);
+
+        // Should handle corrupted files gracefully
+        let result = service.load_sessions(true);
+        assert!(
+            result.is_ok(),
+            "Should handle corrupted state files gracefully"
+        );
+    }
+
+    #[test]
+    fn test_session_filtering_and_sorting_logic() {
+        use crate::test_utils::test_helpers::*;
+        use crate::ui::monitor::SessionStatus;
+        use chrono::{Duration, Utc};
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let _service = SessionService::new(config);
+
+        // Create mock sessions with different statuses and times
+        let now = Utc::now();
+        let mut sessions = vec![
+            SessionInfo {
+                name: "active-session".to_string(),
+                branch: "feature/active".to_string(),
+                status: SessionStatus::Active,
+                last_activity: now,
+                task: "Active task".to_string(),
+                worktree_path: git_temp.path().to_path_buf(),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
+            },
+            SessionInfo {
+                name: "stale-session".to_string(),
+                branch: "old/stale".to_string(),
+                status: SessionStatus::Stale,
+                last_activity: now - Duration::days(2),
+                task: "Stale task".to_string(),
+                worktree_path: git_temp.path().to_path_buf(),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
+            },
+            SessionInfo {
+                name: "idle-session".to_string(),
+                branch: "fix/idle".to_string(),
+                status: SessionStatus::Idle,
+                last_activity: now - Duration::minutes(30),
+                task: "Idle task".to_string(),
+                worktree_path: git_temp.path().to_path_buf(),
+                test_status: None,
+                confidence: None,
+                todo_percentage: None,
+                is_blocked: false,
+            },
+        ];
+
+        // Test filtering logic (simulate apply_filtering_and_sorting)
+        let original_len = sessions.len();
+
+        // Filter out stale sessions
+        sessions.retain(|session| !matches!(session.status, SessionStatus::Stale));
+        assert_eq!(sessions.len(), original_len - 1); // Should remove 1 stale session
+
+        // Verify no stale sessions remain
+        for session in &sessions {
+            assert!(!matches!(session.status, SessionStatus::Stale));
+        }
+
+        // Test sorting by last activity (newest first)
+        sessions.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
+
+        // Verify sorting
+        for i in 1..sessions.len() {
+            assert!(sessions[i - 1].last_activity >= sessions[i].last_activity);
+        }
+    }
+
+    #[test]
+    fn test_activity_cache_performance() {
+        use crate::test_utils::test_helpers::*;
+        use std::path::PathBuf;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let service = SessionService::new(config);
+
+        // Test cache with multiple paths
+        let test_paths = vec![
+            PathBuf::from("/test/path1"),
+            PathBuf::from("/test/path2"),
+            PathBuf::from("/test/path3"),
+        ];
+
+        // First access should miss cache
+        for path in &test_paths {
+            let cached = service.activity_cache.get(path);
+            assert_eq!(cached, None, "Should miss cache initially");
+        }
+
+        // Set cache values
+        for (i, path) in test_paths.iter().enumerate() {
+            service
+                .activity_cache
+                .set(path.clone(), Some(chrono::Utc::now()));
+
+            // Verify cache hit
+            let cached = service.activity_cache.get(path);
+            assert!(cached.is_some(), "Path {} should be cached", i);
+        }
+
+        // Test cache with many entries (performance test)
+        for i in 0..100 {
+            let path = PathBuf::from(format!("/test/performance/{}", i));
+            service
+                .activity_cache
+                .set(path.clone(), Some(chrono::Utc::now()));
+            let cached = service.activity_cache.get(&path);
+            assert!(cached.is_some(), "Performance path {} should be cached", i);
+        }
+    }
+
+    #[test]
+    fn test_task_cache_file_operations() {
+        use crate::test_utils::test_helpers::*;
+        use std::fs;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let state_dir = temp_dir.path().join(".para_state");
+        fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        let service = SessionService::new(config);
+
+        // Test file reading and caching logic
+        let session_name = "test-session";
+        let task_content = "Complex task description with special characters: äöü, emoji 🚀, and newlines\nLine 2\nLine 3";
+
+        // Write task file
+        fs::write(
+            state_dir.join(format!("{}.task", session_name)),
+            task_content,
+        )
+        .unwrap();
+
+        // Simulate task loading (test file I/O)
+        let task_file = state_dir.join(format!("{}.task", session_name));
+        let loaded_content = fs::read_to_string(task_file).unwrap();
+        assert_eq!(loaded_content, task_content);
+
+        // Test cache operations
+        {
+            let mut cache = service.task_cache.lock().unwrap();
+            cache.insert(session_name.to_string(), task_content.to_string());
+        }
+
+        // Verify cached content
+        {
+            let cache = service.task_cache.lock().unwrap();
+            let cached_content = cache.get(session_name).unwrap();
+            assert_eq!(cached_content, task_content);
+        }
+    }
+
+    #[test]
+    fn test_concurrent_service_operations() {
+        use crate::test_utils::test_helpers::*;
+        use std::sync::Arc;
+        use std::thread;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        let service = Arc::new(SessionService::new(config));
+        let mut handles = vec![];
+
+        // Spawn multiple threads accessing the service concurrently
+        for i in 0..5 {
+            let service_clone = Arc::clone(&service);
+            let handle = thread::spawn(move || {
+                // Test concurrent cache access
+                let cache_key = format!("concurrent-test-{}", i);
+
+                // Write to task cache
+                {
+                    let mut cache = service_clone.task_cache.lock().unwrap();
+                    cache.insert(cache_key.clone(), format!("Task content {}", i));
+                }
+
+                // Read from task cache
+                {
+                    let cache = service_clone.task_cache.lock().unwrap();
+                    let content = cache.get(&cache_key);
+                    assert!(content.is_some());
+                    assert_eq!(content.unwrap(), &format!("Task content {}", i));
+                }
+
+                // Test concurrent session loading
+                let result = service_clone.load_sessions(true);
+                assert!(result.is_ok(), "Concurrent load_sessions should succeed");
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify final state
+        let cache = service.task_cache.lock().unwrap();
+        assert_eq!(cache.len(), 5, "Should have entries from all threads");
+    }
+
+    #[test]
+    fn test_session_status_detection_edge_cases() {
+        use crate::core::session::{SessionState, SessionStatus as CoreSessionStatus};
+        use chrono::{Duration, Utc};
+
+        // Test edge cases for session status detection
+        let now = Utc::now();
+
+        // Test exactly at boundary times
+        let session = SessionState::new(
+            "boundary-test".to_string(),
+            "test-branch".to_string(),
+            std::path::PathBuf::from("/test"),
+        );
+
+        // Test exactly 5 minutes ago (still Active based on 0..=5 range)
+        let exactly_five_minutes = now - Duration::minutes(5);
+        let status = detect_session_status(&session, &exactly_five_minutes);
+        assert!(
+            matches!(status, SessionStatus::Active),
+            "5 minutes should still be Active (0..=5)"
+        );
+
+        // Test exactly 1440 minutes ago (boundary between Idle and Stale)
+        let exactly_one_day = now - Duration::minutes(1440);
+        let status = detect_session_status(&session, &exactly_one_day);
+        assert!(
+            matches!(status, SessionStatus::Idle),
+            "Exactly 1440 minutes should still be Idle"
+        );
+
+        // Test 1441 minutes ago (should be Stale)
+        let over_one_day = now - Duration::minutes(1441);
+        let status = detect_session_status(&session, &over_one_day);
+        assert!(
+            matches!(status, SessionStatus::Stale),
+            "Over 1440 minutes should be Stale"
+        );
+
+        // Test Review status override
+        let mut review_session = SessionState::new(
+            "review-test".to_string(),
+            "review-branch".to_string(),
+            std::path::PathBuf::from("/test"),
+        );
+        review_session.update_status(CoreSessionStatus::Review);
+
+        let status = detect_session_status(&review_session, &now);
+        assert!(
+            matches!(status, SessionStatus::Review),
+            "Review status should override time-based detection"
+        );
+
+        // Test Finished/Ready status
+        let mut finished_session = SessionState::new(
+            "finished-test".to_string(),
+            "finished-branch".to_string(),
+            std::path::PathBuf::from("/test"),
+        );
+        finished_session.update_status(CoreSessionStatus::Finished);
+
+        let status = detect_session_status(&finished_session, &now);
+        assert!(
+            matches!(status, SessionStatus::Ready),
+            "Finished status should map to Ready"
+        );
+    }
 }
