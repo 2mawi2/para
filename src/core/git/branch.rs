@@ -62,7 +62,7 @@ impl<'a> BranchManager<'a> {
         Ok(branches)
     }
 
-    pub fn move_to_archive(&self, branch: &str, prefix: &str) -> Result<String> {
+    fn archive_branch_with_name(&self, branch: &str, archived_name: &str) -> Result<String> {
         self.validate_branch_name(branch)?;
 
         if !self.branch_exists(branch)? {
@@ -72,12 +72,15 @@ impl<'a> BranchManager<'a> {
             )));
         }
 
+        execute_git_command_with_status(self.repo, &["branch", "-m", branch, archived_name])?;
+
+        Ok(archived_name.to_string())
+    }
+
+    pub fn move_to_archive(&self, branch: &str, prefix: &str) -> Result<String> {
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
         let archived_name = format!("{}/archived/{}/{}", prefix, timestamp, branch);
-
-        execute_git_command_with_status(self.repo, &["branch", "-m", branch, &archived_name])?;
-
-        Ok(archived_name)
+        self.archive_branch_with_name(branch, &archived_name)
     }
 
     pub fn move_to_archive_with_session_name(
@@ -86,21 +89,9 @@ impl<'a> BranchManager<'a> {
         session_name: &str,
         prefix: &str,
     ) -> Result<String> {
-        self.validate_branch_name(branch)?;
-
-        if !self.branch_exists(branch)? {
-            return Err(ParaError::git_operation(format!(
-                "Branch '{}' does not exist",
-                branch
-            )));
-        }
-
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
         let archived_name = format!("{}/archived/{}/{}", prefix, timestamp, session_name);
-
-        execute_git_command_with_status(self.repo, &["branch", "-m", branch, &archived_name])?;
-
-        Ok(archived_name)
+        self.archive_branch_with_name(branch, &archived_name)
     }
 
     pub fn restore_from_archive(&self, archived_branch: &str, prefix: &str) -> Result<String> {
