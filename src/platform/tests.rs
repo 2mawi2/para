@@ -102,7 +102,7 @@ pub mod platform_tests {
                 .unwrap();
             let handler = crate::platform::macos::CursorHandler;
             let script = handler.generate_applescript(&session_info);
-            assert!(script.contains("set windowTitleFragment to \"my-feature\""));
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
 
         #[test]
@@ -261,7 +261,7 @@ pub mod platform_tests {
 
             let script = handler.generate_applescript(&session_info);
             assert!(script.contains("set appName to \"Cursor\""));
-            assert!(script.contains("set windowTitleFragment to \"my-feature\""));
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
 
         #[test]
@@ -298,7 +298,7 @@ pub mod platform_tests {
             };
             let handler = CursorHandler;
             let script = handler.generate_applescript(&session_info);
-            assert!(script.contains("set windowTitleFragment to \"my-feature\""));
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
 
             // Test Cursor with Docker format
             let session_info2 = SessionInfo {

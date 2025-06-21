@@ -6,8 +6,10 @@ pub struct MacOSPlatform;
 
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
+    #[allow(dead_code)]
     pub name: String,
     pub original_id: String,
+    #[allow(dead_code)]
     pub format_type: SessionNameFormat,
 }
 
@@ -39,18 +41,8 @@ impl IdeHandler for CursorHandler {
     }
 
     fn generate_applescript(&self, session_info: &SessionInfo) -> String {
-        let search_fragment = match session_info.format_type {
-            SessionNameFormat::Timestamp => {
-                // Legacy format: use parsed name without timestamp
-                session_info.name.clone()
-            }
-            SessionNameFormat::DockerStyle => {
-                // Docker-style format: use as-is
-                session_info.name.clone()
-            }
-        };
-
-        generate_applescript_template("Cursor", &search_fragment)
+        // Use original_id for collision-safe window matching, consistent with VSCode
+        generate_applescript_template("Cursor", &session_info.original_id)
     }
 }
 
@@ -193,7 +185,9 @@ impl MacOSPlatform {
                 #[cfg(test)]
                 {
                     // In tests, use the test utility function
-                    crate::platform::tests::platform_tests::parse_launch_file_contents(&contents, ide_name)
+                    crate::platform::tests::platform_tests::parse_launch_file_contents(
+                        &contents, ide_name,
+                    )
                 }
                 #[cfg(not(test))]
                 {
