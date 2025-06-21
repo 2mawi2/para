@@ -11,6 +11,10 @@ use crate::config::ConfigManager;
 use crate::utils::{ParaError, Result};
 
 pub fn execute_command(cli: Cli) -> Result<()> {
+    // Add debug logging for completion script detection
+    if std::env::var("PARA_COMPLETION_SCRIPT").is_ok() {
+        crate::utils::debug_log("Running in completion script mode");
+    }
     execute_command_with_config(cli, None)
 }
 
