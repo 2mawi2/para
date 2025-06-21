@@ -7,6 +7,10 @@ on:
 jobs:
   auto-review:
     runs-on: ubuntu-latest
+    # Prevent concurrent runs on the same PR to avoid race conditions
+    concurrency:
+      group: claude-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     # Only review PRs created by 2mawi2
     if: github.event.pull_request.user.login == '2mawi2'
     permissions:
@@ -15,6 +19,33 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Wait for PR Assistant to complete
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          # Check if PR assistant is currently running
+          echo "Checking for running PR assistant workflow..."
+          
+          # Wait up to 5 minutes for any running PR assistant jobs
+          for i in {1..30}; do
+            RUNNING_JOBS=$(gh run list --workflow="claude-pr-assistant.yml" --status="in_progress" --json "databaseId,headBranch" --jq ".[] | select(.headBranch == \"${{ github.head_ref }}\") | .databaseId" || true)
+            
+            if [ -z "$RUNNING_JOBS" ]; then
+              echo "No PR assistant jobs running, proceeding with review"
+              break
+            fi
+            
+            echo "PR assistant job(s) still running: $RUNNING_JOBS"
+            echo "Waiting 10 seconds before checking again... ($i/30)"
+            sleep 10
+          done
+          
+          # Final check
+          RUNNING_JOBS=$(gh run list --workflow="claude-pr-assistant.yml" --status="in_progress" --json "databaseId,headBranch" --jq ".[] | select(.headBranch == \"${{ github.head_ref }}\") | .databaseId" || true)
+          if [ ! -z "$RUNNING_JOBS" ]; then
+            echo "WARNING: PR assistant still running after 5 minutes, proceeding anyway"
+          fi
+      
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -43,10 +74,14 @@ jobs:
             You are conducting a critical auto-review with iteration tracking. Your job is to find issues that will ACTUALLY cause bugs, not theoretical problems.
 
             **ITERATION TRACKING:**
-            1. Check existing PR comments for `<!-- iteration-count: N -->` to find current iteration
-            2. If iteration >= 3: provide final review only, do NOT add @claude comment
-            3. If iteration < 3 AND critical issues found: auto-trigger with structured comment
-            4. When checking previous iterations, focus on whether issues were actually resolved
+            1. Check ONLY PR comments that contain `<!-- iteration-count: N -->` to find current iteration
+               - IGNORE the PR description/body - it's not an iteration
+               - ONLY count comments with the iteration marker
+            2. If no comments with `<!-- iteration-count: N -->` exist, this is the FIRST iteration (iteration 1)
+            3. If highest iteration found >= 3: provide final review only, do NOT add @claude comment
+            4. If highest iteration found < 3 AND critical issues found: auto-trigger with structured comment
+            5. When checking previous iterations, focus on whether issues were actually resolved
+            6. IMPORTANT: Wait for any running PR assistant jobs to complete before starting review
 
             **CRITICAL REVIEW GUIDELINES - Use this systematic 5-step approach:**
 
@@ -140,7 +175,7 @@ jobs:
             7. STEPS 2-5: Review using the remaining methodological approaches
             8. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
             9. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo fmt --all -- --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(rg *),Bash(rg "#\\[allow\\(dead_code\\)\\]|#\\[allow\\(unused_imports\\)\\]"),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo fmt --all -- --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(rg *),Bash(rg "#\\[allow\\(dead_code\\)\\]|#\\[allow\\(unused_imports\\)\\]"),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
@@ -148,6 +183,7 @@ jobs:
             - mcp__github__get_pull_request_diff - View PR changes
             - mcp__github__get_pull_request_comments - Read existing PR comments (for iteration tracking)
             - mcp__github__get_issue - Read linked issues for full context and original requirements
+            - mcp__github__add_pull_request_comment - Add comments to the PR
             - Write - Create .github-triggers/auto-trigger.json file for triggering PR assistant
             - mcp__github__create_pending_pull_request_review - Start a review
             - mcp__github__add_pull_request_review_comment_to_pending_review - Add inline comments
@@ -186,11 +222,13 @@ jobs:
             - `git show <commit>` - Examine specific commits
             
             **ITERATION TRACKING WORKFLOW:**
-            1. Use mcp__github__get_pull_request_comments to read existing comments
-            2. Look for `<!-- iteration-count: N -->` in comment bodies to determine current iteration
-            3. If no iteration found, start at iteration 0
-            4. If iteration >= 3, provide final review only (no auto-trigger)
-            5. If critical issues found AND iteration < 3:
+            1. Use mcp__github__get_pull_request_comments to read ALL existing PR comments
+            2. Filter to ONLY comments containing `<!-- iteration-count: N -->` marker
+            3. Find the HIGHEST iteration number from these filtered comments
+            4. If no such comments exist, current iteration = 1 (first review)
+            5. If highest iteration >= 3, provide final review only (no auto-trigger)
+            6. If critical issues found AND highest iteration < 3:
+               - Next iteration = highest iteration + 1
                - Create `.github-triggers/` directory and write JSON file
                - JSON must include both iteration number and formatted comment
             
