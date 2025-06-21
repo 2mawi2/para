@@ -40,14 +40,6 @@ impl<'a> ArchiveManager<'a> {
         Ok(entries)
     }
 
-    #[allow(dead_code)]
-    pub fn find_archive(&self, session_name: &str) -> Result<Option<ArchiveEntry>> {
-        let archives = self.list_archives()?;
-        Ok(archives
-            .into_iter()
-            .find(|a| a.session_name == session_name))
-    }
-
     pub fn cleanup_old_archives(&self) -> Result<usize> {
         let Some(cleanup_days) = self.config.session.auto_cleanup_days else {
             return Ok(0);
@@ -196,53 +188,6 @@ mod tests {
     }
 
     #[test]
-    fn test_find_nonexistent_archive() {
-        let temp_dir = TempDir::new().unwrap();
-        let git_temp = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        let config = create_test_config_with_dir(&temp_dir);
-        let archive_manager = ArchiveManager::new(&config, &git_service);
-
-        let result = archive_manager.find_archive("nonexistent");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
-    }
-
-    #[test]
-    fn test_create_and_find_archive() {
-        let temp_dir = TempDir::new().unwrap();
-        let git_temp = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        let config = create_test_config_with_dir(&temp_dir);
-        let archive_manager = ArchiveManager::new(&config, &git_service);
-        let branch_manager = git_service.branch_manager();
-
-        let initial_branch = git_service.repository().get_current_branch().unwrap();
-        branch_manager
-            .create_branch("test-session", &initial_branch)
-            .unwrap();
-
-        git_service
-            .repository()
-            .checkout_branch(&initial_branch)
-            .unwrap();
-
-        branch_manager
-            .move_to_archive("test-session", config.get_branch_prefix())
-            .unwrap();
-
-        let found_archive = archive_manager.find_archive("test-session").unwrap();
-        assert!(found_archive.is_some());
-
-        let archive = found_archive.unwrap();
-        assert_eq!(archive.session_name, "test-session");
-    }
-
-    #[test]
     fn test_parse_timestamp_formats() {
         let temp_dir = TempDir::new().unwrap();
         let git_temp = TempDir::new().unwrap();
@@ -294,60 +239,6 @@ mod tests {
         for i in 0..archives.len() - 1 {
             assert!(archives[i].archived_at >= archives[i + 1].archived_at);
         }
-    }
-
-    #[test]
-    fn test_cancel_and_recover_session_integration() {
-        // This test reproduces the real-world cancel/recover integration issue
-        let temp_dir = TempDir::new().unwrap();
-        let git_temp = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        let config = create_test_config_with_dir(&temp_dir);
-        let archive_manager = ArchiveManager::new(&config, &git_service);
-        let branch_manager = git_service.branch_manager();
-
-        // Simulate creating a session like the start command does
-        let session_name = "integration-test-session";
-        let initial_branch = git_service.repository().get_current_branch().unwrap();
-
-        // Create a timestamped branch like the start command does
-        let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-        let session_branch = format!("{}/{}", config.get_branch_prefix(), timestamp);
-        branch_manager
-            .create_branch(&session_branch, &initial_branch)
-            .unwrap();
-
-        // Switch back to initial branch like cancel command does
-        git_service
-            .repository()
-            .checkout_branch(&initial_branch)
-            .unwrap();
-
-        // Archive the session branch using NEW logic with session name (this should create the correct format)
-        let archived_branch = branch_manager
-            .move_to_archive_with_session_name(
-                &session_branch,
-                session_name,
-                config.get_branch_prefix(),
-            )
-            .unwrap();
-
-        // The archived branch should now be in correct format: para/archived/TIMESTAMP/SESSION-NAME
-        println!("Archived branch: {}", archived_branch);
-
-        // Now this should work with the new session-name-based archiving
-        let found_archive = archive_manager.find_archive(session_name);
-
-        // This test should now PASS with the fix
-        assert!(found_archive.is_ok(), "find_archive should not error");
-        assert!(
-            found_archive.unwrap().is_some(),
-            "Should find archived session '{}' with correct format. Archived as: {}",
-            session_name,
-            archived_branch
-        );
     }
 
     #[test]
