@@ -350,4 +350,346 @@ mod tests {
         assert!(coordinator.handle_key(esc_key).is_ok());
         assert_eq!(coordinator.state.mode, AppMode::Normal);
     }
+
+    // COMPREHENSIVE INTEGRATION TESTS - PHASE 1
+    // These tests verify complete workflows and cross-component communication
+
+    #[test]
+    fn test_integration_complete_session_loading_workflow() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Initial state verification
+        assert_eq!(coordinator.sessions.len(), 0);
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+        assert!(!coordinator.should_quit());
+
+        // Test session refresh workflow
+        coordinator.refresh_sessions();
+
+        // Session loading should complete without errors
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+
+        // State should be consistent after refresh
+        assert!(!coordinator.should_quit());
+        assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+    }
+
+    #[test]
+    fn test_integration_service_to_state_to_renderer_pipeline() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let coordinator = MonitorCoordinator::new(config);
+
+        // Test the pipeline: Service loads sessions → State manages selection → Renderer displays
+
+        // 1. Service component should provide session data
+        assert!(coordinator.service.load_sessions(false).is_ok());
+        assert!(coordinator.service.load_sessions(true).is_ok());
+
+        // 2. State component should manage selection consistently
+        let initial_selection = coordinator.state.selected_index;
+        assert!(initial_selection <= coordinator.sessions.len());
+
+        // 3. Renderer should be able to handle the current state
+        // We can't test actual rendering without a terminal, but we can verify the renderer exists
+        // and the state is consistent for rendering
+        assert!(
+            coordinator.state.mode != AppMode::ErrorDialog
+                || coordinator.state.error_message.is_some()
+        );
+    }
+
+    #[test]
+    fn test_integration_cross_component_error_handling() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Test error propagation across components
+
+        // 1. Service errors should not crash the coordinator
+        coordinator.refresh_sessions(); // Should handle any service errors gracefully
+        assert_eq!(coordinator.state.mode, AppMode::Normal); // Should remain in normal mode
+
+        // 2. State error handling
+        coordinator
+            .state
+            .show_error("Test integration error".to_string());
+        assert_eq!(coordinator.state.mode, AppMode::ErrorDialog);
+        assert!(coordinator.state.error_message.is_some());
+
+        // 3. Error recovery workflow
+        coordinator.state.clear_error();
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+        assert!(coordinator.state.error_message.is_none());
+
+        // 4. Coordinator should remain functional after errors
+        assert!(!coordinator.should_quit());
+        coordinator.refresh_sessions(); // Should not panic
+    }
+
+    #[test]
+    fn test_integration_session_interaction_workflow() {
+        use crate::test_utils::test_helpers::*;
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Test complete user interaction workflow
+
+        // 1. Initial navigation
+        let down_key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        assert!(coordinator.handle_key(down_key).is_ok());
+
+        let up_key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        assert!(coordinator.handle_key(up_key).is_ok());
+
+        // 2. Stale session toggle workflow
+        let initial_stale = coordinator.state.show_stale;
+        let stale_key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
+        assert!(coordinator.handle_key(stale_key).is_ok());
+        assert_ne!(coordinator.state.show_stale, initial_stale);
+
+        // Session refresh should have been triggered
+        // The sessions list may have changed based on stale filter
+        assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+
+        // 3. Modal dialog workflow
+        let finish_key = KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE);
+        assert!(coordinator.handle_key(finish_key).is_ok());
+        // Should remain in normal mode if no sessions available
+
+        // 4. Error dialog workflow
+        coordinator
+            .state
+            .show_error("Integration test error".to_string());
+        assert_eq!(coordinator.state.mode, AppMode::ErrorDialog);
+
+        let enter_key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(coordinator.handle_key(enter_key).is_ok());
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+    }
+
+    #[test]
+    fn test_integration_state_consistency_across_operations() {
+        use crate::test_utils::test_helpers::*;
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Test state consistency across multiple operations
+
+        // Initial consistency check
+        assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+
+        // Perform multiple operations and verify consistency
+        for _ in 0..5 {
+            // Navigation
+            let down_key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+            coordinator.handle_key(down_key).unwrap();
+            assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+
+            // Refresh
+            coordinator.refresh_sessions();
+            assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+
+            // State toggle
+            let stale_key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
+            coordinator.handle_key(stale_key).unwrap();
+            assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+        }
+
+        // Final consistency verification
+        assert!(!coordinator.should_quit());
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+    }
+
+    #[test]
+    fn test_integration_performance_characteristics() {
+        use crate::test_utils::test_helpers::*;
+        use std::time::Instant;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+
+        // Test coordinator creation performance
+        let start = Instant::now();
+        let coordinator = MonitorCoordinator::new(config);
+        let creation_time = start.elapsed();
+
+        assert!(
+            creation_time.as_millis() < 1000,
+            "Coordinator creation should be fast: took {:?}",
+            creation_time
+        );
+
+        // Test session refresh performance
+        let mut coordinator = coordinator;
+        let start = Instant::now();
+        coordinator.refresh_sessions();
+        let refresh_time = start.elapsed();
+
+        assert!(
+            refresh_time.as_millis() < 500,
+            "Session refresh should be fast: took {:?}",
+            refresh_time
+        );
+
+        // Test multiple rapid operations
+        let start = Instant::now();
+        for _ in 0..10 {
+            coordinator.refresh_sessions();
+        }
+        let bulk_refresh_time = start.elapsed();
+
+        assert!(
+            bulk_refresh_time.as_millis() < 2000,
+            "Bulk operations should be reasonably fast: took {:?}",
+            bulk_refresh_time
+        );
+    }
+
+    #[test]
+    fn test_integration_component_isolation_and_boundaries() {
+        use crate::test_utils::test_helpers::*;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Test that components maintain proper boundaries and isolation
+
+        // 1. Service component isolation
+        // Service should work independently of state changes
+        let service_result1 = coordinator.service.load_sessions(false);
+        coordinator.state.toggle_stale();
+        let service_result2 = coordinator.service.load_sessions(true);
+
+        assert!(service_result1.is_ok());
+        assert!(service_result2.is_ok());
+
+        // 2. State component isolation
+        // State should maintain consistency regardless of session changes
+        let initial_mode = coordinator.state.mode;
+        coordinator.refresh_sessions(); // May change session list
+        assert_eq!(coordinator.state.mode, initial_mode);
+
+        // 3. Error isolation
+        // Errors in one component shouldn't affect others
+        coordinator
+            .state
+            .show_error("Component isolation test".to_string());
+        assert_eq!(coordinator.state.mode, AppMode::ErrorDialog);
+
+        // Service should still work
+        assert!(coordinator.service.load_sessions(false).is_ok());
+
+        // Clear error and verify recovery
+        coordinator.state.clear_error();
+        assert_eq!(coordinator.state.mode, AppMode::Normal);
+
+        // 4. Component communication boundaries
+        // State changes should propagate properly but not leak implementation details
+        let original_sessions_len = coordinator.sessions.len();
+        coordinator.refresh_sessions();
+
+        // Sessions may have changed, but coordinator should handle it properly
+        assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+
+        // If sessions length changed, selection should be updated appropriately
+        if coordinator.sessions.len() != original_sessions_len {
+            assert!(coordinator.state.selected_index <= coordinator.sessions.len());
+        }
+    }
+
+    #[test]
+    fn test_integration_concurrent_operations_safety() {
+        use crate::test_utils::test_helpers::*;
+        use std::sync::{Arc, Mutex};
+        use std::thread;
+        use tempfile::TempDir;
+
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let coordinator = Arc::new(Mutex::new(MonitorCoordinator::new(config)));
+
+        // Test that concurrent operations don't cause race conditions or panics
+        let handles: Vec<_> = (0..3)
+            .map(|i| {
+                let coordinator_clone = Arc::clone(&coordinator);
+                thread::spawn(move || {
+                    for _ in 0..5 {
+                        if let Ok(mut coord) = coordinator_clone.try_lock() {
+                            // Perform various operations
+                            coord.refresh_sessions();
+                            coord.state.toggle_stale();
+
+                            // Small delay to simulate real usage
+                            thread::sleep(std::time::Duration::from_millis(1));
+                        }
+                    }
+                    i // Return thread ID for verification
+                })
+            })
+            .collect();
+
+        // Wait for all operations to complete
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+
+        // Verify all threads completed successfully
+        assert_eq!(results.len(), 3);
+        assert_eq!(results, vec![0, 1, 2]);
+
+        // Verify coordinator is still in a valid state
+        let final_coord = coordinator.lock().unwrap();
+        assert!(!final_coord.should_quit());
+        assert!(final_coord.state.selected_index <= final_coord.sessions.len());
+    }
 }
