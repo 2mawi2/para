@@ -1,15 +1,6 @@
 #[cfg(test)]
 pub mod platform_tests {
-    use crate::platform::{
-        get_platform_manager, launch_file_parser::parse_ide_from_launch_contents,
-    };
-
-    /// Test utility function for parsing launch file contents
-    /// Uses the shared launch file parser utility to avoid duplication
-    #[allow(dead_code)]
-    pub(crate) fn parse_launch_file_contents(contents: &str, default_ide: &str) -> String {
-        parse_ide_from_launch_contents(contents, default_ide)
-    }
+    use crate::platform::get_platform_manager;
 
     #[test]
     fn test_platform_manager_creation() {
@@ -29,8 +20,8 @@ pub mod platform_tests {
     #[cfg(target_os = "macos")]
     mod macos_tests {
         use crate::platform::{
+            launch_file_parser::parse_ide_from_launch_contents,
             macos::{IdeHandler, MacOSPlatform},
-            tests::platform_tests::parse_launch_file_contents,
             PlatformManager,
         };
 
@@ -45,42 +36,42 @@ pub mod platform_tests {
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_cursor() {
             let contents = "LAUNCH_METHOD=wrapper\nWRAPPER_IDE=cursor\nLAUNCH_IDE=claude";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "cursor");
         }
 
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_code() {
             let contents = "LAUNCH_METHOD=wrapper\nWRAPPER_IDE=code\nLAUNCH_IDE=claude";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "code");
         }
 
         #[test]
         fn test_parse_launch_file_contents_wrapper_mode_default() {
             let contents = "LAUNCH_METHOD=wrapper\nLAUNCH_IDE=claude";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
         #[test]
         fn test_parse_launch_file_contents_launch_ide() {
             let contents = "LAUNCH_IDE=cursor\nSOME_OTHER=value";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "cursor");
         }
 
         #[test]
         fn test_parse_launch_file_contents_empty() {
             let contents = "";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
         #[test]
         fn test_parse_launch_file_contents_no_ide_info() {
             let contents = "SOME_KEY=value\nANOTHER_KEY=value2";
-            let result = parse_launch_file_contents(contents, "default");
+            let result = parse_ide_from_launch_contents(contents, "default");
             assert_eq!(result, "default");
         }
 
