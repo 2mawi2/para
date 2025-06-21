@@ -2,8 +2,16 @@ use crate::cli::parser::{StatusArgs, StatusCommands};
 use crate::config::Config;
 use crate::core::session::SessionManager;
 use crate::core::status::Status;
-use crate::utils::{get_main_repository_root, ParaError, Result};
-use std::path::{Path, PathBuf};
+use crate::utils::{ParaError, Result};
+use std::path::Path;
+
+mod fetcher;
+mod formatters;
+mod resolver;
+
+use fetcher::StatusFetcher;
+use formatters::{JsonFormatter, StatusFormatter, TextFormatter};
+use resolver::StatePathResolver;
 
 pub fn execute(config: Config, args: StatusArgs) -> Result<()> {
     match args.command {
@@ -80,15 +88,7 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     }
 
     // Save status to file in the main repository's state directory
-    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
-        // If state_dir is already absolute (e.g., in tests), use it directly
-        PathBuf::from(&config.directories.state_dir)
-    } else {
-        // Otherwise, resolve it relative to the main repo root
-        let repo_root = get_main_repository_root()
-            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
-        repo_root.join(&config.directories.state_dir)
-    };
+    let state_dir = StatePathResolver::resolve_state_dir(&config)?;
 
     status
         .save(&state_dir)
@@ -100,34 +100,23 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 }
 
 fn show_status(config: Config, session: Option<String>, json: bool) -> Result<()> {
-    // Use git common-dir to find main repo root, even from worktrees
-    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
-        // If state_dir is already absolute (e.g., in tests), use it directly
-        PathBuf::from(&config.directories.state_dir)
-    } else {
-        // Otherwise, resolve it relative to the main repo root
-        let repo_root = get_main_repository_root()
-            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
-        repo_root.join(&config.directories.state_dir)
-    };
+    let state_dir = StatePathResolver::resolve_state_dir(&config)?;
     let session_manager = SessionManager::new(&config);
+    let fetcher = StatusFetcher::new(&config, &session_manager, &state_dir);
+    
+    let formatter: Box<dyn StatusFormatter> = if json {
+        Box::new(JsonFormatter)
+    } else {
+        Box::new(TextFormatter)
+    };
 
     match session {
         Some(session_name) => {
-            // Show specific session status
-            let status = Status::load(&state_dir, &session_name)
-                .map_err(|e| ParaError::config_error(e.to_string()))?;
-
+            let status = fetcher.fetch_single_status(&session_name)?;
             match status {
                 Some(s) => {
-                    if json {
-                        let json_str = serde_json::to_string_pretty(&s).map_err(|e| {
-                            ParaError::config_error(format!("Failed to serialize status: {}", e))
-                        })?;
-                        println!("{}", json_str);
-                    } else {
-                        display_status(&s);
-                    }
+                    let output = formatter.format_single(&s)?;
+                    println!("{}", output);
                 }
                 None => {
                     if !json {
@@ -137,93 +126,15 @@ fn show_status(config: Config, session: Option<String>, json: bool) -> Result<()
             }
         }
         None => {
-            // Show all session statuses
-            let sessions = session_manager.list_sessions()?;
-            let mut statuses = Vec::new();
-
-            for session_state in sessions {
-                if let Some(status) = Status::load(&state_dir, &session_state.name)
-                    .map_err(|e| ParaError::config_error(e.to_string()))?
-                {
-                    statuses.push(status);
-                }
-            }
-
-            if json {
-                let json_str = serde_json::to_string_pretty(&statuses).map_err(|e| {
-                    ParaError::config_error(format!("Failed to serialize status: {}", e))
-                })?;
-                println!("{}", json_str);
-            } else if statuses.is_empty() {
-                println!("No session statuses found.");
-            } else {
-                display_all_statuses(&statuses);
-            }
+            let statuses = fetcher.fetch_all_statuses()?;
+            let output = formatter.format_multiple(&statuses)?;
+            println!("{}", output);
         }
     }
 
     Ok(())
 }
 
-fn display_status(status: &Status) {
-    println!("Session: {}", status.session_name);
-    println!("Task: {}", status.current_task);
-    println!("Tests: {}", status.test_status);
-    println!("Confidence: {}", status.confidence);
-
-    if let Some(todos) = status.format_todos() {
-        println!("Progress: {}", todos);
-    }
-
-    if status.is_blocked {
-        println!("Status: BLOCKED");
-        if let Some(reason) = &status.blocked_reason {
-            println!("Reason: {}", reason);
-        }
-    }
-
-    println!(
-        "Last Update: {}",
-        status.last_update.format("%Y-%m-%d %H:%M:%S UTC")
-    );
-}
-
-fn display_all_statuses(statuses: &[Status]) {
-    // Sort by last update time (most recent first)
-    let mut sorted_statuses = statuses.to_vec();
-    sorted_statuses.sort_by(|a, b| b.last_update.cmp(&a.last_update));
-
-    println!(
-        "{:<20} {:<40} {:<10} {:<10} {:<15} {:<10}",
-        "Session", "Current Task", "Tests", "Confidence", "Progress", "Status"
-    );
-    println!("{}", "-".repeat(110));
-
-    for status in sorted_statuses {
-        let task = if status.current_task.len() > 38 {
-            format!("{}...", &status.current_task[..35])
-        } else {
-            status.current_task.clone()
-        };
-
-        let progress = status.format_todos().unwrap_or_else(|| "-".to_string());
-        let status_str = if status.is_blocked {
-            "BLOCKED"
-        } else {
-            "Active"
-        };
-
-        println!(
-            "{:<20} {:<40} {:<10} {:<10} {:<15} {:<10}",
-            status.session_name,
-            task,
-            status.test_status.to_string(),
-            status.confidence.to_string(),
-            progress,
-            status_str
-        );
-    }
-}
 
 #[cfg(test)]
 mod tests {
