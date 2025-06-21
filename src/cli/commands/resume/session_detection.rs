@@ -1,4 +1,4 @@
-use crate::cli::commands::common::create_claude_local_md;
+// This file was moved to resume_modules/session_detection.rs
 use crate::config::Config;
 use crate::core::git::{GitService, SessionEnvironment};
 use crate::core::session::{SessionManager, SessionStatus};
