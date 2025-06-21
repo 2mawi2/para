@@ -390,12 +390,17 @@ fn apply_add_continue_flag_transformation(
     // Navigate to tasks array and update command fields
     if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
         for task in tasks {
-            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
-                let updated_command = transform_claude_command(command, has_skip_permissions);
+            if let Some(command_value) = task.get_mut("command") {
+                // Only transform string commands, preserve arrays and other types unchanged
+                if let Some(command_str) = command_value.as_str() {
+                    let updated_command =
+                        transform_claude_command(command_str, has_skip_permissions);
 
-                if updated_command != command {
-                    task["command"] = Value::String(updated_command);
+                    if updated_command != command_str {
+                        *command_value = Value::String(updated_command);
+                    }
                 }
+                // Arrays and other non-string values are left unchanged
             }
         }
     }
