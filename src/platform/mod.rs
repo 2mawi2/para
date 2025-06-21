@@ -1,3 +1,4 @@
+pub mod common;
 pub mod macos;
 #[cfg(test)]
 mod tests;
