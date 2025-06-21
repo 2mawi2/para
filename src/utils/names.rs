@@ -133,21 +133,30 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
     format!("{}_{}", name, timestamp)
 }
 
-pub fn validate_session_name(name: &str) -> Result<()> {
+/// Validates that the session name is not empty
+fn validate_not_empty(name: &str) -> Result<()> {
     if name.is_empty() {
         return Err(ParaError::invalid_session_name(
             name,
             "Session name cannot be empty",
         ));
     }
+    Ok(())
+}
 
+/// Validates that the session name is within acceptable length limits
+fn validate_length(name: &str) -> Result<()> {
     if name.len() > 100 {
         return Err(ParaError::invalid_session_name(
             name,
             "Session name cannot be longer than 100 characters",
         ));
     }
+    Ok(())
+}
 
+/// Validates that the session name contains only allowed characters
+fn validate_character_set(name: &str) -> Result<()> {
     let valid_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
         .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
 
@@ -171,7 +180,11 @@ pub fn validate_session_name(name: &str) -> Result<()> {
             "Session name must start and end with alphanumeric characters and contain only letters, numbers, hyphens, and underscores"
         ));
     }
+    Ok(())
+}
 
+/// Validates that the session name doesn't start or end with separators
+fn validate_start_end_chars(name: &str) -> Result<()> {
     if name.starts_with('-') || name.ends_with('-') {
         return Err(ParaError::invalid_session_name(
             name,
@@ -185,14 +198,33 @@ pub fn validate_session_name(name: &str) -> Result<()> {
             "Session name cannot start or end with an underscore",
         ));
     }
+    Ok(())
+}
 
+/// Validates that the session name doesn't contain consecutive separators
+fn validate_no_consecutive_separators(name: &str) -> Result<()> {
     if name.contains("__") || name.contains("--") {
         return Err(ParaError::invalid_session_name(
             name,
             "Session name cannot contain consecutive underscores or hyphens",
         ));
     }
+    Ok(())
+}
 
+/// Validates a session name using a chain of validation rules
+pub fn validate_session_name(name: &str) -> Result<()> {
+    let validators: &[fn(&str) -> Result<()>] = &[
+        validate_not_empty,
+        validate_length,
+        validate_character_set,
+        validate_start_end_chars,
+        validate_no_consecutive_separators,
+    ];
+
+    for validator in validators {
+        validator(name)?;
+    }
     Ok(())
 }
 
