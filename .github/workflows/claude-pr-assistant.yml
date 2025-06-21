@@ -51,21 +51,27 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git status),Bash(git status *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch *),Bash(git rev-parse),Bash(git rev-parse *),Bash(git blame),Bash(git blame *),Bash(git fetch),Bash(git fetch *),Bash(git merge),Bash(git merge *),Bash(git add),Bash(git add *),Bash(git commit),Bash(git commit *),Bash(git push),Bash(git push *),Bash(git pull),Bash(git pull *),Bash(git rebase),Bash(git rebase *),Bash(git checkout),Bash(git checkout *),Bash(git reset),Bash(git reset *),Bash(git stash),Bash(git stash *),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__add_pull_request_comment,mcp__github__get_pull_request_comments,mcp__github__get_issue"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo fmt --all -- --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git status),Bash(git status *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch *),Bash(git rev-parse),Bash(git rev-parse *),Bash(git blame),Bash(git blame *),Bash(git fetch),Bash(git fetch *),Bash(git merge),Bash(git merge *),Bash(git add),Bash(git add *),Bash(git commit),Bash(git commit *),Bash(git push),Bash(git push *),Bash(git pull),Bash(git pull *),Bash(git rebase),Bash(git rebase *),Bash(git checkout),Bash(git checkout *),Bash(git reset),Bash(git reset *),Bash(git stash),Bash(git stash *),Bash(echo),Bash(cat),Bash(grep),Bash(rg),Bash(which),Bash(pwd),Bash(ls),Bash(head),Bash(tail),Bash(wc),Bash(jq),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__add_pull_request_comment,mcp__github__get_pull_request_comments,mcp__github__get_issue"
           custom_instructions: |
             You have been granted tools for editing files and running Rust/just commands for testing and validating your changes:
             
             **CRITICAL REQUIREMENTS:**
-            ⚠️ The GitHub Actions pipeline will FAIL if tests or lints don't pass!
-            ⚠️ You MUST ensure BOTH `just test` AND `just lint` pass with NO errors before committing!
-            ⚠️ If either command fails, you have NOT completed your task successfully!
+            ⚠️ The GitHub Actions pipeline will FAIL if tests, lints, or formatting don't pass!
+            ⚠️ You MUST ensure ALL of these pass with NO errors before committing:
+               1. `just fmt-check` OR `cargo fmt --all -- --check` - MUST pass (no formatting issues)
+               2. `just test` - MUST pass (all tests green)
+               3. `just lint` - MUST pass (no clippy warnings/errors)
+            ⚠️ If ANY of these commands fail, you have NOT completed your task successfully!
+            ⚠️ The pipeline specifically runs `cargo fmt --all -- --check` and will reject unformatted code!
             
-            **Testing & Validation Commands:**
-            - `just test` - Run comprehensive tests (formatting + tests + linting) - MUST BE GREEN
+            **Testing & Validation Commands (MUST RUN IN THIS ORDER):**
+            1. `just fmt-check` OR `cargo fmt --all -- --check` - Check formatting FIRST
+               - If this fails, run `just fmt` OR `cargo fmt` to fix formatting
+            2. `just test` - Run comprehensive tests - MUST BE GREEN
+            3. `just lint` - Run clippy linting - MUST SHOW NO ERRORS
+            
+            **Other Commands:**
             - `just test <pattern>` - Run specific tests matching a pattern
-            - `just lint` - Run clippy linting - MUST SHOW NO ERRORS
-            - `just fmt` - Format code automatically (run this if formatting fails)
-            - `just fmt-check` - Check if code is properly formatted
             - `just build` - Build debug binary
             - `just build-release` - Build optimized release binary
             
@@ -132,10 +138,11 @@ jobs:
             2. Run tests - they should FAIL
             3. Write code to make tests PASS
             4. Delete any code not used by tests
-            5. Run `just fmt`
-            6. Run `just test` - MUST pass
-            7. Run `just lint` - MUST pass
-            8. Only then commit
+            5. Run `just fmt` OR `cargo fmt` to format code
+            6. Run `just fmt-check` OR `cargo fmt --all -- --check` - MUST pass (no formatting issues)
+            7. Run `just test` - MUST pass
+            8. Run `just lint` - MUST pass
+            9. Only then commit
             
             **CRITICAL:**
             - No production code without a failing test first

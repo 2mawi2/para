@@ -61,8 +61,9 @@ jobs:
             - Supporting changes that enable the main feature are fine; flag only unrelated additions
 
             **STEP 2: Verify It Actually Works**
-            - Run `just test` first - if tests fail, that's a critical issue
-            - Run `just fmt-check` - if formatting is incorrect, that's a critical issue (pipeline will fail)
+            - Run `just fmt-check` OR `cargo fmt --all -- --check` FIRST - if formatting is incorrect, that's a CRITICAL issue (pipeline will FAIL)
+            - Run `just test` - if tests fail, that's a critical issue
+            - Run `just lint` - if linting fails, that's a critical issue
             - Trace the main execution path and check integration points
             - Focus on direct dependencies and files that import/call the changed code
 
@@ -99,8 +100,9 @@ jobs:
 
             **AUTO-TRIGGER CRITERIA:**
             Only auto-trigger (@claude comment) for these critical issues:
+            - Formatting issues (`just fmt-check` OR `cargo fmt --all -- --check` fails) - pipeline WILL reject the PR
             - Test failures or compilation errors
-            - Formatting issues (just fmt-check fails) - pipeline will reject the PR
+            - Linting issues (`just lint` fails)
             - Missing tests for bug fixes or new features
             - Code with `#[allow(dead_code)]` or `#[allow(unused_imports)]` annotations
             - Missing core requirements from PR description  
@@ -126,17 +128,19 @@ jobs:
 
             **WORKFLOW:**
             1. Check iteration count in existing comments using mcp__github__get_pull_request_comments
-            2. Run `just test` first to verify baseline functionality
-            3. Run `just fmt-check` to ensure code formatting is correct (CRITICAL - pipeline enforces this)
-            4. Search for forbidden annotations: `rg "#\[allow\(dead_code\)\]|#\[allow\(unused_imports\)\]"`
+            2. Run `just fmt-check` OR `cargo fmt --all -- --check` FIRST to ensure code formatting is correct (CRITICAL - pipeline enforces this)
+               - If formatting fails, this is a CRITICAL issue requiring auto-trigger
+            3. Run `just test` to verify functionality
+            4. Run `just lint` to check for code quality issues
+            5. Search for forbidden annotations: `rg "#\[allow\(dead_code\)\]|#\[allow\(unused_imports\)\]"`
                - If found, this is a CRITICAL issue requiring auto-trigger
-            5. STEP 1: Requirements verification:
+            6. STEP 1: Requirements verification:
                - Parse PR for issue references and read linked issues with mcp__github__get_issue
                - Systematically check each requirement from PR description AND original issues
-            6. STEPS 2-5: Review using the remaining methodological approaches
-            7. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
-            8. If iteration >= 3: provide final review only
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(rg *),Bash(rg "#\\[allow\\(dead_code\\)\\]|#\\[allow\\(unused_imports\\)\\]"),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
+            7. STEPS 2-5: Review using the remaining methodological approaches
+            8. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
+            9. If iteration >= 3: provide final review only
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash(just test),Bash(just test *),Bash(just test-only),Bash(just test-only *),Bash(just lint),Bash(just fmt),Bash(just fmt-check),Bash(just build),Bash(just build-release),Bash(just run),Bash(just run *),Bash(just clean),Bash(just status),Bash(cargo test),Bash(cargo test *),Bash(cargo build),Bash(cargo build --release),Bash(cargo check),Bash(cargo clippy),Bash(cargo clippy *),Bash(cargo fmt),Bash(cargo fmt --check),Bash(cargo fmt --all -- --check),Bash(cargo run),Bash(cargo run *),Bash(cargo clean),Bash(cargo tree),Bash(cargo doc),Bash(rustc --version),Bash(rustfmt),Bash(clippy),Bash(ls),Bash(cat),Bash(head),Bash(tail),Bash(grep),Bash(rg),Bash(rg *),Bash(rg "#\\[allow\\(dead_code\\)\\]|#\\[allow\\(unused_imports\\)\\]"),Bash(awk),Bash(sed),Bash(sort),Bash(uniq),Bash(wc),Bash(which),Bash(command),Bash(type),Bash(echo),Bash(printf),Bash(test),Bash([),Bash(basename),Bash(dirname),Bash(realpath),Bash(readlink),Bash(date),Bash(env),Bash(pwd),Bash(jq),Bash(mkdir -p .github-triggers),Bash(git status),Bash(git diff),Bash(git diff *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(git branch),Bash(git branch -a),Bash(git rev-parse),Bash(git blame),Bash(git shortlog),mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__add_pull_request_comment,mcp__github__get_issue"
           custom_instructions: |
             You have been granted comprehensive tools for reviewing and testing Rust code:
             
@@ -156,11 +160,15 @@ jobs:
             3. Write your trigger JSON to `.github-triggers/auto-trigger.json` using the Write tool
             4. The workflow will automatically post this as a PR comment
             
-            **Testing & Validation:**
-            - `just test` - Run comprehensive tests (ALWAYS run this first)
+            **Testing & Validation (RUN IN THIS ORDER):**
+            1. `just fmt-check` OR `cargo fmt --all -- --check` - Verify code formatting (ALWAYS run this FIRST)
+               - The GitHub Actions pipeline specifically runs `cargo fmt --all -- --check`
+               - If this fails, the PR will be REJECTED by the pipeline
+            2. `just test` - Run comprehensive tests
+            3. `just lint` - Check for code quality issues with clippy
+            
+            **Other Commands:**
             - `just test <pattern>` - Test specific modules or functions
-            - `just lint` - Check for code quality issues with clippy
-            - `just fmt-check` - Verify code formatting
             - `just build` - Ensure the code compiles
             - `just status` - Check project status
             
@@ -187,15 +195,17 @@ jobs:
                - JSON must include both iteration number and formatted comment
             
             **CRITICAL REVIEW PROCESS:**
-            1. Run `just test` first to ensure the PR doesn't break existing functionality
-            2. Run `just fmt-check` to verify formatting (MUST pass - pipeline enforces this)
-            3. **REQUIREMENTS VERIFICATION**: 
+            1. Run `just fmt-check` OR `cargo fmt --all -- --check` FIRST to verify formatting (MUST pass - pipeline enforces this)
+               - The GitHub Actions pipeline runs `cargo fmt --all -- --check` and will REJECT unformatted PRs
+            2. Run `just test` to ensure the PR doesn't break existing functionality
+            3. Run `just lint` to check for code quality issues
+            4. **REQUIREMENTS VERIFICATION**: 
                - Parse PR description for issue references (Fixes #N, Closes #N, etc.)
                - Use mcp__github__get_issue to read linked issues for full context
                - Systematically check each requirement from BOTH PR and original issues
-            4. **METHODICAL REVIEW**: Apply the 5-step systematic approach focusing on critical issues
-            5. Use mcp__github__create_pending_pull_request_review and related tools for inline feedback  
-            6. Only auto-trigger if you find critical issues (including missing/incorrect requirements or formatting)
+            5. **METHODICAL REVIEW**: Apply the 5-step systematic approach focusing on critical issues
+            6. Use mcp__github__create_pending_pull_request_review and related tools for inline feedback  
+            7. Only auto-trigger if you find critical issues (including formatting issues, missing/incorrect requirements)
             
             **Remember**: Missing or incorrectly implemented requirements from the original issue are critical issues that should trigger fixes!
       
