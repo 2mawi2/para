@@ -145,13 +145,13 @@ impl SessionNameValidator {
             Self::validate_edge_chars,
             Self::validate_consecutive_chars,
         ];
-        
+
         for validation in validations {
             validation(name)?;
         }
         Ok(())
     }
-    
+
     fn validate_not_empty(name: &str) -> Result<()> {
         if name.is_empty() {
             return Err(ParaError::invalid_session_name(
@@ -161,7 +161,7 @@ impl SessionNameValidator {
         }
         Ok(())
     }
-    
+
     fn validate_length(name: &str) -> Result<()> {
         if name.len() > 100 {
             return Err(ParaError::invalid_session_name(
@@ -171,7 +171,7 @@ impl SessionNameValidator {
         }
         Ok(())
     }
-    
+
     fn validate_single_char(name: &str) -> Result<()> {
         if name.len() == 1 {
             if let Some(first_char) = name.chars().next() {
@@ -190,12 +190,12 @@ impl SessionNameValidator {
         }
         Ok(())
     }
-    
+
     fn validate_format(name: &str) -> Result<()> {
         if name.len() > 1 {
             let valid_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
                 .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
-            
+
             if !valid_regex.is_match(name) {
                 return Err(ParaError::invalid_session_name(
                     name,
@@ -205,7 +205,7 @@ impl SessionNameValidator {
         }
         Ok(())
     }
-    
+
     fn validate_edge_chars(name: &str) -> Result<()> {
         if name.starts_with('-') || name.ends_with('-') {
             return Err(ParaError::invalid_session_name(
@@ -213,17 +213,17 @@ impl SessionNameValidator {
                 "Session name cannot start or end with a hyphen",
             ));
         }
-        
+
         if name.starts_with('_') || name.ends_with('_') {
             return Err(ParaError::invalid_session_name(
                 name,
                 "Session name cannot start or end with an underscore",
             ));
         }
-        
+
         Ok(())
     }
-    
+
     fn validate_consecutive_chars(name: &str) -> Result<()> {
         if name.contains("__") || name.contains("--") {
             return Err(ParaError::invalid_session_name(
