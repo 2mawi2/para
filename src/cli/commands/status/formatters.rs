@@ -1,5 +1,6 @@
 use crate::core::status::Status;
 use crate::utils::{ParaError, Result};
+use serde_json;
 
 pub trait StatusFormatter {
     fn format_single(&self, status: &Status) -> Result<String>;
