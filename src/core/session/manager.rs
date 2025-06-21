@@ -1,7 +1,7 @@
 use super::state::{SessionState, SessionStatus};
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
-use crate::utils::{GitignoreManager, ParaError, Result};
+use crate::utils::{get_main_repository_root_from, GitignoreManager, ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,35 +26,13 @@ impl SessionManager {
             return PathBuf::from(state_dir_path);
         }
 
-        if let Ok(git_service) = GitService::discover() {
-            let repo_root = git_service.repository().root.clone();
-            let main_repo_root = Self::get_main_repo_root(&repo_root);
+        // Use the reliable git rev-parse method to find the main repository root
+        if let Ok(main_repo_root) = get_main_repository_root_from(None) {
             main_repo_root.join(state_dir_path)
         } else {
+            // Fallback to current directory if not in a git repository
             PathBuf::from(state_dir_path)
         }
-    }
-
-    fn get_main_repo_root(current_repo_root: &Path) -> PathBuf {
-        let git_path = current_repo_root.join(".git");
-
-        if git_path.is_file() {
-            if let Ok(git_content) = fs::read_to_string(&git_path) {
-                if let Some(git_dir) = git_content.strip_prefix("gitdir: ") {
-                    let git_dir = git_dir.trim();
-                    let git_path = PathBuf::from(git_dir);
-                    if let Some(main_repo_root) = git_path
-                        .parent()
-                        .and_then(|p| p.parent())
-                        .and_then(|p| p.parent())
-                    {
-                        return main_repo_root.to_path_buf();
-                    }
-                }
-            }
-        }
-
-        current_repo_root.to_path_buf()
     }
 
     pub fn config(&self) -> &Config {
