@@ -6,17 +6,7 @@ pub struct MacOSPlatform;
 
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
-    #[allow(dead_code)]
-    pub name: String,
     pub original_id: String,
-    #[allow(dead_code)]
-    pub format_type: SessionNameFormat,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SessionNameFormat {
-    Timestamp,
-    DockerStyle,
 }
 
 pub trait IdeHandler {
@@ -231,23 +221,8 @@ impl MacOSPlatform {
     }
 
     pub(crate) fn parse_session_info(&self, session_id: &str) -> Result<SessionInfo> {
-        let timestamp_regex = regex::Regex::new(r"-\d{8}-\d{6}$").unwrap();
-
-        if timestamp_regex.is_match(session_id) {
-            // Legacy timestamp format (e.g., "my-feature-20250615-123456")
-            let name = timestamp_regex.replace(session_id, "").to_string();
-            Ok(SessionInfo {
-                name,
-                original_id: session_id.to_string(),
-                format_type: SessionNameFormat::Timestamp,
-            })
-        } else {
-            // Docker-style format (e.g., "eager_phoenix")
-            Ok(SessionInfo {
-                name: session_id.to_string(),
-                original_id: session_id.to_string(),
-                format_type: SessionNameFormat::DockerStyle,
-            })
-        }
+        Ok(SessionInfo {
+            original_id: session_id.to_string(),
+        })
     }
 }

@@ -177,12 +177,12 @@ pub mod platform_tests {
                 .parse_session_info("my-feature-20250615-123456")
                 .unwrap();
 
-            assert_eq!(result.name, "my-feature");
             assert_eq!(result.original_id, "my-feature-20250615-123456");
-            assert_eq!(
-                result.format_type,
-                crate::platform::macos::SessionNameFormat::Timestamp
-            );
+
+            // Verify the handler generates correct AppleScript
+            let handler = crate::platform::macos::CursorHandler;
+            let script = handler.generate_applescript(&result);
+            assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
         }
 
         #[test]
@@ -190,12 +190,12 @@ pub mod platform_tests {
             let platform = MacOSPlatform;
             let result = platform.parse_session_info("eager_phoenix").unwrap();
 
-            assert_eq!(result.name, "eager_phoenix");
             assert_eq!(result.original_id, "eager_phoenix");
-            assert_eq!(
-                result.format_type,
-                crate::platform::macos::SessionNameFormat::DockerStyle
-            );
+
+            // Verify the handler generates correct AppleScript
+            let handler = crate::platform::macos::CursorHandler;
+            let script = handler.generate_applescript(&result);
+            assert!(script.contains("set windowTitleFragment to \"eager_phoenix\""));
         }
 
         #[test]
@@ -204,21 +204,22 @@ pub mod platform_tests {
 
             // Test with complex Docker-style name
             let result1 = platform.parse_session_info("fix-issue-123_branch").unwrap();
-            assert_eq!(result1.name, "fix-issue-123_branch");
-            assert_eq!(
-                result1.format_type,
-                crate::platform::macos::SessionNameFormat::DockerStyle
-            );
+            assert_eq!(result1.original_id, "fix-issue-123_branch");
+
+            // Verify handler works with complex names
+            let handler = crate::platform::macos::CursorHandler;
+            let script1 = handler.generate_applescript(&result1);
+            assert!(script1.contains("set windowTitleFragment to \"fix-issue-123_branch\""));
 
             // Test with timestamp that has dashes in feature name
             let result2 = platform
                 .parse_session_info("fix-bug-123-20250615-123456")
                 .unwrap();
-            assert_eq!(result2.name, "fix-bug-123");
-            assert_eq!(
-                result2.format_type,
-                crate::platform::macos::SessionNameFormat::Timestamp
-            );
+            assert_eq!(result2.original_id, "fix-bug-123-20250615-123456");
+
+            // Verify handler works with timestamp format
+            let script2 = handler.generate_applescript(&result2);
+            assert!(script2.contains("set windowTitleFragment to \"fix-bug-123-20250615-123456\""));
         }
 
         #[test]
@@ -246,17 +247,13 @@ pub mod platform_tests {
 
         #[test]
         fn test_cursor_handler_applescript_generation() {
-            use crate::platform::macos::{
-                CursorHandler, IdeHandler, SessionInfo, SessionNameFormat,
-            };
+            use crate::platform::macos::{CursorHandler, IdeHandler, SessionInfo};
 
             let handler = CursorHandler;
 
-            // Test timestamp format
+            // Test collision-safe behavior - uses original_id
             let session_info = SessionInfo {
-                name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
-                format_type: SessionNameFormat::Timestamp,
             };
 
             let script = handler.generate_applescript(&session_info);
@@ -266,17 +263,13 @@ pub mod platform_tests {
 
         #[test]
         fn test_vscode_handler_applescript_generation() {
-            use crate::platform::macos::{
-                IdeHandler, SessionInfo, SessionNameFormat, VSCodeHandler,
-            };
+            use crate::platform::macos::{IdeHandler, SessionInfo, VSCodeHandler};
 
             let handler = VSCodeHandler;
 
             // Test that VS Code uses original_id for window matching
             let session_info = SessionInfo {
-                name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
-                format_type: SessionNameFormat::Timestamp,
             };
 
             let script = handler.generate_applescript(&session_info);
@@ -286,25 +279,19 @@ pub mod platform_tests {
 
         #[test]
         fn test_format_search_fragment_from_session_info_cursor() {
-            use crate::platform::macos::{
-                CursorHandler, IdeHandler, SessionInfo, SessionNameFormat,
-            };
+            use crate::platform::macos::{CursorHandler, IdeHandler, SessionInfo};
 
-            // Test Cursor with timestamp format
+            // Test Cursor collision-safe behavior with timestamp session
             let session_info = SessionInfo {
-                name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
-                format_type: SessionNameFormat::Timestamp,
             };
             let handler = CursorHandler;
             let script = handler.generate_applescript(&session_info);
             assert!(script.contains("set windowTitleFragment to \"my-feature-20250615-123456\""));
 
-            // Test Cursor with Docker format
+            // Test Cursor collision-safe behavior with Docker session
             let session_info2 = SessionInfo {
-                name: "eager_phoenix".to_string(),
                 original_id: "eager_phoenix".to_string(),
-                format_type: SessionNameFormat::DockerStyle,
             };
             let script2 = handler.generate_applescript(&session_info2);
             assert!(script2.contains("set windowTitleFragment to \"eager_phoenix\""));
@@ -312,15 +299,11 @@ pub mod platform_tests {
 
         #[test]
         fn test_format_search_fragment_from_session_info_vscode() {
-            use crate::platform::macos::{
-                IdeHandler, SessionInfo, SessionNameFormat, VSCodeHandler,
-            };
+            use crate::platform::macos::{IdeHandler, SessionInfo, VSCodeHandler};
 
-            // Test VS Code uses original_id regardless of format
+            // Test VS Code uses original_id for collision safety
             let session_info = SessionInfo {
-                name: "my-feature".to_string(),
                 original_id: "my-feature-20250615-123456".to_string(),
-                format_type: SessionNameFormat::Timestamp,
             };
             let handler = VSCodeHandler;
             let script = handler.generate_applescript(&session_info);

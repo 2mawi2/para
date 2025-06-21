@@ -40,7 +40,7 @@ impl<'a> ArchiveManager<'a> {
         Ok(entries)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn find_archive(&self, session_name: &str) -> Result<Option<ArchiveEntry>> {
         let archives = self.list_archives()?;
         Ok(archives
