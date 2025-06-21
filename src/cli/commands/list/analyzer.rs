@@ -1,78 +1,12 @@
-use crate::cli::parser::ListArgs;
-use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus as UnifiedSessionStatus};
 use crate::utils::Result;
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
-pub struct SessionInfo {
-    pub session_id: String,
-    pub branch: String,
-    pub worktree_path: PathBuf,
-    pub base_branch: String,
-    pub merge_mode: String,
-    pub status: SessionStatus,
-    pub last_modified: Option<DateTime<Utc>>,
-    pub has_uncommitted_changes: Option<bool>,
-    pub is_current: bool,
-}
+use super::formatters::{SessionInfo, SessionStatus};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum SessionStatus {
-    Active,
-    Dirty,
-    Missing,
-    Archived,
-}
-
-impl SessionStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            SessionStatus::Active => "active",
-            SessionStatus::Dirty => "dirty",
-            SessionStatus::Missing => "missing",
-            SessionStatus::Archived => "archived",
-        }
-    }
-
-    pub fn symbol(&self) -> &'static str {
-        match self {
-            SessionStatus::Active => "✓",
-            SessionStatus::Dirty => "●",
-            SessionStatus::Missing => "✗",
-            SessionStatus::Archived => "📦",
-        }
-    }
-}
-
-pub fn execute(config: Config, args: ListArgs) -> Result<()> {
-    let session_manager = SessionManager::new(&config);
-
-    let git_service = GitService::discover()?;
-    let sessions = if args.archived {
-        list_archived_sessions(&session_manager, &git_service)?
-    } else {
-        list_active_sessions(&session_manager, &git_service)?
-    };
-
-    if sessions.is_empty() {
-        if !args.quiet {
-            if args.archived {
-                println!("No archived sessions found.");
-            } else {
-                println!("No active sessions found.");
-            }
-        }
-        return Ok(());
-    }
-
-    display_sessions(&sessions, &args)?;
-    Ok(())
-}
-
-fn list_active_sessions(
+pub fn list_active_sessions(
     session_manager: &SessionManager,
     git_service: &GitService,
 ) -> Result<Vec<SessionInfo>> {
@@ -126,7 +60,7 @@ fn list_active_sessions(
     Ok(sessions)
 }
 
-fn list_archived_sessions(
+pub fn list_archived_sessions(
     session_manager: &SessionManager,
     git_service: &GitService,
 ) -> Result<Vec<SessionInfo>> {
@@ -145,12 +79,12 @@ fn list_archived_sessions(
         collect_archived_branch_sessions(session_manager, git_service, &seen_session_ids)?;
     sessions.extend(archived_branch_sessions);
 
-    sort_sessions_by_date(&mut sessions);
+    super::formatters::sort_sessions_by_date(&mut sessions);
 
     Ok(sessions)
 }
 
-fn collect_finished_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
+pub fn collect_finished_sessions(session_manager: &SessionManager) -> Result<Vec<SessionInfo>> {
     let mut sessions = Vec::new();
     let session_states = session_manager.list_sessions()?;
 
@@ -171,7 +105,7 @@ fn collect_finished_sessions(session_manager: &SessionManager) -> Result<Vec<Ses
     Ok(sessions)
 }
 
-fn determine_uncommitted_changes(worktree_path: &Path) -> Option<bool> {
+pub fn determine_uncommitted_changes(worktree_path: &Path) -> Option<bool> {
     if worktree_path.exists() {
         if let Some(service) = git_service_for_path(worktree_path) {
             service.has_uncommitted_changes().ok()
@@ -183,7 +117,7 @@ fn determine_uncommitted_changes(worktree_path: &Path) -> Option<bool> {
     }
 }
 
-fn create_session_info_from_state(
+pub fn create_session_info_from_state(
     session_state: &crate::core::session::SessionState,
     has_uncommitted_changes: Option<bool>,
 ) -> SessionInfo {
@@ -200,7 +134,7 @@ fn create_session_info_from_state(
     }
 }
 
-fn collect_archived_branch_sessions(
+pub fn collect_archived_branch_sessions(
     session_manager: &SessionManager,
     git_service: &GitService,
     seen_session_ids: &std::collections::HashSet<String>,
@@ -224,7 +158,7 @@ fn collect_archived_branch_sessions(
     Ok(sessions)
 }
 
-fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> SessionInfo {
+pub fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> SessionInfo {
     SessionInfo {
         session_id: session_id.to_string(),
         branch: branch_name.to_string(),
@@ -238,15 +172,7 @@ fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> Sessi
     }
 }
 
-fn sort_sessions_by_date(sessions: &mut [SessionInfo]) {
-    sessions.sort_by(|a, b| {
-        b.last_modified
-            .unwrap_or(DateTime::<Utc>::MIN_UTC)
-            .cmp(&a.last_modified.unwrap_or(DateTime::<Utc>::MIN_UTC))
-    });
-}
-
-fn determine_unified_session_status(
+pub fn determine_unified_session_status(
     session_state: &crate::core::session::SessionState,
     git_service: &GitService,
 ) -> Result<SessionStatus> {
@@ -274,11 +200,11 @@ fn determine_unified_session_status(
     Ok(SessionStatus::Active)
 }
 
-fn git_service_for_path(path: &Path) -> Option<GitService> {
+pub fn git_service_for_path(path: &Path) -> Option<GitService> {
     GitService::discover_from(path).ok()
 }
 
-fn extract_session_id_from_archived_branch(
+pub fn extract_session_id_from_archived_branch(
     branch_name: &str,
     branch_prefix: &str,
 ) -> Option<String> {
@@ -291,101 +217,6 @@ fn extract_session_id_from_archived_branch(
     None
 }
 
-fn display_sessions(sessions: &[SessionInfo], args: &ListArgs) -> Result<()> {
-    let result = if args.quiet {
-        display_quiet_sessions(sessions)
-    } else if args.verbose {
-        display_verbose_sessions(sessions)
-    } else {
-        display_compact_sessions(sessions)
-    };
-
-    if !args.quiet && result.is_ok() {
-        println!("\nTip: Use 'para monitor' for interactive session management");
-    }
-
-    result
-}
-
-fn display_quiet_sessions(sessions: &[SessionInfo]) -> Result<()> {
-    for session in sessions {
-        println!("{}", session.session_id);
-    }
-    Ok(())
-}
-
-fn display_compact_sessions(sessions: &[SessionInfo]) -> Result<()> {
-    println!(
-        "{:<2} {:<30} {:<20} {:<15}",
-        "St", "Session", "Branch", "Status"
-    );
-    println!("{}", "-".repeat(70));
-
-    for session in sessions {
-        let current_marker = if session.is_current { "*" } else { " " };
-        let status_indicator = session.status.symbol();
-
-        println!(
-            "{}{} {:<30} {:<20} {:<15}",
-            current_marker,
-            status_indicator,
-            truncate_string(&session.session_id, 30),
-            truncate_string(&session.branch, 20),
-            session.status.as_str()
-        );
-    }
-
-    Ok(())
-}
-
-fn display_verbose_sessions(sessions: &[SessionInfo]) -> Result<()> {
-    for (i, session) in sessions.iter().enumerate() {
-        if i > 0 {
-            println!();
-        }
-
-        let current_marker = if session.is_current { " (current)" } else { "" };
-
-        println!("Session: {}{}", session.session_id, current_marker);
-        println!(
-            "  Status: {} {}",
-            session.status.symbol(),
-            session.status.as_str()
-        );
-        println!("  Branch: {}", session.branch);
-        println!("  Base Branch: {}", session.base_branch);
-        println!("  Merge Mode: {}", session.merge_mode);
-
-        if session.status != SessionStatus::Archived {
-            println!("  Worktree: {}", session.worktree_path.display());
-
-            if let Some(has_changes) = session.has_uncommitted_changes {
-                println!(
-                    "  Uncommitted Changes: {}",
-                    if has_changes { "yes" } else { "no" }
-                );
-            }
-        }
-
-        if let Some(modified) = session.last_modified {
-            println!(
-                "  Last Modified: {}",
-                modified.format("%Y-%m-%d %H:%M:%S UTC")
-            );
-        }
-    }
-
-    Ok(())
-}
-
-fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,59 +224,6 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
-
-    fn create_mock_session_state(
-        state_dir: &std::path::Path,
-        session_id: &str,
-        branch: &str,
-        worktree_path: &str,
-        _base_branch: &str,
-        _merge_mode: &str,
-    ) -> Result<()> {
-        use crate::core::session::SessionState;
-
-        fs::create_dir_all(state_dir)?;
-
-        // Create a proper SessionState and serialize it to JSON
-        let session_state = SessionState::new(
-            session_id.to_string(),
-            branch.to_string(),
-            std::path::PathBuf::from(worktree_path),
-        );
-
-        let state_file = state_dir.join(format!("{}.state", session_id));
-        let json_content = serde_json::to_string_pretty(&session_state).map_err(|e| {
-            crate::utils::ParaError::invalid_config(format!(
-                "Failed to serialize session state: {}",
-                e
-            ))
-        })?;
-        fs::write(state_file, json_content)?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_session_status_display() {
-        assert_eq!(SessionStatus::Active.as_str(), "active");
-        assert_eq!(SessionStatus::Dirty.as_str(), "dirty");
-        assert_eq!(SessionStatus::Missing.as_str(), "missing");
-        assert_eq!(SessionStatus::Archived.as_str(), "archived");
-
-        assert_eq!(SessionStatus::Active.symbol(), "✓");
-        assert_eq!(SessionStatus::Dirty.symbol(), "●");
-        assert_eq!(SessionStatus::Missing.symbol(), "✗");
-        assert_eq!(SessionStatus::Archived.symbol(), "📦");
-    }
-
-    #[test]
-    fn test_truncate_string() {
-        assert_eq!(truncate_string("short", 10), "short");
-        assert_eq!(truncate_string("exactly_ten", 11), "exactly_ten");
-        assert_eq!(truncate_string("this_is_too_long", 10), "this_is...");
-        assert_eq!(truncate_string("abc", 3), "abc");
-        assert_eq!(truncate_string("abcd", 3), "...");
-    }
 
     #[test]
     fn test_extract_session_id_from_archived_branch() {
@@ -489,45 +267,6 @@ mod tests {
 
         let sessions = list_active_sessions(&session_manager, &git_service)?;
         assert!(sessions.is_empty());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_list_active_sessions_with_state_files() -> Result<()> {
-        let git_temp = TempDir::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        // Create config that points to our test state directory
-        let config = create_test_config_with_dir(&temp_dir);
-        let session_manager = SessionManager::new(&config);
-        let state_dir = PathBuf::from(&config.directories.state_dir);
-
-        // Create a simple directory for the worktree path - we just need to test listing
-        let worktree_path = temp_dir.path().join("test-worktree");
-        fs::create_dir_all(&worktree_path)?;
-        let test_branch_name = "para/test-branch".to_string();
-
-        create_mock_session_state(
-            &state_dir,
-            "test-session",
-            &test_branch_name,
-            worktree_path.to_str().unwrap(),
-            "main",
-            "squash",
-        )?;
-
-        let sessions = list_active_sessions(&session_manager, &git_service)?;
-        assert_eq!(sessions.len(), 1);
-
-        let session = &sessions[0];
-        assert_eq!(session.session_id, "test-session");
-        assert_eq!(session.branch, test_branch_name);
-        assert_eq!(session.base_branch, "main"); // Updated to match simplified logic
-        assert_eq!(session.merge_mode, "squash"); // Default merge mode
-        assert_eq!(session.status, SessionStatus::Missing); // Directory exists but not a proper worktree
 
         Ok(())
     }
@@ -599,46 +338,6 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_no_sessions() -> Result<()> {
-        let git_temp = TempDir::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let (_git_temp, git_service) = setup_test_repo();
-
-        // Create config that points to our test state directory
-        let config = create_test_config_with_dir(&temp_dir);
-        let session_manager = SessionManager::new(&config);
-
-        // Test the internal functions directly with proper git context
-        let sessions = list_active_sessions(&session_manager, &git_service)?;
-        assert!(sessions.is_empty());
-
-        // Test that empty sessions are handled correctly
-        let args = ListArgs {
-            verbose: false,
-            archived: false,
-            quiet: false,
-        };
-
-        let result = display_sessions(&sessions, &args);
-        assert!(result.is_ok());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_execute_not_in_git_repo() {
-        // Test that GitService::discover fails when not in a git repo
-        // This test validates the error handling without changing directories
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-
-        // We can't easily test the execute function without changing directories
-        // So we'll test that GitService::discover_from fails for non-git directories
-        let result = GitService::discover_from(temp_dir.path());
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_list_finished_sessions_in_archived() -> Result<()> {
         use crate::core::session::SessionState;
 
@@ -686,61 +385,6 @@ mod tests {
         assert_eq!(archived_sessions.len(), 1);
         assert_eq!(archived_sessions[0].session_id, "finished-session");
         assert_eq!(archived_sessions[0].status, SessionStatus::Archived);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_display_compact_sessions() -> Result<()> {
-        let sessions = vec![
-            SessionInfo {
-                session_id: "test-session-1".to_string(),
-                branch: "para/test-branch-1".to_string(),
-                worktree_path: PathBuf::from("/path/to/worktree1"),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: None,
-                has_uncommitted_changes: Some(false),
-                is_current: false,
-            },
-            SessionInfo {
-                session_id: "current-session".to_string(),
-                branch: "para/current-branch".to_string(),
-                worktree_path: PathBuf::from("/path/to/current"),
-                base_branch: "main".to_string(),
-                merge_mode: "merge".to_string(),
-                status: SessionStatus::Dirty,
-                last_modified: None,
-                has_uncommitted_changes: Some(true),
-                is_current: true,
-            },
-        ];
-
-        // This should not panic
-        let result = display_compact_sessions(&sessions);
-        assert!(result.is_ok());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_display_verbose_sessions() -> Result<()> {
-        let sessions = vec![SessionInfo {
-            session_id: "verbose-test".to_string(),
-            branch: "para/verbose-branch".to_string(),
-            worktree_path: PathBuf::from("/path/to/verbose"),
-            base_branch: "develop".to_string(),
-            merge_mode: "squash".to_string(),
-            status: SessionStatus::Active,
-            last_modified: Some(Utc::now()),
-            has_uncommitted_changes: Some(false),
-            is_current: true,
-        }];
-
-        // This should not panic
-        let result = display_verbose_sessions(&sessions);
-        assert!(result.is_ok());
 
         Ok(())
     }
@@ -940,67 +584,5 @@ mod tests {
         assert_eq!(session_info.last_modified, None);
         assert_eq!(session_info.has_uncommitted_changes, None);
         assert!(!session_info.is_current);
-    }
-
-    #[test]
-    fn test_sort_sessions_by_date() {
-        let now = Utc::now();
-        let earlier = now - chrono::Duration::hours(1);
-        let later = now + chrono::Duration::hours(1);
-
-        let mut sessions = vec![
-            SessionInfo {
-                session_id: "middle".to_string(),
-                branch: "para/middle".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(now),
-                has_uncommitted_changes: None,
-                is_current: false,
-            },
-            SessionInfo {
-                session_id: "earliest".to_string(),
-                branch: "para/earliest".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(earlier),
-                has_uncommitted_changes: None,
-                is_current: false,
-            },
-            SessionInfo {
-                session_id: "latest".to_string(),
-                branch: "para/latest".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(later),
-                has_uncommitted_changes: None,
-                is_current: false,
-            },
-            SessionInfo {
-                session_id: "none".to_string(),
-                branch: "para/none".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: None,
-                has_uncommitted_changes: None,
-                is_current: false,
-            },
-        ];
-
-        sort_sessions_by_date(&mut sessions);
-
-        // Should be sorted by last_modified descending (latest first)
-        assert_eq!(sessions[0].session_id, "latest");
-        assert_eq!(sessions[1].session_id, "middle");
-        assert_eq!(sessions[2].session_id, "earliest");
-        assert_eq!(sessions[3].session_id, "none"); // None should be last
     }
 }
