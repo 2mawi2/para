@@ -2,9 +2,8 @@ use crate::cli::parser::{StatusArgs, StatusCommands};
 use crate::config::Config;
 use crate::core::session::SessionManager;
 use crate::core::status::Status;
-use crate::utils::{ParaError, Result};
+use crate::utils::{get_main_repository_root, ParaError, Result};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub fn execute(config: Config, args: StatusArgs) -> Result<()> {
     match args.command {
@@ -98,52 +97,6 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     println!("Status updated for session '{}'", session_name);
 
     Ok(())
-}
-
-/// Get the main repository root, even when called from a worktree
-fn get_main_repository_root() -> Result<PathBuf> {
-    get_main_repository_root_from(None)
-}
-
-/// Get the main repository root from a specific path (used for testing)
-fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
-    let mut cmd = Command::new("git");
-    cmd.args(["rev-parse", "--git-common-dir"]);
-
-    if let Some(p) = path {
-        cmd.current_dir(p);
-    }
-
-    let output = cmd
-        .output()
-        .map_err(|e| ParaError::git_error(format!("Failed to run git command: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(ParaError::git_error("Not in a git repository".to_string()));
-    }
-
-    let git_common_dir = String::from_utf8(output.stdout)
-        .map_err(|e| ParaError::git_error(format!("Invalid git output: {}", e)))?
-        .trim()
-        .to_string();
-
-    let git_common_path = PathBuf::from(git_common_dir);
-
-    // The git common dir points to the .git directory, we want the parent (repository root)
-    let repo_root = if git_common_path
-        .file_name()
-        .map(|name| name == ".git")
-        .unwrap_or(false)
-    {
-        git_common_path
-            .parent()
-            .unwrap_or(&git_common_path)
-            .to_path_buf()
-    } else {
-        git_common_path
-    };
-
-    Ok(repo_root)
 }
 
 fn show_status(config: Config, session: Option<String>, json: bool) -> Result<()> {
