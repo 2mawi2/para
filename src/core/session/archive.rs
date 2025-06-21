@@ -40,14 +40,6 @@ impl<'a> ArchiveManager<'a> {
         Ok(entries)
     }
 
-    #[cfg(test)]
-    pub fn find_archive(&self, session_name: &str) -> Result<Option<ArchiveEntry>> {
-        let archives = self.list_archives()?;
-        Ok(archives
-            .into_iter()
-            .find(|a| a.session_name == session_name))
-    }
-
     pub fn cleanup_old_archives(&self) -> Result<usize> {
         let Some(cleanup_days) = self.config.session.auto_cleanup_days else {
             return Ok(0);
