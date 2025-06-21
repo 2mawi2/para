@@ -5,6 +5,109 @@ use crate::core::status::Status;
 use crate::utils::{get_main_repository_root, ParaError, Result};
 use std::path::{Path, PathBuf};
 
+/// Trait for different status display strategies (JSON vs text)
+trait StatusDisplayStrategy {
+    fn display_single_session(&self, status: &Option<Status>) -> Result<()>;
+    fn display_all_sessions(&self, statuses: Vec<Status>) -> Result<()>;
+}
+
+/// JSON display strategy for programmatic output
+struct JsonStatusDisplay;
+
+impl StatusDisplayStrategy for JsonStatusDisplay {
+    fn display_single_session(&self, status: &Option<Status>) -> Result<()> {
+        match status {
+            Some(s) => {
+                let json_str = serde_json::to_string_pretty(s).map_err(|e| {
+                    ParaError::config_error(format!("Failed to serialize status: {}", e))
+                })?;
+                println!("{}", json_str);
+            }
+            None => {
+                // For JSON output, print empty when no status found
+            }
+        }
+        Ok(())
+    }
+
+    fn display_all_sessions(&self, statuses: Vec<Status>) -> Result<()> {
+        let json_str = serde_json::to_string_pretty(&statuses)
+            .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {}", e)))?;
+        println!("{}", json_str);
+        Ok(())
+    }
+}
+
+/// Text display strategy for human-readable output
+struct TextStatusDisplay;
+
+impl StatusDisplayStrategy for TextStatusDisplay {
+    fn display_single_session(&self, status: &Option<Status>) -> Result<()> {
+        match status {
+            Some(s) => display_status(s),
+            None => println!("No status found for session"),
+        }
+        Ok(())
+    }
+
+    fn display_all_sessions(&self, statuses: Vec<Status>) -> Result<()> {
+        if statuses.is_empty() {
+            println!("No session statuses found.");
+        } else {
+            display_all_statuses(&statuses);
+        }
+        Ok(())
+    }
+}
+
+/// Service for handling status data operations
+struct StatusDataService {
+    session_manager: SessionManager,
+    state_dir: PathBuf,
+}
+
+impl StatusDataService {
+    fn new(config: &Config) -> Result<Self> {
+        let state_dir = Self::resolve_state_directory(config)?;
+        let session_manager = SessionManager::new(config);
+
+        Ok(StatusDataService {
+            session_manager,
+            state_dir,
+        })
+    }
+
+    fn resolve_state_directory(config: &Config) -> Result<PathBuf> {
+        if Path::new(&config.directories.state_dir).is_absolute() {
+            // If state_dir is already absolute (e.g., in tests), use it directly
+            Ok(PathBuf::from(&config.directories.state_dir))
+        } else {
+            // Otherwise, resolve it relative to the main repo root
+            let repo_root = get_main_repository_root()
+                .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+            Ok(repo_root.join(&config.directories.state_dir))
+        }
+    }
+
+    fn get_session_status(&self, session_name: &str) -> Result<Option<Status>> {
+        Status::load(&self.state_dir, session_name)
+            .map_err(|e| ParaError::config_error(e.to_string()))
+    }
+
+    fn get_all_statuses(&self) -> Result<Vec<Status>> {
+        let sessions = self.session_manager.list_sessions()?;
+        let mut statuses = Vec::new();
+
+        for session_state in sessions {
+            if let Some(status) = self.get_session_status(&session_state.name)? {
+                statuses.push(status);
+            }
+        }
+
+        Ok(statuses)
+    }
+}
+
 pub fn execute(config: Config, args: StatusArgs) -> Result<()> {
     match args.command {
         Some(StatusCommands::Show { session, json }) => show_status(config, session, json),
@@ -100,69 +203,27 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 }
 
 fn show_status(config: Config, session: Option<String>, json: bool) -> Result<()> {
-    // Use git common-dir to find main repo root, even from worktrees
-    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
-        // If state_dir is already absolute (e.g., in tests), use it directly
-        PathBuf::from(&config.directories.state_dir)
+    let data_service = StatusDataService::new(&config)?;
+    let display: Box<dyn StatusDisplayStrategy> = if json {
+        Box::new(JsonStatusDisplay)
     } else {
-        // Otherwise, resolve it relative to the main repo root
-        let repo_root = get_main_repository_root()
-            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
-        repo_root.join(&config.directories.state_dir)
+        Box::new(TextStatusDisplay)
     };
-    let session_manager = SessionManager::new(&config);
 
     match session {
         Some(session_name) => {
-            // Show specific session status
-            let status = Status::load(&state_dir, &session_name)
-                .map_err(|e| ParaError::config_error(e.to_string()))?;
-
-            match status {
-                Some(s) => {
-                    if json {
-                        let json_str = serde_json::to_string_pretty(&s).map_err(|e| {
-                            ParaError::config_error(format!("Failed to serialize status: {}", e))
-                        })?;
-                        println!("{}", json_str);
-                    } else {
-                        display_status(&s);
-                    }
-                }
-                None => {
-                    if !json {
-                        println!("No status found for session '{}'", session_name);
-                    }
-                }
+            let status = data_service.get_session_status(&session_name)?;
+            if status.is_none() && !json {
+                println!("No status found for session '{}'", session_name);
+                return Ok(());
             }
+            display.display_single_session(&status)
         }
         None => {
-            // Show all session statuses
-            let sessions = session_manager.list_sessions()?;
-            let mut statuses = Vec::new();
-
-            for session_state in sessions {
-                if let Some(status) = Status::load(&state_dir, &session_state.name)
-                    .map_err(|e| ParaError::config_error(e.to_string()))?
-                {
-                    statuses.push(status);
-                }
-            }
-
-            if json {
-                let json_str = serde_json::to_string_pretty(&statuses).map_err(|e| {
-                    ParaError::config_error(format!("Failed to serialize status: {}", e))
-                })?;
-                println!("{}", json_str);
-            } else if statuses.is_empty() {
-                println!("No session statuses found.");
-            } else {
-                display_all_statuses(&statuses);
-            }
+            let statuses = data_service.get_all_statuses()?;
+            display.display_all_sessions(statuses)
         }
     }
-
-    Ok(())
 }
 
 fn display_status(status: &Status) {
