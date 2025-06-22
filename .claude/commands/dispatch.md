@@ -1,0 +1,3 @@
+First, create a new task file named `tasks/TASK_{sanitized_task_description}.md`. The content of this file must be a detailed and actionable task based on the following request: "$ARGUMENTS".
+
+Second, after the task file is successfully written, use the `para` MCP tool to dispatch a new agent to work on it. The command should use the `--file` argument pointing to the new task file and include the `--dangerously-skip-permissions` flag.
