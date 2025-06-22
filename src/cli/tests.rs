@@ -182,7 +182,7 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
         };
-        assert!(args.validate().is_err());
+        assert!(args.validate_impl(true).is_err());
 
         let args = DispatchArgs {
             name_or_prompt: Some("test prompt".to_string()),
@@ -190,7 +190,7 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
         };
-        assert!(args.validate().is_ok());
+        assert!(args.validate_impl(true).is_ok());
     }
 
     #[test]

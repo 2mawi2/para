@@ -17,7 +17,7 @@ pub struct Cli {
 pub enum Commands {
     /// Create session with optional name
     Start(StartArgs),
-    /// Start Claude Code session with prompt
+    /// Start Claude Code session with prompt (supports stdin piping)
     Dispatch(DispatchArgs),
     /// Squash all changes into single commit
     Finish(FinishArgs),
@@ -63,6 +63,21 @@ pub struct StartArgs {
 }
 
 #[derive(Args, Debug)]
+#[command(after_help = "EXAMPLES:
+    # Basic usage with inline prompt
+    para dispatch \"implement user authentication\"
+    
+    # With custom session name
+    para dispatch auth-feature \"implement user authentication\"
+    
+    # From file
+    para dispatch --file prompt.txt
+    para dispatch auth-feature --file requirements.md
+    
+    # Using stdin piping
+    echo \"test prompt\" | para dispatch
+    cat requirements.txt | para dispatch my-feature
+    jq '.description' task.json | para dispatch")]
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
@@ -238,12 +253,35 @@ impl StartArgs {
 
 impl DispatchArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
+        use std::io::IsTerminal;
+
+        // Allow no arguments if stdin is piped
+        if !std::io::stdin().is_terminal() {
+            return Ok(());
+        }
+
+        self.validate_args()
+    }
+
+    fn validate_args(&self) -> crate::utils::Result<()> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
             (None, None, None) => Err(crate::utils::ParaError::invalid_args(
                 "dispatch requires a prompt text or file path",
             )),
             _ => Ok(()),
         }
+    }
+
+    #[cfg(test)]
+    pub fn validate_impl(&self, skip_stdin_check: bool) -> crate::utils::Result<()> {
+        use std::io::IsTerminal;
+
+        // Allow no arguments if stdin is piped (unless skipped for testing)
+        if !skip_stdin_check && !std::io::stdin().is_terminal() {
+            return Ok(());
+        }
+
+        self.validate_args()
     }
 }
 
