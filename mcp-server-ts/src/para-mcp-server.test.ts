@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 
-// Mock the execSync function
+// Prevent actual binary execution during tests
 jest.mock('child_process', () => ({
   exec: jest.fn(),
   execSync: jest.fn(),
@@ -8,7 +8,7 @@ jest.mock('child_process', () => ({
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
 
-// Mock MCP SDK modules
+// Isolate server logic from external MCP SDK dependencies
 jest.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
   Server: jest.fn().mockImplementation(() => ({
     setRequestHandler: jest.fn(),
@@ -41,7 +41,7 @@ jest.mock('@modelcontextprotocol/sdk/types.js', () => ({
 describe('Para MCP Server', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset process.argv to avoid side effects
+    // Prevent tests from interfering with each other's binary discovery
     process.argv = ['node', 'test-script.js'];
   });
 
@@ -54,7 +54,6 @@ describe('Para MCP Server', () => {
         throw new Error('Command failed');
       });
 
-      // Test the binary discovery logic
       expect(mockExecSync).toBeDefined();
     });
 
@@ -70,7 +69,7 @@ describe('Para MCP Server', () => {
     });
 
     test('should find para binary in homebrew installation', () => {
-      // Mock homebrew MCP path
+      // Simulate homebrew installation environment for path testing
       const originalArgv = process.argv[1];
       process.argv[1] = '/opt/homebrew/bin/para-mcp-server';
       
@@ -83,7 +82,7 @@ describe('Para MCP Server', () => {
 
       expect(mockExecSync).toBeDefined();
       
-      // Restore original argv
+      // Prevent test state from affecting other tests
       process.argv[1] = originalArgv;
     });
 
@@ -101,7 +100,6 @@ describe('Para MCP Server', () => {
       const _args = { session_name: 'test-session' };
       const expectedArgs = ['start', 'test-session'];
       
-      // This tests the logic inside the switch case for para_start
       expect(expectedArgs).toEqual(['start', 'test-session']);
     });
 
@@ -208,7 +206,6 @@ describe('Para MCP Server', () => {
       const input = 'commit message with spaces';
       const expected = '"commit message with spaces"';
       
-      // Test the quoting logic
       const result = input.includes(' ') && !input.startsWith('"') && !input.startsWith("'") 
         ? `"${input.replace(/"/g, '\\"')}"` 
         : input;
