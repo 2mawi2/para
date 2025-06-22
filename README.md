@@ -52,7 +52,7 @@ para finish "Add new feature"
 - `para finish "message"` - Auto-stage & finish session with commit message
 - `para finish "message" --branch custom-name` - Finish with custom branch name
 - `para list` - Show all active sessions
-- `para cancel [session]` - Discard current or specified session
+- `para cancel [session] [--force]` - Discard current or specified session (use --force to skip confirmation)
 - `para clean` - Remove all sessions
 - `para resume <session>` - Resume session in IDE
 - `para recover [session]` - Recover cancelled session from backup

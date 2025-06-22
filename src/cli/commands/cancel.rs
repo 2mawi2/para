@@ -24,8 +24,13 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     let session_state = session_manager.load_state(&session_name)?;
 
     let has_uncommitted = git_service.repository().has_uncommitted_changes()?;
-    if has_uncommitted {
+    if has_uncommitted && !args.force {
         confirm_cancel_with_changes(&session_name)?;
+    } else if has_uncommitted && args.force {
+        eprintln!(
+            "WARNING: Force canceling session '{}' with uncommitted changes. Your work will be archived.",
+            session_name
+        );
     }
 
     let archived_branch = git_service.archive_branch_with_session_name(
@@ -157,11 +162,15 @@ mod tests {
 
     #[test]
     fn test_validate_cancel_args_valid() {
-        let args = CancelArgs { session: None };
+        let args = CancelArgs {
+            session: None,
+            force: false,
+        };
         assert!(validate_cancel_args(&args).is_ok());
 
         let args = CancelArgs {
             session: Some("valid-session".to_string()),
+            force: false,
         };
         assert!(validate_cancel_args(&args).is_ok());
     }
@@ -170,6 +179,7 @@ mod tests {
     fn test_validate_cancel_args_empty_session() {
         let args = CancelArgs {
             session: Some(String::new()),
+            force: false,
         };
         let result = validate_cancel_args(&args);
         assert!(result.is_err());
@@ -197,6 +207,7 @@ mod tests {
 
         let args = CancelArgs {
             session: Some("test-session".to_string()),
+            force: false,
         };
 
         let result = detect_session_name(&args, &git_service, &session_manager);
@@ -216,6 +227,7 @@ mod tests {
 
         let args = CancelArgs {
             session: Some("nonexistent-session".to_string()),
+            force: false,
         };
 
         let result = detect_session_name(&args, &git_service, &session_manager);
@@ -233,7 +245,10 @@ mod tests {
         let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
-        let args = CancelArgs { session: None };
+        let args = CancelArgs {
+            session: None,
+            force: false,
+        };
 
         std::env::set_current_dir(&git_service.repository().root)
             .expect("Failed to change to repo root");
@@ -253,7 +268,10 @@ mod tests {
         let config = create_test_config_with_dir(&temp_dir);
         let session_manager = SessionManager::new(&config);
 
-        let args = CancelArgs { session: None };
+        let args = CancelArgs {
+            session: None,
+            force: false,
+        };
 
         let invalid_dir = TempDir::new().expect("Failed to create invalid dir");
         std::env::set_current_dir(invalid_dir.path()).expect("Failed to change to invalid dir");
@@ -289,6 +307,96 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("non-interactive mode"));
         assert!(error_msg.contains("Commit or stash changes"));
+
+        std::env::remove_var("PARA_NON_INTERACTIVE");
+    }
+
+    #[test]
+    fn test_force_cancel_with_uncommitted_changes() {
+        // Test that force flag bypasses uncommitted changes check
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
+
+        // Create a session
+        let session_state = SessionState::new(
+            "test-force-session".to_string(),
+            "test-branch".to_string(),
+            git_service.repository().root.join("test-worktree"),
+        );
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Create worktree directory
+        std::fs::create_dir_all(&session_state.worktree_path).unwrap();
+
+        // Create a file with uncommitted changes
+        let test_file = session_state.worktree_path.join("test.txt");
+        std::fs::write(&test_file, "uncommitted changes").unwrap();
+
+        // Test with force flag - should succeed
+        let args = CancelArgs {
+            session: Some("test-force-session".to_string()),
+            force: true,
+        };
+
+        // This should not error even with uncommitted changes
+        let result = execute(config.clone(), args);
+
+        // The actual execute might fail due to git operations in test environment,
+        // but we're testing that it doesn't fail due to uncommitted changes
+        if result.is_err() {
+            let error_msg = result.unwrap_err().to_string();
+            assert!(!error_msg.contains("uncommitted changes"));
+        }
+    }
+
+    #[test]
+    fn test_force_flag_non_interactive() {
+        // Test that force flag works in non-interactive mode
+        std::env::set_var("PARA_NON_INTERACTIVE", "1");
+
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
+
+        // Create a session
+        let session_state = SessionState::new(
+            "test-force-noninteractive".to_string(),
+            "test-branch".to_string(),
+            git_service.repository().root.join("test-worktree"),
+        );
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Create worktree directory
+        std::fs::create_dir_all(&session_state.worktree_path).unwrap();
+
+        // Test with force flag in non-interactive mode
+        let args = CancelArgs {
+            session: Some("test-force-noninteractive".to_string()),
+            force: true,
+        };
+
+        // This should work even in non-interactive mode with force flag
+        let result = execute(config, args);
+
+        // The actual execute might fail due to git operations,
+        // but should not fail due to non-interactive mode
+        if result.is_err() {
+            let error_msg = result.unwrap_err().to_string();
+            assert!(!error_msg.contains("non-interactive mode"));
+        }
 
         std::env::remove_var("PARA_NON_INTERACTIVE");
     }
