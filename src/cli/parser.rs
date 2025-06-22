@@ -46,7 +46,7 @@ pub enum Commands {
     /// Legacy completion endpoint for branches (hidden)
     #[command(name = "_completion_branches", hide = true)]
     CompletionBranches,
-    /// Monitor and manage active sessions in real-time (interactive TUI)
+    /// Monitor and manage active sessions in real-time (interactive TUI with mouse support)
     Monitor(MonitorArgs),
     /// Update session status (for agents to communicate progress)
     Status(StatusArgs),
