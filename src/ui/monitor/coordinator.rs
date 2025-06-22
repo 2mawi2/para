@@ -6,7 +6,114 @@ use crate::ui::monitor::state::{ButtonClick, MonitorAppState};
 use crate::ui::monitor::{AppMode, SessionInfo};
 use crate::utils::Result;
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
-use ratatui::Frame;
+use ratatui::{layout::Rect, Frame};
+
+// Constants for UI layout and mouse interaction
+const ACTIONS_COLUMN_WIDTH: u16 = 9;
+const RESUME_BUTTON_END: u16 = 3;
+const COPY_BUTTON_START: u16 = 4;
+const COPY_BUTTON_END: u16 = 8;
+const HEADER_ROWS: u16 = 2;
+
+/// Represents different types of mouse click targets
+#[derive(Debug, PartialEq, Clone)]
+enum ClickTarget {
+    ResumeButton(usize),
+    CopyButton(usize),
+    SessionRow(usize),
+    OutsideTable,
+}
+
+/// Handles mouse click detection and coordinate calculations
+struct ClickDetector {
+    table_area: Option<Rect>,
+    sessions_count: usize,
+}
+
+impl ClickDetector {
+    fn new(table_area: Option<Rect>, sessions_count: usize) -> Self {
+        Self {
+            table_area,
+            sessions_count,
+        }
+    }
+
+    fn detect_click_target(&self, mouse: MouseEvent) -> Option<ClickTarget> {
+        // Early return if not a left click
+        if !matches!(
+            mouse.kind,
+            MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        ) {
+            return None;
+        }
+
+        // Early return if no table area
+        let table_area = self.table_area?;
+
+        // Check if click is within table bounds
+        if !self.is_valid_table_click(mouse.column, mouse.row, &table_area) {
+            return Some(ClickTarget::OutsideTable);
+        }
+
+        // Calculate table position
+        let table_position = self.calculate_table_position(mouse.column, mouse.row, &table_area)?;
+
+        // Check if within session bounds
+        if table_position.row >= self.sessions_count {
+            return Some(ClickTarget::OutsideTable);
+        }
+
+        // Determine click target based on column position
+        if table_position.column < ACTIONS_COLUMN_WIDTH {
+            // Actions column clicked
+            if table_position.column < RESUME_BUTTON_END {
+                Some(ClickTarget::ResumeButton(table_position.row))
+            } else if table_position.column >= COPY_BUTTON_START
+                && table_position.column < COPY_BUTTON_END
+            {
+                Some(ClickTarget::CopyButton(table_position.row))
+            } else {
+                Some(ClickTarget::SessionRow(table_position.row))
+            }
+        } else {
+            Some(ClickTarget::SessionRow(table_position.row))
+        }
+    }
+
+    fn is_valid_table_click(&self, mouse_x: u16, mouse_y: u16, table_area: &Rect) -> bool {
+        mouse_x >= table_area.x
+            && mouse_x < table_area.x + table_area.width
+            && mouse_y >= table_area.y
+            && mouse_y < table_area.y + table_area.height
+    }
+
+    fn calculate_table_position(
+        &self,
+        mouse_x: u16,
+        mouse_y: u16,
+        table_area: &Rect,
+    ) -> Option<TablePosition> {
+        let relative_y = mouse_y - table_area.y;
+
+        // Skip if clicking on the header row or border
+        if relative_y <= 1 {
+            return None;
+        }
+
+        // Calculate data row index (subtract header and border rows)
+        let row = (relative_y - HEADER_ROWS) as usize;
+        let column = mouse_x - table_area.x;
+
+        Some(TablePosition { row, column })
+    }
+}
+
+/// Represents a position within the table
+#[derive(Debug)]
+struct TablePosition {
+    row: usize,
+    column: u16,
+}
 
 /// High-level coordinator for the monitor UI that manages all components
 pub struct MonitorCoordinator {
@@ -255,54 +362,25 @@ impl MonitorCoordinator {
     }
 
     fn handle_normal_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
-            // Check if we have a stored table area
-            if let Some(table_area) = self.state.table_area {
-                let mouse_x = mouse.column;
-                let mouse_y = mouse.row;
+        let detector = ClickDetector::new(self.state.table_area, self.sessions.len());
 
-                // Check if the click is within the table area
-                if mouse_x >= table_area.x
-                    && mouse_x < table_area.x + table_area.width
-                    && mouse_y >= table_area.y
-                    && mouse_y < table_area.y + table_area.height
-                {
-                    // Calculate which row was clicked
-                    // The table has a header row, so subtract 1 for the header
-                    // and account for the table's top position
-                    let relative_y = mouse_y - table_area.y;
-
-                    // Skip if clicking on the header row (row 0) or the border (row 1)
-                    if relative_y > 1 {
-                        // Subtract 2 for header and border to get the data row index
-                        let table_index = (relative_y - 2) as usize;
-
-                        // Check if the clicked row is within the session list bounds
-                        if table_index < self.sessions.len() {
-                            // Update the selection
-                            self.state.selected_index = table_index;
-                            self.state.table_state.select(Some(table_index));
-
-                            // Check if clicking in the actions column (first 9 characters)
-                            let relative_x = mouse_x - table_area.x;
-                            if relative_x < 9 {
-                                // Actions column clicked
-                                // Button layout: "[▶] [📋]" (positions 0-8)
-                                // [▶] = positions 0-2
-                                // space = position 3
-                                // [📋] = positions 4-7
-                                if relative_x < 3 {
-                                    // Resume button clicked
-                                    self.resume_selected()?;
-                                } else if (4..8).contains(&relative_x) {
-                                    // Copy button clicked
-                                    self.copy_session_name()?;
-                                }
-                            }
-                            // If clicking elsewhere on the row, just select it (no action)
-                        }
-                    }
-                }
+        match detector.detect_click_target(mouse) {
+            Some(ClickTarget::ResumeButton(index)) => {
+                self.state.selected_index = index;
+                self.state.table_state.select(Some(index));
+                self.resume_selected()?;
+            }
+            Some(ClickTarget::CopyButton(index)) => {
+                self.state.selected_index = index;
+                self.state.table_state.select(Some(index));
+                self.copy_session_name()?;
+            }
+            Some(ClickTarget::SessionRow(index)) => {
+                self.state.selected_index = index;
+                self.state.table_state.select(Some(index));
+            }
+            Some(ClickTarget::OutsideTable) | None => {
+                // Do nothing for clicks outside the table or invalid clicks
             }
         }
         Ok(())
