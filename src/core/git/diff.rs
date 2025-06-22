@@ -692,4 +692,64 @@ mod tests {
         );
         assert_eq!(stats.deletions, 0);
     }
+
+    // Additional unit tests for parse_diff_numstat edge cases
+    #[test]
+    fn test_parse_diff_numstat_normal_output() {
+        let output = "5\t2\tfile1.txt\n3\t0\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 2);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_binary_files() {
+        let output = "5\t2\tfile1.txt\n-\t-\tbinary.png\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        // Binary files should be ignored (marked as "-")
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_empty_output() {
+        let output = "";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 0);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_malformed_input() {
+        // Missing tabs - should be ignored
+        let output = "5\t2\tfile1.txt\ninvalid line\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_unparseable_numbers() {
+        // Non-numeric values should be ignored
+        let output = "5\t2\tfile1.txt\nabc\tdef\tbad.txt\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_only_binary_files() {
+        let output = "-\t-\tbinary1.png\n-\t-\tbinary2.pdf\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 0);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_mixed_valid_invalid() {
+        let output = "5\t2\tfile1.txt\n\t\t\n-\t-\tbinary.png\ngarbage\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
 }
