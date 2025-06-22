@@ -112,13 +112,13 @@ test *FILTER:
         exit 1
     fi
     
-    # Rust Clippy linting
-    printf "   Rust Linting: "
-    if cargo clippy --all-targets --all-features -- -W clippy::all >/dev/null 2>&1; then
+    # Clippy linting
+    printf "   Linting: "
+    if cargo clippy --all-targets --all-features -- -D warnings >/dev/null 2>&1; then
         echo "✅ clean"
     else
         echo "❌ FAILED"
-        cargo clippy --all-targets --all-features -- -W clippy::all
+        cargo clippy --all-targets --all-features -- -D warnings
         exit 1
     fi
     
@@ -166,7 +166,7 @@ test-only *FILTER:
 lint:
     @echo "🔍 Running linting checks (Rust + TypeScript)..."
     @echo "   Rust:"
-    cargo clippy --all-targets --all-features -- -W clippy::all
+    cargo clippy --all-targets --all-features -- -D warnings
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
         cd mcp-server-ts && npm run lint; \

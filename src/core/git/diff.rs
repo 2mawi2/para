@@ -3,92 +3,83 @@ use crate::utils::error::{ParaError, Result};
 use std::path::Path;
 use std::process::Command;
 
-/// Calculate git diff statistics between the current HEAD and a base branch
-pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<DiffStats> {
-    // First check if the path exists
-    if !worktree_path.exists() {
+/// Git command executor for worktree operations
+struct GitCommandExecutor<'a> {
+    worktree_path: &'a Path,
+}
+
+impl<'a> GitCommandExecutor<'a> {
+    fn new(worktree_path: &'a Path) -> Self {
+        Self { worktree_path }
+    }
+
+    /// Execute a git command and return the output as a string
+    fn execute(&self, args: &[&str]) -> Result<String> {
+        let output = Command::new("git")
+            .current_dir(self.worktree_path)
+            .args(args)
+            .output()
+            .map_err(|e| ParaError::git_operation(format!("Git command failed: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(ParaError::git_operation(format!(
+                "Git command failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// Check if the worktree is in a valid git repository state
+    fn check_repository_state(&self) -> Result<()> {
+        let output = Command::new("git")
+            .current_dir(self.worktree_path)
+            .args(["status", "--porcelain"])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => Ok(()),
+            Ok(_) => Err(ParaError::git_operation(
+                "Not in a git repository".to_string(),
+            )),
+            Err(e) => Err(ParaError::git_operation(format!(
+                "Git command failed: {}",
+                e
+            ))),
+        }
+    }
+}
+
+/// Validate that a worktree path exists
+fn validate_worktree_path(path: &Path) -> Result<()> {
+    if !path.exists() {
         return Err(ParaError::git_operation(
             "Worktree path does not exist".to_string(),
         ));
     }
+    Ok(())
+}
 
-    // Check if we're in a git repository
-    let status_output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["status", "--porcelain"])
-        .output();
-
-    match status_output {
-        Ok(output) if output.status.success() => {} // Continue
-        Ok(_) => {
-            return Err(ParaError::git_operation(
-                "Not in a git repository".to_string(),
-            ));
-        }
-        Err(e) => {
-            return Err(ParaError::git_operation(format!(
-                "Git command failed: {}",
-                e
-            )));
-        }
-    }
-
-    // Check if base branch exists
-    let branch_check = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["rev-parse", "--verify", base_branch])
-        .output()
-        .map_err(|e| {
-            ParaError::git_operation(format!("Failed to check branch existence: {}", e))
+/// Validate that a branch exists in the repository
+fn validate_branch_exists(executor: &GitCommandExecutor, branch: &str) -> Result<()> {
+    executor
+        .execute(&["rev-parse", "--verify", branch])
+        .map_err(|_| {
+            ParaError::git_operation(format!("Base branch '{}' does not exist", branch))
         })?;
+    Ok(())
+}
 
-    if !branch_check.status.success() {
-        return Err(ParaError::git_operation(format!(
-            "Base branch '{}' does not exist",
-            base_branch
-        )));
-    }
-
-    // Get the merge base between current branch and base branch
-    let merge_base_output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["merge-base", base_branch, "HEAD"])
-        .output()
-        .map_err(|e| ParaError::git_operation(format!("Failed to find merge base: {}", e)))?;
-
-    if !merge_base_output.status.success() {
-        return Err(ParaError::git_operation(
-            "Failed to find merge base".to_string(),
-        ));
-    }
-
-    let merge_base = String::from_utf8_lossy(&merge_base_output.stdout)
-        .trim()
-        .to_string();
-
-    // Get all changes from merge base to current working directory
-    // This includes committed changes, staged changes, and unstaged changes
-    let output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["diff", "--numstat", &merge_base])
-        .output()
-        .map_err(|e| ParaError::git_operation(format!("Failed to get diff stats: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ParaError::git_operation(format!(
-            "Failed to calculate diff: {}",
-            stderr.trim()
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+/// Parse git diff numstat output into DiffStats
+fn parse_diff_numstat(output: &str) -> Result<DiffStats> {
     let mut additions = 0;
     let mut deletions = 0;
 
     // Parse the numstat output
     // Format: additions<TAB>deletions<TAB>filename
-    for line in stdout.lines() {
+    for line in output.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() >= 2 {
             // Handle binary files which show as "-"
@@ -108,6 +99,29 @@ pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<D
     Ok(DiffStats::new(additions, deletions))
 }
 
+/// Calculate git diff statistics between the current HEAD and a base branch
+pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<DiffStats> {
+    // Validate input parameters
+    validate_worktree_path(worktree_path)?;
+
+    // Create git command executor
+    let executor = GitCommandExecutor::new(worktree_path);
+
+    // Check repository state and branch existence
+    executor.check_repository_state()?;
+    validate_branch_exists(&executor, base_branch)?;
+
+    // Get the merge base between current branch and base branch
+    let merge_base = executor.execute(&["merge-base", base_branch, "HEAD"])?;
+
+    // Get all changes from merge base to current working directory
+    // This includes committed changes, staged changes, and unstaged changes
+    let diff_output = executor.execute(&["diff", "--numstat", &merge_base])?;
+
+    // Parse and return the statistics
+    parse_diff_numstat(&diff_output)
+}
+
 /// Try to find the parent branch for a given branch
 pub fn find_parent_branch(worktree_path: &Path, current_branch: &str) -> Result<String> {
     // Special case: if current branch is main/master, use it as parent
@@ -115,53 +129,40 @@ pub fn find_parent_branch(worktree_path: &Path, current_branch: &str) -> Result<
         return Ok(current_branch.to_string());
     }
 
+    let executor = GitCommandExecutor::new(worktree_path);
+
     // Try to find the merge base with common default branches
     let common_branches = ["main", "master", "develop"];
 
     for candidate in &common_branches {
-        let check = Command::new("git")
-            .current_dir(worktree_path)
-            .args([
+        // Check if the candidate branch exists
+        if executor
+            .execute(&[
                 "rev-parse",
                 "--verify",
                 &format!("refs/heads/{}", candidate),
             ])
-            .output();
-
-        if let Ok(output) = check {
-            if output.status.success() {
-                // Check if this could be the parent by finding merge-base
-                let merge_base = Command::new("git")
-                    .current_dir(worktree_path)
-                    .args(["merge-base", candidate, current_branch])
-                    .output();
-
-                if let Ok(mb_output) = merge_base {
-                    if mb_output.status.success() {
-                        return Ok(candidate.to_string());
-                    }
-                }
+            .is_ok()
+        {
+            // Check if this could be the parent by finding merge-base
+            if executor
+                .execute(&["merge-base", candidate, current_branch])
+                .is_ok()
+            {
+                return Ok(candidate.to_string());
             }
         }
     }
 
     // Try to detect the parent from the upstream branch
-    let upstream_output = Command::new("git")
-        .current_dir(worktree_path)
-        .args([
-            "rev-parse",
-            "--abbrev-ref",
-            &format!("{}@{{upstream}}", current_branch),
-        ])
-        .output();
-
-    if let Ok(output) = upstream_output {
-        if output.status.success() {
-            let upstream = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            // Extract the branch name from origin/branch format
-            if let Some(branch) = upstream.split('/').next_back() {
-                return Ok(branch.to_string());
-            }
+    if let Ok(upstream) = executor.execute(&[
+        "rev-parse",
+        "--abbrev-ref",
+        &format!("{}@{{upstream}}", current_branch),
+    ]) {
+        // Extract the branch name from origin/branch format
+        if let Some(branch) = upstream.split('/').next_back() {
+            return Ok(branch.to_string());
         }
     }
 
@@ -690,5 +691,65 @@ mod tests {
             "Should count all changes from merge base"
         );
         assert_eq!(stats.deletions, 0);
+    }
+
+    // Additional unit tests for parse_diff_numstat edge cases
+    #[test]
+    fn test_parse_diff_numstat_normal_output() {
+        let output = "5\t2\tfile1.txt\n3\t0\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 2);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_binary_files() {
+        let output = "5\t2\tfile1.txt\n-\t-\tbinary.png\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        // Binary files should be ignored (marked as "-")
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_empty_output() {
+        let output = "";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 0);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_malformed_input() {
+        // Missing tabs - should be ignored
+        let output = "5\t2\tfile1.txt\ninvalid line\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_unparseable_numbers() {
+        // Non-numeric values should be ignored
+        let output = "5\t2\tfile1.txt\nabc\tdef\tbad.txt\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_only_binary_files() {
+        let output = "-\t-\tbinary1.png\n-\t-\tbinary2.pdf\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 0);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_numstat_mixed_valid_invalid() {
+        let output = "5\t2\tfile1.txt\n\t\t\n-\t-\tbinary.png\ngarbage\n3\t1\tfile2.txt\n";
+        let stats = parse_diff_numstat(output).unwrap();
+        assert_eq!(stats.additions, 8);
+        assert_eq!(stats.deletions, 3);
     }
 }
