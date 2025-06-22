@@ -5,6 +5,7 @@ use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
+use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -219,6 +220,25 @@ fn create_claude_task_json(command: &str) -> String {
 
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {
+        // Check for stdin first
+        if !io::stdin().is_terminal() {
+            let mut buffer = String::new();
+            io::stdin().read_to_string(&mut buffer).map_err(|e| {
+                ParaError::file_operation(format!("Failed to read from stdin: {}", e))
+            })?;
+
+            if buffer.trim().is_empty() {
+                return Err(ParaError::invalid_args("Piped input is empty"));
+            }
+
+            // When using stdin, the first positional argument (if any) is the session name
+            return Ok((self.name_or_prompt.clone(), buffer));
+        }
+
+        self.resolve_prompt_and_session_no_stdin()
+    }
+
+    fn resolve_prompt_and_session_no_stdin(&self) -> Result<(Option<String>, String)> {
         match (&self.name_or_prompt, &self.prompt, &self.file) {
             (_, _, Some(file_path)) => {
                 let prompt = read_file_content(file_path)?;
@@ -406,7 +426,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session().unwrap();
+        let result = args.resolve_prompt_and_session_no_stdin().unwrap();
         assert_eq!(result.0, None); // No session name
         assert_eq!(result.1, "implement user auth"); // Prompt content
     }
@@ -420,7 +440,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session().unwrap();
+        let result = args.resolve_prompt_and_session_no_stdin().unwrap();
         assert_eq!(result.0, Some("auth-feature".to_string())); // Session name
         assert_eq!(result.1, "implement user authentication"); // Prompt content
     }
@@ -437,7 +457,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session().unwrap();
+        let result = args.resolve_prompt_and_session_no_stdin().unwrap();
         assert_eq!(result.0, Some("my-session".to_string())); // Session name
         assert_eq!(result.1, "implement user auth from file"); // File content
     }
@@ -455,7 +475,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session().unwrap();
+        let result = args.resolve_prompt_and_session_no_stdin().unwrap();
         assert_eq!(result.0, None); // No session name
         assert_eq!(result.1, "auto-detected file content"); // File content
     }
@@ -473,7 +493,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session().unwrap();
+        let result = args.resolve_prompt_and_session_no_stdin().unwrap();
         assert_eq!(result.0, Some("feature-branch".to_string())); // Session name
         assert_eq!(result.1, "session with file content"); // File content
     }
@@ -490,7 +510,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session();
+        let result = args.resolve_prompt_and_session_no_stdin();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("file is empty"));
     }
@@ -504,7 +524,7 @@ mod tests {
             dangerously_skip_permissions: false,
         };
 
-        let result = args.resolve_prompt_and_session();
+        let result = args.resolve_prompt_and_session_no_stdin();
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
