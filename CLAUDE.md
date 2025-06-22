@@ -70,6 +70,7 @@ src/
 - Use `para finish` workflow - create branches for manual review before merging
 - Add `dangerously_skip_permissions: true` when dispatching agents to avoid IDE prompts
 - Dispatched agents should use `para finish "<commit message>"` to create branches for review
+- If you review multiple para branches (that have been finished) against their original TASK or intend, use your internal Task tool in parallel for that. Use one parallel Task for each review, and ensure that each Task does not checkout the branches but only reviews the git diff itself.
 
 **Note**: Para MCP tools contain comprehensive workflow documentation. Check tool descriptions for parallel development patterns.
 
