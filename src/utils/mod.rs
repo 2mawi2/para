@@ -12,3 +12,4 @@ pub use gitignore::GitignoreManager;
 pub use names::{generate_friendly_branch_name, generate_unique_name};
 pub use path::{debug_log, safe_resolve_path};
 pub mod validation;
+pub use validation::validate_session_name;

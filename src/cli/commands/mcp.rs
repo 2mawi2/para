@@ -5,12 +5,34 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct McpServerConfig {
     command: String,
     args: Vec<String>,
     description: String,
 }
+
+/// Trait for different MCP server detection strategies
+trait McpServerDetectionStrategy {
+    /// Attempt to detect an MCP server using this strategy
+    fn detect(&self) -> Option<McpServerConfig>;
+
+    /// Get a description of this detection strategy
+    #[allow(dead_code)]
+    fn description(&self) -> &str;
+}
+
+/// Strategy for detecting Homebrew-installed MCP servers
+struct HomebrewDetectionStrategy;
+
+/// Strategy for detecting local development MCP servers
+struct DevelopmentDetectionStrategy;
+
+/// Strategy for detecting system-installed MCP servers
+struct SystemDetectionStrategy;
+
+/// Strategy for detecting MCP servers in system PATH
+struct PathDetectionStrategy;
 
 #[derive(Args)]
 pub struct McpCommand {
@@ -98,17 +120,20 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
     Ok(())
 }
 
-fn find_mcp_server() -> Result<McpServerConfig> {
-    // Detect if we're running from a homebrew installation
-    let current_exe = std::env::current_exe()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
-    let exe_path = current_exe.to_string_lossy();
+/// Utility function to check if a file is a Node.js script
+fn is_node_script(path: &PathBuf) -> bool {
+    if let Ok(first_line) = std::fs::read_to_string(path)
+        .map(|content| content.lines().next().unwrap_or("").to_string())
+    {
+        first_line.starts_with("#!/usr/bin/env node")
+            || (first_line.starts_with("#!") && first_line.contains("node"))
+    } else {
+        false
+    }
+}
 
-    // Check if running from homebrew location
-    let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
-
-    if is_homebrew {
-        // For homebrew installations, ONLY use homebrew MCP server
+impl McpServerDetectionStrategy for HomebrewDetectionStrategy {
+    fn detect(&self) -> Option<McpServerConfig> {
         let homebrew_locations = vec![
             "/opt/homebrew/bin/para-mcp-server",              // Apple Silicon
             "/usr/local/bin/para-mcp-server",                 // Intel Mac
@@ -118,154 +143,196 @@ fn find_mcp_server() -> Result<McpServerConfig> {
         for location in homebrew_locations {
             let path = PathBuf::from(location);
             if path.exists() {
-                // Check if it's a Node.js script
-                if let Ok(first_line) = std::fs::read_to_string(&path)
-                    .map(|content| content.lines().next().unwrap_or("").to_string())
-                {
-                    if first_line.starts_with("#!/usr/bin/env node")
-                        || first_line.starts_with("#!") && first_line.contains("node")
-                    {
-                        return Ok(McpServerConfig {
-                            command: "node".to_string(),
-                            args: vec![path.to_string_lossy().to_string()],
-                            description: "Homebrew Node.js MCP server".to_string(),
-                        });
-                    }
+                if is_node_script(&path) {
+                    return Some(McpServerConfig {
+                        command: "node".to_string(),
+                        args: vec![path.to_string_lossy().to_string()],
+                        description: "Homebrew Node.js MCP server".to_string(),
+                    });
+                } else {
+                    return Some(McpServerConfig {
+                        command: path.to_string_lossy().to_string(),
+                        args: vec![],
+                        description: "Homebrew MCP server".to_string(),
+                    });
                 }
-
-                return Ok(McpServerConfig {
-                    command: path.to_string_lossy().to_string(),
-                    args: vec![],
-                    description: "Homebrew MCP server".to_string(),
-                });
             }
         }
+        None
+    }
 
+    fn description(&self) -> &str {
+        "Homebrew MCP server detection"
+    }
+}
+
+impl McpServerDetectionStrategy for DevelopmentDetectionStrategy {
+    fn detect(&self) -> Option<McpServerConfig> {
+        let current_dir = std::env::current_dir().ok()?;
+        let local_ts_server = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
+
+        if local_ts_server.exists() {
+            Some(McpServerConfig {
+                command: "node".to_string(),
+                args: vec![local_ts_server.to_string_lossy().to_string()],
+                description: "Local development TypeScript MCP server".to_string(),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn description(&self) -> &str {
+        "Local development MCP server detection"
+    }
+}
+
+impl McpServerDetectionStrategy for SystemDetectionStrategy {
+    fn detect(&self) -> Option<McpServerConfig> {
+        let home_dir = directories::BaseDirs::new()
+            .map(|dirs| dirs.home_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("~"));
+        let local_server = home_dir.join(".local/bin/para-mcp-server");
+
+        if !local_server.exists() {
+            return None;
+        }
+
+        if is_node_script(&local_server) {
+            // Try to find the original installation with dependencies
+            let possible_source_locations = vec![
+                directories::BaseDirs::new().map(|dirs| {
+                    dirs.home_dir()
+                        .join("Documents/git/para/mcp-server-ts/build/para-mcp-server.js")
+                }),
+                directories::BaseDirs::new().map(|dirs| {
+                    dirs.home_dir()
+                        .join("git/para/mcp-server-ts/build/para-mcp-server.js")
+                }),
+                directories::BaseDirs::new().map(|dirs| {
+                    dirs.home_dir()
+                        .join("repos/para/mcp-server-ts/build/para-mcp-server.js")
+                }),
+                directories::BaseDirs::new().map(|dirs| {
+                    dirs.home_dir()
+                        .join("projects/para/mcp-server-ts/build/para-mcp-server.js")
+                }),
+                Some(PathBuf::from(
+                    "/opt/homebrew/opt/para/mcp-server-ts/build/para-mcp-server.js",
+                )),
+                Some(PathBuf::from(
+                    "/usr/local/opt/para/mcp-server-ts/build/para-mcp-server.js",
+                )),
+            ];
+
+            // Check if any of these locations have both the server and node_modules
+            for source in possible_source_locations.into_iter().flatten() {
+                if source.exists() {
+                    if let Some(parent) = source.parent() {
+                        if parent.join("../node_modules").exists() {
+                            return Some(McpServerConfig {
+                                command: "node".to_string(),
+                                args: vec![source.to_string_lossy().to_string()],
+                                description: "Para TypeScript MCP server with dependencies"
+                                    .to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Use the installed one anyway (it might fail, but we'll provide a clear error)
+            Some(McpServerConfig {
+                command: "node".to_string(),
+                args: vec![local_server.to_string_lossy().to_string()],
+                description: "Local Node.js MCP server (may need dependencies)".to_string(),
+            })
+        } else {
+            // Otherwise treat it as a binary
+            Some(McpServerConfig {
+                command: local_server.to_string_lossy().to_string(),
+                args: vec![],
+                description: "Local MCP server".to_string(),
+            })
+        }
+    }
+
+    fn description(&self) -> &str {
+        "System installation MCP server detection"
+    }
+}
+
+impl McpServerDetectionStrategy for PathDetectionStrategy {
+    fn detect(&self) -> Option<McpServerConfig> {
+        if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let path = PathBuf::from(&path_str);
+
+                if is_node_script(&path) {
+                    Some(McpServerConfig {
+                        command: "node".to_string(),
+                        args: vec![path_str],
+                        description: "System PATH Node.js MCP server".to_string(),
+                    })
+                } else {
+                    Some(McpServerConfig {
+                        command: path_str,
+                        args: vec![],
+                        description: "System PATH MCP server".to_string(),
+                    })
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn description(&self) -> &str {
+        "System PATH MCP server detection"
+    }
+}
+
+/// Get all detection strategies in order of preference
+fn get_detection_strategies() -> Vec<Box<dyn McpServerDetectionStrategy>> {
+    vec![
+        Box::new(DevelopmentDetectionStrategy),
+        Box::new(SystemDetectionStrategy),
+        Box::new(PathDetectionStrategy),
+    ]
+}
+
+/// Simplified MCP server detection using strategy pattern
+fn find_mcp_server() -> Result<McpServerConfig> {
+    // Check if we're running from homebrew - if so, only use homebrew strategy
+    let current_exe = std::env::current_exe()
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
+    let exe_path = current_exe.to_string_lossy();
+    let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
+
+    let strategies: Vec<Box<dyn McpServerDetectionStrategy>> = if is_homebrew {
+        // For homebrew installations, only use homebrew strategy
+        vec![Box::new(HomebrewDetectionStrategy)]
+    } else {
+        // For other installations, try all strategies in order
+        get_detection_strategies()
+    };
+
+    for strategy in strategies {
+        if let Some(config) = strategy.detect() {
+            return Ok(config);
+        }
+    }
+
+    // Handle homebrew case specifically
+    if is_homebrew {
         return Err(ParaError::invalid_args(
             "Para is installed via Homebrew but MCP server is missing.\n\
             Try reinstalling: brew reinstall para"
                 .to_string(),
         ));
-    }
-
-    // For development/local installations, check in this order:
-
-    // 1. Local development: TypeScript server in current directory
-    let current_dir = std::env::current_dir()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get current directory: {}", e)))?;
-    let local_ts_server = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
-
-    if local_ts_server.exists() {
-        return Ok(McpServerConfig {
-            command: "node".to_string(),
-            args: vec![local_ts_server.to_string_lossy().to_string()],
-            description: "Local development TypeScript MCP server".to_string(),
-        });
-    }
-
-    // 2. System installation: MCP server in ~/.local/bin
-    let home_dir = directories::BaseDirs::new()
-        .map(|dirs| dirs.home_dir().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("~"));
-    let local_server = home_dir.join(".local/bin/para-mcp-server");
-
-    if local_server.exists() {
-        // Check if it's a Node.js script by reading the first line
-        if let Ok(first_line) = std::fs::read_to_string(&local_server)
-            .map(|content| content.lines().next().unwrap_or("").to_string())
-        {
-            if first_line.starts_with("#!/usr/bin/env node")
-                || first_line.starts_with("#!") && first_line.contains("node")
-            {
-                // It's a Node.js script - but we need to check if it can actually run
-                // Try to find the original installation with dependencies
-                let possible_source_locations = vec![
-                    // Look for common para installation directories
-                    directories::BaseDirs::new().map(|dirs| {
-                        dirs.home_dir()
-                            .join("Documents/git/para/mcp-server-ts/build/para-mcp-server.js")
-                    }),
-                    directories::BaseDirs::new().map(|dirs| {
-                        dirs.home_dir()
-                            .join("git/para/mcp-server-ts/build/para-mcp-server.js")
-                    }),
-                    directories::BaseDirs::new().map(|dirs| {
-                        dirs.home_dir()
-                            .join("repos/para/mcp-server-ts/build/para-mcp-server.js")
-                    }),
-                    directories::BaseDirs::new().map(|dirs| {
-                        dirs.home_dir()
-                            .join("projects/para/mcp-server-ts/build/para-mcp-server.js")
-                    }),
-                    Some(PathBuf::from(
-                        "/opt/homebrew/opt/para/mcp-server-ts/build/para-mcp-server.js",
-                    )),
-                    Some(PathBuf::from(
-                        "/usr/local/opt/para/mcp-server-ts/build/para-mcp-server.js",
-                    )),
-                ];
-
-                // Check if any of these locations have both the server and node_modules
-                for source in possible_source_locations.into_iter().flatten() {
-                    if source.exists() {
-                        // Check if node_modules exists in the parent directory
-                        if let Some(parent) = source.parent() {
-                            if parent.join("../node_modules").exists() {
-                                return Ok(McpServerConfig {
-                                    command: "node".to_string(),
-                                    args: vec![source.to_string_lossy().to_string()],
-                                    description: "Para TypeScript MCP server with dependencies"
-                                        .to_string(),
-                                });
-                            }
-                        }
-                    }
-                }
-
-                // If we can't find the source with dependencies, use the installed one anyway
-                // (it might fail, but we'll provide a clear error)
-                return Ok(McpServerConfig {
-                    command: "node".to_string(),
-                    args: vec![local_server.to_string_lossy().to_string()],
-                    description: "Local Node.js MCP server (may need dependencies)".to_string(),
-                });
-            }
-        }
-
-        // Otherwise treat it as a binary
-        return Ok(McpServerConfig {
-            command: local_server.to_string_lossy().to_string(),
-            args: vec![],
-            description: "Local MCP server".to_string(),
-        });
-    }
-
-    // 3. System PATH as fallback
-    if let Ok(output) = Command::new("which").arg("para-mcp-server").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-            // Check if the found script is a Node.js script
-            if let Ok(first_line) = std::fs::read_to_string(&path)
-                .map(|content| content.lines().next().unwrap_or("").to_string())
-            {
-                if first_line.starts_with("#!/usr/bin/env node")
-                    || first_line.starts_with("#!") && first_line.contains("node")
-                {
-                    return Ok(McpServerConfig {
-                        command: "node".to_string(),
-                        args: vec![path],
-                        description: "System PATH Node.js MCP server".to_string(),
-                    });
-                }
-            }
-
-            return Ok(McpServerConfig {
-                command: path,
-                args: vec![],
-                description: "System PATH MCP server".to_string(),
-            });
-        }
     }
 
     // No MCP server found - provide detailed guidance
@@ -505,5 +572,67 @@ mod tests {
         assert!(!added_again);
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert_eq!(content.matches(".mcp.json").count(), 1);
+    }
+
+    // Tests for MCP server detection strategies
+    mod strategy_tests {
+        use super::*;
+        use std::fs;
+        use tempfile::TempDir;
+
+        #[test]
+        fn test_homebrew_detection_strategy() {
+            let strategy = HomebrewDetectionStrategy;
+            assert_eq!(strategy.description(), "Homebrew MCP server detection");
+        }
+
+        #[test]
+        fn test_development_detection_strategy() {
+            let strategy = DevelopmentDetectionStrategy;
+            assert_eq!(
+                strategy.description(),
+                "Local development MCP server detection"
+            );
+        }
+
+        #[test]
+        fn test_system_detection_strategy() {
+            let strategy = SystemDetectionStrategy;
+            assert_eq!(
+                strategy.description(),
+                "System installation MCP server detection"
+            );
+        }
+
+        #[test]
+        fn test_path_detection_strategy() {
+            let strategy = PathDetectionStrategy;
+            assert_eq!(strategy.description(), "System PATH MCP server detection");
+        }
+
+        #[test]
+        fn test_node_script_detection() {
+            let temp_dir = TempDir::new().unwrap();
+
+            // Test Node.js script with shebang
+            let node_script = temp_dir.path().join("node-script");
+            fs::write(&node_script, "#!/usr/bin/env node\nconsole.log('test');").unwrap();
+            assert!(is_node_script(&node_script));
+
+            // Test alternative Node.js shebang
+            let node_script2 = temp_dir.path().join("node-script2");
+            fs::write(&node_script2, "#!/bin/node\nconsole.log('test');").unwrap();
+            assert!(is_node_script(&node_script2));
+
+            // Test non-Node.js script
+            let bash_script = temp_dir.path().join("bash-script");
+            fs::write(&bash_script, "#!/bin/bash\necho 'test'").unwrap();
+            assert!(!is_node_script(&bash_script));
+
+            // Test binary file
+            let binary = temp_dir.path().join("binary");
+            fs::write(&binary, [0x7f, 0x45, 0x4c, 0x46]).unwrap(); // ELF header
+            assert!(!is_node_script(&binary));
+        }
     }
 }
