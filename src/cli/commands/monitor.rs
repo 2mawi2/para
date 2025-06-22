@@ -69,6 +69,12 @@ impl App {
                         // Redraw after handling key event
                         terminal.draw(|f| self.coordinator.render(f))?;
                     }
+                    Event::Mouse(mouse) => {
+                        self.coordinator.handle_mouse(mouse).unwrap_or(());
+
+                        // Redraw after handling mouse event
+                        terminal.draw(|f| self.coordinator.render(f))?;
+                    }
                     Event::Resize(_, _) => {
                         // Redraw immediately on resize
                         terminal.draw(|f| self.coordinator.render(f))?;

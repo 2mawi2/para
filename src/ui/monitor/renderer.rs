@@ -98,7 +98,7 @@ impl MonitorRenderer {
         Self { config }
     }
 
-    pub fn render(&self, f: &mut Frame, sessions: &[SessionInfo], state: &MonitorAppState) {
+    pub fn render(&self, f: &mut Frame, sessions: &[SessionInfo], state: &mut MonitorAppState) {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -146,11 +146,14 @@ impl MonitorRenderer {
         f: &mut Frame,
         area: Rect,
         sessions: &[SessionInfo],
-        state: &MonitorAppState,
+        state: &mut MonitorAppState,
     ) {
         let header = self.create_table_header();
         let rows = self.create_table_rows(sessions, state);
         let table = self.create_table_widget(rows, header);
+
+        // Store the table area for mouse click handling
+        state.set_table_area(area);
 
         f.render_stateful_widget(table, area, &mut state.table_state.clone());
     }
