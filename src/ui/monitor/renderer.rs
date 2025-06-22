@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::core::session::SessionManager;
-use crate::ui::monitor::state::MonitorAppState;
+use crate::ui::monitor::state::{ButtonClick, MonitorAppState};
 use crate::ui::monitor::{centered_rect, format_activity, truncate_task, AppMode, SessionInfo};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -99,6 +99,10 @@ impl MonitorRenderer {
     }
 
     pub fn render(&self, f: &mut Frame, sessions: &[SessionInfo], state: &mut MonitorAppState) {
+        // Clear expired feedback messages and button clicks
+        state.clear_expired_feedback();
+        state.clear_expired_button_click();
+
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -112,6 +116,12 @@ impl MonitorRenderer {
         self.render_header(f, main_layout[0]);
         self.render_table(f, main_layout[1], sessions, state);
         self.render_footer(f, main_layout[2], sessions, state);
+
+        // Render feedback message if present
+        if state.get_feedback_message().is_some() {
+            self.render_feedback_message(f, state);
+        }
+
         match state.mode {
             AppMode::FinishPrompt => self.render_finish_prompt(f, state),
             AppMode::CancelConfirm => self.render_cancel_confirm(f),
@@ -201,7 +211,7 @@ impl MonitorRenderer {
         let base_style = self.get_base_row_style(is_selected, is_stale);
 
         Row::new(vec![
-            self.create_action_buttons_cell(is_selected),
+            self.create_action_buttons_cell(is_selected, index, state),
             Cell::from(session.name.clone()).style(base_style.add_modifier(Modifier::BOLD)),
             self.create_state_cell(session, is_stale),
             Cell::from(format_activity(&session.last_activity)).style(base_style),
@@ -214,30 +224,67 @@ impl MonitorRenderer {
         .height(1)
     }
 
-    fn create_action_buttons_cell<'a>(&self, is_selected: bool) -> Cell<'a> {
-        // Use Unicode icons for better visual appeal
-        // ▶ for play/resume, 📋 for copy (or fallback to text)
+    fn create_action_buttons_cell<'a>(
+        &self,
+        is_selected: bool,
+        index: usize,
+        state: &MonitorAppState,
+    ) -> Cell<'a> {
+        // Check if any button is clicked for this row
+        let button_click = state.get_button_click();
+        let resume_clicked = matches!(button_click, Some(ButtonClick::Resume(i)) if *i == index);
+        let copy_clicked = matches!(button_click, Some(ButtonClick::Copy(i)) if *i == index);
+
+        // Use box-drawing characters to create button appearance
         let buttons = if is_selected {
             // Show buttons with highlighting when row is selected
             Line::from(vec![
                 Span::styled(
-                    " ▶ ",
+                    if resume_clicked { "[✓]" } else { "[▶]" },
                     Style::default()
-                        .fg(COLOR_GREEN)
+                        .fg(if resume_clicked {
+                            COLOR_WHITE
+                        } else {
+                            COLOR_GREEN
+                        })
+                        .bg(if resume_clicked {
+                            COLOR_GREEN
+                        } else {
+                            COLOR_SELECTED_BG
+                        })
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("|"),
+                Span::raw(" "),
                 Span::styled(
-                    " 📋 ",
-                    Style::default().fg(COLOR_BLUE).add_modifier(Modifier::BOLD),
+                    if copy_clicked { "[✓]" } else { "[📋]" },
+                    Style::default()
+                        .fg(if copy_clicked {
+                            COLOR_WHITE
+                        } else {
+                            COLOR_BLUE
+                        })
+                        .bg(if copy_clicked {
+                            COLOR_BLUE
+                        } else {
+                            COLOR_SELECTED_BG
+                        })
+                        .add_modifier(Modifier::BOLD),
                 ),
             ])
         } else {
-            // Show dimmed buttons when not selected
+            // Show dimmed buttons with borders when not selected, but still show click feedback
             Line::from(vec![
-                Span::styled(" ▶ ", Style::default().fg(COLOR_GRAY)),
-                Span::raw("|"),
-                Span::styled(" 📋 ", Style::default().fg(COLOR_GRAY)),
+                if resume_clicked {
+                    Span::styled("[✓]", Style::default().fg(COLOR_WHITE).bg(COLOR_GREEN))
+                } else {
+                    Span::styled("[▶]", Style::default().fg(COLOR_GRAY))
+                },
+                Span::raw(" "),
+                if copy_clicked {
+                    Span::styled("[✓]", Style::default().fg(COLOR_WHITE).bg(COLOR_BLUE))
+                } else {
+                    Span::styled("[📋]", Style::default().fg(COLOR_GRAY))
+                },
             ])
         };
 
@@ -461,7 +508,7 @@ impl MonitorRenderer {
             Span::raw(" Finish • "),
             create_styled_span("[c]", COLOR_BLUE, true),
             Span::raw(" Cancel • "),
-            create_styled_span("[C]", COLOR_BLUE, true),
+            create_styled_span("[y]", COLOR_BLUE, true),
             Span::raw(" Copy • "),
             create_styled_span("[q]", COLOR_BLUE, true),
             Span::raw(" Quit"),
@@ -548,6 +595,47 @@ impl MonitorRenderer {
         .wrap(ratatui::widgets::Wrap { trim: true });
 
         f.render_widget(error_popup, area);
+    }
+
+    fn render_feedback_message(&self, f: &mut Frame, state: &MonitorAppState) {
+        if let Some(message) = state.get_feedback_message() {
+            let area = f.area();
+
+            // Create a more compact toast notification
+            let icon = if message.contains("Copied") {
+                "✓ "
+            } else {
+                "• "
+            };
+            let toast_text = format!("{}{}", icon, message);
+
+            // Calculate dimensions
+            let feedback_width = (toast_text.len() as u16).min(40) + 2; // More compact
+            let feedback_height = 1; // Single line toast
+
+            // Position in bottom right corner
+            let x = area.width.saturating_sub(feedback_width + 2); // 2 chars from right edge
+            let y = area.height.saturating_sub(feedback_height + 2); // 2 lines from bottom
+
+            let feedback_area = Rect {
+                x,
+                y,
+                width: feedback_width,
+                height: feedback_height,
+            };
+
+            // Create a sleek toast notification without borders
+            let feedback_widget = Paragraph::new(toast_text)
+                .style(
+                    Style::default()
+                        .fg(COLOR_BLACK)
+                        .bg(COLOR_GREEN)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .alignment(Alignment::Center);
+
+            f.render_widget(feedback_widget, feedback_area);
+        }
     }
 }
 

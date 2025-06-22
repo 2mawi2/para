@@ -3,6 +3,12 @@ use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
 use std::time::Instant;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ButtonClick {
+    Resume(usize), // Session index
+    Copy(usize),   // Session index
+}
+
 pub struct MonitorAppState {
     pub selected_index: usize,
     pub should_quit: bool,
@@ -13,6 +19,8 @@ pub struct MonitorAppState {
     pub last_refresh: Instant,
     pub error_message: Option<String>,
     pub table_area: Option<Rect>,
+    pub feedback_message: Option<(String, Instant)>,
+    pub button_click: Option<(ButtonClick, Instant)>,
 }
 
 impl MonitorAppState {
@@ -30,6 +38,8 @@ impl MonitorAppState {
             last_refresh: Instant::now(),
             error_message: None,
             table_area: None,
+            feedback_message: None,
+            button_click: None,
         }
     }
 
@@ -126,6 +136,56 @@ impl MonitorAppState {
 
     pub fn set_table_area(&mut self, area: Rect) {
         self.table_area = Some(area);
+    }
+
+    pub fn show_feedback(&mut self, message: String) {
+        self.feedback_message = Some((message, Instant::now()));
+    }
+
+    pub fn get_feedback_message(&self) -> Option<&str> {
+        if let Some((msg, time)) = &self.feedback_message {
+            // Show feedback for 2 seconds
+            if time.elapsed().as_secs() < 2 {
+                Some(msg)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_expired_feedback(&mut self) {
+        if let Some((_, time)) = &self.feedback_message {
+            if time.elapsed().as_secs() >= 2 {
+                self.feedback_message = None;
+            }
+        }
+    }
+
+    pub fn register_button_click(&mut self, button: ButtonClick) {
+        self.button_click = Some((button, Instant::now()));
+    }
+
+    pub fn get_button_click(&self) -> Option<&ButtonClick> {
+        if let Some((button, time)) = &self.button_click {
+            // Show button click feedback for 500ms
+            if time.elapsed().as_millis() < 500 {
+                Some(button)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_expired_button_click(&mut self) {
+        if let Some((_, time)) = &self.button_click {
+            if time.elapsed().as_millis() >= 500 {
+                self.button_click = None;
+            }
+        }
     }
 }
 
@@ -351,5 +411,66 @@ mod tests {
         assert!(!state.should_quit);
         state.quit();
         assert!(state.should_quit);
+    }
+
+    #[test]
+    fn test_feedback_messages() {
+        let mut state = MonitorAppState::new();
+
+        // Test no feedback initially
+        assert!(state.get_feedback_message().is_none());
+
+        // Test showing feedback
+        state.show_feedback("Test message".to_string());
+        assert_eq!(state.get_feedback_message(), Some("Test message"));
+
+        // Test feedback persists within 2 seconds
+        assert!(state.feedback_message.is_some());
+
+        // Test clearing expired feedback doesn't affect non-expired messages
+        state.clear_expired_feedback();
+        assert!(state.feedback_message.is_some());
+        assert_eq!(state.get_feedback_message(), Some("Test message"));
+    }
+
+    #[test]
+    fn test_button_clicks() {
+        let mut state = MonitorAppState::new();
+
+        // Test no button click initially
+        assert!(state.get_button_click().is_none());
+
+        // Test registering resume button click
+        state.register_button_click(ButtonClick::Resume(0));
+        assert_eq!(state.get_button_click(), Some(&ButtonClick::Resume(0)));
+
+        // Test registering copy button click (overwrites previous)
+        state.register_button_click(ButtonClick::Copy(1));
+        assert_eq!(state.get_button_click(), Some(&ButtonClick::Copy(1)));
+
+        // Test button click persists within 500ms
+        assert!(state.button_click.is_some());
+
+        // Test clearing expired button clicks doesn't affect non-expired clicks
+        state.clear_expired_button_click();
+        assert!(state.button_click.is_some());
+        assert_eq!(state.get_button_click(), Some(&ButtonClick::Copy(1)));
+    }
+
+    #[test]
+    fn test_button_click_enum() {
+        // Test ButtonClick enum equality
+        let click1 = ButtonClick::Resume(0);
+        let click2 = ButtonClick::Resume(0);
+        let click3 = ButtonClick::Resume(1);
+        let click4 = ButtonClick::Copy(0);
+
+        assert_eq!(click1, click2);
+        assert_ne!(click1, click3);
+        assert_ne!(click1, click4);
+
+        // Test Debug trait
+        assert!(format!("{:?}", click1).contains("Resume"));
+        assert!(format!("{:?}", click4).contains("Copy"));
     }
 }

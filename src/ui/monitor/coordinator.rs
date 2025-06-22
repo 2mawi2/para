@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::ui::monitor::actions::MonitorActions;
 use crate::ui::monitor::renderer::MonitorRenderer;
 use crate::ui::monitor::service::SessionService;
-use crate::ui::monitor::state::MonitorAppState;
+use crate::ui::monitor::state::{ButtonClick, MonitorAppState};
 use crate::ui::monitor::{AppMode, SessionInfo};
 use crate::utils::Result;
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
@@ -71,12 +71,13 @@ impl MonitorCoordinator {
             KeyCode::Char('c') => {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.state.quit();
-                } else if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    // Shift+C to copy session name
-                    self.copy_session_name()?;
                 } else {
                     self.start_cancel();
                 }
+            }
+            KeyCode::Char('y') => {
+                // 'y' to yank/copy session name (like vim)
+                self.copy_session_name()?;
             }
             KeyCode::Char('s') => {
                 self.state.toggle_stale();
@@ -143,9 +144,16 @@ impl MonitorCoordinator {
 
     fn resume_selected(&mut self) -> Result<()> {
         if let Some(session) = self.state.get_selected_session(&self.sessions) {
+            // Register button click for visual feedback
+            self.state
+                .register_button_click(ButtonClick::Resume(self.state.selected_index));
+
             if let Err(e) = self.actions.resume_session(session) {
                 self.state
                     .show_error(format!("Failed to resume session: {}", e));
+            } else {
+                self.state
+                    .show_feedback(format!("Opening session: {}", session.name));
             }
         }
         Ok(())
@@ -155,14 +163,18 @@ impl MonitorCoordinator {
         if let Some(session) = self.state.get_selected_session(&self.sessions) {
             use copypasta::{ClipboardContext, ClipboardProvider};
 
+            // Register button click for visual feedback
+            self.state
+                .register_button_click(ButtonClick::Copy(self.state.selected_index));
+
             match ClipboardContext::new() {
                 Ok(mut ctx) => {
                     if let Err(e) = ctx.set_contents(session.name.clone()) {
                         self.state
                             .show_error(format!("Failed to copy to clipboard: {}", e));
                     } else {
-                        // Optionally show a brief success message (you could add this feature)
-                        // For now, the action just completes silently
+                        self.state
+                            .show_feedback(format!("Copied: {}", session.name));
                     }
                 }
                 Err(e) => {
@@ -275,11 +287,15 @@ impl MonitorCoordinator {
                             let relative_x = mouse_x - table_area.x;
                             if relative_x < 9 {
                                 // Actions column clicked
-                                if relative_x < 4 {
-                                    // Resume button area (first 4 chars: " ▶ ")
+                                // Button layout: "[▶] [📋]" (positions 0-8)
+                                // [▶] = positions 0-2
+                                // space = position 3
+                                // [📋] = positions 4-7
+                                if relative_x < 3 {
+                                    // Resume button clicked
                                     self.resume_selected()?;
-                                } else if (5..9).contains(&relative_x) {
-                                    // Copy button area (chars 5-8: " 📋 ")
+                                } else if (4..8).contains(&relative_x) {
+                                    // Copy button clicked
                                     self.copy_session_name()?;
                                 }
                             }
