@@ -12,11 +12,8 @@ pub enum UiAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum SessionAction {
     Resume(usize),
-    Cancel(usize),
-    Finish(usize, String),
     Copy(usize),
     Integrate(usize),
 }

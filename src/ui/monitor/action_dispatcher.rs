@@ -7,13 +7,6 @@ use crate::ui::monitor::SessionInfo;
 use crate::utils::Result;
 use copypasta::{ClipboardContext, ClipboardProvider};
 
-/// Context needed for executing actions
-#[allow(dead_code)]
-pub struct ActionContext<'a> {
-    pub sessions: &'a [SessionInfo],
-    pub selected_index: usize,
-}
-
 /// Dispatches and executes UI actions
 pub struct ActionDispatcher {
     actions: MonitorActions,
@@ -68,22 +61,6 @@ impl ActionDispatcher {
                     }
                 }
                 Ok(ActionResult::Continue)
-            }
-            SessionAction::Cancel(index) => {
-                if let Some(session) = sessions.get(index) {
-                    self.actions.cancel_session(session)?;
-                    Ok(ActionResult::RefreshSessions)
-                } else {
-                    Ok(ActionResult::Continue)
-                }
-            }
-            SessionAction::Finish(index, message) => {
-                if let Some(session) = sessions.get(index) {
-                    self.actions.finish_session(session, message)?;
-                    Ok(ActionResult::RefreshSessions)
-                } else {
-                    Ok(ActionResult::Continue)
-                }
             }
             SessionAction::Copy(index) => {
                 if let Some(session) = sessions.get(index) {
