@@ -50,6 +50,8 @@ pub enum Commands {
     Monitor(MonitorArgs),
     /// Update session status (for agents to communicate progress)
     Status(StatusArgs),
+    /// I am a teacup
+    Teacup,
 }
 
 #[derive(Args, Debug)]
