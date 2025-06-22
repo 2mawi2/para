@@ -370,7 +370,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_finish":
         {
-          const finishArgs = args as ParaFinishArgs;
+          const finishArgs = args as unknown as ParaFinishArgs;
           const cmdArgs = ["finish"];
           cmdArgs.push(finishArgs.commit_message);
           if (finishArgs.session) {
@@ -385,7 +385,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_dispatch":
         {
-          const dispatchArgs = args as ParaDispatchArgs;
+          const dispatchArgs = args as unknown as ParaDispatchArgs;
           const cmdArgs = ["dispatch"];
           cmdArgs.push(dispatchArgs.session_name);
 

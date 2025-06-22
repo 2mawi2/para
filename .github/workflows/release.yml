@@ -77,11 +77,24 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Build TypeScript MCP server
         run: |
           cd mcp-server-ts
-          npm ci
-          npm run build
+          # Use bun if available, fallback to npm
+          if command -v bun >/dev/null 2>&1; then
+            echo "Using bun for dependencies and build..."
+            bun install
+            bun run build
+          else
+            echo "Bun not available, falling back to npm..."
+            npm ci
+            npm run build
+          fi
     
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -200,8 +213,14 @@ jobs:
               
               # Build and install TypeScript MCP server with dependencies
               cd "mcp-server-ts" do
-                system "npm", "ci"
-                system "npm", "run", "build"
+                # Use bun if available, fallback to npm
+                if which("bun")
+                  system "bun", "install"
+                  system "bun", "run", "build"
+                else
+                  system "npm", "ci"
+                  system "npm", "run", "build"
+                end
                 
                 # Install the MCP server and its node_modules to libexec
                 libexec.install "build/para-mcp-server.js"
