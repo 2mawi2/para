@@ -2,7 +2,6 @@
   "name": "para-mcp-server",
   "version": "1.1.2",
   "description": "Para MCP Server - TypeScript implementation calling Rust para binary",
-  "type": "module",
   "bin": {
     "para-mcp-server": "./build/para-mcp-server.js"
   },
