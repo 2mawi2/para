@@ -1,0 +1,2 @@
+Think deeply about the following topic: "$ARGUMENTS".
+Your goal is to find the root cause or provide a comprehensive analysis. Search the codebase, trace the logic, then think deeply and conclude with a summary of your findings and recommended next steps.

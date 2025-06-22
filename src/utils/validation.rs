@@ -18,10 +18,20 @@ pub fn validate_session_name(name: &str) -> Result<()> {
         ));
     }
 
-    // Intentional bug: forgot to check for spaces and special chars
-    // This will cause issues when creating git branches
+    // Check for spaces and special characters that are invalid in git branch names
+    if name.contains(' ') {
+        return Err(ParaError::invalid_args(
+            "Session name cannot contain spaces",
+        ));
+    }
 
-    // Intentional linting issue: unused variable - removed
+    // Check for other characters that are problematic in git branch names
+    let invalid_chars = ['~', '^', ':', '?', '*', '[', '\\', '.', '@', '{'];
+    if name.chars().any(|c| invalid_chars.contains(&c)) {
+        return Err(ParaError::invalid_args(
+            "Session name contains invalid characters for git branch names",
+        ));
+    }
 
     Ok(())
 }
