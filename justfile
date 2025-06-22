@@ -258,18 +258,18 @@ lint:
         if ! [ -d "mcp-server-ts/node_modules" ]; then \
             echo "   Installing TypeScript dependencies..."; \
             if command -v bun >/dev/null 2>&1; then \
-                cd mcp-server-ts && bun install; \
+                (cd mcp-server-ts && bun install); \
             elif command -v npm >/dev/null 2>&1; then \
-                cd mcp-server-ts && npm install; \
+                (cd mcp-server-ts && npm install); \
             else \
                 echo "❌ Neither bun nor npm found"; \
                 exit 1; \
             fi; \
         fi; \
         if command -v bun >/dev/null 2>&1; then \
-            cd mcp-server-ts && bun run lint; \
+            (cd mcp-server-ts && bun run lint); \
         elif command -v npm >/dev/null 2>&1; then \
-            cd mcp-server-ts && npm run lint; \
+            (cd mcp-server-ts && npm run lint); \
         else \
             echo "❌ Neither bun nor npm found"; \
             exit 1; \
@@ -286,18 +286,18 @@ fmt:
         if ! [ -d "mcp-server-ts/node_modules" ]; then \
             echo "   Installing TypeScript dependencies..."; \
             if command -v bun >/dev/null 2>&1; then \
-                cd mcp-server-ts && bun install; \
+                (cd mcp-server-ts && bun install); \
             elif command -v npm >/dev/null 2>&1; then \
-                cd mcp-server-ts && npm install; \
+                (cd mcp-server-ts && npm install); \
             else \
                 echo "❌ Neither bun nor npm found"; \
                 exit 1; \
             fi; \
         fi; \
         if command -v bun >/dev/null 2>&1; then \
-            cd mcp-server-ts && bun run lint:fix; \
+            (cd mcp-server-ts && bun run lint:fix); \
         elif command -v npm >/dev/null 2>&1; then \
-            cd mcp-server-ts && npm run lint:fix; \
+            (cd mcp-server-ts && npm run lint:fix); \
         else \
             echo "❌ Neither bun nor npm found"; \
             exit 1; \
@@ -314,18 +314,18 @@ fmt-check:
         if ! [ -d "mcp-server-ts/node_modules" ]; then \
             echo "   Installing TypeScript dependencies..."; \
             if command -v bun >/dev/null 2>&1; then \
-                cd mcp-server-ts && bun install; \
+                (cd mcp-server-ts && bun install); \
             elif command -v npm >/dev/null 2>&1; then \
-                cd mcp-server-ts && npm install; \
+                (cd mcp-server-ts && npm install); \
             else \
                 echo "❌ Neither bun nor npm found"; \
                 exit 1; \
             fi; \
         fi; \
         if command -v bun >/dev/null 2>&1; then \
-            cd mcp-server-ts && bun run lint; \
+            (cd mcp-server-ts && bun run lint); \
         elif command -v npm >/dev/null 2>&1; then \
-            cd mcp-server-ts && npm run lint; \
+            (cd mcp-server-ts && npm run lint); \
         else \
             echo "❌ Neither bun nor npm found"; \
             exit 1; \
