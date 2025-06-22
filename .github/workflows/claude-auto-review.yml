@@ -36,7 +36,7 @@ jobs:
           sleep 30
           
           # Check if newer commits exist
-          LATEST_SHA=$(gh pr view ${{ github.event.pull_request.number }} --json headRefOid -q .headRefOid)
+          LATEST_SHA=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json headRefOid -q .headRefOid)
           CURRENT_SHA="${{ github.event.pull_request.head.sha }}"
           
           echo "Current commit: $CURRENT_SHA"
@@ -56,6 +56,7 @@ jobs:
         run: |
           # Double-check if PR Assistant is currently running
           RUNNING=$(gh run list \
+            --repo ${{ github.repository }} \
             --workflow="claude-pr-assistant.yml" \
             --status="in_progress" \
             --branch="${{ github.head_ref }}" \
