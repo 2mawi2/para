@@ -49,38 +49,33 @@ pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<D
         )));
     }
 
-    // Get diff stats using git diff --numstat
-    // Use two-dot notation (..) to show changes from base branch to current HEAD
+    // Get the merge base between current branch and base branch
+    let merge_base_output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["merge-base", base_branch, "HEAD"])
+        .output()
+        .map_err(|e| ParaError::git_operation(format!("Failed to find merge base: {}", e)))?;
+
+    if !merge_base_output.status.success() {
+        return Err(ParaError::git_operation(
+            "Failed to find merge base".to_string(),
+        ));
+    }
+
+    let merge_base = String::from_utf8_lossy(&merge_base_output.stdout)
+        .trim()
+        .to_string();
+
+    // Get all changes from merge base to current working directory
+    // This includes committed changes, staged changes, and unstaged changes
     let output = Command::new("git")
         .current_dir(worktree_path)
-        .args(["diff", "--numstat", &format!("{}..HEAD", base_branch)])
+        .args(["diff", "--numstat", &merge_base])
         .output()
         .map_err(|e| ParaError::git_operation(format!("Failed to get diff stats: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        // Check if this is a detached HEAD state
-        if stderr.contains("ambiguous argument 'HEAD'") {
-            // Try using the current branch name instead
-            let branch_output = Command::new("git")
-                .current_dir(worktree_path)
-                .args(["rev-parse", "--abbrev-ref", "HEAD"])
-                .output();
-
-            if let Ok(output) = branch_output {
-                if output.status.success() {
-                    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if branch != "HEAD" {
-                        // Retry with branch name
-                        return calculate_diff_stats_with_branch(
-                            worktree_path,
-                            base_branch,
-                            &branch,
-                        );
-                    }
-                }
-            }
-        }
         return Err(ParaError::git_operation(format!(
             "Failed to calculate diff: {}",
             stderr.trim()
@@ -96,99 +91,16 @@ pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<D
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() >= 2 {
-            if let Ok(add) = parts[0].parse::<usize>() {
-                additions += add;
-            }
-            if let Ok(del) = parts[1].parse::<usize>() {
-                deletions += del;
-            }
-        }
-    }
-
-    // Also include unstaged changes
-    let unstaged_output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["diff", "--numstat"])
-        .output()
-        .map_err(|e| {
-            ParaError::git_operation(format!("Failed to get unstaged diff stats: {}", e))
-        })?;
-
-    if unstaged_output.status.success() {
-        let unstaged_stdout = String::from_utf8_lossy(&unstaged_output.stdout);
-        for line in unstaged_stdout.lines() {
-            let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 2 {
+            // Handle binary files which show as "-"
+            if parts[0] != "-" {
                 if let Ok(add) = parts[0].parse::<usize>() {
                     additions += add;
                 }
+            }
+            if parts[1] != "-" {
                 if let Ok(del) = parts[1].parse::<usize>() {
                     deletions += del;
                 }
-            }
-        }
-    }
-
-    // Also include staged changes
-    let staged_output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["diff", "--cached", "--numstat"])
-        .output()
-        .map_err(|e| ParaError::git_operation(format!("Failed to get staged diff stats: {}", e)))?;
-
-    if staged_output.status.success() {
-        let staged_stdout = String::from_utf8_lossy(&staged_output.stdout);
-        for line in staged_stdout.lines() {
-            let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 2 {
-                if let Ok(add) = parts[0].parse::<usize>() {
-                    additions += add;
-                }
-                if let Ok(del) = parts[1].parse::<usize>() {
-                    deletions += del;
-                }
-            }
-        }
-    }
-
-    Ok(DiffStats::new(additions, deletions))
-}
-
-fn calculate_diff_stats_with_branch(
-    worktree_path: &Path,
-    base_branch: &str,
-    current_branch: &str,
-) -> Result<DiffStats> {
-    let output = Command::new("git")
-        .current_dir(worktree_path)
-        .args([
-            "diff",
-            "--numstat",
-            &format!("{}..{}", base_branch, current_branch),
-        ])
-        .output()
-        .map_err(|e| ParaError::git_operation(format!("Failed to get diff stats: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ParaError::git_operation(format!(
-            "Failed to calculate diff: {}",
-            stderr.trim()
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut additions = 0;
-    let mut deletions = 0;
-
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 2 {
-            if let Ok(add) = parts[0].parse::<usize>() {
-                additions += add;
-            }
-            if let Ok(del) = parts[1].parse::<usize>() {
-                deletions += del;
             }
         }
     }
@@ -509,5 +421,274 @@ mod tests {
 
         assert_eq!(stats1, stats2);
         assert_ne!(stats1, stats3);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_from_different_directory() {
+        let (git_temp, git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Create a new branch with changes
+        git_service
+            .create_branch("test-diff-branch", "main")
+            .unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "test-diff-branch"])
+            .output()
+            .unwrap();
+
+        // Add a file with content
+        let test_file = git_temp.path().join("test_file.txt");
+        std::fs::write(&test_file, "Line 1\nLine 2\nLine 3\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Add test file"])
+            .output()
+            .unwrap();
+
+        // Now change to a different directory (simulate agent being elsewhere)
+        let other_dir = temp_dir.path().join("other_location");
+        std::fs::create_dir_all(&other_dir).unwrap();
+        std::env::set_current_dir(&other_dir).unwrap();
+
+        // Try to calculate diff stats - this should still work
+        let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
+        assert_eq!(stats.additions, 3);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_bug_showing_zero() {
+        // This test reproduces the bug where diff stats show as 0 even with changes
+        let (git_temp, git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Create a new branch (simulating a para session branch)
+        git_service.create_branch("para/fix-bug", "main").unwrap();
+
+        // Checkout the branch
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "para/fix-bug"])
+            .output()
+            .unwrap();
+
+        // Make some changes and commit them
+        let test_file = git_temp.path().join("feature.rs");
+        std::fs::write(
+            &test_file,
+            "// New feature\nfn feature() {\n    println!(\"Hello\");\n}\n",
+        )
+        .unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Add feature"])
+            .output()
+            .unwrap();
+
+        // Add more uncommitted changes
+        let test_file2 = git_temp.path().join("wip.txt");
+        std::fs::write(&test_file2, "Work in progress\n").unwrap();
+
+        // Calculate diff stats
+        let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
+
+        // We should see additions from committed file (4 lines)
+        // Note: untracked files are not included in git diff
+        println!(
+            "Bug test - Stats: additions={}, deletions={}",
+            stats.additions, stats.deletions
+        );
+        assert_eq!(
+            stats.additions, 4,
+            "Expected 4 additions from committed file"
+        );
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_shows_zero_when_no_changes() {
+        // This test verifies the specific bug: showing 0 changes when there are actually changes
+        let (git_temp, git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Create and checkout a new branch
+        git_service.create_branch("para/test-zero", "main").unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "para/test-zero"])
+            .output()
+            .unwrap();
+
+        // Add a file and commit it
+        let file1 = git_temp.path().join("file1.txt");
+        std::fs::write(&file1, "Line 1\nLine 2\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Add file1"])
+            .output()
+            .unwrap();
+
+        // Now let's simulate what happens when agent calls status from main repo
+        // while changes exist in the worktree
+
+        // First verify we have changes
+        let output = std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["diff", "--numstat", "main..HEAD"])
+            .output()
+            .unwrap();
+        let diff_output = String::from_utf8_lossy(&output.stdout);
+        println!("Direct git diff output: '{}'", diff_output);
+
+        // Calculate stats using our function
+        let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
+        println!(
+            "Calculated stats: additions={}, deletions={}",
+            stats.additions, stats.deletions
+        );
+
+        // The bug would show 0 additions when there should be 2
+        assert_eq!(
+            stats.additions, 2,
+            "Should show 2 additions for the committed file"
+        );
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_uses_merge_base() {
+        // This test verifies that we use merge base, not current main HEAD
+        let (git_temp, git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Create a feature branch and add a file
+        git_service.create_branch("feature", "main").unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "feature"])
+            .output()
+            .unwrap();
+
+        let feature_file = git_temp.path().join("feature.txt");
+        std::fs::write(&feature_file, "Feature work\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Add feature"])
+            .output()
+            .unwrap();
+
+        // Switch back to main and add a different file
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "main"])
+            .output()
+            .unwrap();
+
+        let main_file = git_temp.path().join("main-change.txt");
+        std::fs::write(&main_file, "Change on main\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Change on main"])
+            .output()
+            .unwrap();
+
+        // Go back to feature branch
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "feature"])
+            .output()
+            .unwrap();
+
+        // Calculate diff stats - should only show feature changes, not main changes
+        let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
+
+        // Should only count the feature.txt addition (1 line), not main-change.txt
+        println!(
+            "Merge base test - Stats: additions={}, deletions={}",
+            stats.additions, stats.deletions
+        );
+        assert_eq!(
+            stats.additions, 1,
+            "Should only show feature branch changes"
+        );
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_calculate_diff_stats_with_merge_base_and_working_changes() {
+        // Test that includes both committed changes and working directory changes
+        let (git_temp, git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Create a branch
+        git_service.create_branch("work", "main").unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["checkout", "work"])
+            .output()
+            .unwrap();
+
+        // Add committed changes
+        let file1 = git_temp.path().join("committed.txt");
+        std::fs::write(&file1, "Line 1\nLine 2\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["commit", "-m", "Add committed file"])
+            .output()
+            .unwrap();
+
+        // Add staged changes
+        let file2 = git_temp.path().join("staged.txt");
+        std::fs::write(&file2, "Staged line\n").unwrap();
+        git_service.stage_all_changes().unwrap();
+
+        // Add unstaged changes to existing file
+        std::fs::write(&file1, "Line 1\nLine 2\nLine 3 (unstaged)\n").unwrap();
+
+        // Get merge base
+        let merge_base_output = std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["merge-base", "main", "HEAD"])
+            .output()
+            .unwrap();
+        let merge_base = String::from_utf8_lossy(&merge_base_output.stdout)
+            .trim()
+            .to_string();
+
+        // Verify what git diff shows from merge base
+        let git_diff_output = std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["diff", "--numstat", &merge_base])
+            .output()
+            .unwrap();
+        let git_diff = String::from_utf8_lossy(&git_diff_output.stdout);
+        println!("Git diff from merge base: '{}'", git_diff);
+
+        // Calculate stats
+        let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
+
+        // Should count: 2 from committed + 1 from staged + 1 from unstaged = 4 total
+        println!(
+            "Working changes test - Stats: additions={}, deletions={}",
+            stats.additions, stats.deletions
+        );
+        assert_eq!(
+            stats.additions, 4,
+            "Should count all changes from merge base"
+        );
+        assert_eq!(stats.deletions, 0);
     }
 }
