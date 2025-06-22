@@ -3,6 +3,7 @@ use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::ide::IdeManager;
+use crate::core::session::state::SessionState;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
 use dialoguer::Select;
@@ -103,6 +104,67 @@ fn save_resume_context(session_path: &Path, session_name: &str, context: &str) -
     Ok(())
 }
 
+fn validate_session_exists(
+    session_manager: &SessionManager,
+    session_name: &str,
+) -> Result<Option<SessionState>> {
+    if session_manager.session_exists(session_name) {
+        let session_state = session_manager.load_state(session_name)?;
+        Ok(Some(session_state))
+    } else {
+        Ok(None)
+    }
+}
+
+fn repair_worktree_path(
+    session_state: &mut SessionState,
+    git_service: &GitService,
+    session_manager: &SessionManager,
+    session_name: &str,
+) -> Result<()> {
+    if !session_state.worktree_path.exists() {
+        let branch_to_match = session_state.branch.clone();
+        if let Some(wt) = git_service
+            .list_worktrees()?
+            .into_iter()
+            .find(|w| w.branch == branch_to_match)
+        {
+            session_state.worktree_path = wt.path.clone();
+            session_manager.save_state(session_state)?;
+        } else if let Some(wt) = git_service.list_worktrees()?.into_iter().find(|w| {
+            w.path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with(session_name))
+                .unwrap_or(false)
+        }) {
+            session_state.worktree_path = wt.path.clone();
+            session_manager.save_state(session_state)?;
+        } else {
+            return Err(ParaError::session_not_found(format!(
+                "Session '{}' exists but worktree path '{}' not found",
+                session_name,
+                session_state.worktree_path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn prepare_session_files(session_state: &SessionState) -> Result<()> {
+    // Ensure CLAUDE.local.md exists for the session
+    create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
+    Ok(())
+}
+
+fn handle_resume_context(session_state: &SessionState, args: &ResumeArgs) -> Result<()> {
+    // Process and save resume context if provided
+    if let Some(context) = process_resume_context(args)? {
+        save_resume_context(&session_state.worktree_path, &session_state.name, &context)?;
+    }
+    Ok(())
+}
+
 fn resume_specific_session(
     config: &Config,
     git_service: &GitService,
@@ -111,44 +173,23 @@ fn resume_specific_session(
 ) -> Result<()> {
     let session_manager = SessionManager::new(config);
 
-    if session_manager.session_exists(session_name) {
-        let mut session_state = session_manager.load_state(session_name)?;
+    // Try to validate and load existing session
+    if let Some(mut session_state) = validate_session_exists(&session_manager, session_name)? {
+        // Repair worktree path if needed
+        repair_worktree_path(
+            &mut session_state,
+            git_service,
+            &session_manager,
+            session_name,
+        )?;
 
-        if !session_state.worktree_path.exists() {
-            let branch_to_match = session_state.branch.clone();
-            if let Some(wt) = git_service
-                .list_worktrees()?
-                .into_iter()
-                .find(|w| w.branch == branch_to_match)
-            {
-                session_state.worktree_path = wt.path.clone();
-                session_manager.save_state(&session_state)?;
-            } else if let Some(wt) = git_service.list_worktrees()?.into_iter().find(|w| {
-                w.path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n.starts_with(session_name))
-                    .unwrap_or(false)
-            }) {
-                session_state.worktree_path = wt.path.clone();
-                session_manager.save_state(&session_state)?;
-            } else {
-                return Err(ParaError::session_not_found(format!(
-                    "Session '{}' exists but worktree path '{}' not found",
-                    session_name,
-                    session_state.worktree_path.display()
-                )));
-            }
-        }
+        // Prepare session files
+        prepare_session_files(&session_state)?;
 
-        // Ensure CLAUDE.local.md exists for the session
-        create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
+        // Handle resume context
+        handle_resume_context(&session_state, args)?;
 
-        // Process and save resume context if provided
-        if let Some(context) = process_resume_context(args)? {
-            save_resume_context(&session_state.worktree_path, &session_state.name, &context)?;
-        }
-
+        // Launch IDE
         launch_ide_for_session(config, &session_state.worktree_path)?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
