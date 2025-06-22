@@ -11,4 +11,3 @@ pub use git::{get_main_repository_root, get_main_repository_root_from};
 pub use gitignore::GitignoreManager;
 pub use names::{generate_friendly_branch_name, generate_unique_name, validate_session_name};
 pub use path::{debug_log, safe_resolve_path};
-pub mod validation;
