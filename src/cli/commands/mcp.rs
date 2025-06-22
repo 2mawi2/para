@@ -18,7 +18,6 @@ trait McpServerDetectionStrategy {
     fn detect(&self) -> Option<McpServerConfig>;
 
     /// Get a description of this detection strategy
-    #[allow(dead_code)]
     fn description(&self) -> &str;
 }
 
@@ -320,7 +319,9 @@ fn find_mcp_server() -> Result<McpServerConfig> {
         get_detection_strategies()
     };
 
+    let mut tried_strategies = Vec::new();
     for strategy in strategies {
+        tried_strategies.push(strategy.description().to_string());
         if let Some(config) = strategy.detect() {
             return Ok(config);
         }
@@ -335,21 +336,25 @@ fn find_mcp_server() -> Result<McpServerConfig> {
         ));
     }
 
-    // No MCP server found - provide detailed guidance
+    // No MCP server found - provide detailed guidance with strategies tried
+    let strategies_tried = tried_strategies.join(", ");
     Err(ParaError::invalid_args(
-        "No para MCP server found. Claude Code won't be able to connect to Para tools.\n\n\
-        📋 Install options (choose one):\n\n\
-        🔧 For development in this repo:\n  \
-        cd mcp-server-ts && npm install && npm run build\n\n\
-        🏠 For production use:\n  \
-        brew install 2mawi2/tap/para  # (includes MCP server)\n\n\
-        🛠️  Manual installation:\n  \
-        just install  # (builds and installs to ~/.local/bin)\n\n\
-        ⚡ Quick check:\n  \
-        Run 'which para-mcp-server' to see if it's in your PATH\n  \
-        Check 'node mcp-server-ts/build/para-mcp-server.js --help' for TypeScript server\n\n\
-        💡 After installing, run 'para mcp init --claude-code' again to update the configuration."
-            .to_string(),
+        format!(
+            "No para MCP server found. Claude Code won't be able to connect to Para tools.\n\
+            Tried strategies: {}\n\n\
+            📋 Install options (choose one):\n\n\
+            🔧 For development in this repo:\n  \
+            cd mcp-server-ts && npm install && npm run build\n\n\
+            🏠 For production use:\n  \
+            brew install 2mawi2/tap/para  # (includes MCP server)\n\n\
+            🛠️  Manual installation:\n  \
+            just install  # (builds and installs to ~/.local/bin)\n\n\
+            ⚡ Quick check:\n  \
+            Run 'which para-mcp-server' to see if it's in your PATH\n  \
+            Check 'node mcp-server-ts/build/para-mcp-server.js --help' for TypeScript server\n\n\
+            💡 After installing, run 'para mcp init --claude-code' again to update the configuration.",
+            strategies_tried
+        )
     ))
 }
 
