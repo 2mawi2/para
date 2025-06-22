@@ -114,11 +114,11 @@ test *FILTER:
     
     # Clippy linting
     printf "   Linting: "
-    if cargo clippy --all-targets --all-features -- -W clippy::all >/dev/null 2>&1; then
+    if cargo clippy --all-targets --all-features -- -D warnings >/dev/null 2>&1; then
         echo "✅ clean"
     else
         echo "❌ FAILED"
-        cargo clippy --all-targets --all-features -- -W clippy::all
+        cargo clippy --all-targets --all-features -- -D warnings
         exit 1
     fi
     
@@ -136,7 +136,7 @@ test-only *FILTER:
 # Run Rust linting with clippy
 lint:
     @echo "🔍 Running Rust linting checks..."
-    cargo clippy --all-targets --all-features -- -W clippy::all
+    cargo clippy --all-targets --all-features -- -D warnings
 
 # Format Rust code
 fmt:
