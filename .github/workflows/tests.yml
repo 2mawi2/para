@@ -1,4 +1,4 @@
-name: CI Tests
+name: CI Tests (Rust + TypeScript)
 
 on:
   push:
@@ -45,6 +45,16 @@ jobs:
         elif [ "$RUNNER_OS" = "Linux" ]; then
           echo "Ubuntu runner setup complete"
         fi
+    
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+    
+    - name: Setup Node.js (fallback)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
     - name: Check Rust formatting
       run: cargo fmt --all -- --check
@@ -88,3 +98,41 @@ jobs:
         cargo build --release
         ./target/release/para --help
         ./target/release/para --version
+    
+    - name: Install TypeScript dependencies
+      working-directory: mcp-server-ts
+      run: |
+        if command -v bun >/dev/null 2>&1; then
+          echo "Using bun for TypeScript dependencies"
+          bun install
+        else
+          echo "Using npm for TypeScript dependencies"
+          npm install
+        fi
+    
+    - name: Build TypeScript MCP server
+      working-directory: mcp-server-ts
+      run: |
+        if command -v bun >/dev/null 2>&1; then
+          bun run build
+        else
+          npm run build
+        fi
+    
+    - name: Run TypeScript tests
+      working-directory: mcp-server-ts
+      run: |
+        if command -v bun >/dev/null 2>&1; then
+          bun run test
+        else
+          npm run test
+        fi
+    
+    - name: Run TypeScript linting
+      working-directory: mcp-server-ts
+      run: |
+        if command -v bun >/dev/null 2>&1; then
+          bun run lint
+        else
+          npm run lint
+        fi
