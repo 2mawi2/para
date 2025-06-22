@@ -155,6 +155,14 @@ pub struct ListArgs {
 pub struct ResumeArgs {
     /// Session ID to resume (optional, shows list if not provided)
     pub session: Option<String>,
+
+    /// Additional prompt or instructions for the resumed session
+    #[arg(long, short)]
+    pub prompt: Option<String>,
+
+    /// Read additional instructions from specified file
+    #[arg(long, short)]
+    pub file: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -297,6 +305,17 @@ impl FinishArgs {
             validate_branch_name(branch)?;
         }
 
+        Ok(())
+    }
+}
+
+impl ResumeArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        if self.prompt.is_some() && self.file.is_some() {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot specify both --prompt and --file. Please use only one.",
+            ));
+        }
         Ok(())
     }
 }
