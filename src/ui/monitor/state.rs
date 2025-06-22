@@ -1,4 +1,5 @@
 use crate::ui::monitor::{AppMode, SessionInfo};
+use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
 use std::time::Instant;
 
@@ -11,6 +12,7 @@ pub struct MonitorAppState {
     pub show_stale: bool,
     pub last_refresh: Instant,
     pub error_message: Option<String>,
+    pub table_area: Option<Rect>,
 }
 
 impl MonitorAppState {
@@ -27,6 +29,7 @@ impl MonitorAppState {
             show_stale: true,
             last_refresh: Instant::now(),
             error_message: None,
+            table_area: None,
         }
     }
 
@@ -119,6 +122,10 @@ impl MonitorAppState {
     }
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    pub fn set_table_area(&mut self, area: Rect) {
+        self.table_area = Some(area);
     }
 }
 
