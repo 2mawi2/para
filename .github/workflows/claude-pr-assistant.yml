@@ -130,3 +130,28 @@ jobs:
             - Avoid writing code that isn't actually used
             - Tests failing? Fix the code, not the test
             - Pipeline will reject if tests or lints fail!
+            
+            **COMMENT QUALITY STANDARDS:**
+            You MUST follow strict comment guidelines to maintain code quality:
+            
+            **FORBIDDEN COMMENTS:**
+            - ❌ "What" comments that describe code: `// Loop through users`, `// Set status to active`
+            - ❌ Reviewer chatter: `// TODO: Claude, please optimize this`, `// Note for reviewer: this might be confusing`  
+            - ❌ Change descriptions: `// Added this function for the new feature`, `// Changed this to fix the bug`
+            - ❌ Meta-commentary about the development process
+            
+            **REQUIRED COMMENTS:**
+            - ✅ "Why" comments explaining business logic: `// Skip inactive users to avoid permission errors`
+            - ✅ Constraint explanations: `// Use UTC to avoid timezone issues in distributed systems`
+            - ✅ Non-obvious decisions: `// Retry 3 times because external API has transient failures`
+            - ✅ Performance or security considerations: `// Cache result to avoid expensive DB lookup`
+            
+            **ACCEPTABLE "WHAT" COMMENTS (SPARINGLY):**
+            - Only for genuinely complex code (regex, algorithms, mathematical formulas)
+            - Must question: "Is this code too complex and should be simplified instead?"
+            - Example: `// Regex matches IPv4 addresses in CIDR notation: 192.168.1.0/24`
+            
+            **COMMENT REVIEW:**
+            - Before adding any comment, ask: "Does this explain WHY, not WHAT?"
+            - Remove any comments that don't add value beyond what the code already shows
+            - Keep comments concise and focused on business value or technical constraints
