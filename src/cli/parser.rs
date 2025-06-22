@@ -96,6 +96,14 @@ pub struct FinishArgs {
 pub struct CancelArgs {
     /// Session ID (optional, auto-detects if not provided)
     pub session: Option<String>,
+
+    /// Force cancellation even with uncommitted changes (destructive)
+    #[arg(
+        long,
+        short,
+        help = "Force cancellation even with uncommitted changes (destructive)"
+    )]
+    pub force: bool,
 }
 
 #[derive(Args, Debug)]

@@ -14,7 +14,7 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 - **para_list** - Check status
 - **para_start** - Manual sessions with user
 - **para_finish** - Rarely used
-- **para_cancel** - Cleanup abandoned work
+- **para_cancel** - Cleanup abandoned work (supports force parameter to skip confirmation)
 
 ### CLI Commands (for Dispatched Agents)
 - **para finish** - Creates branch for review (with optional custom branch names)

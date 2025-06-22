@@ -155,6 +155,7 @@ Once MCP integration is set up, Claude Code gains access to these Para tools:
 
 - **`para_cancel`** - Cancel and delete sessions, removing worktrees and branches
   - `session_name` (required): Name of the session to cancel
+  - `force` (optional): Skip confirmation prompt when true
 
 - **`para_config_show`** - Display current Para configuration
 

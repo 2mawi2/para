@@ -250,6 +250,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             session_name: {
               type: "string",
               description: "Name of the session to cancel (optional, auto-detects current session - DANGEROUS!)"
+            },
+            force: {
+              type: "boolean",
+              description: "Force cancellation without confirmation prompts"
             }
           },
           required: []
@@ -367,6 +371,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const cmdArgs = ["cancel"];
           if ((args as any).session_name) {
             cmdArgs.push((args as any).session_name);
+          }
+          if ((args as any).force) {
+            cmdArgs.push("--force");
           }
           result = await runParaCommand(cmdArgs);
         }
