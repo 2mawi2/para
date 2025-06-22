@@ -101,6 +101,10 @@ jobs:
             1. Check ONLY PR comments that contain `<!-- iteration-count: N -->` to find current iteration
                - IGNORE the PR description/body - it's not an iteration
                - ONLY count comments with the iteration marker
+               - IMPORTANT: When you see a comment like "@claude please fix these critical issues (iteration 2/3):", 
+                 this is NOT a separate iteration - it's the trigger comment that is PART OF the same iteration
+               - The iteration count in the trigger comment (e.g., "iteration 2/3") indicates what iteration 
+                 the PR Assistant is working on, not a new review iteration
             2. If no comments with `<!-- iteration-count: N -->` exist, this is the FIRST iteration (iteration 1)
             3. If highest iteration found >= 3: provide final review only, do NOT add @claude comment
             4. If highest iteration found < 3 AND critical issues found: auto-trigger with structured comment
@@ -240,9 +244,12 @@ jobs:
             1. Use mcp__github__get_pull_request_comments to read ALL existing PR comments
             2. Filter to ONLY comments containing `<!-- iteration-count: N -->` marker
             3. Find the HIGHEST iteration number from these filtered comments
-            4. If no such comments exist, current iteration = 1 (first review)
-            5. If highest iteration >= 3, provide final review only (no auto-trigger)
-            6. If critical issues found AND highest iteration < 3:
+            4. CRITICAL: Ignore trigger comments like "@claude please fix..." - these are NOT new iterations
+               - Example: If you see "@claude please fix these critical issues (iteration 2/3):" followed by
+                 "<!-- iteration-count: 2 -->", this is all ONE iteration (iteration 2), not two separate ones
+            5. If no comments with iteration markers exist, current iteration = 1 (first review)
+            6. If highest iteration >= 3, provide final review only (no auto-trigger)
+            7. If critical issues found AND highest iteration < 3:
                - Next iteration = highest iteration + 1
                - Create `.github-triggers/` directory and write JSON file
                - JSON must include both iteration number and formatted comment
