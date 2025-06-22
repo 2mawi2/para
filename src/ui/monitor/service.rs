@@ -87,6 +87,7 @@ impl SessionService {
                 worktree_path: session.worktree_path.clone(),
                 test_status: None,
                 confidence: None,
+                diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
             };
@@ -134,17 +135,18 @@ impl SessionService {
         for session_info in &mut sessions {
             let agent_status = Status::load(state_dir, &session_info.name).ok().flatten();
 
-            let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
+            let (test_status, confidence, diff_stats, todo_percentage, is_blocked, agent_task) =
                 if let Some(ref status) = agent_status {
                     (
                         Some(status.test_status.clone()),
                         Some(status.confidence.clone()),
+                        status.diff_stats.clone(),
                         status.todo_percentage(),
                         status.is_blocked,
                         Some(status.current_task.clone()),
                     )
                 } else {
-                    (None, None, None, false, None)
+                    (None, None, None, None, false, None)
                 };
 
             // Agent task takes priority over session task
@@ -154,6 +156,7 @@ impl SessionService {
 
             session_info.test_status = test_status;
             session_info.confidence = confidence;
+            session_info.diff_stats = diff_stats;
             session_info.todo_percentage = todo_percentage;
             session_info.is_blocked = is_blocked;
         }
@@ -532,6 +535,7 @@ mod tests {
             worktree_path: PathBuf::from("/test/path"),
             test_status: Some(agent_status.test_status.clone()),
             confidence: Some(agent_status.confidence.clone()),
+            diff_stats: None,
             todo_percentage: agent_status.todo_percentage(),
             is_blocked: agent_status.is_blocked,
         };
@@ -584,6 +588,7 @@ mod tests {
             worktree_path: PathBuf::from("/test1"),
             test_status: None,
             confidence: None,
+            diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
         };
@@ -597,6 +602,7 @@ mod tests {
             worktree_path: PathBuf::from("/test2"),
             test_status: None,
             confidence: None,
+            diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
         };
@@ -610,6 +616,7 @@ mod tests {
             worktree_path: PathBuf::from("/test3"),
             test_status: None,
             confidence: None,
+            diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
         };
