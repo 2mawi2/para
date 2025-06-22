@@ -1,6 +1,6 @@
 # Para - Parallel IDE Workflow Helper
 
-Work on multiple features simultaneously using Git worktrees and your favorite IDE. Built with Rust for performance and reliability.
+Work on multiple features simultaneously using Git worktrees and your favorite IDE. Built with Rust for performance and reliability. Testing workflow fixes.
 
 ## Installation
 
