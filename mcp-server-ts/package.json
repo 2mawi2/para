@@ -9,6 +9,11 @@
   "scripts": {
     "build": "tsc && chmod +x build/para-mcp-server.js",
     "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
     "clean": "rm -rf build node_modules package-lock.json"
   },
   "dependencies": {
@@ -16,6 +21,30 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.1",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "eslint": "^9.18.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.7.3"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "testMatch": [
+      "**/src/**/*.test.ts",
+      "**/tests/**/*.test.ts"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.test.ts",
+      "!src/**/*.d.ts"
+    ],
+    "moduleFileExtensions": ["ts", "js"],
+    "testTimeout": 10000
   }
 }
