@@ -52,7 +52,12 @@ pub fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
         if let Some(p) = path {
             p.join(git_common_dir)
         } else {
-            PathBuf::from(git_common_dir)
+            // When no path is provided, resolve relative to current directory
+            std::env::current_dir()
+                .map_err(|e| {
+                    ParaError::git_error(format!("Failed to get current directory: {}", e))
+                })?
+                .join(git_common_dir)
         }
     };
 
