@@ -233,6 +233,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: "para_resume",
+        description: "Resume an existing active session with optional additional context or instructions. Opens the session's worktree in your IDE.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            session: {
+              type: "string",
+              description: "Session ID to resume (optional, shows list if not provided)"
+            },
+            prompt: {
+              type: "string",
+              description: "Additional prompt or instructions for the resumed session"
+            },
+            file: {
+              type: "string",
+              description: "Read additional instructions from specified file"
+            }
+          },
+          required: []
+        }
+      },
+      {
         name: "para_config_show",
         description: "Display current para configuration including IDE, directories, and Git settings.",
         inputSchema: {
@@ -357,6 +379,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const cmdArgs = ["recover"];
           if ((args as any).session_name) {
             cmdArgs.push((args as any).session_name);
+          }
+          result = await runParaCommand(cmdArgs);
+        }
+        break;
+
+      case "para_resume":
+        {
+          const cmdArgs = ["resume"];
+          if ((args as any).session) {
+            cmdArgs.push((args as any).session);
+          }
+          if ((args as any).prompt) {
+            cmdArgs.push("--prompt", (args as any).prompt);
+          }
+          if ((args as any).file) {
+            cmdArgs.push("--file", (args as any).file);
           }
           result = await runParaCommand(cmdArgs);
         }

@@ -9,6 +9,7 @@ use dialoguer::Select;
 use serde_json::Value;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 #[derive(Debug, PartialEq)]
@@ -26,21 +27,87 @@ enum TaskTransformation {
 }
 
 pub fn execute(config: Config, args: ResumeArgs) -> Result<()> {
+    args.validate()?;
     validate_resume_args(&args)?;
 
     let git_service = GitService::discover()?;
     let session_manager = SessionManager::new(&config);
 
-    match args.session {
-        Some(session_name) => resume_specific_session(&config, &git_service, &session_name),
-        None => detect_and_resume_session(&config, &git_service, &session_manager),
+    match &args.session {
+        Some(session_name) => resume_specific_session(&config, &git_service, session_name, &args),
+        None => detect_and_resume_session(&config, &git_service, &session_manager, &args),
     }
+}
+
+fn process_resume_context(args: &ResumeArgs) -> Result<Option<String>> {
+    match (&args.prompt, &args.file) {
+        (Some(prompt), None) => Ok(Some(prompt.clone())),
+        (None, Some(file_path)) => {
+            // Resolve path relative to current directory
+            let resolved_path = if file_path.is_absolute() {
+                file_path.clone()
+            } else {
+                env::current_dir()?.join(file_path)
+            };
+
+            // Validate file exists
+            if !resolved_path.exists() {
+                return Err(ParaError::fs_error(format!(
+                    "File not found: {}",
+                    resolved_path.display()
+                )));
+            }
+
+            // Check file size (1MB limit)
+            let metadata = fs::metadata(&resolved_path)?;
+            if metadata.len() > 1_048_576 {
+                return Err(ParaError::invalid_args(
+                    "File too large. Maximum size is 1MB.",
+                ));
+            }
+
+            // Read file contents
+            let content = fs::read_to_string(&resolved_path)
+                .map_err(|e| ParaError::fs_error(format!("Failed to read file: {}", e)))?;
+
+            if content.trim().is_empty() {
+                println!("⚠️  Warning: File is empty");
+            }
+
+            Ok(Some(content))
+        }
+        (None, None) => Ok(None),
+        (Some(_), Some(_)) => unreachable!("Should be caught by validation"),
+    }
+}
+
+fn save_resume_context(session_path: &Path, session_name: &str, context: &str) -> Result<()> {
+    let para_dir = session_path.join(".para");
+    let sessions_dir = para_dir.join("sessions");
+    let session_dir = sessions_dir.join(session_name);
+
+    // Create directories if they don't exist
+    fs::create_dir_all(&session_dir)?;
+
+    // Save context to file
+    let context_file = session_dir.join("resume_context.md");
+    let mut file = fs::File::create(&context_file)?;
+    writeln!(file, "# Resume Context")?;
+    writeln!(
+        file,
+        "This file contains additional context provided when resuming the session.\n"
+    )?;
+    writeln!(file, "{}", context)?;
+
+    println!("📝 Resume context saved to: {}", context_file.display());
+    Ok(())
 }
 
 fn resume_specific_session(
     config: &Config,
     git_service: &GitService,
     session_name: &str,
+    args: &ResumeArgs,
 ) -> Result<()> {
     let session_manager = SessionManager::new(config);
 
@@ -77,6 +144,11 @@ fn resume_specific_session(
         // Ensure CLAUDE.local.md exists for the session
         create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
+        // Process and save resume context if provided
+        if let Some(context) = process_resume_context(args)? {
+            save_resume_context(&session_state.worktree_path, &session_state.name, &context)?;
+        }
+
         launch_ide_for_session(config, &session_state.worktree_path)?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
@@ -87,7 +159,7 @@ fn resume_specific_session(
             .find(|s| s.name.starts_with(session_name))
         {
             // recurse with the full name
-            return resume_specific_session(config, git_service, &candidate.name);
+            return resume_specific_session(config, git_service, &candidate.name, args);
         }
         // original branch/path heuristic
         let worktrees = git_service.list_worktrees()?;
@@ -119,6 +191,22 @@ fn resume_specific_session(
             create_claude_local_md(&matching_worktree.path, session_name)?;
         }
 
+        // Process and save resume context if provided
+        if let Some(context) = process_resume_context(args)? {
+            // Try to determine session name for context saving
+            let session_name_for_context = session_manager
+                .list_sessions()?
+                .into_iter()
+                .find(|s| {
+                    s.worktree_path == matching_worktree.path
+                        || s.branch == matching_worktree.branch
+                })
+                .map(|s| s.name)
+                .unwrap_or_else(|| session_name.to_string());
+
+            save_resume_context(&matching_worktree.path, &session_name_for_context, &context)?;
+        }
+
         launch_ide_for_session(config, &matching_worktree.path)?;
         println!(
             "✅ Resumed session at '{}'",
@@ -133,6 +221,7 @@ fn detect_and_resume_session(
     config: &Config,
     git_service: &GitService,
     session_manager: &SessionManager,
+    args: &ResumeArgs,
 ) -> Result<()> {
     let current_dir = env::current_dir()?;
 
@@ -145,9 +234,14 @@ fn detect_and_resume_session(
                 .list_sessions()?
                 .into_iter()
                 .find(|s| s.worktree_path == current_dir || s.branch == branch)
-                .map(|s| s.name)
+                .map(|s| s.name.clone())
             {
                 create_claude_local_md(&current_dir, &session_name)?;
+
+                // Process and save resume context if provided
+                if let Some(context) = process_resume_context(args)? {
+                    save_resume_context(&current_dir, &session_name, &context)?;
+                }
             }
 
             launch_ide_for_session(config, &current_dir)?;
@@ -156,11 +250,11 @@ fn detect_and_resume_session(
         }
         SessionEnvironment::MainRepository => {
             println!("Current directory is the main repository");
-            list_and_select_session(config, git_service, session_manager)
+            list_and_select_session(config, git_service, session_manager, args)
         }
         SessionEnvironment::Invalid => {
             println!("Current directory is not part of a para session");
-            list_and_select_session(config, git_service, session_manager)
+            list_and_select_session(config, git_service, session_manager, args)
         }
     }
 }
@@ -169,6 +263,7 @@ fn list_and_select_session(
     config: &Config,
     _git_service: &GitService,
     session_manager: &SessionManager,
+    args: &ResumeArgs,
 ) -> Result<()> {
     let sessions = session_manager.list_sessions()?;
     let active_sessions: Vec<_> = sessions
@@ -204,6 +299,11 @@ fn list_and_select_session(
 
         // Ensure CLAUDE.local.md exists for the session
         create_claude_local_md(&session.worktree_path, &session.name)?;
+
+        // Process and save resume context if provided
+        if let Some(context) = process_resume_context(args)? {
+            save_resume_context(&session.worktree_path, &session.name, &context)?;
+        }
 
         launch_ide_for_session(config, &session.worktree_path)?;
         println!("✅ Resumed session '{}'", session.name);
@@ -427,6 +527,7 @@ mod tests {
         Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
     use std::fs;
+    use std::path::PathBuf;
     use std::process::Command;
     use tempfile::TempDir;
 
@@ -522,7 +623,12 @@ mod tests {
         session_manager.save_state(&state).unwrap();
 
         // now resume with base name
-        super::resume_specific_session(&config, &git_service, "test4").unwrap();
+        let args = ResumeArgs {
+            session: Some("test4".to_string()),
+            prompt: None,
+            file: None,
+        };
+        super::resume_specific_session(&config, &git_service, "test4", &args).unwrap();
     }
 
     #[test]
@@ -1263,5 +1369,297 @@ mod tests {
 
         let result = super::load_tasks_json(&tasks_file);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_process_resume_context_with_prompt() {
+        let args = ResumeArgs {
+            session: None,
+            prompt: Some("Continue working on the authentication system".to_string()),
+            file: None,
+        };
+
+        let result = super::process_resume_context(&args).unwrap();
+        assert_eq!(
+            result,
+            Some("Continue working on the authentication system".to_string())
+        );
+    }
+
+    #[test]
+    fn test_process_resume_context_with_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("context.md");
+        fs::write(&test_file, "# New Requirements\n\nAdd OAuth support").unwrap();
+
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: Some(test_file.clone()),
+        };
+
+        let result = super::process_resume_context(&args).unwrap();
+        assert_eq!(
+            result,
+            Some("# New Requirements\n\nAdd OAuth support".to_string())
+        );
+    }
+
+    #[test]
+    fn test_process_resume_context_no_input() {
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: None,
+        };
+
+        let result = super::process_resume_context(&args).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_process_resume_context_file_not_found() {
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: Some(PathBuf::from("/nonexistent/file.txt")),
+        };
+
+        let result = super::process_resume_context(&args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("File not found"));
+    }
+
+    #[test]
+    fn test_process_resume_context_file_too_large() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("large.txt");
+
+        // Create a file larger than 1MB
+        let large_content = "x".repeat(1_048_577);
+        fs::write(&test_file, large_content).unwrap();
+
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: Some(test_file),
+        };
+
+        let result = super::process_resume_context(&args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("File too large"));
+    }
+
+    #[test]
+    fn test_save_resume_context() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path();
+        let session_name = "test-session";
+        let context = "This is test context\nWith multiple lines";
+
+        super::save_resume_context(session_path, session_name, context).unwrap();
+
+        let expected_file = session_path.join(".para/sessions/test-session/resume_context.md");
+        assert!(expected_file.exists());
+
+        let saved_content = fs::read_to_string(&expected_file).unwrap();
+        assert!(saved_content.contains("# Resume Context"));
+        assert!(saved_content.contains(context));
+    }
+
+    #[test]
+    fn test_resume_args_validate() {
+        // Test valid cases
+        let args = ResumeArgs {
+            session: None,
+            prompt: Some("test".to_string()),
+            file: None,
+        };
+        assert!(args.validate().is_ok());
+
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: Some(PathBuf::from("test.md")),
+        };
+        assert!(args.validate().is_ok());
+
+        // Test invalid case - both prompt and file
+        let args = ResumeArgs {
+            session: None,
+            prompt: Some("test".to_string()),
+            file: Some(PathBuf::from("test.md")),
+        };
+        assert!(args.validate().is_err());
+        assert!(args
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot specify both"));
+    }
+
+    // Integration tests for new resume functionality
+    #[test]
+    fn test_resume_with_prompt_integration() {
+        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session
+        let session_name = "test-prompt-session".to_string();
+        let branch_name = "para/test-prompt-branch".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let state = crate::core::session::state::SessionState::new(
+            session_name.clone(),
+            branch_name,
+            worktree_path.clone(),
+        );
+        session_manager.save_state(&state).unwrap();
+
+        // Resume with prompt
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: Some("Continue implementing the feature".to_string()),
+            file: None,
+        };
+
+        // Execute resume (with echo IDE it won't actually launch anything)
+        super::resume_specific_session(&config, &git_service, &session_name, &args).unwrap();
+
+        // Verify context was saved
+        let context_file = worktree_path
+            .join(".para/sessions")
+            .join(&session_name)
+            .join("resume_context.md");
+        assert!(context_file.exists());
+        let saved_content = fs::read_to_string(&context_file).unwrap();
+        assert!(saved_content.contains("Continue implementing the feature"));
+    }
+
+    #[test]
+    fn test_resume_with_file_integration() {
+        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session
+        let session_name = "test-file-session".to_string();
+        let branch_name = "para/test-file-branch".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let state = crate::core::session::state::SessionState::new(
+            session_name.clone(),
+            branch_name,
+            worktree_path.clone(),
+        );
+        session_manager.save_state(&state).unwrap();
+
+        // Create a test file with context
+        let temp_dir = TempDir::new().unwrap();
+        let context_file = temp_dir.path().join("new_requirements.md");
+        fs::write(
+            &context_file,
+            "# Updated Requirements\n\nImplement OAuth2 authentication",
+        )
+        .unwrap();
+
+        // Resume with file
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: None,
+            file: Some(context_file),
+        };
+
+        // Execute resume
+        super::resume_specific_session(&config, &git_service, &session_name, &args).unwrap();
+
+        // Verify context was saved
+        let saved_context_file = worktree_path
+            .join(".para/sessions")
+            .join(&session_name)
+            .join("resume_context.md");
+        assert!(saved_context_file.exists());
+        let saved_content = fs::read_to_string(&saved_context_file).unwrap();
+        assert!(saved_content.contains("Updated Requirements"));
+        assert!(saved_content.contains("Implement OAuth2 authentication"));
+    }
+
+    #[test]
+    fn test_resume_backwards_compatibility() {
+        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session
+        let session_name = "test-compat-session".to_string();
+        let branch_name = "para/test-compat-branch".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let state = crate::core::session::state::SessionState::new(
+            session_name.clone(),
+            branch_name,
+            worktree_path.clone(),
+        );
+        session_manager.save_state(&state).unwrap();
+
+        // Resume without any additional context (old behavior)
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: None,
+            file: None,
+        };
+
+        // Execute resume - should work exactly as before
+        let result = super::resume_specific_session(&config, &git_service, &session_name, &args);
+        assert!(result.is_ok());
+
+        // Verify no context file was created
+        let context_file = worktree_path
+            .join(".para/sessions")
+            .join(&session_name)
+            .join("resume_context.md");
+        assert!(!context_file.exists());
+    }
+
+    #[test]
+    fn test_resume_empty_file_warning() {
+        let temp_dir = TempDir::new().unwrap();
+        let empty_file = temp_dir.path().join("empty.txt");
+        fs::write(&empty_file, "").unwrap();
+
+        let args = ResumeArgs {
+            session: None,
+            prompt: None,
+            file: Some(empty_file),
+        };
+
+        // Process should succeed but with empty content
+        let result = super::process_resume_context(&args).unwrap();
+        assert_eq!(result, Some("".to_string()));
     }
 }
