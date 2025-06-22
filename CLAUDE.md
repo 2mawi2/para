@@ -15,7 +15,7 @@ just test <filter>    # Run specific tests only (skips linting/formatting for sp
                      # Examples: just test finish, just test integration, just test core::git
 just lint             # Run clippy linting for all files
 just fmt              # Auto-fix Rust formatting
-just build            # Build debug binary
+just build            # Build debug binary (with bun/npm fallback for MCP server)
 just build-release    # Build optimized release binary
 ```
 
@@ -35,6 +35,13 @@ just release          # Create new release (patch version bump)
 - Use `just lint` to check linting on all modules
 - The `just` commands have clean, focused output - avoid raw `cargo` commands
 
+### TypeScript/MCP Testing
+```bash
+just test-ts          # Run TypeScript tests for MCP server
+just lint-ts          # Run ESLint on TypeScript code
+just fmt-ts           # Format TypeScript code
+```
+
 ## Architecture Overview
 
 ### Modular Rust Design
@@ -42,11 +49,34 @@ just release          # Create new release (patch version bump)
 src/
 ├── cli/              # Command-line interface, argument parsing, and command implementations
 │   └── commands/     # Individual command implementations (start, finish, dispatch, etc.)
+│       ├── mcp/      # MCP server management (init, strategies for finding servers)
+│       ├── list/     # Session listing with formatters and analyzers
+│       └── resume/   # Session resumption with context and task transformation
 ├── config/           # Configuration management, validation, and interactive wizard
 ├── core/             # Core business logic, session management, and IDE integration
-│   └── git/          # Git operations, worktree management, and repository handling
+│   ├── git/          # Git operations, worktree management, and repository handling
+│   │   └── diff.rs   # Git diff calculation and statistics
+│   └── status.rs     # Session status tracking and reporting
+├── ui/               # Terminal UI components
+│   └── monitor/      # Interactive session monitoring UI
+│       ├── coordinator.rs    # Main UI coordination
+│       ├── renderer.rs       # UI rendering logic
+│       ├── state_manager.rs  # State management
+│       └── actions.rs        # UI action handling
 ├── utils/            # Utility functions, error handling, and helper modules
+│   └── validation.rs # Session name validation
 └── main.rs           # Application entry point
+```
+
+### TypeScript MCP Server
+```
+mcp-server-ts/        # Model Context Protocol server implementation
+├── src/
+│   ├── para-mcp-server.ts      # Main MCP server implementation
+│   └── para-mcp-server.test.ts # MCP server tests
+├── package.json      # Node.js dependencies
+├── tsconfig.json     # TypeScript configuration
+└── eslint.config.js  # ESLint configuration
 ```
 
 ### Key Dependencies
@@ -56,6 +86,8 @@ src/
 - **chrono**: Date/time handling for sessions
 - **anyhow/thiserror**: Error handling
 - **directories**: Cross-platform config directories
+- **ratatui**: Terminal UI framework for monitor command
+- **crossterm**: Cross-platform terminal manipulation
 
 ### Key Features
 - **Context-Aware**: Auto-detects current session from working directory
@@ -63,6 +95,10 @@ src/
 - **Recovery System**: Session snapshots for later recovery with `para recover`
 - **File Input Support**: `para dispatch --file prompt.txt` for complex prompts from files
 - **IDE Wrapper Mode**: Claude Code can run inside VS Code/Cursor terminals
+- **Interactive Monitor**: Real-time session monitoring with `para monitor` command
+- **Status Tracking**: Update and view session status for AI agents with `para status`
+- **MCP Integration**: Built-in TypeScript MCP server for Claude Code integration
+- **Custom Branch Names**: Support for `--branch` flag in finish command
 
 ## Para Workflow Preferences
 
@@ -73,6 +109,24 @@ src/
 - If you review multiple para branches (that have been finished) against their original TASK or intend, use your internal Task tool in parallel for that. Use one parallel Task for each review, and ensure that each Task does not checkout the branches but only reviews the git diff itself.
 
 **Note**: Para MCP tools contain comprehensive workflow documentation. Check tool descriptions for parallel development patterns.
+
+## Available Commands
+
+### Core Commands
+- `para start [name]` - Create new parallel session
+- `para finish "message" [--branch name]` - Complete session with commit
+- `para list` - Show all active sessions
+- `para cancel [session] [--force]` - Discard session
+- `para clean` - Remove all sessions
+- `para resume [session] [--prompt "text"] [--file context.md]` - Resume with context
+- `para recover [session]` - Recover cancelled session
+- `para monitor` - Interactive TUI for monitoring sessions
+- `para status` - Update/view session status (for AI agents)
+- `para dispatch [name] "prompt" [--file prompt.txt]` - AI-powered session creation
+
+### MCP Commands
+- `para mcp init --claude-code` - Set up MCP integration in current repo
+- `para mcp` - Manage MCP server configuration
 
 ## File Structure Notes
 
@@ -85,6 +139,8 @@ src/
 - **`justfile`**: All development automation commands
 - **`Cargo.toml`**: Rust package configuration
 - **`scripts/pre-commit`** and **`scripts/pre-push`**: Git hooks for quality control
+- **`.github/workflows/`**: GitHub Actions for CI/CD and automated reviews
+- **`mcp-server-ts/`**: TypeScript MCP server implementation
 
 ## Code Style Requirements
 
