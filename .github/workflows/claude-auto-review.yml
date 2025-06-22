@@ -25,32 +25,50 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - name: Wait for PR Assistant to complete
+      - name: Deduplicate Reviews
+        if: github.event.action == 'synchronize'
         env:
           GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          # Check if PR assistant is currently running
-          echo "Checking for running PR assistant workflow..."
+          echo "Review triggered by synchronize event. Checking for newer commits..."
           
-          # Wait up to 5 minutes for any running PR assistant jobs
-          for i in {1..30}; do
-            RUNNING_JOBS=$(gh run list --workflow="claude-pr-assistant.yml" --status="in_progress" --json "databaseId,headBranch" --jq ".[] | select(.headBranch == \"${{ github.head_ref }}\") | .databaseId" || true)
-            
-            if [ -z "$RUNNING_JOBS" ]; then
-              echo "No PR assistant jobs running, proceeding with review"
-              break
-            fi
-            
-            echo "PR assistant job(s) still running: $RUNNING_JOBS"
-            echo "Waiting 10 seconds before checking again... ($i/30)"
-            sleep 10
-          done
+          # Wait 30 seconds for more commits to arrive
+          sleep 30
           
-          # Final check
-          RUNNING_JOBS=$(gh run list --workflow="claude-pr-assistant.yml" --status="in_progress" --json "databaseId,headBranch" --jq ".[] | select(.headBranch == \"${{ github.head_ref }}\") | .databaseId" || true)
-          if [ ! -z "$RUNNING_JOBS" ]; then
-            echo "WARNING: PR assistant still running after 5 minutes, proceeding anyway"
+          # Check if newer commits exist
+          LATEST_SHA=$(gh pr view ${{ github.event.pull_request.number }} --json headRefOid -q .headRefOid)
+          CURRENT_SHA="${{ github.event.pull_request.head.sha }}"
+          
+          echo "Current commit: $CURRENT_SHA"
+          echo "Latest commit:  $LATEST_SHA"
+          
+          if [ "$LATEST_SHA" != "$CURRENT_SHA" ]; then
+            echo "❌ Newer commits exist. Skipping this review to avoid duplicate work."
+            exit 0
           fi
+          
+          echo "✅ This is the latest commit. Proceeding with review."
+      
+      - name: Skip if PR Assistant is actively working
+        if: github.event.action == 'synchronize'
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          # Double-check if PR Assistant is currently running
+          RUNNING=$(gh run list \
+            --workflow="claude-pr-assistant.yml" \
+            --status="in_progress" \
+            --branch="${{ github.head_ref }}" \
+            --limit=1 \
+            --json databaseId \
+            -q '.[0].databaseId' || echo "")
+          
+          if [ -n "$RUNNING" ]; then
+            echo "❌ PR Assistant is still working (run #$RUNNING). Skipping review."
+            exit 0
+          fi
+          
+          echo "✅ PR Assistant is not running. Proceeding with review."
       
       - name: Checkout repository
         uses: actions/checkout@v4
