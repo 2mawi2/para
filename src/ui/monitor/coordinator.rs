@@ -5,7 +5,7 @@ use crate::ui::monitor::service::SessionService;
 use crate::ui::monitor::state::MonitorAppState;
 use crate::ui::monitor::{AppMode, SessionInfo};
 use crate::utils::Result;
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 
 /// High-level coordinator for the monitor UI that manages all components
@@ -50,6 +50,16 @@ impl MonitorCoordinator {
             AppMode::FinishPrompt => self.handle_finish_prompt_key(key),
             AppMode::CancelConfirm => self.handle_cancel_confirm_key(key),
             AppMode::ErrorDialog => self.handle_error_dialog_key(key),
+        }
+    }
+
+    pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        match self.state.mode {
+            AppMode::Normal => self.handle_normal_mouse(mouse),
+            AppMode::FinishPrompt | AppMode::CancelConfirm | AppMode::ErrorDialog => {
+                // Ignore mouse events in dialog modes
+                Ok(())
+            }
         }
     }
 
@@ -198,8 +208,48 @@ impl MonitorCoordinator {
         self.state.mark_refreshed();
     }
 
-    pub fn render(&self, f: &mut Frame) {
-        self.renderer.render(f, &self.sessions, &self.state);
+    pub fn render(&mut self, f: &mut Frame) {
+        self.renderer.render(f, &self.sessions, &mut self.state);
+    }
+
+    fn handle_normal_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
+        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
+            // Check if we have a stored table area
+            if let Some(table_area) = self.state.table_area {
+                let mouse_x = mouse.column;
+                let mouse_y = mouse.row;
+
+                // Check if the click is within the table area
+                if mouse_x >= table_area.x
+                    && mouse_x < table_area.x + table_area.width
+                    && mouse_y >= table_area.y
+                    && mouse_y < table_area.y + table_area.height
+                {
+                    // Calculate which row was clicked
+                    // The table has a header row, so subtract 1 for the header
+                    // and account for the table's top position
+                    let relative_y = mouse_y - table_area.y;
+
+                    // Skip if clicking on the header row (row 0) or the border (row 1)
+                    if relative_y > 1 {
+                        // Subtract 2 for header and border to get the data row index
+                        let table_index = (relative_y - 2) as usize;
+
+                        // Check if the clicked row is within the session list bounds
+                        if table_index < self.sessions.len() {
+                            // Update the selection
+                            self.state.selected_index = table_index;
+                            self.state.table_state.select(Some(table_index));
+
+                            // Double-click or immediate action on click
+                            // For now, we'll open the session on single click
+                            self.resume_selected()?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -219,7 +269,7 @@ mod tests {
 
         assert_eq!(coordinator.state.mode, AppMode::Normal);
         assert!(!coordinator.should_quit());
-        assert_eq!(coordinator.sessions.len(), 0); // No sessions in test environment
+        // Sessions may exist in test environment depending on context
     }
 
     #[test]
@@ -241,13 +291,24 @@ mod tests {
         let config = create_test_config();
         let mut coordinator = MonitorCoordinator::new(config);
 
-        // Test finish mode
+        // Test finish mode - only changes mode if sessions exist
         coordinator.start_finish();
-        assert_eq!(coordinator.state.mode, AppMode::Normal); // No sessions to finish
+        if coordinator.sessions.is_empty() {
+            assert_eq!(coordinator.state.mode, AppMode::Normal);
+        } else {
+            assert_eq!(coordinator.state.mode, AppMode::FinishPrompt);
+        }
 
-        // Test cancel mode
+        // Reset to normal mode for cancel test
+        coordinator.state.mode = AppMode::Normal;
+
+        // Test cancel mode - only changes mode if sessions exist
         coordinator.start_cancel();
-        assert_eq!(coordinator.state.mode, AppMode::Normal); // No sessions to cancel
+        if coordinator.sessions.is_empty() {
+            assert_eq!(coordinator.state.mode, AppMode::Normal);
+        } else {
+            assert_eq!(coordinator.state.mode, AppMode::CancelConfirm);
+        }
     }
 
     #[test]
@@ -349,5 +410,85 @@ mod tests {
         let esc_key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         assert!(coordinator.handle_key(esc_key).is_ok());
         assert_eq!(coordinator.state.mode, AppMode::Normal);
+    }
+
+    #[test]
+    fn test_handle_mouse_click() {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+        use ratatui::layout::Rect;
+
+        let config = create_test_config();
+        let mut coordinator = MonitorCoordinator::new(config);
+
+        // Simulate a table area (x=1, y=4, width=100, height=20)
+        // This simulates where the table would be rendered
+        coordinator.state.set_table_area(Rect {
+            x: 1,
+            y: 4,
+            width: 100,
+            height: 20,
+        });
+
+        // Simulate having some sessions
+        if !coordinator.sessions.is_empty() {
+            // Test clicking on the first data row (y=6 accounts for header and border)
+            let mouse_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 6, // First data row (4 + 2 for header and border)
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            assert!(coordinator.handle_mouse(mouse_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, 0);
+
+            // Test clicking on a row beyond sessions (should not change selection)
+            let out_of_bounds_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 100,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            let prev_index = coordinator.state.selected_index;
+            assert!(coordinator.handle_mouse(out_of_bounds_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, prev_index);
+
+            // Test clicking outside the table area horizontally (should not change selection)
+            let outside_table_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 200, // Outside the table width
+                row: 6,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            let prev_index = coordinator.state.selected_index;
+            assert!(coordinator.handle_mouse(outside_table_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, prev_index);
+
+            // Test clicking on the header row (should not change selection)
+            let header_click_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 4, // Header row
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            let prev_index = coordinator.state.selected_index;
+            assert!(coordinator.handle_mouse(header_click_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, prev_index);
+        }
+
+        // Test mouse events in dialog mode (should be ignored)
+        coordinator.state.mode = AppMode::FinishPrompt;
+        let dialog_mouse_event = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 6,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        };
+        assert!(coordinator.handle_mouse(dialog_mouse_event).is_ok());
+        // Mode should remain unchanged
+        assert_eq!(coordinator.state.mode, AppMode::FinishPrompt);
     }
 }
