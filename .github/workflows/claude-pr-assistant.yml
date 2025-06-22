@@ -6,20 +6,9 @@ on:
   pull_request_review_comment:
     types: [created]
   issues:
-    types: [opened, assigned, labeled]
+    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
-  workflow_dispatch:
-    inputs:
-      issue_number:
-        description: 'Issue number to work on'
-        required: true
-        type: string
-      auto_create_pr:
-        description: 'Auto-create PR after fixing issue'
-        required: false
-        type: boolean
-        default: true
 
 jobs:
   claude-code-action:
@@ -28,8 +17,7 @@ jobs:
         (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && (github.event.comment.user.login == '2mawi2' || github.event.comment.user.login == 'app/github-actions')) ||
         (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && github.event.comment.user.login == '2mawi2') ||
         (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && github.event.review.user.login == '2mawi2') ||
-        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || github.event.action == 'labeled') && github.event.issue.user.login == '2mawi2') ||
-        (github.event_name == 'workflow_dispatch')
+        (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') && github.event.issue.user.login == '2mawi2')
       )
     runs-on: ubuntu-latest
     # Concurrency control to prevent race conditions
@@ -74,25 +62,9 @@ jobs:
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           timeout_minutes: "60"
-          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash,mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__add_issue_comment,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__assign_copilot_to_issue,mcp__github__create_and_submit_pull_request_review,mcp__github__create_branch,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__create_pull_request,mcp__github__create_repository,mcp__github__delete_file,mcp__github__delete_pending_pull_request_review,mcp__github__dismiss_notification,mcp__github__fork_repository,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__manage_notification_subscription,mcp__github__manage_repository_notification_subscription,mcp__github__mark_all_notifications_read,mcp__github__merge_pull_request,mcp__github__push_files,mcp__github__request_copilot_review,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_repositories,mcp__github__search_users,mcp__github__submit_pending_pull_request_review,mcp__github__update_issue,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,ListMcpResourcesTool,ReadMcpResourceTool"
+          allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__add_issue_comment,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__assign_copilot_to_issue,mcp__github__create_and_submit_pull_request_review,mcp__github__create_branch,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__create_pull_request,mcp__github__delete_file,mcp__github__delete_pending_pull_request_review,mcp__github__dismiss_notification,mcp__github__fork_repository,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__manage_notification_subscription,mcp__github__manage_repository_notification_subscription,mcp__github__mark_all_notifications_read,mcp__github__push_files,mcp__github__request_copilot_review,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_repositories,mcp__github__search_users,mcp__github__submit_pending_pull_request_review,mcp__github__update_issue,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,ListMcpResourcesTool,ReadMcpResourceTool"
           custom_instructions: |
             You have been granted tools for editing files and running Rust/just commands for testing and validating your changes:
-
-            **AUTOMATIC PR WORKFLOW (ISSUES ONLY):**
-            {% if github.event_name == 'issues' or (github.event_name == 'workflow_dispatch' and github.event.inputs.auto_create_pr == 'true') %}
-            After successfully completing code changes and ensuring all tests/lints pass:
-            1. Use `mcp__github_file_ops__commit_files` to commit your changes with a descriptive message
-            2. Use `mcp__github__create_branch` to create a feature branch (format: "fix/issue-{{ github.event.issue.number || github.event.inputs.issue_number }}")
-            3. Use `mcp__github__create_pull_request` to automatically create the PR:
-               - Title: "Fix #{{ github.event.issue.number || github.event.inputs.issue_number }}: {{ github.event.issue.title }}"
-               - Body: Include summary of changes and "Fixes #{{ github.event.issue.number || github.event.inputs.issue_number }}"
-               - Base: main branch
-               - Head: your created feature branch
-            4. Use `mcp__github__add_issue_comment` to link the PR back to the original issue
-            5. Create `.github-outputs/created-pr.json` with PR details: `{"html_url": "PR_URL", "number": PR_NUMBER}`
-            {% else %}
-            You are working within an existing PR context - do NOT create new pull requests.
-            {% endif %}
             
             **CRITICAL REQUIREMENTS:**
             ⚠️ The GitHub Actions pipeline will FAIL if tests, lints, or formatting don't pass!
@@ -157,19 +129,3 @@ jobs:
             - Avoid writing code that isn't actually used
             - Tests failing? Fix the code, not the test
             - Pipeline will reject if tests or lints fail!
-
-      - name: Link PR to Issue
-        if: github.event_name == 'issues' && success()
-        env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          if [ -f ".github-outputs/created-pr.json" ]; then
-            PR_URL=$(jq -r '.html_url' .github-outputs/created-pr.json)
-            PR_NUMBER=$(jq -r '.number' .github-outputs/created-pr.json)
-            ISSUE_NUMBER=${{ github.event.issue.number }}
-            echo "🤖 I've created pull request #$PR_NUMBER to address this issue: $PR_URL"
-            gh issue comment $ISSUE_NUMBER --body "🤖 I've created pull request #$PR_NUMBER to address this issue: $PR_URL"
-            echo "Issue comment posted successfully"
-          else
-            echo "No PR created, skipping issue comment"
-          fi
