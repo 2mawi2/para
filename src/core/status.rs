@@ -6,6 +6,27 @@ use std::path::{Path, PathBuf};
 
 use crate::utils::ParaError;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiffStats {
+    pub additions: usize,
+    pub deletions: usize,
+}
+
+impl DiffStats {
+    pub fn new(additions: usize, deletions: usize) -> Self {
+        Self {
+            additions,
+            deletions,
+        }
+    }
+}
+
+impl std::fmt::Display for DiffStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "+{} -{}", self.additions, self.deletions)
+    }
+}
+
 /// Represents the current status of a para session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Status {
@@ -19,6 +40,8 @@ pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos_total: Option<u32>,
     pub confidence: ConfidenceLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_stats: Option<DiffStats>,
     pub last_update: DateTime<Utc>,
 }
 
@@ -54,6 +77,7 @@ impl Status {
             todos_completed: None,
             todos_total: None,
             confidence,
+            diff_stats: None,
             last_update: Utc::now(),
         }
     }
@@ -67,6 +91,11 @@ impl Status {
     pub fn with_todos(mut self, completed: u32, total: u32) -> Self {
         self.todos_completed = Some(completed);
         self.todos_total = Some(total);
+        self
+    }
+
+    pub fn with_diff_stats(mut self, diff_stats: DiffStats) -> Self {
+        self.diff_stats = Some(diff_stats);
         self
     }
 
