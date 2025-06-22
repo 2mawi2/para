@@ -16,7 +16,6 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec, execSync } from "child_process";
 
-// Tool argument interfaces
 interface ParaStartArgs {
   session_name?: string;
   dangerously_skip_permissions?: boolean;
@@ -61,7 +60,7 @@ interface ParaStatusShowArgs {
   json?: boolean;
 }
 
-// Para binary path - dynamically discover
+// Dynamic discovery needed to support homebrew, dev builds, and system installations
 function findParaBinary(): string {
   // Check if MCP server is running from homebrew
   const mcpPath = process.argv[1]; // Path to this script
@@ -124,12 +123,11 @@ const server = new Server({
   }
 });
 
-// Helper function to execute para commands
+// Abstracts command execution to handle timeouts, environment setup, and error handling
 async function runParaCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Properly quote arguments that contain spaces
+    // Prevent shell injection and argument splitting issues
     const quotedArgs = args.map(arg => {
-      // If the argument contains spaces and isn't already quoted, wrap it in quotes
       if (arg.includes(' ') && !arg.startsWith('"') && !arg.startsWith("'")) {
         return `"${arg.replace(/"/g, '\\"')}"`;
       }
@@ -138,7 +136,7 @@ async function runParaCommand(args: string[]): Promise<string> {
 
     const command = `${PARA_BINARY} ${quotedArgs.join(' ')}`;
     
-    // Set environment to indicate non-interactive mode
+    // Prevent para from blocking on user prompts in automated contexts
     const env = {
       ...process.env,
       PARA_NON_INTERACTIVE: '1',
@@ -160,7 +158,7 @@ async function runParaCommand(args: string[]): Promise<string> {
       resolve(stdout.trim());
     });
 
-    // Set a 30-second timeout
+    // Prevent hanging on complex operations while allowing time for worktree setup
     const timeout = setTimeout(() => {
       child.kill();
       reject(new McpError(ErrorCode.InternalError, `Command timed out after 30 seconds: ${args.join(' ')}`));
@@ -168,7 +166,6 @@ async function runParaCommand(args: string[]): Promise<string> {
   });
 }
 
-// List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -346,7 +343,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -498,7 +494,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// List available resources
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return {
     resources: [
@@ -518,7 +513,6 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
   };
 });
 
-// Read resources
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
 
@@ -553,7 +547,6 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-// Start the server
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
