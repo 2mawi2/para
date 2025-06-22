@@ -168,6 +168,11 @@ fn launch_claude_in_ide(
     cmd.current_dir(session_path);
     cmd.arg(session_path);
 
+    // Detach the IDE process from the parent's stdio to prevent blocking
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+
     match cmd.spawn() {
         Ok(_) => {
             println!("Opened {} workspace", ide_name);
@@ -220,7 +225,13 @@ fn create_claude_task_json(command: &str) -> String {
 
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {
-        // Check for stdin first
+        // If we have a --file argument, use it directly without checking stdin
+        // This prevents blocking in non-terminal environments like MCP
+        if self.file.is_some() {
+            return self.resolve_prompt_and_session_no_stdin();
+        }
+
+        // Check for stdin only when no file is provided
         if !io::stdin().is_terminal() {
             let mut buffer = String::new();
             io::stdin().read_to_string(&mut buffer).map_err(|e| {
@@ -541,6 +552,51 @@ mod tests {
                 || err_msg.contains("No such file")
                 || err_msg.contains("does not exist")
         );
+    }
+
+    #[test]
+    fn test_resolve_prompt_with_file_should_ignore_stdin() {
+        // This test simulates the MCP environment issue where stdin is not a terminal
+        // but we're using --file, which should bypass stdin detection entirely
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = create_test_file(&temp_dir, "task.md", "task from file");
+
+        let args = DispatchArgs {
+            name_or_prompt: Some("test-session".to_string()),
+            prompt: None,
+            file: Some(file_path),
+            dangerously_skip_permissions: false,
+        };
+
+        // The resolve_prompt_and_session method checks stdin, but when --file is provided
+        // it should skip stdin detection and use the file directly
+        // Currently this would fail in MCP environment with "Piped input is empty"
+        let result = args.resolve_prompt_and_session();
+        assert!(
+            result.is_ok(),
+            "Should succeed even when stdin is not a terminal"
+        );
+        let (session, prompt) = result.unwrap();
+        assert_eq!(session, Some("test-session".to_string()));
+        assert_eq!(prompt, "task from file");
+    }
+
+    #[test]
+    fn test_resolve_prompt_with_inline_text_no_stdin() {
+        // Test that inline text works correctly using the no_stdin method directly
+        let args = DispatchArgs {
+            name_or_prompt: Some("implement feature".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        // Test the no_stdin method directly to avoid stdin detection issues in tests
+        let result = args.resolve_prompt_and_session_no_stdin();
+        assert!(result.is_ok());
+        let (session, prompt) = result.unwrap();
+        assert_eq!(session, None);
+        assert_eq!(prompt, "implement feature");
     }
 
     #[test]
