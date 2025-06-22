@@ -208,29 +208,44 @@ impl MonitorCoordinator {
         self.state.mark_refreshed();
     }
 
-    pub fn render(&self, f: &mut Frame) {
-        self.renderer.render(f, &self.sessions, &self.state);
+    pub fn render(&mut self, f: &mut Frame) {
+        self.renderer.render(f, &self.sessions, &mut self.state);
     }
 
     fn handle_normal_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
         if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
-            // Calculate which row was clicked based on the mouse position
-            // The table starts at y=4 (header=3, table header=1) and each row is 1 line
-            let table_start_y = 4;
-            let clicked_row = mouse.row as usize;
+            // Check if we have a stored table area
+            if let Some(table_area) = self.state.table_area {
+                let mouse_x = mouse.column;
+                let mouse_y = mouse.row;
 
-            if clicked_row >= table_start_y {
-                let table_index = clicked_row - table_start_y;
+                // Check if the click is within the table area
+                if mouse_x >= table_area.x
+                    && mouse_x < table_area.x + table_area.width
+                    && mouse_y >= table_area.y
+                    && mouse_y < table_area.y + table_area.height
+                {
+                    // Calculate which row was clicked
+                    // The table has a header row, so subtract 1 for the header
+                    // and account for the table's top position
+                    let relative_y = mouse_y - table_area.y;
 
-                // Check if the clicked row is within the session list bounds
-                if table_index < self.sessions.len() {
-                    // Update the selection
-                    self.state.selected_index = table_index;
-                    self.state.table_state.select(Some(table_index));
+                    // Skip if clicking on the header row (row 0) or the border (row 1)
+                    if relative_y > 1 {
+                        // Subtract 2 for header and border to get the data row index
+                        let table_index = (relative_y - 2) as usize;
 
-                    // Double-click or immediate action on click
-                    // For now, we'll open the session on single click
-                    self.resume_selected()?;
+                        // Check if the clicked row is within the session list bounds
+                        if table_index < self.sessions.len() {
+                            // Update the selection
+                            self.state.selected_index = table_index;
+                            self.state.table_state.select(Some(table_index));
+
+                            // Double-click or immediate action on click
+                            // For now, we'll open the session on single click
+                            self.resume_selected()?;
+                        }
+                    }
                 }
             }
         }
@@ -400,17 +415,27 @@ mod tests {
     #[test]
     fn test_handle_mouse_click() {
         use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+        use ratatui::layout::Rect;
 
         let config = create_test_config();
         let mut coordinator = MonitorCoordinator::new(config);
 
+        // Simulate a table area (x=1, y=4, width=100, height=20)
+        // This simulates where the table would be rendered
+        coordinator.state.set_table_area(Rect {
+            x: 1,
+            y: 4,
+            width: 100,
+            height: 20,
+        });
+
         // Simulate having some sessions
         if !coordinator.sessions.is_empty() {
-            // Test clicking on the first row (y=4 is where table data starts)
+            // Test clicking on the first data row (y=6 accounts for header and border)
             let mouse_event = MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column: 10,
-                row: 4,
+                row: 6, // First data row (4 + 2 for header and border)
                 modifiers: crossterm::event::KeyModifiers::NONE,
             };
 
@@ -428,6 +453,30 @@ mod tests {
             let prev_index = coordinator.state.selected_index;
             assert!(coordinator.handle_mouse(out_of_bounds_event).is_ok());
             assert_eq!(coordinator.state.selected_index, prev_index);
+
+            // Test clicking outside the table area horizontally (should not change selection)
+            let outside_table_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 200, // Outside the table width
+                row: 6,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            let prev_index = coordinator.state.selected_index;
+            assert!(coordinator.handle_mouse(outside_table_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, prev_index);
+
+            // Test clicking on the header row (should not change selection)
+            let header_click_event = MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 4, // Header row
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            };
+
+            let prev_index = coordinator.state.selected_index;
+            assert!(coordinator.handle_mouse(header_click_event).is_ok());
+            assert_eq!(coordinator.state.selected_index, prev_index);
         }
 
         // Test mouse events in dialog mode (should be ignored)
@@ -435,7 +484,7 @@ mod tests {
         let dialog_mouse_event = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
-            row: 5,
+            row: 6,
             modifiers: crossterm::event::KeyModifiers::NONE,
         };
         assert!(coordinator.handle_mouse(dialog_mouse_event).is_ok());
