@@ -98,18 +98,20 @@ jobs:
             You are conducting a critical auto-review with iteration tracking. Your job is to find issues that will ACTUALLY cause bugs, not theoretical problems.
 
             **ITERATION TRACKING:**
-            1. Check ONLY PR comments that contain `<!-- iteration-count: N -->` to find current iteration
-               - IGNORE the PR description/body - it's not an iteration
-               - ONLY count comments with the iteration marker
-               - IMPORTANT: When you see a comment like "@claude please fix these critical issues (iteration 2/3):", 
-                 this is NOT a separate iteration - it's the trigger comment that is PART OF the same iteration
-               - The iteration count in the trigger comment (e.g., "iteration 2/3") indicates what iteration 
-                 the PR Assistant is working on, not a new review iteration
-            2. If no comments with `<!-- iteration-count: N -->` exist, this is the FIRST iteration (iteration 1)
-            3. If highest iteration found >= 3: provide final review only, do NOT add @claude comment
-            4. If highest iteration found < 3 AND critical issues found: auto-trigger with structured comment
-            5. When checking previous iterations, focus on whether issues were actually resolved
-            6. IMPORTANT: Wait for any running PR assistant jobs to complete before starting review
+            1. Find completed iterations by checking PR comments for patterns:
+               - Look for comments containing "Claude finished @2mawi2's task" (PR Assistant completion)
+               - These indicate COMPLETED fix attempts 
+               - Count these to determine how many fix iterations have been completed
+            2. Find requested iterations by checking for `<!-- iteration-count: N -->` markers
+               - These indicate fix requests that have been made
+            3. LOGIC:
+               - completed_iterations = count of "Claude finished" comments from PR Assistant
+               - If completed_iterations >= 3: provide final review only (no more auto-triggers)
+               - If completed_iterations < 3 AND critical issues found: auto-trigger next iteration
+               - next_iteration = completed_iterations + 1
+            4. IMPORTANT: Don't count your own "Auto-Review Analysis" comments as iterations
+               - Only count PR Assistant completion comments as completed iterations
+               - Your trigger comments are requests for the NEXT iteration
 
             **CRITICAL REVIEW GUIDELINES - Use this systematic 5-step approach:**
 
@@ -242,17 +244,22 @@ jobs:
             
             **ITERATION TRACKING WORKFLOW:**
             1. Use mcp__github__get_pull_request_comments to read ALL existing PR comments
-            2. Filter to ONLY comments containing `<!-- iteration-count: N -->` marker
-            3. Find the HIGHEST iteration number from these filtered comments
-            4. CRITICAL: Ignore trigger comments like "@claude please fix..." - these are NOT new iterations
-               - Example: If you see "@claude please fix these critical issues (iteration 2/3):" followed by
-                 "<!-- iteration-count: 2 -->", this is all ONE iteration (iteration 2), not two separate ones
-            5. If no comments with iteration markers exist, current iteration = 1 (first review)
-            6. If highest iteration >= 3, provide final review only (no auto-trigger)
-            7. If critical issues found AND highest iteration < 3:
-               - Next iteration = highest iteration + 1
-               - Create `.github-triggers/` directory and write JSON file
-               - JSON must include both iteration number and formatted comment
+            2. Count completed fix attempts:
+               - Search for comments containing "Claude finished @2mawi2's task"
+               - Each indicates one completed fix iteration by the PR Assistant
+               - completed_count = number of these completion comments
+            3. EXAMPLES:
+               - No "Claude finished" comments found = 0 completed iterations (this is the first review)
+               - Found 1 "Claude finished" comment = 1 completed iteration (reviewing after first fix)
+               - Found 2 "Claude finished" comments = 2 completed iterations (reviewing after second fix)
+               - Found 3+ "Claude finished" comments = 3+ completed iterations (final review only)
+            4. DECISION LOGIC:
+               - If completed_count >= 3: provide final review only (no auto-trigger)
+               - If completed_count < 3 AND critical issues found: auto-trigger next iteration
+               - next_iteration = completed_count + 1
+            5. AUTO-TRIGGER FORMAT:
+               - Create `.github-triggers/auto-trigger.json`
+               - Include: `"iteration": {next_iteration}` and formatted comment with `<!-- iteration-count: {next_iteration} -->`
             
             **CRITICAL REVIEW PROCESS:**
             1. Run `just fmt-check` OR `cargo fmt --all -- --check` FIRST to verify formatting (MUST pass - pipeline enforces this)
