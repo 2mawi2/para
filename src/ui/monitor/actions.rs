@@ -30,6 +30,7 @@ impl MonitorActions {
 
             let _ = Command::new("para")
                 .args(["resume", &session_name])
+                .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn();
@@ -90,6 +91,7 @@ impl MonitorActions {
             let _ = Command::new("para")
                 .args(["integrate", &session.name])
                 .current_dir(&session.worktree_path)
+                .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn();

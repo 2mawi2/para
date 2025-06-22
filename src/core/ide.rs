@@ -110,6 +110,11 @@ impl IdeManager {
         let mut cmd = Command::new(wrapper_cmd);
         cmd.arg(path.to_string_lossy().as_ref());
 
+        // Detach the IDE process from the parent by redirecting stdio
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
+
         cmd.spawn()
             .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {}", e)))?;
         println!(
@@ -157,6 +162,11 @@ impl IdeManager {
 
         let mut cmd = Command::new(&self.config.wrapper.command);
         cmd.arg(path.to_string_lossy().as_ref());
+
+        // Detach the IDE process from the parent by redirecting stdio
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
 
         println!(
             "▶ launching VS Code wrapper with {} auto-start...",
