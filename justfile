@@ -164,30 +164,76 @@ test *FILTER:
     
     # TypeScript Tests (if TypeScript project exists)
     if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then
+        # Ensure TypeScript dependencies are installed
+        if ! [ -d "mcp-server-ts/node_modules" ]; then
+            printf "   Installing TypeScript deps: "
+            if command -v bun >/dev/null 2>&1; then
+                (cd mcp-server-ts && bun install >/dev/null 2>&1) && echo "✅ done" || (echo "❌ FAILED" && exit 1)
+            elif command -v npm >/dev/null 2>&1; then
+                (cd mcp-server-ts && npm install >/dev/null 2>&1) && echo "✅ done" || (echo "❌ FAILED" && exit 1)
+            else
+                echo "❌ Neither bun nor npm found"
+                exit 1
+            fi
+        fi
+        
         printf "   TypeScript Tests: "
-        if (cd mcp-server-ts && bun run test >/dev/null 2>&1); then
-            echo "✅ passed"
+        if command -v bun >/dev/null 2>&1; then
+            if (cd mcp-server-ts && bun run test >/dev/null 2>&1); then
+                echo "✅ passed"
+            else
+                echo "❌ FAILED"
+                echo "TypeScript test output:"
+                cd mcp-server-ts && bun run test
+                exit 1
+            fi
+        elif command -v npm >/dev/null 2>&1; then
+            if (cd mcp-server-ts && npm run test >/dev/null 2>&1); then
+                echo "✅ passed"
+            else
+                echo "❌ FAILED"
+                echo "TypeScript test output:"
+                cd mcp-server-ts && npm run test
+                exit 1
+            fi
         else
-            echo "❌ FAILED"
-            echo "TypeScript test output:"
-            cd mcp-server-ts && bun run test
+            echo "❌ Neither bun nor npm found"
             exit 1
         fi
         
         # TypeScript Linting (allow warnings, fail on errors)
         printf "   TypeScript Linting: "
-        if lint_output=$(cd mcp-server-ts && bun run lint 2>&1); then
-            echo "✅ clean"
-        else
-            # Check if it's only warnings or actual errors
-            if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
-                echo "✅ warnings only"
+        if command -v bun >/dev/null 2>&1; then
+            if lint_output=$(cd mcp-server-ts && bun run lint 2>&1); then
+                echo "✅ clean"
             else
-                echo "❌ FAILED"
-                echo "TypeScript linting output:"
-                echo "$lint_output"
-                exit 1
+                # Check if it's only warnings or actual errors
+                if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
+                    echo "✅ warnings only"
+                else
+                    echo "❌ FAILED"
+                    echo "TypeScript linting output:"
+                    echo "$lint_output"
+                    exit 1
+                fi
             fi
+        elif command -v npm >/dev/null 2>&1; then
+            if lint_output=$(cd mcp-server-ts && npm run lint 2>&1); then
+                echo "✅ clean"
+            else
+                # Check if it's only warnings or actual errors
+                if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
+                    echo "✅ warnings only"
+                else
+                    echo "❌ FAILED"
+                    echo "TypeScript linting output:"
+                    echo "$lint_output"
+                    exit 1
+                fi
+            fi
+        else
+            echo "❌ Neither bun nor npm found"
+            exit 1
         fi
     fi
     
@@ -209,7 +255,25 @@ lint:
     cargo clippy --all-targets --all-features -- -D warnings
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && bun run lint; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Format code (Rust + TypeScript)
@@ -219,7 +283,25 @@ fmt:
     cargo fmt --all
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && bun run lint:fix; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint:fix; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint:fix; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Check formatting (Rust + TypeScript)
@@ -229,7 +311,25 @@ fmt-check:
     cargo fmt --all -- --check
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && bun run lint; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Run the para binary with arguments
