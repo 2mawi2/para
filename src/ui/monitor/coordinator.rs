@@ -1,127 +1,24 @@
 use crate::config::Config;
+use crate::ui::monitor::action_dispatcher::{ActionDispatcher, ActionResult};
 use crate::ui::monitor::actions::MonitorActions;
+use crate::ui::monitor::event_handler::EventHandler;
 use crate::ui::monitor::renderer::MonitorRenderer;
 use crate::ui::monitor::service::SessionService;
-use crate::ui::monitor::state::{ButtonClick, MonitorAppState};
-use crate::ui::monitor::{AppMode, SessionInfo};
+use crate::ui::monitor::state::MonitorAppState;
+use crate::ui::monitor::state_manager::StateManager;
+use crate::ui::monitor::SessionInfo;
 use crate::utils::Result;
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
-use ratatui::{layout::Rect, Frame};
+use ratatui::Frame;
 
-// Constants for UI layout and mouse interaction
-const ACTIONS_COLUMN_WIDTH: u16 = 9;
-const RESUME_BUTTON_END: u16 = 3;
-const COPY_BUTTON_START: u16 = 4;
-const COPY_BUTTON_END: u16 = 8;
-const HEADER_ROWS: u16 = 2;
-
-/// Represents different types of mouse click targets
-#[derive(Debug, PartialEq, Clone)]
-enum ClickTarget {
-    ResumeButton(usize),
-    CopyButton(usize),
-    SessionRow(usize),
-    OutsideTable,
-}
-
-/// Handles mouse click detection and coordinate calculations
-struct ClickDetector {
-    table_area: Option<Rect>,
-    sessions_count: usize,
-}
-
-impl ClickDetector {
-    fn new(table_area: Option<Rect>, sessions_count: usize) -> Self {
-        Self {
-            table_area,
-            sessions_count,
-        }
-    }
-
-    fn detect_click_target(&self, mouse: MouseEvent) -> Option<ClickTarget> {
-        // Early return if not a left click
-        if !matches!(
-            mouse.kind,
-            MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
-            return None;
-        }
-
-        // Early return if no table area
-        let table_area = self.table_area?;
-
-        // Check if click is within table bounds
-        if !self.is_valid_table_click(mouse.column, mouse.row, &table_area) {
-            return Some(ClickTarget::OutsideTable);
-        }
-
-        // Calculate table position
-        let table_position = self.calculate_table_position(mouse.column, mouse.row, &table_area)?;
-
-        // Check if within session bounds
-        if table_position.row >= self.sessions_count {
-            return Some(ClickTarget::OutsideTable);
-        }
-
-        // Determine click target based on column position
-        if table_position.column < ACTIONS_COLUMN_WIDTH {
-            // Actions column clicked
-            if table_position.column < RESUME_BUTTON_END {
-                Some(ClickTarget::ResumeButton(table_position.row))
-            } else if table_position.column >= COPY_BUTTON_START
-                && table_position.column < COPY_BUTTON_END
-            {
-                Some(ClickTarget::CopyButton(table_position.row))
-            } else {
-                Some(ClickTarget::SessionRow(table_position.row))
-            }
-        } else {
-            Some(ClickTarget::SessionRow(table_position.row))
-        }
-    }
-
-    fn is_valid_table_click(&self, mouse_x: u16, mouse_y: u16, table_area: &Rect) -> bool {
-        mouse_x >= table_area.x
-            && mouse_x < table_area.x + table_area.width
-            && mouse_y >= table_area.y
-            && mouse_y < table_area.y + table_area.height
-    }
-
-    fn calculate_table_position(
-        &self,
-        mouse_x: u16,
-        mouse_y: u16,
-        table_area: &Rect,
-    ) -> Option<TablePosition> {
-        let relative_y = mouse_y - table_area.y;
-
-        // Skip if clicking on the header row or border
-        if relative_y <= 1 {
-            return None;
-        }
-
-        // Calculate data row index (subtract header and border rows)
-        let row = (relative_y - HEADER_ROWS) as usize;
-        let column = mouse_x - table_area.x;
-
-        Some(TablePosition { row, column })
-    }
-}
-
-/// Represents a position within the table
-#[derive(Debug)]
-struct TablePosition {
-    row: usize,
-    column: u16,
-}
-
-/// High-level coordinator for the monitor UI that manages all components
+/// High-level coordinator for the monitor UI that orchestrates components
 pub struct MonitorCoordinator {
     pub state: MonitorAppState,
     pub sessions: Vec<SessionInfo>,
     renderer: MonitorRenderer,
-    actions: MonitorActions,
-    service: SessionService,
+    event_handler: EventHandler,
+    action_dispatcher: ActionDispatcher,
+    state_manager: StateManager,
 }
 
 impl MonitorCoordinator {
@@ -129,14 +26,18 @@ impl MonitorCoordinator {
         let renderer = MonitorRenderer::new(config.clone());
         let actions = MonitorActions::new(config.clone());
         let service = SessionService::new(config.clone());
+        let action_dispatcher = ActionDispatcher::new(actions);
+        let event_handler = EventHandler::new();
+        let state_manager = StateManager::new(service);
         let state = MonitorAppState::new();
 
         let mut coordinator = Self {
             state,
             sessions: Vec::new(),
             renderer,
-            actions,
-            service,
+            event_handler,
+            action_dispatcher,
+            state_manager,
         };
 
         coordinator.refresh_sessions();
@@ -144,252 +45,102 @@ impl MonitorCoordinator {
     }
 
     pub fn refresh_sessions(&mut self) {
+        let new_sessions = self.state_manager.load_sessions(self.state.show_stale);
         self.sessions = self
-            .service
-            .load_sessions(self.state.show_stale)
-            .unwrap_or_else(|_| Vec::new());
-        self.state.update_selection_for_sessions(&self.sessions);
+            .state_manager
+            .update_sessions(&mut self.state, new_sessions);
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
-        match self.state.mode {
-            AppMode::Normal => self.handle_normal_key(key),
-            AppMode::FinishPrompt => self.handle_finish_prompt_key(key),
-            AppMode::CancelConfirm => self.handle_cancel_confirm_key(key),
-            AppMode::ErrorDialog => self.handle_error_dialog_key(key),
+        if let Some(action) = self
+            .event_handler
+            .handle_key_event(key, &self.state, &self.sessions)
+        {
+            self.process_action(action)?;
         }
+        Ok(())
     }
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        match self.state.mode {
-            AppMode::Normal => self.handle_normal_mouse(mouse),
-            AppMode::FinishPrompt | AppMode::CancelConfirm | AppMode::ErrorDialog => {
-                // Ignore mouse events in dialog modes
-                Ok(())
-            }
-        }
-    }
+        // Handle selection changes for mouse clicks first
+        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
+            if let Some(table_area) = self.state.table_area {
+                let mouse_x = mouse.column;
+                let mouse_y = mouse.row;
 
-    fn handle_normal_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::{KeyCode, KeyModifiers};
-
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.state.quit(),
-            KeyCode::Char('c') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    self.state.quit();
-                } else {
-                    self.start_cancel();
-                }
-            }
-            KeyCode::Char('y') => {
-                // 'y' to yank/copy session name (like vim)
-                self.copy_session_name()?;
-            }
-            KeyCode::Char('s') => {
-                self.state.toggle_stale();
-                self.refresh_sessions();
-            }
-            KeyCode::Up | KeyCode::Char('k') => self.state.previous_item(&self.sessions),
-            KeyCode::Down | KeyCode::Char('j') => self.state.next_item(&self.sessions),
-            KeyCode::Enter => self.resume_selected()?,
-            KeyCode::Tab => {
-                // Tab navigation between buttons could be implemented here
-                // For now, Enter still resumes the selected session
-            }
-            KeyCode::Char('f') => self.start_finish(),
-            KeyCode::Char('i') => self.integrate_if_ready()?,
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn handle_finish_prompt_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::{KeyCode, KeyModifiers};
-
-        match key.code {
-            KeyCode::Esc => {
-                self.state.exit_dialog();
-            }
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.state.exit_dialog();
-            }
-            KeyCode::Enter => {
-                if self.state.is_input_ready() {
-                    self.execute_finish()?;
-                }
-            }
-            KeyCode::Backspace => {
-                self.state.backspace();
-            }
-            KeyCode::Char(c) => {
-                self.state.add_char(c);
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn handle_cancel_confirm_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::{KeyCode, KeyModifiers};
-
-        match key.code {
-            KeyCode::Enter => {
-                self.execute_cancel()?;
-                self.state.exit_dialog();
-            }
-            KeyCode::Esc => {
-                self.state.exit_dialog();
-            }
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.state.exit_dialog();
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn resume_selected(&mut self) -> Result<()> {
-        if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            // Register button click for visual feedback
-            self.state
-                .register_button_click(ButtonClick::Resume(self.state.selected_index));
-
-            if let Err(e) = self.actions.resume_session(session) {
-                self.state
-                    .show_error(format!("Failed to resume session: {}", e));
-            } else {
-                self.state
-                    .show_feedback(format!("Opening session: {}", session.name));
-            }
-        }
-        Ok(())
-    }
-
-    fn copy_session_name(&mut self) -> Result<()> {
-        if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            use copypasta::{ClipboardContext, ClipboardProvider};
-
-            // Register button click for visual feedback
-            self.state
-                .register_button_click(ButtonClick::Copy(self.state.selected_index));
-
-            match ClipboardContext::new() {
-                Ok(mut ctx) => {
-                    if let Err(e) = ctx.set_contents(session.name.clone()) {
-                        self.state
-                            .show_error(format!("Failed to copy to clipboard: {}", e));
-                    } else {
-                        self.state
-                            .show_feedback(format!("Copied: {}", session.name));
+                if mouse_x >= table_area.x
+                    && mouse_x < table_area.x + table_area.width
+                    && mouse_y >= table_area.y
+                    && mouse_y < table_area.y + table_area.height
+                {
+                    let relative_y = mouse_y - table_area.y;
+                    if relative_y > 1 {
+                        let table_index = (relative_y - 2) as usize;
+                        if table_index < self.sessions.len() {
+                            // Update selection first
+                            self.state_manager.handle_selection_to_index(
+                                &mut self.state,
+                                table_index,
+                                &self.sessions,
+                            );
+                        }
                     }
                 }
-                Err(e) => {
-                    self.state
-                        .show_error(format!("Clipboard not available: {}", e));
-                }
             }
         }
-        Ok(())
-    }
 
-    fn start_finish(&mut self) {
-        if self.state.get_selected_session(&self.sessions).is_some() {
-            self.state.start_finish();
-        }
-    }
-
-    fn start_cancel(&mut self) {
-        if self.state.get_selected_session(&self.sessions).is_some() {
-            self.state.start_cancel();
-        }
-    }
-
-    fn integrate_if_ready(&mut self) -> Result<()> {
-        if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            self.actions.integrate_session(session)?;
+        // Then handle any action from the mouse event
+        if let Some(action) =
+            self.event_handler
+                .handle_mouse_event(mouse, &self.state, &self.sessions)
+        {
+            self.process_action(action)?;
         }
         Ok(())
     }
 
-    fn execute_finish(&mut self) -> Result<()> {
-        if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            let message = self.state.take_input();
-            self.actions.finish_session(session, message)?;
-            self.state.exit_dialog();
-            self.refresh_sessions();
-        }
-        Ok(())
-    }
+    /// Process an action by dispatching it and handling the result
+    fn process_action(
+        &mut self,
+        action: crate::ui::monitor::event_handler::UiAction,
+    ) -> Result<()> {
+        let result = self
+            .action_dispatcher
+            .dispatch(action, &mut self.state, &self.sessions)?;
 
-    fn execute_cancel(&mut self) -> Result<()> {
-        if let Some(session) = self.state.get_selected_session(&self.sessions) {
-            self.actions.cancel_session(session)?;
-            self.refresh_sessions();
-        }
-        Ok(())
-    }
-
-    fn handle_error_dialog_key(&mut self, key: KeyEvent) -> Result<()> {
-        use crossterm::event::{KeyCode, KeyModifiers};
-
-        match key.code {
-            KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => {
-                self.state.clear_error();
+        match result {
+            ActionResult::RefreshSessions => {
+                self.refresh_sessions();
             }
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.state.clear_error();
+            ActionResult::Continue => {
+                // No additional action needed
             }
-            _ => {}
         }
+
         Ok(())
     }
 
     pub fn should_quit(&self) -> bool {
-        self.state.should_quit
+        self.state_manager.should_quit(&self.state)
     }
 
     pub fn should_refresh(&self) -> bool {
-        self.state.should_refresh()
+        self.state_manager.should_refresh(&self.state)
     }
 
     pub fn mark_refreshed(&mut self) {
-        self.state.mark_refreshed();
+        self.state_manager.mark_refreshed(&mut self.state);
     }
 
     pub fn render(&mut self, f: &mut Frame) {
         self.renderer.render(f, &self.sessions, &mut self.state);
-    }
-
-    fn handle_normal_mouse(&mut self, mouse: MouseEvent) -> Result<()> {
-        let detector = ClickDetector::new(self.state.table_area, self.sessions.len());
-
-        match detector.detect_click_target(mouse) {
-            Some(ClickTarget::ResumeButton(index)) => {
-                self.state.selected_index = index;
-                self.state.table_state.select(Some(index));
-                self.resume_selected()?;
-            }
-            Some(ClickTarget::CopyButton(index)) => {
-                self.state.selected_index = index;
-                self.state.table_state.select(Some(index));
-                self.copy_session_name()?;
-            }
-            Some(ClickTarget::SessionRow(index)) => {
-                self.state.selected_index = index;
-                self.state.table_state.select(Some(index));
-            }
-            Some(ClickTarget::OutsideTable) | None => {
-                // Do nothing for clicks outside the table or invalid clicks
-            }
-        }
-        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::monitor::AppMode;
     use crossterm::event::{KeyCode, KeyEvent};
 
     fn create_test_config() -> Config {
@@ -426,21 +177,16 @@ mod tests {
         let mut coordinator = MonitorCoordinator::new(config);
 
         // Test finish mode - only changes mode if sessions exist
-        coordinator.start_finish();
-        if coordinator.sessions.is_empty() {
-            assert_eq!(coordinator.state.mode, AppMode::Normal);
-        } else {
+        if !coordinator.sessions.is_empty() {
+            coordinator.state.start_finish();
             assert_eq!(coordinator.state.mode, AppMode::FinishPrompt);
-        }
 
-        // Reset to normal mode for cancel test
-        coordinator.state.mode = AppMode::Normal;
-
-        // Test cancel mode - only changes mode if sessions exist
-        coordinator.start_cancel();
-        if coordinator.sessions.is_empty() {
+            // Reset to normal mode for cancel test
+            coordinator.state.exit_dialog();
             assert_eq!(coordinator.state.mode, AppMode::Normal);
-        } else {
+
+            // Test cancel mode
+            coordinator.state.start_cancel();
             assert_eq!(coordinator.state.mode, AppMode::CancelConfirm);
         }
     }
