@@ -12,7 +12,7 @@
     "clean": "rm -rf build node_modules package-lock.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.3"
+    "@modelcontextprotocol/sdk": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.1",
