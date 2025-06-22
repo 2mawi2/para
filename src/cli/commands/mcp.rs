@@ -555,6 +555,7 @@ mod tests {
     // Comprehensive tests for find_mcp_server function
     mod find_mcp_server_tests {
         use super::*;
+        use crate::utils::path::safe_resolve_path;
         use std::{env, fs, path::Path};
         use tempfile::TempDir;
 
@@ -700,7 +701,11 @@ mod tests {
             let current_dir = env::current_dir().unwrap();
             let expected_path = current_dir.join("mcp-server-ts/build/para-mcp-server.js");
 
-            assert_eq!(ts_server_path, expected_path);
+            // Use safe_resolve_path to handle symlink resolution differences on macOS
+            assert_eq!(
+                safe_resolve_path(&ts_server_path),
+                safe_resolve_path(&expected_path)
+            );
             assert!(ts_server_path.exists());
 
             // Test expected config structure
