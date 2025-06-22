@@ -11,7 +11,6 @@ use crate::utils::Result;
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 
-
 /// High-level coordinator for the monitor UI that orchestrates components
 pub struct MonitorCoordinator {
     pub state: MonitorAppState,
