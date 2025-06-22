@@ -160,6 +160,7 @@ impl MonitorRenderer {
 
     fn create_table_header<'a>(&self) -> Row<'a> {
         Row::new(vec![
+            Cell::from("Actions"),
             Cell::from("Session"),
             Cell::from("State"),
             Cell::from("Last Modified"),
@@ -200,6 +201,7 @@ impl MonitorRenderer {
         let base_style = self.get_base_row_style(is_selected, is_stale);
 
         Row::new(vec![
+            self.create_action_buttons_cell(is_selected),
             Cell::from(session.name.clone()).style(base_style.add_modifier(Modifier::BOLD)),
             self.create_state_cell(session, is_stale),
             Cell::from(format_activity(&session.last_activity)).style(base_style),
@@ -210,6 +212,36 @@ impl MonitorRenderer {
             self.create_diff_stats_cell(&session.diff_stats, is_stale),
         ])
         .height(1)
+    }
+
+    fn create_action_buttons_cell<'a>(&self, is_selected: bool) -> Cell<'a> {
+        // Use Unicode icons for better visual appeal
+        // ▶ for play/resume, 📋 for copy (or fallback to text)
+        let buttons = if is_selected {
+            // Show buttons with highlighting when row is selected
+            Line::from(vec![
+                Span::styled(
+                    " ▶ ",
+                    Style::default()
+                        .fg(COLOR_GREEN)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("|"),
+                Span::styled(
+                    " 📋 ",
+                    Style::default().fg(COLOR_BLUE).add_modifier(Modifier::BOLD),
+                ),
+            ])
+        } else {
+            // Show dimmed buttons when not selected
+            Line::from(vec![
+                Span::styled(" ▶ ", Style::default().fg(COLOR_GRAY)),
+                Span::raw("|"),
+                Span::styled(" 📋 ", Style::default().fg(COLOR_GRAY)),
+            ])
+        };
+
+        Cell::from(buttons)
     }
 
     fn get_base_row_style(&self, is_selected: bool, is_stale: bool) -> Style {
@@ -371,14 +403,15 @@ impl MonitorRenderer {
         Table::new(
             rows,
             [
-                Constraint::Min(20),
-                Constraint::Length(10),
-                Constraint::Length(14),
-                Constraint::Min(30),
-                Constraint::Length(10),
-                Constraint::Length(13),
-                Constraint::Length(10),
-                Constraint::Length(12),
+                Constraint::Length(9),  // Actions column
+                Constraint::Min(20),    // Session name
+                Constraint::Length(10), // State
+                Constraint::Length(14), // Last Modified
+                Constraint::Min(30),    // Current Task
+                Constraint::Length(10), // Tests
+                Constraint::Length(13), // Progress
+                Constraint::Length(10), // Confidence
+                Constraint::Length(12), // Changes
             ],
         )
         .header(header)
@@ -428,6 +461,8 @@ impl MonitorRenderer {
             Span::raw(" Finish • "),
             create_styled_span("[c]", COLOR_BLUE, true),
             Span::raw(" Cancel • "),
+            create_styled_span("[C]", COLOR_BLUE, true),
+            Span::raw(" Copy • "),
             create_styled_span("[q]", COLOR_BLUE, true),
             Span::raw(" Quit"),
         ])];
