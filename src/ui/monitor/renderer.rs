@@ -164,6 +164,7 @@ impl MonitorRenderer {
             Cell::from("Tests"),
             Cell::from("Progress"),
             Cell::from("Confidence"),
+            Cell::from("Changes"),
         ])
         .style(
             Style::default()
@@ -203,6 +204,7 @@ impl MonitorRenderer {
             self.create_test_cell(&session.test_status, is_stale),
             self.create_progress_cell(session.todo_percentage, is_stale),
             self.create_confidence_cell(&session.confidence, is_stale),
+            self.create_diff_stats_cell(&session.diff_stats, is_stale),
         ])
         .height(1)
     }
@@ -329,6 +331,39 @@ impl MonitorRenderer {
         }
     }
 
+    fn create_diff_stats_cell<'a>(
+        &self,
+        diff_stats: &Option<crate::core::status::DiffStats>,
+        is_stale: bool,
+    ) -> Cell<'a> {
+        match diff_stats {
+            Some(stats) => {
+                let text = format!("+{} -{}", stats.additions, stats.deletions);
+                if is_stale {
+                    Cell::from(text).style(
+                        Style::default()
+                            .fg(crate::ui::monitor::types::SessionStatus::dimmed_text_color()),
+                    )
+                } else {
+                    // Create a colored string with green for additions and red for deletions
+                    let spans = vec![
+                        Span::styled(
+                            format!("+{}", stats.additions),
+                            Style::default().fg(COLOR_GREEN),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("-{}", stats.deletions),
+                            Style::default().fg(COLOR_RED),
+                        ),
+                    ];
+                    Cell::from(Line::from(spans))
+                }
+            }
+            None => create_default_cell_for_none("-", is_stale),
+        }
+    }
+
     fn create_table_widget<'a>(&self, rows: Vec<Row<'a>>, header: Row<'a>) -> Table<'a> {
         Table::new(
             rows,
@@ -340,6 +375,7 @@ impl MonitorRenderer {
                 Constraint::Length(10),
                 Constraint::Length(13),
                 Constraint::Length(10),
+                Constraint::Length(12),
             ],
         )
         .header(header)
@@ -499,6 +535,7 @@ mod tests {
                 worktree_path: PathBuf::from("/tmp/session1"),
                 test_status: None,
                 confidence: None,
+                diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
             },
@@ -511,6 +548,7 @@ mod tests {
                 worktree_path: PathBuf::from("/tmp/session2"),
                 test_status: None,
                 confidence: None,
+                diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
             },

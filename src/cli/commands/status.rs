@@ -1,7 +1,8 @@
 use crate::cli::parser::{StatusArgs, StatusCommands};
 use crate::config::Config;
+use crate::core::git::{calculate_diff_stats, find_parent_branch};
 use crate::core::session::SessionManager;
-use crate::core::status::Status;
+use crate::core::status::{DiffStats, Status};
 use crate::utils::{get_main_repository_root, ParaError, Result};
 use std::path::{Path, PathBuf};
 
@@ -59,11 +60,24 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     // Parse and validate arguments
     let test_status =
         Status::parse_test_status(&tests).map_err(|e| ParaError::invalid_args(e.to_string()))?;
+
+    // Calculate diff stats if we're in a worktree
+    let diff_stats = match session_manager.load_state(&session_name) {
+        Ok(session_state) => calculate_diff_stats_for_session(&session_state).ok(),
+        Err(_) => None, // Session not found or error loading
+    };
+
+    // Parse confidence level
     let confidence_level = Status::parse_confidence(&confidence)
         .map_err(|e| ParaError::invalid_args(e.to_string()))?;
 
     // Create status object
     let mut status = Status::new(session_name.clone(), task, test_status, confidence_level);
+
+    // Add diff stats if available
+    if let Some(stats) = diff_stats {
+        status = status.with_diff_stats(stats);
+    }
 
     // Handle optional todos
     if let Some(todos_str) = args.todos {
@@ -97,6 +111,16 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     println!("Status updated for session '{}'", session_name);
 
     Ok(())
+}
+
+fn calculate_diff_stats_for_session(
+    session_state: &crate::core::session::SessionState,
+) -> Result<DiffStats> {
+    // Find the parent branch (usually main/master)
+    let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)?;
+
+    // Calculate diff stats
+    calculate_diff_stats(&session_state.worktree_path, &parent_branch)
 }
 
 struct StatusDisplayHandler {
@@ -194,6 +218,9 @@ fn display_status(status: &Status) {
     println!("Task: {}", status.current_task);
     println!("Tests: {}", status.test_status);
     println!("Confidence: {}", status.confidence);
+    if let Some(diff_stats) = &status.diff_stats {
+        println!("Changes: {}", diff_stats);
+    }
 
     if let Some(todos) = status.format_todos() {
         println!("Progress: {}", todos);
