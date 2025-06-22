@@ -18,22 +18,62 @@ build-release:
 
 # Install para CLI and MCP server
 install: build-release
-    @echo "🚀 Installing Para binaries..."
-    @mkdir -p ~/.local/bin
-    @cp target/release/para ~/.local/bin/para
-    @echo "✅ Para CLI binary installed to ~/.local/bin/para"
-    @# Check if MCP server exists before copying
-    @if [ -f "mcp-server-ts/build/para-mcp-server.js" ]; then \
-        echo "📦 Installing MCP server..."; \
-        cp mcp-server-ts/build/para-mcp-server.js ~/.local/bin/para-mcp-server; \
-        chmod +x ~/.local/bin/para-mcp-server; \
-        echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"; \
-    else \
-        echo "⚠️  MCP server not found. Run 'cd mcp-server-ts && npm install && npm run build' to build it"; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    echo "🚀 Installing Para binaries..."
+    mkdir -p ~/.local/bin
+    cp target/release/para ~/.local/bin/para
+    echo "✅ Para CLI binary installed to ~/.local/bin/para"
+    
+    # Build and install MCP server if TypeScript project exists
+    if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then
+        echo "📦 Building MCP server..."
+        cd mcp-server-ts
+        
+        # Install dependencies with bun if available, fallback to npm
+        if command -v bun >/dev/null 2>&1; then
+            echo "   Using bun for dependencies..."
+            bun install
+            bun run build
+        elif command -v npm >/dev/null 2>&1; then
+            echo "   Using npm for dependencies..."
+            npm install
+            npm run build
+        else
+            echo "❌ Neither bun nor npm found. Cannot build MCP server."
+            echo "   Install bun (recommended) or npm to build the MCP server"
+            exit 1
+        fi
+        
+        # Install the built server with dependencies
+        if [ -f "build/para-mcp-server.js" ]; then
+            # Create a directory for the MCP server and its dependencies
+            mkdir -p ~/.local/lib/para-mcp-server
+            cp build/para-mcp-server.js ~/.local/lib/para-mcp-server/
+            cp -r node_modules ~/.local/lib/para-mcp-server/
+            cp package.json ~/.local/lib/para-mcp-server/
+            
+            # Create a wrapper script that sets up the environment
+            echo '#!/bin/bash' > ~/.local/bin/para-mcp-server
+            echo '# Para MCP Server wrapper script' >> ~/.local/bin/para-mcp-server
+            echo 'export NODE_PATH="$HOME/.local/lib/para-mcp-server/node_modules"' >> ~/.local/bin/para-mcp-server
+            echo 'exec node "$HOME/.local/lib/para-mcp-server/para-mcp-server.js" "$@"' >> ~/.local/bin/para-mcp-server
+            chmod +x ~/.local/bin/para-mcp-server
+            echo "✅ Para MCP server installed to ~/.local/bin/para-mcp-server"
+        else
+            echo "❌ MCP server build failed - para-mcp-server.js not found"
+            exit 1
+        fi
+        
+        cd ..
+    else
+        echo "⚠️  TypeScript MCP server project not found, skipping MCP server installation"
     fi
-    @echo ""
-    @echo "🔧 Next steps:"
-    @echo "   Run 'para mcp init' to configure MCP integration for your IDE"
+    
+    echo ""
+    echo "🔧 Next steps:"
+    echo "   Run 'para mcp init' to configure MCP integration for your IDE"
 
 # Uninstall para globally  
 uninstall:
@@ -124,30 +164,76 @@ test *FILTER:
     
     # TypeScript Tests (if TypeScript project exists)
     if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then
+        # Ensure TypeScript dependencies are installed
+        if ! [ -d "mcp-server-ts/node_modules" ]; then
+            printf "   Installing TypeScript deps: "
+            if command -v bun >/dev/null 2>&1; then
+                (cd mcp-server-ts && bun install >/dev/null 2>&1) && echo "✅ done" || (echo "❌ FAILED" && exit 1)
+            elif command -v npm >/dev/null 2>&1; then
+                (cd mcp-server-ts && npm install >/dev/null 2>&1) && echo "✅ done" || (echo "❌ FAILED" && exit 1)
+            else
+                echo "❌ Neither bun nor npm found"
+                exit 1
+            fi
+        fi
+        
         printf "   TypeScript Tests: "
-        if (cd mcp-server-ts && npm test >/dev/null 2>&1); then
-            echo "✅ passed"
+        if command -v bun >/dev/null 2>&1; then
+            if (cd mcp-server-ts && bun run test >/dev/null 2>&1); then
+                echo "✅ passed"
+            else
+                echo "❌ FAILED"
+                echo "TypeScript test output:"
+                cd mcp-server-ts && bun run test
+                exit 1
+            fi
+        elif command -v npm >/dev/null 2>&1; then
+            if (cd mcp-server-ts && npm run test >/dev/null 2>&1); then
+                echo "✅ passed"
+            else
+                echo "❌ FAILED"
+                echo "TypeScript test output:"
+                cd mcp-server-ts && npm run test
+                exit 1
+            fi
         else
-            echo "❌ FAILED"
-            echo "TypeScript test output:"
-            cd mcp-server-ts && npm test
+            echo "❌ Neither bun nor npm found"
             exit 1
         fi
         
         # TypeScript Linting (allow warnings, fail on errors)
         printf "   TypeScript Linting: "
-        if lint_output=$(cd mcp-server-ts && npm run lint 2>&1); then
-            echo "✅ clean"
-        else
-            # Check if it's only warnings or actual errors
-            if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
-                echo "✅ warnings only"
+        if command -v bun >/dev/null 2>&1; then
+            if lint_output=$(cd mcp-server-ts && bun run lint 2>&1); then
+                echo "✅ clean"
             else
-                echo "❌ FAILED"
-                echo "TypeScript linting output:"
-                echo "$lint_output"
-                exit 1
+                # Check if it's only warnings or actual errors
+                if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
+                    echo "✅ warnings only"
+                else
+                    echo "❌ FAILED"
+                    echo "TypeScript linting output:"
+                    echo "$lint_output"
+                    exit 1
+                fi
             fi
+        elif command -v npm >/dev/null 2>&1; then
+            if lint_output=$(cd mcp-server-ts && npm run lint 2>&1); then
+                echo "✅ clean"
+            else
+                # Check if it's only warnings or actual errors
+                if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
+                    echo "✅ warnings only"
+                else
+                    echo "❌ FAILED"
+                    echo "TypeScript linting output:"
+                    echo "$lint_output"
+                    exit 1
+                fi
+            fi
+        else
+            echo "❌ Neither bun nor npm found"
+            exit 1
         fi
     fi
     
@@ -169,7 +255,25 @@ lint:
     cargo clippy --all-targets --all-features -- -D warnings
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && npm run lint; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Format code (Rust + TypeScript)
@@ -179,7 +283,25 @@ fmt:
     cargo fmt --all
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && npm run lint:fix; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint:fix; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint:fix; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Check formatting (Rust + TypeScript)
@@ -189,7 +311,25 @@ fmt-check:
     cargo fmt --all -- --check
     @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
         echo "   TypeScript:"; \
-        cd mcp-server-ts && npm run lint; \
+        if ! [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "   Installing TypeScript dependencies..."; \
+            if command -v bun >/dev/null 2>&1; then \
+                cd mcp-server-ts && bun install; \
+            elif command -v npm >/dev/null 2>&1; then \
+                cd mcp-server-ts && npm install; \
+            else \
+                echo "❌ Neither bun nor npm found"; \
+                exit 1; \
+            fi; \
+        fi; \
+        if command -v bun >/dev/null 2>&1; then \
+            cd mcp-server-ts && bun run lint; \
+        elif command -v npm >/dev/null 2>&1; then \
+            cd mcp-server-ts && npm run lint; \
+        else \
+            echo "❌ Neither bun nor npm found"; \
+            exit 1; \
+        fi; \
     fi
 
 # Run the para binary with arguments
@@ -223,7 +363,7 @@ status:
     @echo ""
     @echo "TypeScript toolchain:"
     @command -v node >/dev/null 2>&1 && echo "  ✅ node $(node --version)" || echo "  ❌ node not found"
-    @command -v npm >/dev/null 2>&1 && echo "  ✅ npm $(npm --version)" || echo "  ❌ npm not found"
+    @command -v bun >/dev/null 2>&1 && echo "  ✅ bun $(bun --version)" || echo "  ❌ bun not found"
     @echo ""
     @echo "Development tools:"
     @command -v git >/dev/null 2>&1 && echo "  ✅ git" || echo "  ❌ git"
@@ -238,7 +378,7 @@ status:
         if [ -d "mcp-server-ts/node_modules" ]; then \
             echo "  ✅ TypeScript dependencies installed"; \
         else \
-            echo "  ❌ TypeScript dependencies not installed (run: cd mcp-server-ts && npm install)"; \
+            echo "  ❌ TypeScript dependencies not installed (run: cd mcp-server-ts && bun install)"; \
         fi; \
     else \
         echo "  ❓ TypeScript project not found"; \
@@ -247,7 +387,7 @@ status:
     @echo "Binary status:"
     @[ -f target/debug/para ] && echo "  ✅ debug CLI binary built" || echo "  ❌ debug CLI binary not found"
     @[ -f target/release/para ] && echo "  ✅ release CLI binary built" || echo "  ❌ release CLI binary not found"
-    @[ -f mcp-server-ts/build/para-mcp-server.js ] && echo "  ✅ MCP server built" || echo "  ❌ MCP server not found (build with: cd mcp-server-ts && npm install && npm run build)"
+    @[ -f mcp-server-ts/build/para-mcp-server.js ] && echo "  ✅ MCP server built" || echo "  ❌ MCP server not found (build with: cd mcp-server-ts && bun install && bun run build)"
 
 # Development workflow setup
 dev-setup: setup-hooks test

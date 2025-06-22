@@ -30,3 +30,48 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+
+  # Enable version updates for TypeScript/Node.js dependencies in mcp-server-ts
+  - package-ecosystem: "npm"
+    directory: "/mcp-server-ts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "typescript"
+      - "mcp-server"
+    commit-message:
+      prefix: "npm"
+      prefix-development: "npm-dev"
+      include: "scope"
+    # Group updates to reduce PR noise for related packages
+    groups:
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"
+      mcp-sdk:
+        patterns:
+          - "@modelcontextprotocol/*"
+      jest-testing:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "ts-jest"
+      typescript-core:
+        patterns:
+          - "typescript"
+          - "@types/node"
+    # Ignore major version updates for core dependencies to maintain stability
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@modelcontextprotocol/sdk"
+        update-types: ["version-update:semver-major"]
+    # Allow automatic merging of patch updates for security
+    reviewers:
+      - "2mawi2"
+    assignees:
+      - "2mawi2"
