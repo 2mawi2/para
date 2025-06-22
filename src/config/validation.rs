@@ -1,4 +1,5 @@
 use super::{Config, ConfigError, Result};
+use crate::utils::config_validator::validate_ide_command;
 use std::path::Path;
 
 pub fn validate_config(config: &Config) -> Result<()> {
@@ -52,7 +53,7 @@ fn validate_ide_config_with_checks(
         )));
     }
 
-    if check_command_availability && !super::defaults::is_command_available(&ide.command) {
+    if check_command_availability && validate_ide_command(&ide.command).is_err() {
         return Err(ConfigError::Validation(format!(
             "Claude Code command '{}' is not available. Please ensure Claude Code is installed and in your PATH",
             ide.command
@@ -89,9 +90,7 @@ fn validate_ide_config_with_checks(
             )));
         }
 
-        if check_command_availability
-            && !super::defaults::is_command_available(&ide.wrapper.command)
-        {
+        if check_command_availability && validate_ide_command(&ide.wrapper.command).is_err() {
             return Err(ConfigError::Validation(format!(
                 "Wrapper command '{}' is not available. Please ensure {} is installed.",
                 ide.wrapper.command, ide.wrapper.name
