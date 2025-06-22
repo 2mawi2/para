@@ -4,18 +4,24 @@
   "description": "Para MCP Server - TypeScript implementation calling Rust para binary",
   "type": "module",
   "bin": {
-    "para-mcp-server": "./build/para-mcp-server.js"
+    "para-mcp-server": "./build/para-mcp-server-refactored.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x build/para-mcp-server.js",
+    "build": "tsc && chmod +x build/para-mcp-server.js && chmod +x build/para-mcp-server-refactored.js",
     "dev": "tsc --watch",
-    "clean": "rm -rf build node_modules package-lock.json"
+    "clean": "rm -rf build node_modules package-lock.json",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.1",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5"
   }
 }
