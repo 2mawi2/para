@@ -153,6 +153,22 @@ jobs:
             - Code that lies about what it does (misleading names/interfaces)
             - Hidden side effects or fragile assumptions about external state
 
+            **STEP 6: Comment Quality Review**
+            Enforce high-quality comments that explain "why" not "what":
+            - **CRITICAL ISSUE**: Comments that describe WHAT the code does instead of WHY
+              - Bad: `// Loop through users` or `// Set status to active`
+              - Good: `// Skip inactive users to avoid permission errors` or `// Mark as active to trigger downstream notifications`
+            - **CRITICAL ISSUE**: Comments that chat with reviewers or AI models
+              - Bad: `// TODO: Claude, please optimize this` or `// Note for reviewer: this might be confusing`
+            - **CRITICAL ISSUE**: Comments that describe changes for review purposes  
+              - Bad: `// Added this function for the new feature` or `// Changed this to fix the bug`
+            - **ACCEPTABLE**: "What" comments ONLY if code complexity genuinely requires it
+              - Must question: "Is this code too complex and should be simplified instead?"
+              - Example: Complex regex or mathematical formulas where the intent isn't obvious
+            - **ENCOURAGE**: Comments explaining business logic, constraints, or non-obvious decisions
+              - Good: `// Use UTC to avoid timezone issues in distributed systems`
+              - Good: `// Retry 3 times because external API has transient failures`
+
             **IGNORE:**
             - Code that works but could be "cleaner"
             - Performance issues without measured proof of problems
@@ -174,6 +190,7 @@ jobs:
             - Missing core requirements from PR description  
             - Bugs that will cause runtime failures or crashes
             - Security vulnerabilities or data corruption risks
+            - Poor quality comments: "what" comments, reviewer chatter, or change descriptions
             
             For minor issues, provide feedback in review only (no @claude comment).
 
@@ -203,9 +220,10 @@ jobs:
             6. STEP 1: Requirements verification:
                - Parse PR for issue references and read linked issues with mcp__github__get_issue
                - Systematically check each requirement from PR description AND original issues
-            7. STEPS 2-5: Review using the remaining methodological approaches
-            8. If critical issues found (including missing requirements from original issues) AND iteration < 3: auto-trigger with structured comment
-            9. If iteration >= 3: provide final review only
+            7. STEPS 2-6: Review using the remaining methodological approaches including comment quality
+            8. Check for poor quality comments: search for "what" comments, reviewer chatter, and change descriptions
+            9. If critical issues found (including comment quality issues) AND iteration < 3: auto-trigger with structured comment
+            10. If iteration >= 3: provide final review only
           allowed_tools: "Edit,Read,Write,MultiEdit,Glob,Grep,LS,TodoRead,TodoWrite,Bash,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_comments,mcp__github__get_issue,mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files,mcp__github_file_ops__update_claude_comment,mcp__github__add_issue_comment,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__assign_copilot_to_issue,mcp__github__create_and_submit_pull_request_review,mcp__github__create_branch,mcp__github__create_issue,mcp__github__create_or_update_file,mcp__github__create_pending_pull_request_review,mcp__github__create_pull_request,mcp__github__delete_file,mcp__github__delete_pending_pull_request_review,mcp__github__dismiss_notification,mcp__github__fork_repository,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__manage_notification_subscription,mcp__github__manage_repository_notification_subscription,mcp__github__mark_all_notifications_read,mcp__github__push_files,mcp__github__request_copilot_review,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_repositories,mcp__github__search_users,mcp__github__submit_pending_pull_request_review,mcp__github__update_issue,mcp__github__update_pull_request,mcp__github__update_pull_request_branch,ListMcpResourcesTool,ReadMcpResourceTool"
           disallowed_tools: "mcp__github__create_repository,mcp__github__fork_repository,WebSearch,WebFetch,Bash(reboot),Bash(shutdown),Bash(halt),Bash(poweroff),Bash(init 0),Bash(init 6),Bash(sudo),Bash(su),Bash(doas),Bash(pkexec),Bash(dd),Bash(mkfs),Bash(fdisk),Bash(parted),Bash(format),Bash(chown root),Bash(chmod u+s),Bash(visudo),Bash(usermod),Bash(useradd),Bash(passwd),Bash(nc -l),Bash(netcat -l),Bash(telnet),Bash(rsh),Bash(rlogin),Bash(nmap),Bash(masscan),Bash(iptables),Bash(ip6tables),Bash(nftables),Bash(tcpdump),Bash(wireshark),Bash(tshark),Bash(crontab),Bash(at),Bash(batch),Bash(curl),Bash(wget),Bash(fetch),Bash(lynx),Bash(w3m),Bash(links),Bash(elinks),Bash(httpie),Bash(http),Bash(aria2c),Bash(axel),Bash(scp),Bash(sftp),Bash(rsync),Bash(ftp),Bash(nc),Bash(netcat),Bash(socat),Bash(ssh)"
           
@@ -274,9 +292,10 @@ jobs:
                - Systematically check each requirement from BOTH PR and original issues
             5. **METHODICAL REVIEW**: Apply the 5-step systematic approach focusing on critical issues
             6. Use mcp__github__create_pending_pull_request_review and related tools for inline feedback  
-            7. Only auto-trigger if you find critical issues (including formatting issues, missing/incorrect requirements)
+            7. Only auto-trigger if you find critical issues (including formatting issues, missing/incorrect requirements, poor comment quality)
             
             **Remember**: Missing or incorrectly implemented requirements from the original issue are critical issues that should trigger fixes!
+            **Comment Quality**: "What" comments, reviewer chatter, and change descriptions are critical issues requiring fixes!
       
       - name: Post Auto-Trigger Comment if Needed
         if: always()
