@@ -71,6 +71,9 @@ impl MonitorCoordinator {
             KeyCode::Char('c') => {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.state.quit();
+                } else if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    // Shift+C to copy session name
+                    self.copy_session_name()?;
                 } else {
                     self.start_cancel();
                 }
@@ -82,6 +85,10 @@ impl MonitorCoordinator {
             KeyCode::Up | KeyCode::Char('k') => self.state.previous_item(&self.sessions),
             KeyCode::Down | KeyCode::Char('j') => self.state.next_item(&self.sessions),
             KeyCode::Enter => self.resume_selected()?,
+            KeyCode::Tab => {
+                // Tab navigation between buttons could be implemented here
+                // For now, Enter still resumes the selected session
+            }
             KeyCode::Char('f') => self.start_finish(),
             KeyCode::Char('i') => self.integrate_if_ready()?,
             _ => {}
@@ -139,6 +146,29 @@ impl MonitorCoordinator {
             if let Err(e) = self.actions.resume_session(session) {
                 self.state
                     .show_error(format!("Failed to resume session: {}", e));
+            }
+        }
+        Ok(())
+    }
+
+    fn copy_session_name(&mut self) -> Result<()> {
+        if let Some(session) = self.state.get_selected_session(&self.sessions) {
+            use copypasta::{ClipboardContext, ClipboardProvider};
+
+            match ClipboardContext::new() {
+                Ok(mut ctx) => {
+                    if let Err(e) = ctx.set_contents(session.name.clone()) {
+                        self.state
+                            .show_error(format!("Failed to copy to clipboard: {}", e));
+                    } else {
+                        // Optionally show a brief success message (you could add this feature)
+                        // For now, the action just completes silently
+                    }
+                }
+                Err(e) => {
+                    self.state
+                        .show_error(format!("Clipboard not available: {}", e));
+                }
             }
         }
         Ok(())
@@ -241,9 +271,19 @@ impl MonitorCoordinator {
                             self.state.selected_index = table_index;
                             self.state.table_state.select(Some(table_index));
 
-                            // Double-click or immediate action on click
-                            // For now, we'll open the session on single click
-                            self.resume_selected()?;
+                            // Check if clicking in the actions column (first 9 characters)
+                            let relative_x = mouse_x - table_area.x;
+                            if relative_x < 9 {
+                                // Actions column clicked
+                                if relative_x < 4 {
+                                    // Resume button area (first 4 chars: " ▶ ")
+                                    self.resume_selected()?;
+                                } else if (5..9).contains(&relative_x) {
+                                    // Copy button area (chars 5-8: " 📋 ")
+                                    self.copy_session_name()?;
+                                }
+                            }
+                            // If clicking elsewhere on the row, just select it (no action)
                         }
                     }
                 }
