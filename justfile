@@ -74,7 +74,7 @@ mcp-setup: install
     @echo "  para mcp init --cursor       # Setup for Cursor"
     @echo "  para mcp init --vscode       # Setup for VS Code"
 
-# Run comprehensive Rust tests (formatting + tests + linting)
+# Run comprehensive tests (Rust + TypeScript formatting + tests + linting)
 test *FILTER:
     #!/bin/bash
     set -euo pipefail
@@ -86,10 +86,10 @@ test *FILTER:
         exit 0
     fi
     
-    echo "🧪 Running all Rust checks..."
+    echo "🧪 Running all checks (Rust + TypeScript)..."
     
-    # Format first
-    printf "   Format: "
+    # Rust Format first
+    printf "   Rust Format: "
     if cargo fmt --all --quiet 2>/dev/null; then
         echo "✅ formatted"
     else
@@ -97,8 +97,8 @@ test *FILTER:
         exit 1
     fi
     
-    # Tests
-    printf "   Tests: "
+    # Rust Tests
+    printf "   Rust Tests: "
     if test_output=$(cargo test --message-format=short 2>&1); then
         if echo "$test_output" | grep -q "test result:"; then
             summary=$(echo "$test_output" | grep "test result:" | tail -1 | sed 's/test result: //')
@@ -122,7 +122,36 @@ test *FILTER:
         exit 1
     fi
     
-    echo "🎉 All Rust checks passed!"
+    # TypeScript Tests (if TypeScript project exists)
+    if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then
+        printf "   TypeScript Tests: "
+        if (cd mcp-server-ts && npm test >/dev/null 2>&1); then
+            echo "✅ passed"
+        else
+            echo "❌ FAILED"
+            echo "TypeScript test output:"
+            cd mcp-server-ts && npm test
+            exit 1
+        fi
+        
+        # TypeScript Linting (allow warnings, fail on errors)
+        printf "   TypeScript Linting: "
+        if lint_output=$(cd mcp-server-ts && npm run lint 2>&1); then
+            echo "✅ clean"
+        else
+            # Check if it's only warnings or actual errors
+            if echo "$lint_output" | grep -q "✖.*problems.*0 errors"; then
+                echo "✅ warnings only"
+            else
+                echo "❌ FAILED"
+                echo "TypeScript linting output:"
+                echo "$lint_output"
+                exit 1
+            fi
+        fi
+    fi
+    
+    echo "🎉 All checks passed (Rust + TypeScript)!"
 
 # Run only Rust tests (no formatting/linting)
 test-only *FILTER:
@@ -133,20 +162,35 @@ test-only *FILTER:
         cargo test
     fi
 
-# Run Rust linting with clippy
+# Run linting (Rust + TypeScript)
 lint:
-    @echo "🔍 Running Rust linting checks..."
+    @echo "🔍 Running linting checks (Rust + TypeScript)..."
+    @echo "   Rust:"
     cargo clippy --all-targets --all-features -- -D warnings
+    @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
+        echo "   TypeScript:"; \
+        cd mcp-server-ts && npm run lint; \
+    fi
 
-# Format Rust code
+# Format code (Rust + TypeScript)
 fmt:
-    @echo "🎨 Formatting Rust code..."
+    @echo "🎨 Formatting code (Rust + TypeScript)..."
+    @echo "   Rust:"
     cargo fmt --all
+    @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
+        echo "   TypeScript:"; \
+        cd mcp-server-ts && npm run lint:fix; \
+    fi
 
-# Check Rust formatting
+# Check formatting (Rust + TypeScript)
 fmt-check:
-    @echo "🔍 Checking Rust formatting..."
+    @echo "🔍 Checking formatting (Rust + TypeScript)..."
+    @echo "   Rust:"
     cargo fmt --all -- --check
+    @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
+        echo "   TypeScript:"; \
+        cd mcp-server-ts && npm run lint; \
+    fi
 
 # Run the para binary with arguments
 run *ARGS: build
@@ -177,6 +221,10 @@ status:
     @rustc --version || echo "  ❌ rustc not found"
     @cargo --version || echo "  ❌ cargo not found"
     @echo ""
+    @echo "TypeScript toolchain:"
+    @command -v node >/dev/null 2>&1 && echo "  ✅ node $(node --version)" || echo "  ❌ node not found"
+    @command -v npm >/dev/null 2>&1 && echo "  ✅ npm $(npm --version)" || echo "  ❌ npm not found"
+    @echo ""
     @echo "Development tools:"
     @command -v git >/dev/null 2>&1 && echo "  ✅ git" || echo "  ❌ git"
     @command -v just >/dev/null 2>&1 && echo "  ✅ just" || echo "  ❌ just"
@@ -184,6 +232,17 @@ status:
     @echo "Git hooks:"
     @[ -f .git/hooks/pre-commit ] && echo "  ✅ pre-commit" || echo "  ❌ pre-commit"
     @[ -f .git/hooks/pre-push ] && echo "  ✅ pre-push" || echo "  ❌ pre-push"
+    @echo ""
+    @echo "TypeScript dependencies:"
+    @if [ -d "mcp-server-ts" ] && [ -f "mcp-server-ts/package.json" ]; then \
+        if [ -d "mcp-server-ts/node_modules" ]; then \
+            echo "  ✅ TypeScript dependencies installed"; \
+        else \
+            echo "  ❌ TypeScript dependencies not installed (run: cd mcp-server-ts && npm install)"; \
+        fi; \
+    else \
+        echo "  ❓ TypeScript project not found"; \
+    fi
     @echo ""
     @echo "Binary status:"
     @[ -f target/debug/para ] && echo "  ✅ debug CLI binary built" || echo "  ❌ debug CLI binary not found"
