@@ -15,9 +15,51 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec, execSync } from "child_process";
-import { promisify } from "util";
 
-const execAsync = promisify(exec);
+// Tool argument interfaces
+interface ParaStartArgs {
+  session_name?: string;
+  dangerously_skip_permissions?: boolean;
+}
+
+interface ParaFinishArgs {
+  commit_message: string;
+  session?: string;
+  branch?: string;
+}
+
+interface ParaDispatchArgs {
+  session_name: string;
+  task_description?: string;
+  file?: string;
+  dangerously_skip_permissions?: boolean;
+}
+
+interface ParaListArgs {
+  verbose?: boolean;
+  archived?: boolean;
+  quiet?: boolean;
+}
+
+interface ParaRecoverArgs {
+  session_name?: string;
+}
+
+interface ParaResumeArgs {
+  session?: string;
+  prompt?: string;
+  file?: string;
+}
+
+interface ParaCancelArgs {
+  session_name?: string;
+  force?: boolean;
+}
+
+interface ParaStatusShowArgs {
+  session?: string;
+  json?: boolean;
+}
 
 // Para binary path - dynamically discover
 function findParaBinary(): string {
@@ -314,11 +356,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case "para_start":
         {
+          const startArgs = args as ParaStartArgs;
           const cmdArgs = ["start"];
-          if ((args as any).session_name) {
-            cmdArgs.push((args as any).session_name);
+          if (startArgs.session_name) {
+            cmdArgs.push(startArgs.session_name);
           }
-          if ((args as any).dangerously_skip_permissions) {
+          if (startArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
           }
           result = await runParaCommand(cmdArgs);
@@ -327,13 +370,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_finish":
         {
+          const finishArgs = args as ParaFinishArgs;
           const cmdArgs = ["finish"];
-          cmdArgs.push((args as any).commit_message);
-          if ((args as any).session) {
-            cmdArgs.push((args as any).session);
+          cmdArgs.push(finishArgs.commit_message);
+          if (finishArgs.session) {
+            cmdArgs.push(finishArgs.session);
           }
-          if ((args as any).branch) {
-            cmdArgs.push("--branch", (args as any).branch);
+          if (finishArgs.branch) {
+            cmdArgs.push("--branch", finishArgs.branch);
           }
           result = await runParaCommand(cmdArgs);
         }
@@ -341,16 +385,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_dispatch":
         {
+          const dispatchArgs = args as ParaDispatchArgs;
           const cmdArgs = ["dispatch"];
-          cmdArgs.push((args as any).session_name);
+          cmdArgs.push(dispatchArgs.session_name);
 
-          if ((args as any).file) {
-            cmdArgs.push("--file", (args as any).file);
-          } else if ((args as any).task_description) {
-            cmdArgs.push((args as any).task_description);
+          if (dispatchArgs.file) {
+            cmdArgs.push("--file", dispatchArgs.file);
+          } else if (dispatchArgs.task_description) {
+            cmdArgs.push(dispatchArgs.task_description);
           }
 
-          if ((args as any).dangerously_skip_permissions) {
+          if (dispatchArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
           }
 
@@ -360,14 +405,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_list":
         {
+          const listArgs = args as ParaListArgs;
           const cmdArgs = ["list"];
-          if ((args as any).verbose) {
+          if (listArgs.verbose) {
             cmdArgs.push("--verbose");
           }
-          if ((args as any).archived) {
+          if (listArgs.archived) {
             cmdArgs.push("--archived");
           }
-          if ((args as any).quiet) {
+          if (listArgs.quiet) {
             cmdArgs.push("--quiet");
           }
           result = await runParaCommand(cmdArgs);
@@ -376,9 +422,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_recover":
         {
+          const recoverArgs = args as ParaRecoverArgs;
           const cmdArgs = ["recover"];
-          if ((args as any).session_name) {
-            cmdArgs.push((args as any).session_name);
+          if (recoverArgs.session_name) {
+            cmdArgs.push(recoverArgs.session_name);
           }
           result = await runParaCommand(cmdArgs);
         }
@@ -386,15 +433,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_resume":
         {
+          const resumeArgs = args as ParaResumeArgs;
           const cmdArgs = ["resume"];
-          if ((args as any).session) {
-            cmdArgs.push((args as any).session);
+          if (resumeArgs.session) {
+            cmdArgs.push(resumeArgs.session);
           }
-          if ((args as any).prompt) {
-            cmdArgs.push("--prompt", (args as any).prompt);
+          if (resumeArgs.prompt) {
+            cmdArgs.push("--prompt", resumeArgs.prompt);
           }
-          if ((args as any).file) {
-            cmdArgs.push("--file", (args as any).file);
+          if (resumeArgs.file) {
+            cmdArgs.push("--file", resumeArgs.file);
           }
           result = await runParaCommand(cmdArgs);
         }
@@ -406,11 +454,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_cancel":
         {
+          const cancelArgs = args as ParaCancelArgs;
           const cmdArgs = ["cancel"];
-          if ((args as any).session_name) {
-            cmdArgs.push((args as any).session_name);
+          if (cancelArgs.session_name) {
+            cmdArgs.push(cancelArgs.session_name);
           }
-          if ((args as any).force) {
+          if (cancelArgs.force) {
             cmdArgs.push("--force");
           }
           result = await runParaCommand(cmdArgs);
@@ -419,11 +468,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_status_show":
         {
+          const statusArgs = args as ParaStatusShowArgs;
           const cmdArgs = ["status", "show"];
-          if ((args as any).session) {
-            cmdArgs.push((args as any).session);
+          if (statusArgs.session) {
+            cmdArgs.push(statusArgs.session);
           }
-          if ((args as any).json) {
+          if (statusArgs.json) {
             cmdArgs.push("--json");
           }
           result = await runParaCommand(cmdArgs);
@@ -442,8 +492,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       ]
     };
-  } catch (error: any) {
-    throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${errorMessage}`);
   }
 });
 
@@ -496,13 +547,14 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         }
       ]
     };
-  } catch (error: any) {
-    throw new McpError(ErrorCode.InternalError, `Resource read failed: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new McpError(ErrorCode.InternalError, `Resource read failed: ${errorMessage}`);
   }
 });
 
 // Start the server
-async function main() {
+async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Para MCP server running via TypeScript");
