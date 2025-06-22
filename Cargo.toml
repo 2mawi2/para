@@ -27,6 +27,7 @@ tokio = { version = "1.0", features = ["full"] }
 atty = "0.2"
 ratatui = "0.28"
 crossterm = "0.28"
+copypasta = "0.10"
 
 [lints.rust]
 warnings = "deny"
