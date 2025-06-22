@@ -54,7 +54,9 @@ para finish "Add new feature"
 - `para list` - Show all active sessions
 - `para cancel [session] [--force]` - Discard current or specified session (use --force to skip confirmation)
 - `para clean` - Remove all sessions
-- `para resume <session>` - Resume session in IDE
+- `para resume [session]` - Resume session in IDE
+- `para resume [session] --prompt "text"` - Resume with additional instructions
+- `para resume [session] --file context.md` - Resume with context from file
 - `para recover [session]` - Recover cancelled session from backup
 
 ### Configuration
@@ -222,6 +224,27 @@ para dispatch --file auth-requirements.prompt
 para finish "Implement OAuth authentication"
 ```
 
+
+## Resuming Sessions with Context
+
+You can resume existing sessions with additional context or updated instructions:
+
+```bash
+# Resume normally (opens IDE)
+para resume my-session
+
+# Resume with additional instructions
+para resume my-session --prompt "Add unit tests for the auth module"
+
+# Resume with context from a file
+para resume my-session --file updated-requirements.md
+
+# Resume from current directory (auto-detects session)
+cd .para/worktrees/my-session
+para resume --prompt "Continue where we left off"
+```
+
+The additional context is saved to `.para/sessions/{session}/resume_context.md` for reference.
 
 ## Session Recovery
 
