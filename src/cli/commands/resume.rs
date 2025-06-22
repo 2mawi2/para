@@ -151,16 +151,20 @@ fn repair_worktree_path(
     Ok(())
 }
 
-fn prepare_session_files(session_state: &SessionState) -> Result<()> {
+fn prepare_session_files(worktree_path: &Path, session_name: &str) -> Result<()> {
     // Ensure CLAUDE.local.md exists for the session
-    create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
+    create_claude_local_md(worktree_path, session_name)?;
     Ok(())
 }
 
-fn handle_resume_context(session_state: &SessionState, args: &ResumeArgs) -> Result<()> {
+fn handle_resume_context(
+    worktree_path: &Path,
+    session_name: &str,
+    args: &ResumeArgs,
+) -> Result<()> {
     // Process and save resume context if provided
     if let Some(context) = process_resume_context(args)? {
-        save_resume_context(&session_state.worktree_path, &session_state.name, &context)?;
+        save_resume_context(worktree_path, session_name, &context)?;
     }
     Ok(())
 }
@@ -184,10 +188,10 @@ fn resume_specific_session(
         )?;
 
         // Prepare session files
-        prepare_session_files(&session_state)?;
+        prepare_session_files(&session_state.worktree_path, &session_state.name)?;
 
         // Handle resume context
-        handle_resume_context(&session_state, args)?;
+        handle_resume_context(&session_state.worktree_path, &session_state.name, args)?;
 
         // Launch IDE
         launch_ide_for_session(config, &session_state.worktree_path)?;
@@ -217,36 +221,21 @@ fn resume_specific_session(
             })
             .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
 
-        // Try to find session name from matching worktree
-        if let Some(session_name) = session_manager
+        // Try to find session name from matching worktree, fallback to search session name
+        let session_name_for_files = session_manager
             .list_sessions()?
             .into_iter()
             .find(|s| {
                 s.worktree_path == matching_worktree.path || s.branch == matching_worktree.branch
             })
             .map(|s| s.name)
-        {
-            create_claude_local_md(&matching_worktree.path, &session_name)?;
-        } else {
-            // Fallback: use session name from search
-            create_claude_local_md(&matching_worktree.path, session_name)?;
-        }
+            .unwrap_or_else(|| session_name.to_string());
 
-        // Process and save resume context if provided
-        if let Some(context) = process_resume_context(args)? {
-            // Try to determine session name for context saving
-            let session_name_for_context = session_manager
-                .list_sessions()?
-                .into_iter()
-                .find(|s| {
-                    s.worktree_path == matching_worktree.path
-                        || s.branch == matching_worktree.branch
-                })
-                .map(|s| s.name)
-                .unwrap_or_else(|| session_name.to_string());
+        // Prepare session files using extracted function
+        prepare_session_files(&matching_worktree.path, &session_name_for_files)?;
 
-            save_resume_context(&matching_worktree.path, &session_name_for_context, &context)?;
-        }
+        // Handle resume context using extracted function
+        handle_resume_context(&matching_worktree.path, &session_name_for_files, args)?;
 
         launch_ide_for_session(config, &matching_worktree.path)?;
         println!(
