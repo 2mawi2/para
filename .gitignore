@@ -23,6 +23,7 @@ Thumbs.db
 tests/test_*.tmp
 test_subtrees/
 subtrees/
+.test_data/
 
 # Rust build artifacts
 target/

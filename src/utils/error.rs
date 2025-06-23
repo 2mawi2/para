@@ -36,6 +36,10 @@ pub enum ParaError {
     #[error("State corruption detected: {message}")]
     StateCorruption { message: String },
 
+    #[error("Docker operation failed: {message}")]
+    #[allow(dead_code)]
+    DockerOperation { message: String },
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -126,6 +130,13 @@ impl ParaError {
 
     pub fn invalid_config(message: impl Into<String>) -> Self {
         Self::Config {
+            message: message.into(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn docker_error(message: impl Into<String>) -> Self {
+        Self::DockerOperation {
             message: message.into(),
         }
     }

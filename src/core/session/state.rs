@@ -14,6 +14,9 @@ pub struct SessionState {
     pub task_description: Option<String>,
     pub last_activity: Option<DateTime<Utc>>,
     pub git_stats: Option<GitStats>,
+
+    // Docker support
+    pub is_docker: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +45,7 @@ impl SessionState {
             task_description: None,
             last_activity: None,
             git_stats: None,
+            is_docker: false,
         }
     }
 
@@ -133,6 +137,7 @@ mod tests {
             task_description: Some("Completed feature implementation".to_string()),
             last_activity: None,
             git_stats: None,
+            is_docker: false,
         };
 
         // Should be able to serialize and deserialize Review status

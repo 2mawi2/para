@@ -4,6 +4,10 @@ pub mod mock_platform;
 #[cfg(test)]
 pub mod test_safety;
 
+#[cfg(test)]
+pub mod docker_helpers;
+
+#[cfg(test)]
 pub mod test_helpers {
     use crate::config::Config;
     use crate::core::git::GitService;
