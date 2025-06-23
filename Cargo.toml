@@ -28,6 +28,7 @@ atty = "0.2"
 ratatui = "0.28"
 crossterm = "0.28"
 copypasta = "0.10"
+fs2 = "0.4"
 
 [lints.rust]
 warnings = "deny"

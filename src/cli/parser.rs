@@ -240,6 +240,18 @@ pub enum StatusCommands {
         #[arg(long, help = "Output as JSON")]
         json: bool,
     },
+    /// Generate a summary of all status files
+    Summary {
+        /// Output format
+        #[arg(long, help = "Output as JSON")]
+        json: bool,
+    },
+    /// Clean up stale status files
+    Cleanup {
+        /// Dry run - show what would be cleaned without removing
+        #[arg(long, help = "Show what would be cleaned without removing")]
+        dry_run: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
