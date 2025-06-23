@@ -1,6 +1,7 @@
 use crate::ui::monitor::state::MonitorAppState;
 use crate::ui::monitor::{AppMode, SessionInfo};
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
 
 /// Actions that can be triggered by UI events
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +41,29 @@ pub enum DialogAction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SystemAction {
     Quit,
+}
+
+/// Represents what type of UI element was clicked by the mouse
+#[derive(Debug, Clone, PartialEq)]
+enum MouseTarget {
+    TableRow(usize),
+    ActionColumn(usize, ActionType),
+    OutsideTable,
+}
+
+/// Specific action types within the action column
+#[derive(Debug, Clone, PartialEq)]
+enum ActionType {
+    Resume,
+    Copy,
+}
+
+/// Represents a click position within the table
+#[derive(Debug, Clone, PartialEq)]
+struct TableClick {
+    row_index: usize,
+    relative_x: u16,
+    relative_y: u16,
 }
 
 /// Handles input events and translates them to UI actions
@@ -198,64 +222,97 @@ impl EventHandler {
         }
     }
 
+    /// Detect if mouse click is within table area and return click information
+    fn detect_table_click(&self, mouse: MouseEvent, table_area: Rect) -> Option<TableClick> {
+        let mouse_x = mouse.column;
+        let mouse_y = mouse.row;
+
+        if mouse_x >= table_area.x
+            && mouse_x < table_area.x + table_area.width
+            && mouse_y >= table_area.y
+            && mouse_y < table_area.y + table_area.height
+        {
+            let relative_y = mouse_y - table_area.y;
+            if relative_y > 1 {
+                let table_index = (relative_y - 2) as usize;
+                let relative_x = mouse_x - table_area.x;
+
+                return Some(TableClick {
+                    row_index: table_index,
+                    relative_x,
+                    relative_y,
+                });
+            }
+        }
+        None
+    }
+
+    /// Detect which action column button was clicked
+    fn detect_action_column_click(&self, relative_x: u16) -> Option<ActionType> {
+        if relative_x < 9 {
+            if relative_x < 3 {
+                Some(ActionType::Resume)
+            } else if (4..8).contains(&relative_x) {
+                Some(ActionType::Copy)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Calculate the mouse target based on click information
+    fn calculate_mouse_target(&self, click: TableClick, session_count: usize) -> MouseTarget {
+        if click.row_index >= session_count {
+            return MouseTarget::OutsideTable;
+        }
+
+        if let Some(action_type) = self.detect_action_column_click(click.relative_x) {
+            MouseTarget::ActionColumn(click.row_index, action_type)
+        } else {
+            MouseTarget::TableRow(click.row_index)
+        }
+    }
+
     fn handle_normal_mouse(
         &self,
         mouse: MouseEvent,
         state: &MonitorAppState,
         sessions: &[SessionInfo],
     ) -> Option<UiAction> {
-        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
-            // Check if we have a stored table area
-            if let Some(table_area) = state.table_area {
-                let mouse_x = mouse.column;
-                let mouse_y = mouse.row;
-
-                // Check if the click is within the table area
-                if mouse_x >= table_area.x
-                    && mouse_x < table_area.x + table_area.width
-                    && mouse_y >= table_area.y
-                    && mouse_y < table_area.y + table_area.height
-                {
-                    // Calculate which row was clicked
-                    // The table has a header row, so subtract 1 for the header
-                    // and account for the table's top position
-                    let relative_y = mouse_y - table_area.y;
-
-                    // Skip if clicking on the header row (row 0) or the border (row 1)
-                    if relative_y > 1 {
-                        // Subtract 2 for header and border to get the data row index
-                        let table_index = (relative_y - 2) as usize;
-
-                        // Check if the clicked row is within the session list bounds
-                        if table_index < sessions.len() {
-                            // Check if clicking in the actions column (first 9 characters)
-                            let relative_x = mouse_x - table_area.x;
-                            if relative_x < 9 {
-                                // Actions column clicked
-                                // Button layout: "[▶] [📋]" (positions 0-8)
-                                // [▶] = positions 0-2
-                                // space = position 3
-                                // [📋] = positions 4-7
-                                if relative_x < 3 {
-                                    // Resume button clicked
-                                    return Some(UiAction::Session(SessionAction::Resume(
-                                        table_index,
-                                    )));
-                                } else if (4..8).contains(&relative_x) {
-                                    // Copy button clicked
-                                    return Some(UiAction::Session(SessionAction::Copy(
-                                        table_index,
-                                    )));
-                                }
-                            }
-                            // If clicking elsewhere on the row, just select it (no additional action beyond selection)
-                            // Selection will be handled by the caller
-                        }
-                    }
-                }
-            }
+        // Early return if not a left mouse button down event
+        if !matches!(
+            mouse.kind,
+            MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        ) {
+            return None;
         }
-        None
+
+        // Early return if no table area is stored
+        let table_area = state.table_area?;
+
+        // Detect table click, return None if outside table or invalid
+        let table_click = self.detect_table_click(mouse, table_area)?;
+
+        // Calculate what was clicked
+        let mouse_target = self.calculate_mouse_target(table_click, sessions.len());
+
+        // Map mouse target to UI action
+        match mouse_target {
+            MouseTarget::ActionColumn(row_index, ActionType::Resume) => {
+                Some(UiAction::Session(SessionAction::Resume(row_index)))
+            }
+            MouseTarget::ActionColumn(row_index, ActionType::Copy) => {
+                Some(UiAction::Session(SessionAction::Copy(row_index)))
+            }
+            MouseTarget::TableRow(_) => {
+                // Row click without action button - no action needed
+                // Selection will be handled by the caller
+                None
+            }
+            MouseTarget::OutsideTable => None,
+        }
     }
 }
 
