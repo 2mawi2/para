@@ -57,7 +57,6 @@ pub struct SessionConfig {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct DockerConfig {
     pub enabled: bool,
-    pub default_image: String,
     pub mount_workspace: bool,
 }
 

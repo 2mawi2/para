@@ -1,30 +1,26 @@
 //! IDE integration module for Docker containers (MVP)
 //!
-//! This module provides basic devcontainer configuration generation
+//! This module provides automatic IDE-to-container connection
 //! for VS Code and Cursor IDEs when working with Docker containers.
 
+use crate::config::Config;
 use crate::core::docker::session::ContainerSession;
 use crate::utils::{ParaError, Result};
-use serde::Serialize;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
-/// MVP Docker IDE integration - generates basic devcontainer config
+/// MVP Docker IDE integration - automatic container connection
 pub struct DockerIdeIntegration;
 
 impl DockerIdeIntegration {
-    /// Generate basic devcontainer configuration for a container session
-    pub fn generate_devcontainer_config(
+    /// Launch IDE with automatic container connection
+    pub fn launch_container_ide(
+        config: &Config,
         session_dir: &Path,
         container_session: &ContainerSession,
         initial_prompt: Option<&str>,
     ) -> Result<()> {
-        // Create .devcontainer directory
-        let devcontainer_dir = session_dir.join(".devcontainer");
-        fs::create_dir_all(&devcontainer_dir).map_err(|e| {
-            ParaError::docker_error(format!("Failed to create .devcontainer directory: {}", e))
-        })?;
-
         // Save initial prompt if provided
         if let Some(prompt) = initial_prompt {
             let prompt_file = session_dir.join(".initial-prompt");
@@ -33,68 +29,113 @@ impl DockerIdeIntegration {
             })?;
         }
 
-        // Generate basic devcontainer.json
+        // Create VS Code tasks.json for auto-run
+        Self::create_vscode_tasks(session_dir, initial_prompt)?;
+
+        // Construct vscode-remote URI for direct container connection
         let container_name = format!("para-{}", container_session.session_name);
-        let devcontainer_config = DevContainerConfig {
-            name: format!("Para: {}", container_session.session_name),
-            docker_compose_file: None,
-            service: None,
-            workspace_folder: "/workspace".to_string(),
-            remote_user: "vscode".to_string(),
-            post_attach_command: initial_prompt
-                .map(|p| format!("echo 'Initial prompt saved in .initial-prompt: {}'", p)),
-            extensions: vec!["ms-vscode.remote-explorer".to_string()],
-            settings: serde_json::json!({
-                "terminal.integrated.defaultProfile.linux": "bash",
-            }),
-            forward_ports: vec![],
-            remote_env: serde_json::json!({
-                "PARA_SESSION": container_session.session_name.clone(),
-                "PARA_CONTAINER": container_session.container_id.clone(),
-            }),
+        let container_hex = Self::hex_encode_string(&container_name);
+        let remote_uri = format!(
+            "vscode-remote://attached-container+{}/workspace",
+            container_hex
+        );
+
+        // Determine IDE command (VS Code only for MVP)
+        let ide_command = if config.ide.wrapper.enabled {
+            &config.ide.wrapper.command
+        } else {
+            &config.ide.command
         };
 
-        let devcontainer_json =
-            serde_json::to_string_pretty(&devcontainer_config).map_err(|e| {
-                ParaError::docker_error(format!("Failed to serialize devcontainer.json: {}", e))
-            })?;
+        // Only support VS Code for now
+        if ide_command != "code" {
+            return Err(ParaError::docker_error(
+                "Docker container auto-connection currently only supports VS Code. Please use 'code' as your IDE command."
+            ));
+        }
 
-        let devcontainer_file = devcontainer_dir.join("devcontainer.json");
-        fs::write(&devcontainer_file, devcontainer_json).map_err(|e| {
-            ParaError::docker_error(format!("Failed to write devcontainer.json: {}", e))
+        // Launch IDE with remote URI
+        let mut cmd = Command::new(ide_command);
+        cmd.arg("--folder-uri").arg(&remote_uri);
+        
+        // Detach the IDE process
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
+
+        match cmd.spawn() {
+            Ok(_) => {
+                println!("🚀 Launching VS Code connected to container: {}", container_name);
+                println!("   Container: {}", container_name);
+                println!("   Workspace: /workspace");
+                if initial_prompt.is_some() {
+                    println!();
+                    println!("🤖 Claude will start automatically in the container!");
+                    println!("   - VS Code will open connected to the container");
+                    println!("   - Claude will run with your saved prompt");
+                    println!("   - The prompt is saved to .initial-prompt");
+                }
+                Ok(())
+            }
+            Err(e) => Err(ParaError::docker_error(format!(
+                "Failed to launch VS Code with container: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Create VS Code tasks.json for auto-run
+    fn create_vscode_tasks(session_dir: &Path, initial_prompt: Option<&str>) -> Result<()> {
+        let vscode_dir = session_dir.join(".vscode");
+        fs::create_dir_all(&vscode_dir).map_err(|e| {
+            ParaError::docker_error(format!("Failed to create .vscode directory: {}", e))
         })?;
 
-        println!(
-            "✅ Generated .devcontainer/devcontainer.json for container: {}",
-            container_name
-        );
+        // Now that we have Claude installed in the container, we can run it directly
+        let command = if initial_prompt.is_some() {
+            "claude \"$(cat '/workspace/.initial-prompt')\""
+        } else {
+            "echo 'Para container session ready. Run: claude'"
+        };
+
+        let tasks_config = serde_json::json!({
+            "version": "2.0.0",
+            "tasks": [
+                {
+                    "label": "Start Claude Code in Container",
+                    "type": "shell",
+                    "command": command,
+                    "runOptions": {
+                        "runOn": "folderOpen"
+                    },
+                    "presentation": {
+                        "echo": true,
+                        "reveal": "always",
+                        "focus": true,
+                        "panel": "new"
+                    }
+                }
+            ]
+        });
+
+        let tasks_file = vscode_dir.join("tasks.json");
+        let tasks_json = serde_json::to_string_pretty(&tasks_config).map_err(|e| {
+            ParaError::docker_error(format!("Failed to serialize tasks.json: {}", e))
+        })?;
+        
+        fs::write(&tasks_file, tasks_json).map_err(|e| {
+            ParaError::docker_error(format!("Failed to write tasks.json: {}", e))
+        })?;
 
         Ok(())
     }
-}
 
-/// Basic Dev Container configuration structure (MVP)
-#[derive(Debug, Serialize)]
-struct DevContainerConfig {
-    name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "dockerComposeFile")]
-    docker_compose_file: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    service: Option<String>,
-    #[serde(rename = "workspaceFolder")]
-    workspace_folder: String,
-    #[serde(rename = "remoteUser")]
-    remote_user: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "postAttachCommand")]
-    post_attach_command: Option<String>,
-    extensions: Vec<String>,
-    settings: serde_json::Value,
-    #[serde(rename = "forwardPorts")]
-    forward_ports: Vec<u16>,
-    #[serde(rename = "remoteEnv")]
-    remote_env: serde_json::Value,
+    /// Hex encode a string for vscode-remote URI
+    fn hex_encode_string(s: &str) -> String {
+        s.bytes()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
+    }
 }
 
 // TODO: Connect to CLI in next phase
@@ -108,61 +149,52 @@ struct DevContainerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
-    fn create_test_container_session(name: &str) -> ContainerSession {
-        ContainerSession::new(
-            "test-container-123".to_string(),
-            name.to_string(),
-            "ubuntu:latest".to_string(),
-            PathBuf::from("/workspace"),
-        )
+    #[test]
+    fn test_hex_encode_string() {
+        assert_eq!(DockerIdeIntegration::hex_encode_string("hello"), "68656c6c6f");
+        assert_eq!(DockerIdeIntegration::hex_encode_string("para-test-123"), "706172612d746573742d313233");
+        assert_eq!(DockerIdeIntegration::hex_encode_string(""), "");
     }
 
     #[test]
-    fn test_generate_devcontainer_config_basic() {
+    fn test_create_vscode_tasks_with_prompt() {
         let temp_dir = TempDir::new().unwrap();
-        let container_session = create_test_container_session("test-session");
-
-        let result = DockerIdeIntegration::generate_devcontainer_config(
+        
+        let result = DockerIdeIntegration::create_vscode_tasks(
             temp_dir.path(),
-            &container_session,
+            Some("Test prompt"),
+        );
+        assert!(result.is_ok());
+
+        // Should create tasks.json that runs Claude in container
+        let tasks_file = temp_dir.path().join(".vscode/tasks.json");
+        assert!(tasks_file.exists());
+
+        let content = fs::read_to_string(tasks_file).unwrap();
+        assert!(content.contains("Start Claude Code in Container"));
+        assert!(content.contains("claude"));
+        assert!(content.contains("/workspace/.initial-prompt"));
+        assert!(content.contains("folderOpen"));
+    }
+
+    #[test]
+    fn test_create_vscode_tasks_without_prompt() {
+        let temp_dir = TempDir::new().unwrap();
+        
+        let result = DockerIdeIntegration::create_vscode_tasks(
+            temp_dir.path(),
             None,
         );
         assert!(result.is_ok());
 
-        let devcontainer_file = temp_dir.path().join(".devcontainer/devcontainer.json");
-        assert!(devcontainer_file.exists());
-
-        let content = fs::read_to_string(devcontainer_file).unwrap();
-        assert!(content.contains("Para: test-session"));
-        assert!(content.contains("PARA_SESSION"));
-        assert!(content.contains("test-container-123"));
-    }
-
-    #[test]
-    fn test_generate_devcontainer_config_with_prompt() {
-        let temp_dir = TempDir::new().unwrap();
-        let container_session = create_test_container_session("test-session");
-
-        let result = DockerIdeIntegration::generate_devcontainer_config(
-            temp_dir.path(),
-            &container_session,
-            Some("Test initial prompt"),
-        );
-        assert!(result.is_ok());
-
-        // Check prompt file was created
-        let prompt_file = temp_dir.path().join(".initial-prompt");
-        assert!(prompt_file.exists());
-        let prompt_content = fs::read_to_string(prompt_file).unwrap();
-        assert_eq!(prompt_content, "Test initial prompt");
-
-        // Check devcontainer has postAttachCommand
-        let devcontainer_file = temp_dir.path().join(".devcontainer/devcontainer.json");
-        let content = fs::read_to_string(devcontainer_file).unwrap();
-        assert!(content.contains("postAttachCommand"));
-        assert!(content.contains("Initial prompt saved"));
+        // Should still create tasks.json but with a different message
+        let tasks_file = temp_dir.path().join(".vscode/tasks.json");
+        assert!(tasks_file.exists());
+        
+        let content = fs::read_to_string(tasks_file).unwrap();
+        assert!(content.contains("Para container session ready"));
+        assert!(!content.contains("/workspace/.initial-prompt"));
     }
 }

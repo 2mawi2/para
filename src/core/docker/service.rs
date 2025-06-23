@@ -18,7 +18,7 @@ impl DockerService {
     pub fn create_container(
         &self,
         session_name: &str,
-        config: &DockerConfig,
+        _config: &DockerConfig,
         working_dir: &Path,
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
@@ -33,7 +33,7 @@ impl DockerService {
                 &format!("{}:/workspace", working_dir.display()),
                 "-w",
                 "/workspace",
-                config.default_image.as_str(),
+                "para-claude:latest",
                 "sleep",
                 "infinity", // Keep container running
             ])
@@ -51,7 +51,7 @@ impl DockerService {
         Ok(ContainerSession::new(
             container_id,
             session_name.to_string(),
-            config.default_image.clone(),
+            "para-claude:latest".to_string(),
             working_dir.to_path_buf(),
         ))
     }

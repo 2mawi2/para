@@ -62,7 +62,6 @@ pub fn default_session_config() -> SessionConfig {
 pub fn default_docker_config() -> DockerConfig {
     DockerConfig {
         enabled: false,
-        default_image: "ubuntu:latest".to_string(),
         mount_workspace: true,
     }
 }

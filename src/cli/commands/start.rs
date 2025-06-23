@@ -21,24 +21,35 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         }
 
         let docker_manager = crate::core::docker::DockerManager::new(config.clone());
-        session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?
+        let session = session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
+        
+        // Create CLAUDE.local.md in the session directory
+        create_claude_local_md(&session.worktree_path, &session.name)?;
+        
+        // Launch IDE connected to container
+        docker_manager.launch_container_ide(&session, None)
+            .map_err(|e| crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
+        
+        session
     } else {
         // Create regular worktree session
-        session_manager.create_session(session_name.clone(), None)?
+        let session = session_manager.create_session(session_name.clone(), None)?;
+        
+        create_claude_local_md(&session.worktree_path, &session.name)?;
+        
+        let ide_manager = IdeManager::new(&config);
+        ide_manager.launch(
+            &session.worktree_path,
+            args.dangerously_skip_permissions,
+        )?;
+        
+        session
     };
-
-    create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
-
-    let ide_manager = IdeManager::new(&config);
-    ide_manager.launch(
-        &session_state.worktree_path,
-        args.dangerously_skip_permissions,
-    )?;
 
     println!("✅ Session '{}' started successfully", session_name);
     if args.container {
         println!("   Container: para-{}", session_name);
-        println!("   Image: {}", config.docker.default_image);
+        println!("   Image: para-claude:latest");
     }
     println!("   Branch: {}", session_state.branch);
     println!("   Worktree: {}", session_state.worktree_path.display());
