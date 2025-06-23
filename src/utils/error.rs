@@ -36,9 +36,8 @@ pub enum ParaError {
     #[error("State corruption detected: {message}")]
     StateCorruption { message: String },
 
-    // TODO: Remove when integrating Docker functionality
-    #[allow(dead_code)]
     #[error("Docker operation failed: {message}")]
+    #[allow(dead_code)]
     DockerOperation { message: String },
 
     #[error("IO error: {0}")]
@@ -135,7 +134,6 @@ impl ParaError {
         }
     }
 
-    // TODO: Remove when integrating Docker functionality
     #[allow(dead_code)]
     pub fn docker_error(message: impl Into<String>) -> Self {
         Self::DockerOperation {
