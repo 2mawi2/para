@@ -32,7 +32,7 @@ export default [
       'no-console': ['warn', { allow: ['error'] }],
       'prefer-const': 'error',
       'no-var': 'error',
-      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
+      'no-unused-vars': 'off', // Disable base rule in favor of @typescript-eslint/no-unused-vars
     },
   },
   {
@@ -56,7 +56,7 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }],
       'no-console': 'off',
-      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }],
+      'no-unused-vars': 'off', // Disable base rule in favor of @typescript-eslint/no-unused-vars
     },
   },
 ];
