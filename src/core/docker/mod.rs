@@ -20,11 +20,18 @@ pub mod mock;
 mod tests;
 
 // Re-export main types from submodules
-pub use config::{DockerConfig, VolumeMapping};
-pub use session::ResourceLimits;
-pub use error::{DockerError, DockerResult};
+pub use config::DockerConfig;
+pub use error::DockerResult;
 pub use service::DockerService;
 pub use session::{ContainerSession, ContainerStatus};
+
+// Optional re-exports for when they're actually used
+#[allow(unused_imports)]
+pub use config::VolumeMapping;
+#[allow(unused_imports)]
+pub use error::DockerError;
+#[allow(unused_imports)]
+pub use session::ResourceLimits;
 
 // TODO: Uncomment when integrating with session commands
 // pub use auth::DockerAuthManager;

@@ -249,6 +249,7 @@ mod tests {
 }
 
 /// Mock implementation of DockerService for testing
+#[allow(dead_code)]
 pub struct MockDockerService {
     containers: Arc<Mutex<HashMap<String, MockContainerState>>>,
     docker_available: bool,
@@ -256,6 +257,7 @@ pub struct MockDockerService {
 
 #[derive(Clone, Debug)]
 struct MockContainerState {
+    #[allow(dead_code)]
     running: bool,
     #[allow(dead_code)]
     config: DockerSessionConfig,

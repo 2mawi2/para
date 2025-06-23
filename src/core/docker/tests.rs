@@ -3,12 +3,12 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::core::docker::config::{ProjectType, detect_project_type};
+    use crate::core::docker::config::{detect_project_type, ProjectType};
     use crate::core::docker::manager::DockerManager;
     use crate::core::docker::service::ContainerStats;
     use crate::core::docker::session::MountType;
-    use crate::core::session::SessionState;
     use crate::core::session::state::SessionStatus;
+    use crate::core::session::SessionState;
     use crate::test_utils::test_helpers::*;
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
@@ -104,7 +104,15 @@ mod tests {
         }
 
         fn finish_session(&self, session_name: &str, remove: bool) -> DockerResult<()> {
-            self.stop_session(session_name)?;
+            // Try to stop the session, but ignore ContainerNotRunning errors
+            match self.stop_session(session_name) {
+                Ok(_) => {}
+                Err(DockerError::ContainerNotRunning { .. }) => {
+                    // Container is already stopped, that's fine
+                }
+                Err(e) => return Err(e),
+            }
+
             if remove {
                 self.containers.lock().unwrap().remove(session_name);
             }
@@ -286,7 +294,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
-        let config = create_test_config();
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        // Ensure state directory exists
+        std::fs::create_dir_all(&config.directories.state_dir).unwrap();
+
         let docker_config = DockerConfig::default();
         let mock_service = Arc::new(MockDockerService::new());
         let manager = DockerManager::new(mock_service.clone(), config, docker_config);
@@ -322,9 +339,7 @@ mod tests {
         assert_eq!(status, ContainerStatus::Stopped);
 
         // Test container finish with removal
-        manager
-            .finish_container("test-session", true)
-            .unwrap();
+        manager.finish_container("test-session", true).unwrap();
         let result = mock_service.get_container_status("test-session");
         assert!(matches!(result, Err(DockerError::ContainerNotFound { .. })));
     }
@@ -335,7 +350,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
-        let config = create_test_config();
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        // Ensure state directory exists
+        std::fs::create_dir_all(&config.directories.state_dir).unwrap();
+
         let docker_config = DockerConfig::default();
         let mock_service = Arc::new(MockDockerService::new());
         let manager = DockerManager::new(mock_service, config, docker_config);
@@ -344,12 +368,9 @@ mod tests {
         let result = manager.start_container("non-existent");
         assert!(matches!(result, Err(DockerError::ContainerNotFound { .. })));
 
-        // Test stopping non-running container
+        // Test stopping non-existent container
         let result = manager.stop_container("non-existent");
-        assert!(matches!(
-            result,
-            Err(DockerError::ContainerNotRunning { .. })
-        ));
+        assert!(matches!(result, Err(DockerError::ContainerNotFound { .. })));
     }
 
     #[test]
