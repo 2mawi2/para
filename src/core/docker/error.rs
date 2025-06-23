@@ -13,7 +13,6 @@ pub enum DockerError {
     #[error("Failed to start container: {0}")]
     ContainerStartFailed(String),
 
-
     #[error("Network isolation verification failed: {0}")]
     NetworkIsolationFailed(String),
 

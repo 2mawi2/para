@@ -142,7 +142,6 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
-            docker: super::super::defaults::default_docker_config(),
         }
     }
 
@@ -305,12 +304,6 @@ mod tests {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
-            },
-            docker: super::super::DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
             },
         };
 

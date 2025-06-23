@@ -12,32 +12,26 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    // Track whether we're using Docker and the final config
-    let (is_container, final_docker_config) = if args.container {
+    // Track whether we're using Docker and network isolation settings
+    let (is_container, network_isolation, _allowed_domains) = if args.container {
         // Create Docker container session
-        if !config.docker.enabled {
-            return Err(crate::utils::ParaError::invalid_config(
-                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
-            ));
-        }
-
-        // Override Docker config with CLI flags
-        let mut docker_config = config.docker.clone();
-        if let Some(ref domains) = args.allow_domains {
+        let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
             // Enable network isolation when --allow-domains is used
-            docker_config.network_isolation = true;
             let additional_domains: Vec<String> = domains
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
-            docker_config.allowed_domains.extend(additional_domains);
-        }
+            (true, additional_domains)
+        } else {
+            (false, vec![])
+        };
 
-        let mut config_with_docker = config.clone();
-        config_with_docker.docker = docker_config.clone();
-
-        let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
+        let docker_manager = crate::core::docker::DockerManager::new(
+            config.clone(),
+            network_isolation,
+            allowed_domains.clone(),
+        );
         let session = session_manager.create_docker_session(
             session_name.clone(),
             &docker_manager,
@@ -55,7 +49,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;
 
-        (true, docker_config)
+        (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session
         let session = session_manager.create_session(session_name.clone(), None)?;
@@ -65,7 +59,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         let ide_manager = IdeManager::new(&config);
         ide_manager.launch(&session.worktree_path, args.dangerously_skip_permissions)?;
 
-        (false, config.docker.clone())
+        (false, false, vec![])
     };
 
     let session_state = session_manager
@@ -80,7 +74,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         println!("   Image: para-authenticated:latest");
 
         // Show network isolation warning if it's disabled
-        if !final_docker_config.network_isolation {
+        if !network_isolation {
             println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
         }
     }
@@ -112,7 +106,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 mod tests {
     use super::*;
     use crate::config::{
-        Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
     use tempfile::TempDir;
 
@@ -149,12 +143,6 @@ mod tests {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
-            },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
             },
         }
     }
