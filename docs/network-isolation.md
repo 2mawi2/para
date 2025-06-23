@@ -73,6 +73,29 @@ para start --container --no-network-isolation my-session
 # Note: This is currently equivalent to not using --allow-domains
 ```
 
+### Common Development Scenarios
+
+#### NPM Package Installation
+When using npm packages that require network access during installation:
+```bash
+# Allow npm registry access
+para start --container --allow-domains "registry.npmjs.org,cdn.jsdelivr.net" my-session
+```
+
+#### Python Package Installation
+For Python development with pip:
+```bash
+# Allow PyPI access
+para start --container --allow-domains "pypi.org,files.pythonhosted.org" my-session
+```
+
+#### Custom API Development
+When developing against custom APIs:
+```bash
+# Allow your API endpoints
+para start --container --allow-domains "api.mycompany.com,staging-api.mycompany.com" my-session
+```
+
 ### Configuration File
 
 Add to your para configuration:
