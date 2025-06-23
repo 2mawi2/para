@@ -318,7 +318,8 @@ mod tests {
             task_description: None,
             last_activity: None,
             git_stats: None,
-            is_docker: true,
+            session_type: crate::core::session::SessionType::Container { container_id: None },
+            is_docker: None,
         };
 
         // Test container creation

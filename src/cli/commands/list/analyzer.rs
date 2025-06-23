@@ -4,7 +4,7 @@ use crate::utils::Result;
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
-use super::formatters::{SessionInfo, SessionStatus};
+use super::formatters::{SessionInfo, SessionStatus, SessionType};
 
 pub fn list_active_sessions(
     session_manager: &SessionManager,
@@ -36,6 +36,14 @@ pub fn list_active_sessions(
 
         let status = determine_unified_session_status(&session_state, git_service)?;
 
+        let (session_type, container_status) = match &session_state.session_type {
+            crate::core::session::SessionType::Container { .. } => {
+                // TODO: Get actual container status from Docker
+                (SessionType::Container, Some("unknown".to_string()))
+            }
+            crate::core::session::SessionType::Worktree => (SessionType::Worktree, None),
+        };
+
         let session_info = SessionInfo {
             session_id: session_state.name.clone(),
             branch: session_state.branch.clone(),
@@ -46,6 +54,8 @@ pub fn list_active_sessions(
             last_modified: Some(session_state.created_at),
             has_uncommitted_changes,
             is_current,
+            session_type,
+            container_status,
         };
 
         sessions.push(session_info);
@@ -121,6 +131,13 @@ pub fn create_session_info_from_state(
     session_state: &crate::core::session::SessionState,
     has_uncommitted_changes: Option<bool>,
 ) -> SessionInfo {
+    let (session_type, container_status) = match &session_state.session_type {
+        crate::core::session::SessionType::Container { .. } => {
+            (SessionType::Container, Some("unknown".to_string()))
+        }
+        crate::core::session::SessionType::Worktree => (SessionType::Worktree, None),
+    };
+
     SessionInfo {
         session_id: session_state.name.clone(),
         branch: session_state.branch.clone(),
@@ -131,6 +148,8 @@ pub fn create_session_info_from_state(
         last_modified: Some(session_state.created_at),
         has_uncommitted_changes,
         is_current: false,
+        session_type,
+        container_status,
     }
 }
 
@@ -169,6 +188,8 @@ pub fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> S
         last_modified: None,
         has_uncommitted_changes: None,
         is_current: false,
+        session_type: SessionType::Worktree,
+        container_status: None,
     }
 }
 
@@ -318,6 +339,8 @@ mod tests {
                     last_modified: None,
                     has_uncommitted_changes: None,
                     is_current: false,
+                    session_type: SessionType::Worktree,
+                    container_status: None,
                 };
                 sessions.push(session_info);
             }

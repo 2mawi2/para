@@ -256,7 +256,7 @@ pub struct DockerConfigExtension {
 
 /// Helper to detect project type from files in the working directory
 #[allow(dead_code)]
-pub fn detect_project_type(project_path: &PathBuf) -> ProjectType {
+pub fn detect_project_type(project_path: &Path) -> ProjectType {
     if project_path.join("Cargo.toml").exists() {
         ProjectType::Rust
     } else if project_path.join("package.json").exists() {
