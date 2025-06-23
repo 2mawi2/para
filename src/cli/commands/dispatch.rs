@@ -71,7 +71,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Launch IDE connected to container with initial prompt
         docker_manager
-            .launch_container_ide(&session, Some(&prompt))
+            .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
         session
