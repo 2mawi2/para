@@ -2,10 +2,11 @@
 //!
 //! Coordinates Docker operations with para session management
 
-use super::{get_auth_resolver, DockerError, DockerIdeIntegration, DockerResult, DockerService};
+use super::{DockerError, DockerIdeIntegration, DockerResult, DockerService};
 use crate::config::Config;
 use crate::core::docker::session::ContainerSession;
 use crate::core::session::SessionState;
+use std::process::Command;
 
 /// Docker manager that integrates with para sessions
 pub struct DockerManager {
@@ -22,6 +23,23 @@ impl DockerManager {
         }
     }
 
+    /// Get the appropriate Docker image name
+    fn get_docker_image(&self) -> DockerResult<&'static str> {
+        // Check if authenticated image exists
+        let output = Command::new("docker")
+            .args(["images", "-q", "para-authenticated:latest"])
+            .output()
+            .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
+
+        if output.status.success() && !output.stdout.is_empty() {
+            Ok("para-authenticated:latest")
+        } else {
+            Err(DockerError::Other(anyhow::anyhow!(
+                "The 'para-authenticated:latest' image is not available. Please build it first with authentication credentials baked in."
+            )))
+        }
+    }
+
     /// Create and start a container for a session
     pub fn create_container_session(&self, session: &SessionState) -> DockerResult<()> {
         println!("🐳 Creating Docker container for session: {}", session.name);
@@ -29,19 +47,12 @@ impl DockerManager {
         // Check Docker is available
         self.service.health_check()?;
 
-        // Get the auth resolver and retrieve Claude credentials
-        println!("🔐 Retrieving Claude credentials from keychain...");
-        let auth_resolver = get_auth_resolver();
-        let auth_tokens = auth_resolver.get_claude_credentials()?;
-        println!("✅ Successfully retrieved Claude credentials");
-
-        // Create the container with auth tokens
-        println!("🏗️  Creating container with image: para-claude:latest");
+        // Create the container (authentication is now baked into the image)
+        println!("🏗️  Creating container with authenticated image");
         let _container = self.service.create_container(
             &session.name,
             &self.config.docker,
             &session.worktree_path,
-            Some(&auth_tokens),
         )?;
 
         // Start it
@@ -57,10 +68,11 @@ impl DockerManager {
         session: &SessionState,
         initial_prompt: Option<&str>,
     ) -> DockerResult<()> {
+        let image_name = self.get_docker_image()?;
         let container_session = ContainerSession::new(
             format!("para-{}", session.name),
             session.name.clone(),
-            "para-claude:latest".to_string(),
+            image_name.to_string(),
             session.worktree_path.clone(),
         );
 

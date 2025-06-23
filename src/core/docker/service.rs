@@ -20,11 +20,10 @@ impl DockerService {
         session_name: &str,
         _config: &DockerConfig,
         working_dir: &Path,
-        auth_tokens: Option<&crate::core::docker::ClaudeAuthTokens>,
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
-        let mut docker_args = vec![
+        let docker_args = vec![
             "create".to_string(),
             "--name".to_string(),
             container_name.clone(),
@@ -32,21 +31,10 @@ impl DockerService {
             format!("{}:/workspace", working_dir.display()),
             "-w".to_string(),
             "/workspace".to_string(),
-        ];
-
-        // Add authentication environment variables if provided
-        if let Some(tokens) = auth_tokens {
-            docker_args.extend([
-                "-e".to_string(),
-                format!("CLAUDE_CREDENTIALS_JSON={}", tokens.credentials_json),
-            ]);
-        }
-
-        docker_args.extend([
-            "para-claude:latest".to_string(),
+            "para-authenticated:latest".to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
-        ]);
+        ];
 
         println!(
             "🐋 Running docker command: docker {}",
@@ -68,7 +56,7 @@ impl DockerService {
         Ok(ContainerSession::new(
             container_id,
             session_name.to_string(),
-            "para-claude:latest".to_string(),
+            "para-authenticated:latest".to_string(),
             working_dir.to_path_buf(),
         ))
     }

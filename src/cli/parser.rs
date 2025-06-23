@@ -50,6 +50,8 @@ pub enum Commands {
     Monitor(MonitorArgs),
     /// Update session status (for agents to communicate progress)
     Status(StatusArgs),
+    /// Manage Docker container authentication
+    Auth(AuthArgs),
 }
 
 #[derive(Args, Debug)]
@@ -264,6 +266,36 @@ pub enum StatusCommands {
         #[arg(long, help = "Show what would be cleaned without removing")]
         dry_run: bool,
     },
+}
+
+#[derive(Args, Debug)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: Option<AuthCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AuthCommands {
+    /// Set up container authentication interactively
+    Setup {
+        /// Force re-authentication even if credentials exist
+        #[arg(long, help = "Force re-authentication even if credentials exist")]
+        force: bool,
+    },
+    /// Remove authentication artifacts
+    Cleanup {
+        /// Show what would be removed without actually removing
+        #[arg(long, help = "Show what would be removed without actually removing")]
+        dry_run: bool,
+    },
+    /// Check authentication status
+    Status {
+        /// Show detailed authentication information
+        #[arg(long, help = "Show detailed authentication information")]
+        verbose: bool,
+    },
+    /// Re-authenticate (cleanup and setup in one command)
+    Reauth,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]

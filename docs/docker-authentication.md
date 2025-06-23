@@ -4,74 +4,74 @@ This document describes how Para handles Claude authentication for Docker contai
 
 ## Overview
 
-Para automatically retrieves Claude credentials from the macOS Keychain and passes them to Docker containers, allowing Claude to run authenticated inside containers without manual login.
+Para uses pre-authenticated Docker images that have Claude credentials baked in during the image build process. This approach ensures consistent authentication across all containers without requiring runtime credential passing.
 
-## Authentication Flow
+## Authentication Setup
 
-1. **Credential Retrieval**: Para reads credentials from macOS Keychain using the `security` command
-2. **JSON Validation**: The credentials JSON is validated to ensure it contains all required fields
-3. **Environment Variable**: The complete credentials JSON is passed to the container via `CLAUDE_CREDENTIALS_JSON`
+### Building the Authenticated Image
 
-## Credential Structure
-
-The credentials JSON retrieved from the Keychain contains:
-
-```json
-{
-  "claudeAiOauth": {
-    "accessToken": "sk-ant-oat01-...",
-    "refreshToken": "sk-ant-ort01-...",
-    "expiresAt": 1750714269974,
-    "scopes": ["user:inference", "user:profile"],
-    "subscriptionType": "max"
-  }
-}
-```
-
-## Container Setup
-
-Inside the Docker container, the Claude application can use the credentials by:
-
-1. Reading the `CLAUDE_CREDENTIALS_JSON` environment variable
-2. Writing the JSON to the appropriate credentials file location
-3. Starting Claude with the authenticated session
-
-## Example Container Script
+Before using Docker containers with Para, you need to build the `para-authenticated:latest` image with your Claude credentials already configured inside it:
 
 ```bash
-#!/bin/bash
-# Script to setup Claude credentials in container
-
-if [ -n "$CLAUDE_CREDENTIALS_JSON" ]; then
-    # Create Claude config directory
-    mkdir -p ~/.claude
-    
-    # Write credentials to file
-    echo "$CLAUDE_CREDENTIALS_JSON" > ~/.claude/credentials.json
-    
-    echo "Claude credentials configured successfully"
-else
-    echo "Warning: No Claude credentials found in environment"
-fi
+# Build the authenticated image using the provided Dockerfile
+# Note: This assumes you have already authenticated Claude on your host system
+docker build -f docker/Dockerfile.authenticated -t para-authenticated:latest .
 ```
+
+### Using Authenticated Containers
+
+Once the authenticated image is built, Para will automatically use it for all container sessions:
+
+```bash
+# Start a new session with Docker container
+para start my-feature --container
+
+# Dispatch a task with container
+para dispatch "implement feature X" --container
+```
+
+## How It Works
+
+1. **Pre-baked Authentication**: Claude credentials are included in the Docker image during build time
+2. **No Runtime Setup**: Containers start with authentication already configured
+3. **Consistent State**: All containers use the same authenticated base image
 
 ## Security Considerations
 
-- Credentials are only passed to containers created by Para
-- The credentials JSON contains sensitive tokens and should not be logged
-- Containers should handle credentials securely and not expose them
+- Credentials are stored within the Docker image layers
+- The authenticated image is local to your machine
+- Each user must build their own authenticated image
+- No credentials are passed via environment variables or command line
 
 ## Platform Support
 
-- **macOS**: Full automatic credential retrieval from Keychain
-- **Linux**: Manual credential setup required (future enhancement)
+- **macOS**: Full support
+- **Linux**: Full support
 - **Windows**: Not yet supported
 
 ## Troubleshooting
 
-If authentication fails:
+If containers fail to authenticate:
 
-1. Ensure you're logged into Claude on the host machine: `claude /login`
-2. Verify credentials exist in Keychain: `security find-generic-password -s "Claude Code-credentials"`
-3. Check that Docker container receives the environment variable
-4. Ensure the container properly processes the credentials JSON
+1. **Check Docker status**: Ensure Docker is running
+   ```bash
+   docker version
+   ```
+
+2. **Verify authenticated image exists**:
+   ```bash
+   docker images | grep para-authenticated
+   ```
+
+3. **Rebuild the authenticated image** if needed:
+   ```bash
+   docker build -f docker/Dockerfile.authenticated -t para-authenticated:latest .
+   ```
+
+## Technical Details
+
+The pre-authenticated image approach:
+- Eliminates runtime credential management complexity
+- Provides consistent authentication across all containers
+- Avoids credential extraction from host systems
+- Simplifies container creation and startup

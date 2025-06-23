@@ -27,6 +27,7 @@ pub fn execute_command_with_config(
             Some(Commands::Config(_))
             | Some(Commands::Completion(_))
             | Some(Commands::Init)
+            | Some(Commands::Auth(_))
             | Some(Commands::CompletionSessions)
             | Some(Commands::CompletionBranches) => None,
             Some(Commands::Monitor(_)) | None => match test_config {
@@ -69,6 +70,7 @@ pub fn execute_command_with_config(
         Some(Commands::CompletionBranches) => commands::completion_branches::execute(),
         Some(Commands::Monitor(args)) => commands::monitor::execute(config.unwrap(), args),
         Some(Commands::Status(args)) => commands::status::execute(config.unwrap(), args),
+        Some(Commands::Auth(args)) => commands::auth::execute(args),
         None => commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {}),
     }
 }
