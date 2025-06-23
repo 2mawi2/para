@@ -304,10 +304,31 @@ impl SessionManager {
 
             if let Ok(git_service) = GitService::discover() {
                 let repository_root = git_service.repository().root.clone();
-                GitignoreManager::ensure_para_ignored_in_repository(&repository_root)?;
+                // Only attempt to create gitignore if the repository root still exists
+                if repository_root.exists() {
+                    if let Err(e) =
+                        GitignoreManager::ensure_para_ignored_in_repository(&repository_root)
+                    {
+                        // Log the error but don't fail the operation - gitignore creation is optional
+                        crate::utils::debug_log(&format!(
+                            "Warning: Failed to create repository .gitignore: {}",
+                            e
+                        ));
+                    }
+                }
             }
 
             if let Some(para_dir) = self.get_para_directory() {
+                // Ensure the para directory exists before trying to create gitignore
+                if !para_dir.exists() {
+                    fs::create_dir_all(&para_dir).map_err(|e| {
+                        ParaError::fs_error(format!(
+                            "Failed to create para directory {}: {}",
+                            para_dir.display(),
+                            e
+                        ))
+                    })?;
+                }
                 self.ensure_para_gitignore_exists(&para_dir)?;
             }
         }
