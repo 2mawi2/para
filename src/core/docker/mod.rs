@@ -3,12 +3,15 @@
 //! This module provides containerization support for para sessions,
 //! allowing developers to work in isolated Docker environments.
 
+pub mod auth;
 pub mod config;
 pub mod error;
 pub mod manager;
 pub mod service;
 pub mod session;
 
+#[cfg(test)]
+pub mod mock;
 #[cfg(test)]
 mod tests;
 
@@ -17,3 +20,6 @@ pub use error::{DockerError, DockerResult};
 pub use manager::DockerManager;
 pub use service::DockerService;
 pub use session::{ContainerSession, ContainerStatus};
+
+// TODO: Uncomment when integrating with session commands
+// pub use auth::DockerAuthManager;
