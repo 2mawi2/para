@@ -39,7 +39,6 @@ pub use session::ResourceLimits;
 // pub use auth::DockerAuthManager;
 
 /// Trait defining the interface for Docker operations (from test infrastructure)
-#[allow(dead_code)]
 pub trait DockerServiceTrait: Send + Sync {
     /// Check if Docker is available on the system
     fn is_docker_available(&self) -> bool;

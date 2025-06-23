@@ -3,16 +3,12 @@ use crate::utils::{ParaError, Result};
 #[cfg(test)]
 use super::mock::MockDockerClient;
 
-// TODO: Remove when integrating with session commands
-#[allow(dead_code)]
+// TODO: Connect to CLI in next phase
 pub const AUTH_BASE_CONTAINER_NAME: &str = "para-auth-base";
-#[allow(dead_code)]
 pub const AUTH_VOLUME_PREFIX: &str = "para-auth-claude";
-#[allow(dead_code)]
 pub const CONFIG_VOLUME_PREFIX: &str = "para-auth-ide-config";
 
-// TODO: Remove when integrating with session commands
-#[allow(dead_code)]
+// TODO: Connect to CLI in next phase
 #[derive(Clone)]
 pub struct DockerAuthManager {
     #[cfg(test)]
@@ -20,8 +16,6 @@ pub struct DockerAuthManager {
     user_id: String,
 }
 
-// TODO: Remove when integrating with session commands
-#[allow(dead_code)]
 impl DockerAuthManager {
     pub fn new(user_id: String) -> Self {
         Self {
