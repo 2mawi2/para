@@ -23,7 +23,7 @@ impl DockerService {
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
-        let docker_args = vec![
+        let mut docker_args = vec![
             "create".to_string(),
             "--name".to_string(),
             container_name.clone(),
@@ -31,10 +31,30 @@ impl DockerService {
             format!("{}:/workspace", working_dir.display()),
             "-w".to_string(),
             "/workspace".to_string(),
+        ];
+
+        // Mount Para state directory for session tracking
+        if let Ok(para_dir) = working_dir.join(".para").canonicalize() {
+            docker_args.extend([
+                "-v".to_string(),
+                format!("{}:/workspace/.para:rw", para_dir.display()),
+            ]);
+        }
+
+        // Set environment variables for container detection
+        docker_args.extend([
+            "-e".to_string(),
+            "PARA_CONTAINER=1".to_string(),
+            "-e".to_string(),
+            format!("PARA_SESSION={}", session_name),
+        ]);
+
+        // Add image and command
+        docker_args.extend([
             "para-authenticated:latest".to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
-        ];
+        ]);
 
         println!(
             "🐋 Running docker command: docker {}",
