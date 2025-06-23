@@ -161,7 +161,13 @@ fn perform_pre_finish_operations(
         .map(|s| s.name.clone())
         .unwrap_or_else(|| feature_branch.to_string());
 
-    if config.is_real_ide_environment() {
+    // Check if this is a container session
+    let is_container_session = session_info
+        .as_ref()
+        .map(|s| s.is_container())
+        .unwrap_or(false);
+
+    if !is_container_session && config.is_real_ide_environment() {
         let platform = get_platform_manager();
 
         let ide_to_close = if config.ide.name == "claude" && config.is_wrapper_enabled() {
@@ -175,7 +181,7 @@ fn perform_pre_finish_operations(
         }
     }
 
-    if config.should_auto_stage() {
+    if !is_container_session && config.should_auto_stage() {
         if let Err(e) = git_service.stage_all_changes() {
             eprintln!(
                 "Warning: Auto-staging failed: {}. Please stage changes manually.",
@@ -188,6 +194,38 @@ fn perform_pre_finish_operations(
     Ok(())
 }
 
+fn handle_container_finish(
+    session_info: &SessionState,
+    args: &FinishArgs,
+    _config: &Config,
+) -> Result<FinishResult> {
+    use crate::core::docker::extraction::{extract_changes, ExtractionOptions};
+
+    println!("Container session finish - MVP placeholder");
+
+    // TODO: Connect to CLI in next phase
+    // For MVP, just create the extraction options and call the placeholder
+    let extraction_options = ExtractionOptions {
+        session_name: session_info.name.clone(),
+        commit_message: args.message.clone(),
+        source_path: session_info.worktree_path.clone(),
+        target_path: session_info.worktree_path.clone(), // Same for MVP
+    };
+
+    // Call the MVP extraction function
+    let extraction_result = extract_changes(extraction_options).map_err(|e| {
+        ParaError::docker_error(format!("Failed to extract container changes: {}", e))
+    })?;
+
+    println!("✓ Container session completed");
+    println!("  Files processed: {}", extraction_result.files_copied);
+
+    // For MVP, just return success with the current branch
+    Ok(FinishResult::Success {
+        final_branch: session_info.branch.clone(),
+    })
+}
+
 pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
     let (git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
     let mut session_manager = SessionManager::new(&config);
@@ -197,15 +235,31 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 
     let feature_branch = determine_feature_branch(&session_info, &session_env)?;
 
-    perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
+    // Check if this is a container session
+    let is_container_session = session_info
+        .as_ref()
+        .map(|s| s.is_container())
+        .unwrap_or(false);
 
-    let finish_request = FinishRequest {
-        feature_branch: feature_branch.clone(),
-        commit_message: args.message.clone(),
-        target_branch_name: args.branch.clone(),
+    let result = if is_container_session {
+        // Handle container finish differently
+        if let Some(ref session) = session_info {
+            handle_container_finish(session, &args, &config)?
+        } else {
+            return Err(ParaError::invalid_args("Container session info not found"));
+        }
+    } else {
+        // Traditional worktree finish
+        perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
+
+        let finish_request = FinishRequest {
+            feature_branch: feature_branch.clone(),
+            commit_message: args.message.clone(),
+            target_branch_name: args.branch.clone(),
+        };
+
+        git_service.finish_session(finish_request)?
     };
-
-    let result = git_service.finish_session(finish_request)?;
 
     let mut ctx = FinishContext {
         session_info,
