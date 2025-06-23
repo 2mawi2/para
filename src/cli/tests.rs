@@ -182,6 +182,7 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -191,6 +192,7 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
         assert!(args.validate_impl(true).is_ok());
     }
@@ -247,6 +249,94 @@ mod cli_tests {
 
         let completion_branches_cmd = app.find_subcommand("_completion_branches").unwrap();
         assert!(completion_branches_cmd.is_hide_set());
+    }
+
+    #[test]
+    fn test_start_command_with_container_short_flag() {
+        let cli = Cli::try_parse_from(["para", "start", "-c"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Start(args) => {
+                assert!(args.container);
+                assert!(args.docker_args.is_empty());
+            }
+            _ => panic!("Expected Start command"),
+        }
+    }
+
+    #[test]
+    fn test_start_command_with_container_and_docker_args() {
+        let cli = Cli::try_parse_from([
+            "para",
+            "start",
+            "-c",
+            "--docker-args",
+            "-d",
+            "--docker-args",
+            "--memory=2g",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::Start(args) => {
+                assert!(args.container);
+                assert_eq!(args.docker_args, vec!["-d", "--memory=2g"]);
+            }
+            _ => panic!("Expected Start command"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_command_with_container_short_flag() {
+        let cli =
+            Cli::try_parse_from(["para", "dispatch", "-c", "test-session", "test prompt"]).unwrap();
+        match cli.command.unwrap() {
+            Commands::Dispatch(args) => {
+                assert!(args.container);
+                assert!(args.docker_args.is_empty());
+            }
+            _ => panic!("Expected Dispatch command"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_command_with_docker_args() {
+        let cli = Cli::try_parse_from([
+            "para",
+            "dispatch",
+            "--container",
+            "--docker-args",
+            "-e",
+            "--docker-args",
+            "MY_VAR=value",
+            "session",
+            "task",
+        ])
+        .unwrap();
+        match cli.command.unwrap() {
+            Commands::Dispatch(args) => {
+                assert!(args.container);
+                assert_eq!(args.docker_args, vec!["-e", "MY_VAR=value"]);
+            }
+            _ => panic!("Expected Dispatch command"),
+        }
+    }
+
+    #[test]
+    fn test_docker_args_validation_allows_valid_args() {
+        use crate::cli::parser::validate_docker_args;
+
+        let args = vec!["-d".to_string(), "-e".to_string(), "VAR=value".to_string()];
+        assert!(validate_docker_args(&args).is_ok());
+    }
+
+    #[test]
+    fn test_docker_args_validation_rejects_name_override() {
+        use crate::cli::parser::validate_docker_args;
+
+        let args = vec!["--name".to_string(), "custom-name".to_string()];
+        assert!(validate_docker_args(&args).is_err());
+
+        let args2 = vec!["--name=custom-name".to_string()];
+        assert!(validate_docker_args(&args2).is_err());
     }
 
     #[test]

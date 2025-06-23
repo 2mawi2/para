@@ -41,7 +41,11 @@ impl DockerManager {
     }
 
     /// Create and start a container for a session
-    pub fn create_container_session(&self, session: &SessionState) -> DockerResult<()> {
+    pub fn create_container_session(
+        &self,
+        session: &SessionState,
+        docker_args: &[String],
+    ) -> DockerResult<()> {
         println!("🐳 Creating Docker container for session: {}", session.name);
 
         // Check Docker is available
@@ -53,6 +57,7 @@ impl DockerManager {
             &session.name,
             &self.config.docker,
             &session.worktree_path,
+            docker_args,
         )?;
 
         // Start it

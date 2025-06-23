@@ -397,6 +397,7 @@ impl SessionManager {
         name: String,
         docker_manager: &crate::core::docker::DockerManager,
         _initial_prompt: Option<&str>,
+        docker_args: &[String],
     ) -> Result<SessionState> {
         // Create a container-type session
         let session_state = self.create_session_with_type(
@@ -407,7 +408,7 @@ impl SessionManager {
 
         // Create the Docker container
         docker_manager
-            .create_container_session(&session_state)
+            .create_container_session(&session_state, docker_args)
             .map_err(|e| ParaError::docker_error(format!("Failed to create container: {}", e)))?;
 
         // TODO: Update session with actual container ID after creation
