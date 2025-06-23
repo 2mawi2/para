@@ -142,6 +142,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: super::super::defaults::default_docker_config(),
         }
     }
 

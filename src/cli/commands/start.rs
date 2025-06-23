@@ -12,7 +12,20 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    let session_state = session_manager.create_session(session_name.clone(), None)?;
+    let session_state = if args.container {
+        // Create Docker container session
+        if !config.docker.enabled {
+            return Err(crate::utils::ParaError::invalid_config(
+                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
+            ));
+        }
+
+        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?
+    } else {
+        // Create regular worktree session
+        session_manager.create_session(session_name.clone(), None)?
+    };
 
     create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
@@ -23,6 +36,10 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     )?;
 
     println!("✅ Session '{}' started successfully", session_name);
+    if args.container {
+        println!("   Container: para-{}", session_name);
+        println!("   Image: {}", config.docker.default_image);
+    }
     println!("   Branch: {}", session_state.branch);
     println!("   Worktree: {}", session_state.worktree_path.display());
     println!("   IDE: {} launched", config.ide.name);
@@ -51,7 +68,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 mod tests {
     use super::*;
     use crate::config::{
-        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+        Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
     use tempfile::TempDir;
 
@@ -89,6 +106,11 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: DockerConfig {
+                enabled: false,
+                default_image: "ubuntu:latest".to_string(),
+                mount_workspace: true,
+            },
         }
     }
 
@@ -101,6 +123,7 @@ mod tests {
         let args = StartArgs {
             name: Some("test-session".to_string()),
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -116,6 +139,7 @@ mod tests {
         let args = StartArgs {
             name: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

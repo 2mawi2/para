@@ -42,24 +42,40 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     let branch_name = generate_friendly_branch_name(config.get_branch_prefix(), &session_name);
     let session_id = session_name.clone();
 
-    let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
-    let session_path = subtrees_path.join(&session_id);
+    let mut session_manager = SessionManager::new(&config);
 
-    if !subtrees_path.exists() {
-        fs::create_dir_all(&subtrees_path).map_err(|e| {
-            ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
-        })?;
-    }
+    let session_state = if args.container {
+        // Create Docker container session
+        if !config.docker.enabled {
+            return Err(ParaError::invalid_config(
+                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
+            ));
+        }
 
-    git_service
-        .create_worktree(&branch_name, &session_path)
-        .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
+        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        session_manager.create_docker_session(session_id.clone(), &docker_manager, Some(&prompt))?
+    } else {
+        // Create regular worktree session
+        let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
+        let session_path = subtrees_path.join(&session_id);
 
-    let mut session_state =
-        SessionState::new(session_id.clone(), branch_name, session_path.clone());
+        if !subtrees_path.exists() {
+            fs::create_dir_all(&subtrees_path).map_err(|e| {
+                ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
+            })?;
+        }
 
-    session_state.task_description = Some(prompt.clone());
-    session_manager.save_state(&session_state)?;
+        git_service
+            .create_worktree(&branch_name, &session_path)
+            .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
+
+        let mut session_state =
+            SessionState::new(session_id.clone(), branch_name, session_path.clone());
+
+        session_state.task_description = Some(prompt.clone());
+        session_manager.save_state(&session_state)?;
+        session_state
+    };
 
     let state_dir = Path::new(&config.directories.state_dir);
     let task_file = state_dir.join(format!("{}.task", session_id));
@@ -435,6 +451,7 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -449,6 +466,7 @@ mod tests {
             prompt: Some("implement user authentication".to_string()),
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -466,6 +484,7 @@ mod tests {
             prompt: None,
             file: Some(file_path),
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -484,6 +503,7 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -502,6 +522,7 @@ mod tests {
             prompt: Some(file_path_str),
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -519,6 +540,7 @@ mod tests {
             prompt: None,
             file: Some(file_path),
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -533,6 +555,7 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -566,6 +589,7 @@ mod tests {
             prompt: None,
             file: Some(file_path),
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -589,6 +613,7 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -641,6 +666,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -664,6 +690,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -687,6 +714,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -709,6 +737,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -732,6 +761,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);

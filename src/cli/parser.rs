@@ -60,6 +60,10 @@ pub struct StartArgs {
     /// Skip IDE permission warnings (dangerous)
     #[arg(long, help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
+
+    /// Run session in Docker container
+    #[arg(long, help = "Run session in Docker container")]
+    pub container: bool,
 }
 
 #[derive(Args, Debug)]
@@ -77,7 +81,11 @@ pub struct StartArgs {
     # Using stdin piping
     echo \"test prompt\" | para dispatch
     cat requirements.txt | para dispatch my-feature
-    jq '.description' task.json | para dispatch")]
+    jq '.description' task.json | para dispatch
+    
+    # With Docker container
+    para dispatch --container \"implement user authentication\"
+    para dispatch --container auth-feature --file requirements.md")]
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
@@ -92,6 +100,10 @@ pub struct DispatchArgs {
     /// Skip IDE permission warnings (dangerous)
     #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
     pub dangerously_skip_permissions: bool,
+
+    /// Run session in Docker container
+    #[arg(long, help = "Run session in Docker container")]
+    pub container: bool,
 }
 
 #[derive(Args, Debug)]
