@@ -26,8 +26,8 @@ echo "# Test Project" > README.md
 git add README.md
 git commit -m "Initial commit"
 
-# Enable Docker in config
-echo "Configuring para for Docker..."
+# Enable Docker in config with VS Code
+echo "Configuring para for Docker with VS Code..."
 mkdir -p ~/.config/para
 cat > ~/.config/para/config.json <<EOF
 {
@@ -36,9 +36,9 @@ cat > ~/.config/para/config.json <<EOF
     "command": "code",
     "user_data_dir": null,
     "wrapper": {
-      "enabled": false,
-      "name": "",
-      "command": ""
+      "enabled": true,
+      "name": "code",
+      "command": "code"
     }
   },
   "directories": {

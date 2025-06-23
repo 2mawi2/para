@@ -131,14 +131,6 @@ fn configure_docker_simple(mut config: super::DockerConfig) -> Result<super::Doc
         .interact()
         .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
     
-    if config.enabled {
-        config.default_image = Input::<String>::with_theme(&ColorfulTheme::default())
-            .with_prompt("Default Docker image")
-            .default(config.default_image)
-            .interact()
-            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
-    }
-    
     Ok(config)
 }
 
@@ -162,9 +154,6 @@ fn display_config_summary(config: &Config) {
         println!("  Auto-cleanup: disabled");
     }
     println!("  Docker enabled: {}", config.docker.enabled);
-    if config.docker.enabled {
-        println!("  Docker image: {}", config.docker.default_image);
-    }
 }
 
 pub fn run_quick_setup() -> Result<Config> {

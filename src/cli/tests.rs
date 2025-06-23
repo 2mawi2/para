@@ -181,6 +181,7 @@ mod cli_tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -189,6 +190,7 @@ mod cli_tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            container: false,
         };
         assert!(args.validate_impl(true).is_ok());
     }

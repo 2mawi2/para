@@ -1,0 +1,41 @@
+# Para base image with Claude pre-installed
+FROM ubuntu:22.04
+
+# Avoid prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    sudo \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20.x (required for Claude)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally via npm
+RUN npm install -g @anthropic-ai/claude-code
+
+# Create a non-root user 'para' for security
+RUN useradd -m -s /bin/bash para && \
+    echo "para ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Create workspace directory
+RUN mkdir -p /workspace && \
+    chown -R para:para /workspace
+
+# Switch to non-root user
+USER para
+WORKDIR /workspace
+
+# Verify Claude is installed
+RUN claude --version || echo "Claude CLI installed"
+
+# Default command
+CMD ["/bin/bash"]

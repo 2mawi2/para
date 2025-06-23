@@ -2,8 +2,9 @@
 //!
 //! Coordinates Docker operations with para session management
 
-use super::{DockerError, DockerResult, DockerService};
+use super::{DockerError, DockerIdeIntegration, DockerResult, DockerService};
 use crate::config::Config;
+use crate::core::docker::session::ContainerSession;
 use crate::core::session::SessionState;
 
 /// Docker manager that integrates with para sessions
@@ -36,18 +37,28 @@ impl DockerManager {
         // Start it
         self.service.start_container(&session.name)?;
 
-        // Generate devcontainer config
-        let container_session = crate::core::docker::session::ContainerSession::new(
+        Ok(())
+    }
+
+    /// Launch IDE connected to container
+    pub fn launch_container_ide(
+        &self,
+        session: &SessionState,
+        initial_prompt: Option<&str>,
+    ) -> DockerResult<()> {
+        let container_session = ContainerSession::new(
             format!("para-{}", session.name),
             session.name.clone(),
-            self.config.docker.default_image.clone(),
+            "para-claude:latest".to_string(),
             session.worktree_path.clone(),
         );
 
-        crate::core::docker::DockerIdeIntegration::generate_devcontainer_config(
+        // Launch IDE with automatic container connection
+        DockerIdeIntegration::launch_container_ide(
+            &self.config,
             &session.worktree_path,
             &container_session,
-            None,
+            initial_prompt,
         )
         .map_err(|e| DockerError::Other(e.into()))?;
 
