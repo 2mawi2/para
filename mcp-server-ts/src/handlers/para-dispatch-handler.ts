@@ -46,9 +46,18 @@ export class ParaDispatchHandler extends BaseCommandHandler {
     });
   }
 
+  private parseDispatchArgs(args: Record<string, unknown>): ParaDispatchArgs {
+    return {
+      session_name: args.session_name as string,
+      task_description: args.task_description as string | undefined,
+      file: args.file as string | undefined,
+      dangerously_skip_permissions: args.dangerously_skip_permissions as boolean | undefined
+    };
+  }
+
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
     this.validateArgs(args);
-    const dispatchArgs = args as ParaDispatchArgs;
+    const dispatchArgs = this.parseDispatchArgs(args);
     
     const cmdArgs = ["dispatch"];
     cmdArgs.push(dispatchArgs.session_name);

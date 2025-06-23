@@ -41,9 +41,17 @@ export class ParaFinishHandler extends BaseCommandHandler {
     });
   }
 
+  private parseFinishArgs(args: Record<string, unknown>): ParaFinishArgs {
+    return {
+      commit_message: args.commit_message as string,
+      session: args.session as string | undefined,
+      branch: args.branch as string | undefined
+    };
+  }
+
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
     this.validateArgs(args);
-    const finishArgs = args as ParaFinishArgs;
+    const finishArgs = this.parseFinishArgs(args);
     
     const cmdArgs = ["finish"];
     cmdArgs.push(finishArgs.commit_message);

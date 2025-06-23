@@ -1,4 +1,4 @@
-import { McpError } from "@modelcontextprotocol/sdk/types.js";
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { ToolDefinition, ToolResult } from "./types.js";
 
 export interface CommandHandler {
@@ -12,7 +12,7 @@ export abstract class BaseCommandHandler implements CommandHandler {
     for (const field of required) {
       if (args[field] === undefined || args[field] === null) {
         throw new McpError(
-          "INVALID_PARAMS",
+          ErrorCode.InvalidParams,
           `Missing required parameter: ${field}`
         );
       }
@@ -25,7 +25,7 @@ export abstract class BaseCommandHandler implements CommandHandler {
         const actualType = typeof args[field];
         if (actualType !== expectedType) {
           throw new McpError(
-            "INVALID_PARAMS",
+            ErrorCode.InvalidParams,
             `Parameter ${field} must be of type ${expectedType}, got ${actualType}`
           );
         }

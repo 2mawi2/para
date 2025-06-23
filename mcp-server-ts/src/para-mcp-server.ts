@@ -37,7 +37,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
 
   try {
@@ -46,7 +46,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
 
-    return await handler.execute(args);
+    const result = await handler.execute(args || {});
+    return result as any;
   } catch (error: unknown) {
     if (error instanceof McpError) {
       throw error;
