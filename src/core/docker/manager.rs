@@ -56,9 +56,8 @@ impl DockerManager {
         // Check Docker is available
         self.service.health_check()?;
 
-        // Acquire container from pool
-        let container_id = self.pool.acquire()?;
-        println!("🔄 Acquired container from pool: {}", container_id);
+        // Create dedicated container for this session
+        let container_id = self.pool.create_session_container(&session.name)?;
 
         // Setup workspace in container
         self.setup_container_workspace(&container_id, session)?;
@@ -111,19 +110,18 @@ impl DockerManager {
         Ok(())
     }
 
-    /// Release a container back to the pool
-    pub fn release_container(&self, session: &SessionState) -> DockerResult<()> {
+    /// Destroy a session's container
+    pub fn destroy_session_container(&self, session: &SessionState) -> DockerResult<()> {
         match &session.session_type {
             SessionType::Container {
                 container_id: Some(id),
             } => {
-                println!("🔄 Returning container to pool: {}", id);
-                self.pool.release(id.clone())?;
-                println!("✅ Container returned to pool");
+                println!("🗑️  Destroying container for session: {}", session.name);
+                self.pool.destroy_session_container(id)?;
                 Ok(())
             }
             _ => {
-                // Not a container session, nothing to release
+                // Not a container session, nothing to destroy
                 Ok(())
             }
         }
@@ -178,11 +176,7 @@ impl DockerManager {
 
     /// Get pool statistics
     #[allow(dead_code)] // Used for debugging and future monitoring features
-    pub fn pool_stats(&self) -> (usize, usize, usize) {
-        (
-            self.pool.containers_in_use(),
-            self.pool.containers_available(),
-            self.pool.max_size(),
-        )
+    pub fn pool_stats(&self) -> (usize, usize) {
+        (self.pool.active_containers(), self.pool.max_size())
     }
 }
