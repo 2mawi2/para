@@ -1,12 +1,4 @@
-# Multi-stage build: Build Para first, then create runtime image
-FROM rust:1.75 as para-builder
-
-# Copy Para source and build it
-COPY . /src
-WORKDIR /src
-RUN cargo build --release
-
-# Runtime image with Claude pre-installed
+# Para base image with Claude pre-installed
 FROM ubuntu:22.04
 
 # Avoid prompts during package installation
@@ -29,10 +21,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 # Install Claude Code CLI globally via npm
 RUN npm install -g @anthropic-ai/claude-code
-
-# Copy Para binary from build stage  
-COPY --from=para-builder /src/target/release/para /usr/local/bin/para
-RUN chmod +x /usr/local/bin/para
 
 # Create a non-root user 'para' for security
 RUN useradd -m -s /bin/bash para && \

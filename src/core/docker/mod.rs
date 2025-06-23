@@ -3,9 +3,9 @@
 //! This module provides Docker container support for para sessions.
 
 pub mod error;
+pub mod extraction;
 pub mod ide_integration;
 pub mod manager;
-pub mod patch_watcher;
 pub mod service;
 pub mod session;
 
@@ -16,6 +16,5 @@ pub mod mock;
 pub use error::{DockerError, DockerResult};
 pub use ide_integration::DockerIdeIntegration;
 pub use manager::DockerManager;
-pub use patch_watcher::ContainerPatchWatcher;
 pub use service::DockerService;
 pub use session::ContainerSession;
