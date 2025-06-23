@@ -63,7 +63,17 @@ pub fn default_docker_config() -> DockerConfig {
     DockerConfig {
         enabled: false,
         mount_workspace: true,
+        network_isolation: true,
+        allowed_domains: default_allowed_domains(),
     }
+}
+
+pub fn default_network_isolation() -> bool {
+    true
+}
+
+pub fn default_allowed_domains() -> Vec<String> {
+    vec![]
 }
 
 pub fn detect_ide() -> (String, String) {

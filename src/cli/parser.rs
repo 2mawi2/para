@@ -66,6 +66,17 @@ pub struct StartArgs {
     /// Run session in Docker container
     #[arg(long, help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Disable network isolation for containers (less secure)
+    #[arg(long, help = "Disable network isolation for containers (less secure)")]
+    pub no_network_isolation: bool,
+
+    /// Additional allowed domains for container network access
+    #[arg(
+        long,
+        help = "Additional allowed domains for container network access (comma-separated)"
+    )]
+    pub allow_domains: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -106,6 +117,17 @@ pub struct DispatchArgs {
     /// Run session in Docker container
     #[arg(long, help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Disable network isolation for containers (less secure)
+    #[arg(long, help = "Disable network isolation for containers (less secure)")]
+    pub no_network_isolation: bool,
+
+    /// Additional allowed domains for container network access
+    #[arg(
+        long,
+        help = "Additional allowed domains for container network access (comma-separated)"
+    )]
+    pub allow_domains: Option<String>,
 }
 
 #[derive(Args, Debug)]

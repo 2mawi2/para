@@ -20,7 +20,24 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             ));
         }
 
-        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        // Override Docker config with CLI flags
+        let mut docker_config = config.docker.clone();
+        if args.no_network_isolation {
+            docker_config.network_isolation = false;
+        }
+        if let Some(ref domains) = args.allow_domains {
+            let additional_domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            docker_config.allowed_domains.extend(additional_domains);
+        }
+
+        let mut config_with_docker = config.clone();
+        config_with_docker.docker = docker_config;
+
+        let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
         let session =
             session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
 
@@ -121,6 +138,8 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         }
     }
@@ -135,6 +154,8 @@ mod tests {
             name: Some("test-session".to_string()),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -151,6 +172,8 @@ mod tests {
             name: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

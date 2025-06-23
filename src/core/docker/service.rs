@@ -18,12 +18,12 @@ impl DockerService {
     pub fn create_container(
         &self,
         session_name: &str,
-        _config: &DockerConfig,
+        config: &DockerConfig,
         working_dir: &Path,
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
-        let docker_args = vec![
+        let mut docker_args = vec![
             "create".to_string(),
             "--name".to_string(),
             container_name.clone(),
@@ -31,10 +31,54 @@ impl DockerService {
             format!("{}:/workspace", working_dir.display()),
             "-w".to_string(),
             "/workspace".to_string(),
+        ];
+
+        // Configure network isolation
+        if config.network_isolation {
+            // Add capabilities required for iptables/ipset
+            docker_args.extend([
+                "--cap-add".to_string(),
+                "NET_ADMIN".to_string(),
+                "--cap-add".to_string(),
+                "NET_RAW".to_string(),
+            ]);
+
+            // Set network isolation environment variable
+            docker_args.extend(["-e".to_string(), "PARA_NETWORK_ISOLATION=true".to_string()]);
+
+            // Combine default and user-specified allowed domains
+            let default_domains = vec![
+                "api.anthropic.com".to_string(),
+                "github.com".to_string(),
+                "api.github.com".to_string(),
+                "registry.npmjs.org".to_string(),
+            ];
+
+            let all_domains: Vec<String> = default_domains
+                .into_iter()
+                .chain(config.allowed_domains.iter().cloned())
+                .collect();
+
+            if !all_domains.is_empty() {
+                docker_args.extend([
+                    "-e".to_string(),
+                    format!("PARA_ALLOWED_DOMAINS={}", all_domains.join(",")),
+                ]);
+            }
+        } else {
+            // Legacy behavior: use host network for backward compatibility
+            docker_args.extend(["--network".to_string(), "host".to_string()]);
+
+            // Disable network isolation
+            docker_args.extend(["-e".to_string(), "PARA_NETWORK_ISOLATION=false".to_string()]);
+        }
+
+        // Add the image and command
+        docker_args.extend([
             "para-authenticated:latest".to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
-        ];
+        ]);
 
         println!(
             "🐋 Running docker command: docker {}",
@@ -93,5 +137,64 @@ impl DockerService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::DockerConfig;
+
+    #[test]
+    fn test_docker_service_creation() {
+        let _service = DockerService;
+    }
+
+    #[test]
+    fn test_network_isolation_enabled_config() {
+        let config = DockerConfig {
+            enabled: true,
+            mount_workspace: true,
+            network_isolation: true,
+            allowed_domains: vec!["custom-api.com".to_string()],
+        };
+
+        // Test the config structure
+        assert!(config.network_isolation);
+        assert_eq!(config.allowed_domains.len(), 1);
+        assert_eq!(config.allowed_domains[0], "custom-api.com");
+    }
+
+    #[test]
+    fn test_network_isolation_disabled_config() {
+        let config = DockerConfig {
+            enabled: true,
+            mount_workspace: true,
+            network_isolation: false,
+            allowed_domains: vec![],
+        };
+
+        // Test the config structure
+        assert!(!config.network_isolation);
+        assert!(config.allowed_domains.is_empty());
+    }
+
+    #[test]
+    fn test_docker_config_serialization() {
+        let config = DockerConfig {
+            enabled: true,
+            mount_workspace: true,
+            network_isolation: true,
+            allowed_domains: vec!["test.com".to_string(), "example.org".to_string()],
+        };
+
+        // Test that the config can be serialized and deserialized
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: DockerConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(config.enabled, deserialized.enabled);
+        assert_eq!(config.mount_workspace, deserialized.mount_workspace);
+        assert_eq!(config.network_isolation, deserialized.network_isolation);
+        assert_eq!(config.allowed_domains, deserialized.allowed_domains);
     }
 }
