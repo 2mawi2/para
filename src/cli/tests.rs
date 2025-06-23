@@ -182,7 +182,6 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -194,7 +193,6 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
