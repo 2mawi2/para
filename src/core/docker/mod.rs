@@ -10,6 +10,7 @@ use std::process::Command;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod ide_integration;
 pub mod manager;
 pub mod service;
 pub mod session;
@@ -22,6 +23,7 @@ mod tests;
 // Re-export main types from submodules
 pub use config::DockerConfig;
 pub use error::DockerResult;
+pub use ide_integration::DockerIdeIntegration;
 pub use service::DockerService;
 pub use session::{ContainerSession, ContainerStatus};
 
