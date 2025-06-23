@@ -2,6 +2,22 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+fn default_session_type() -> SessionType {
+    SessionType::Worktree
+}
+
+/// Type of session - either traditional worktree or Docker container
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SessionType {
+    /// Traditional git worktree session
+    Worktree,
+    /// Docker container session
+    Container {
+        /// Container ID assigned by Docker
+        container_id: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub name: String,
@@ -15,8 +31,13 @@ pub struct SessionState {
     pub last_activity: Option<DateTime<Utc>>,
     pub git_stats: Option<GitStats>,
 
-    // Docker support
-    pub is_docker: bool,
+    // Session type - worktree or container
+    #[serde(default = "default_session_type")]
+    pub session_type: SessionType,
+
+    // Deprecated - use session_type instead
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub is_docker: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +66,42 @@ impl SessionState {
             task_description: None,
             last_activity: None,
             git_stats: None,
-            is_docker: false,
+            session_type: SessionType::Worktree,
+            is_docker: None,
+        }
+    }
+
+    /// Create a new container-based session
+    pub fn new_container(
+        name: String,
+        branch: String,
+        worktree_path: PathBuf,
+        container_id: Option<String>,
+    ) -> Self {
+        Self {
+            name,
+            branch,
+            worktree_path,
+            created_at: Utc::now(),
+            status: SessionStatus::Active,
+            task_description: None,
+            last_activity: None,
+            git_stats: None,
+            session_type: SessionType::Container { container_id },
+            is_docker: None,
+        }
+    }
+
+    /// Check if this is a container session
+    pub fn is_container(&self) -> bool {
+        matches!(self.session_type, SessionType::Container { .. })
+    }
+
+    /// Get container ID if this is a container session
+    pub fn container_id(&self) -> Option<&str> {
+        match &self.session_type {
+            SessionType::Container { container_id } => container_id.as_deref(),
+            _ => None,
         }
     }
 
@@ -70,6 +126,7 @@ mod tests {
         assert_eq!(state.branch, "test/branch");
         assert_eq!(state.worktree_path, PathBuf::from("/path/to/worktree"));
         assert!(matches!(state.status, SessionStatus::Active));
+        assert_eq!(state.session_type, SessionType::Worktree);
     }
 
     #[test]
@@ -137,7 +194,8 @@ mod tests {
             task_description: Some("Completed feature implementation".to_string()),
             last_activity: None,
             git_stats: None,
-            is_docker: false,
+            session_type: SessionType::Worktree,
+            is_docker: None,
         };
 
         // Should be able to serialize and deserialize Review status
@@ -166,5 +224,43 @@ mod tests {
         // Active -> Cancelled (user cancellation)
         state.update_status(SessionStatus::Cancelled);
         assert!(matches!(state.status, SessionStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_container_session_state() {
+        let state = SessionState::new_container(
+            "container-session".to_string(),
+            "test/container-branch".to_string(),
+            PathBuf::from("/path/to/worktree"),
+            Some("abc123".to_string()),
+        );
+
+        assert_eq!(state.name, "container-session");
+        assert!(state.is_container());
+        assert_eq!(state.container_id(), Some("abc123"));
+        assert!(matches!(state.session_type, SessionType::Container { .. }));
+    }
+
+    #[test]
+    fn test_session_type_serialization() {
+        // Test worktree type
+        let worktree_session = SessionState::new(
+            "worktree".to_string(),
+            "test/worktree".to_string(),
+            PathBuf::from("/test"),
+        );
+        let json = serde_json::to_string(&worktree_session).unwrap();
+        assert!(json.contains(r#""session_type":"Worktree""#));
+
+        // Test container type
+        let container_session = SessionState::new_container(
+            "container".to_string(),
+            "test/container".to_string(),
+            PathBuf::from("/test"),
+            Some("xyz789".to_string()),
+        );
+        let json = serde_json::to_string(&container_session).unwrap();
+        assert!(json.contains(r#""session_type":{"Container""#));
+        assert!(json.contains("xyz789"));
     }
 }

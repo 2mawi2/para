@@ -14,6 +14,8 @@ pub struct SessionInfo {
     pub last_modified: Option<DateTime<Utc>>,
     pub has_uncommitted_changes: Option<bool>,
     pub is_current: bool,
+    pub session_type: SessionType,
+    pub container_status: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +24,12 @@ pub enum SessionStatus {
     Dirty,
     Missing,
     Archived,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SessionType {
+    Worktree,
+    Container,
 }
 
 impl SessionStatus {
@@ -108,6 +116,16 @@ pub fn display_verbose_sessions(sessions: &[SessionInfo]) -> Result<()> {
         println!("  Branch: {}", session.branch);
         println!("  Base Branch: {}", session.base_branch);
         println!("  Merge Mode: {}", session.merge_mode);
+        println!(
+            "  Type: {}",
+            match session.session_type {
+                SessionType::Container => "container",
+                SessionType::Worktree => "worktree",
+            }
+        );
+        if let Some(container_status) = &session.container_status {
+            println!("  Container: {}", container_status);
+        }
 
         if session.status != SessionStatus::Archived {
             println!("  Worktree: {}", session.worktree_path.display());
@@ -153,6 +171,27 @@ mod tests {
     use chrono::Utc;
     use std::path::PathBuf;
 
+    fn create_test_session_info(
+        session_id: &str,
+        branch: &str,
+        status: SessionStatus,
+        is_current: bool,
+    ) -> SessionInfo {
+        SessionInfo {
+            session_id: session_id.to_string(),
+            branch: branch.to_string(),
+            worktree_path: PathBuf::from(format!("/path/to/{}", session_id)),
+            base_branch: "main".to_string(),
+            merge_mode: "squash".to_string(),
+            status,
+            last_modified: None,
+            has_uncommitted_changes: Some(false),
+            is_current,
+            session_type: SessionType::Worktree,
+            container_status: None,
+        }
+    }
+
     #[test]
     fn test_session_status_display() {
         assert_eq!(SessionStatus::Active.as_str(), "active");
@@ -178,27 +217,22 @@ mod tests {
     #[test]
     fn test_display_compact_sessions() -> Result<()> {
         let sessions = vec![
-            SessionInfo {
-                session_id: "test-session-1".to_string(),
-                branch: "para/test-branch-1".to_string(),
-                worktree_path: PathBuf::from("/path/to/worktree1"),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: None,
-                has_uncommitted_changes: Some(false),
-                is_current: false,
-            },
-            SessionInfo {
-                session_id: "current-session".to_string(),
-                branch: "para/current-branch".to_string(),
-                worktree_path: PathBuf::from("/path/to/current"),
-                base_branch: "main".to_string(),
-                merge_mode: "merge".to_string(),
-                status: SessionStatus::Dirty,
-                last_modified: None,
-                has_uncommitted_changes: Some(true),
-                is_current: true,
+            create_test_session_info(
+                "test-session-1",
+                "para/test-branch-1",
+                SessionStatus::Active,
+                false,
+            ),
+            {
+                let mut info = create_test_session_info(
+                    "current-session",
+                    "para/current-branch",
+                    SessionStatus::Dirty,
+                    true,
+                );
+                info.has_uncommitted_changes = Some(true);
+                info.merge_mode = "merge".to_string();
+                info
             },
         ];
 
@@ -211,16 +245,16 @@ mod tests {
 
     #[test]
     fn test_display_verbose_sessions() -> Result<()> {
-        let sessions = vec![SessionInfo {
-            session_id: "verbose-test".to_string(),
-            branch: "para/verbose-branch".to_string(),
-            worktree_path: PathBuf::from("/path/to/verbose"),
-            base_branch: "develop".to_string(),
-            merge_mode: "squash".to_string(),
-            status: SessionStatus::Active,
-            last_modified: Some(Utc::now()),
-            has_uncommitted_changes: Some(false),
-            is_current: true,
+        let sessions = vec![{
+            let mut info = create_test_session_info(
+                "verbose-test",
+                "para/verbose-branch",
+                SessionStatus::Active,
+                true,
+            );
+            info.base_branch = "develop".to_string();
+            info.last_modified = Some(Utc::now());
+            info
         }];
 
         // This should not panic
@@ -237,49 +271,37 @@ mod tests {
         let later = now + chrono::Duration::hours(1);
 
         let mut sessions = vec![
-            SessionInfo {
-                session_id: "middle".to_string(),
-                branch: "para/middle".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(now),
-                has_uncommitted_changes: None,
-                is_current: false,
+            {
+                let mut info =
+                    create_test_session_info("middle", "para/middle", SessionStatus::Active, false);
+                info.last_modified = Some(now);
+                info.has_uncommitted_changes = None;
+                info
             },
-            SessionInfo {
-                session_id: "earliest".to_string(),
-                branch: "para/earliest".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(earlier),
-                has_uncommitted_changes: None,
-                is_current: false,
+            {
+                let mut info = create_test_session_info(
+                    "earliest",
+                    "para/earliest",
+                    SessionStatus::Active,
+                    false,
+                );
+                info.last_modified = Some(earlier);
+                info.has_uncommitted_changes = None;
+                info
             },
-            SessionInfo {
-                session_id: "latest".to_string(),
-                branch: "para/latest".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: Some(later),
-                has_uncommitted_changes: None,
-                is_current: false,
+            {
+                let mut info =
+                    create_test_session_info("latest", "para/latest", SessionStatus::Active, false);
+                info.last_modified = Some(later);
+                info.has_uncommitted_changes = None;
+                info
             },
-            SessionInfo {
-                session_id: "none".to_string(),
-                branch: "para/none".to_string(),
-                worktree_path: PathBuf::new(),
-                base_branch: "main".to_string(),
-                merge_mode: "squash".to_string(),
-                status: SessionStatus::Active,
-                last_modified: None,
-                has_uncommitted_changes: None,
-                is_current: false,
+            {
+                let mut info =
+                    create_test_session_info("none", "para/none", SessionStatus::Active, false);
+                info.last_modified = None;
+                info.has_uncommitted_changes = None;
+                info
             },
         ];
 

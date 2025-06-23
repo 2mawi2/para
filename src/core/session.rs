@@ -4,4 +4,4 @@ pub mod recovery;
 pub mod state;
 
 pub use manager::SessionManager;
-pub use state::{SessionState, SessionStatus};
+pub use state::{SessionState, SessionStatus, SessionType};

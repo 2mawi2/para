@@ -44,6 +44,16 @@ impl SessionManager {
         name: String,
         base_branch: Option<String>,
     ) -> Result<SessionState> {
+        self.create_session_with_type(name, base_branch, None)
+    }
+
+    /// Create a session with specified type (worktree or container)
+    pub fn create_session_with_type(
+        &mut self,
+        name: String,
+        base_branch: Option<String>,
+        session_type: Option<super::state::SessionType>,
+    ) -> Result<SessionState> {
         let git_service = GitService::discover().map_err(|e| {
             ParaError::git_error(format!("Failed to discover git repository: {}", e))
         })?;
@@ -87,7 +97,17 @@ impl SessionManager {
 
         git_service.create_worktree(&branch_name, &worktree_path)?;
 
-        let session_state = SessionState::new(final_session_name, branch_name, worktree_path);
+        let session_state = match session_type {
+            Some(super::state::SessionType::Container { container_id }) => {
+                SessionState::new_container(
+                    final_session_name,
+                    branch_name,
+                    worktree_path,
+                    container_id,
+                )
+            }
+            _ => SessionState::new(final_session_name, branch_name, worktree_path),
+        };
 
         self.save_state(&session_state)?;
 
@@ -110,13 +130,21 @@ impl SessionManager {
             ))
         })?;
 
-        let session: SessionState = serde_json::from_str(&content).map_err(|e| {
+        let mut session: SessionState = serde_json::from_str(&content).map_err(|e| {
             ParaError::state_corruption(format!(
                 "Failed to parse session state from {}: {}",
                 state_file.display(),
                 e
             ))
         })?;
+
+        // Handle backward compatibility - migrate is_docker to session_type
+        if let Some(is_docker) = session.is_docker {
+            if is_docker {
+                session.session_type = super::state::SessionType::Container { container_id: None };
+            }
+            session.is_docker = None;
+        }
 
         Ok(session)
     }
@@ -263,6 +291,34 @@ impl SessionManager {
         Ok(None)
     }
 
+    /// Get all active sessions including both worktree and container sessions
+    pub fn get_active_sessions(&self) -> Result<Vec<SessionState>> {
+        let sessions = self.list_sessions()?;
+        Ok(sessions
+            .into_iter()
+            .filter(|s| matches!(s.status, SessionStatus::Active))
+            .collect())
+    }
+
+    /// Get container status for a session if it's a container session
+    pub fn get_container_status(
+        &self,
+        session_name: &str,
+        docker_manager: &crate::core::docker::DockerManager,
+    ) -> Result<Option<String>> {
+        let session = self.load_state(session_name)?;
+
+        if session.is_container() {
+            match docker_manager.is_container_running(session_name) {
+                Ok(true) => Ok(Some("running".to_string())),
+                Ok(false) => Ok(Some("stopped".to_string())),
+                Err(_) => Ok(Some("unknown".to_string())),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn find_session_by_branch(&self, branch: &str) -> Result<Option<SessionState>> {
         let sessions = self.list_sessions()?;
 
@@ -364,36 +420,34 @@ impl SessionManager {
         GitignoreManager::create_para_internal_gitignore(para_dir)
     }
 
-    #[allow(dead_code)]
     pub fn create_docker_session(
         &mut self,
         name: String,
         docker_config: &crate::core::docker::DockerSessionConfig,
         docker_manager: &crate::core::docker::DockerManager,
     ) -> Result<SessionState> {
-        // First create a regular session
-        let mut session_state = self.create_session(name, None)?;
-
-        // Mark it as a Docker session
-        session_state.is_docker = true;
+        // Create a container-type session
+        let session_state = self.create_session_with_type(
+            name,
+            None,
+            Some(super::state::SessionType::Container { container_id: None }),
+        )?;
 
         // Start the Docker container
         docker_manager
             .start_container(&session_state.name, docker_config)
             .map_err(|e| ParaError::docker_error(format!("Failed to start container: {}", e)))?;
 
-        // Save the updated state
-        self.save_state(&session_state)?;
+        // TODO: Update session with actual container ID after creation
 
         Ok(session_state)
     }
 
-    #[allow(dead_code)]
     pub fn cancel_session(&mut self, session_name: &str, force: bool) -> Result<()> {
         let session = self.load_state(session_name)?;
 
         // If it's a Docker session, stop the container
-        if session.is_docker {
+        if session.is_container() {
             let docker_manager = crate::core::docker::DockerManager::new();
             let _ = docker_manager.stop_container(session_name);
             let _ = docker_manager.remove_container(session_name);
@@ -407,7 +461,7 @@ impl SessionManager {
         }
 
         // Clean up the worktree if requested or if it's a Docker session
-        if (force || session.is_docker) && session.worktree_path.exists() {
+        if (force || session.is_container()) && session.worktree_path.exists() {
             fs::remove_dir_all(&session.worktree_path)
                 .map_err(|e| ParaError::fs_error(format!("Failed to remove worktree: {}", e)))?;
         }
@@ -415,6 +469,10 @@ impl SessionManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "manager/manager_mixed_tests.rs"]
+mod manager_mixed_tests;
 
 #[cfg(test)]
 mod tests {
