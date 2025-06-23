@@ -12,7 +12,8 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    let session_state = if args.container {
+    // Track whether we're using Docker and the final config
+    let (is_container, final_docker_config) = if args.container {
         // Create Docker container session
         if !config.docker.enabled {
             return Err(crate::utils::ParaError::invalid_config(
@@ -35,7 +36,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         }
 
         let mut config_with_docker = config.clone();
-        config_with_docker.docker = docker_config;
+        config_with_docker.docker = docker_config.clone();
 
         let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
         let session =
@@ -51,7 +52,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;
 
-        session
+        (true, docker_config)
     } else {
         // Create regular worktree session
         let session = session_manager.create_session(session_name.clone(), None)?;
@@ -61,13 +62,24 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         let ide_manager = IdeManager::new(&config);
         ide_manager.launch(&session.worktree_path, args.dangerously_skip_permissions)?;
 
-        session
+        (false, config.docker.clone())
     };
 
+    let session_state = session_manager
+        .list_sessions()?
+        .into_iter()
+        .find(|s| s.name == session_name)
+        .ok_or_else(|| crate::utils::ParaError::session_not_found(&session_name))?;
+
     println!("✅ Session '{}' started successfully", session_name);
-    if args.container {
+    if is_container {
         println!("   Container: para-{}", session_name);
         println!("   Image: para-authenticated:latest");
+
+        // Show network isolation warning if it's disabled
+        if !final_docker_config.network_isolation {
+            println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
     }
     println!("   Branch: {}", session_state.branch);
     println!("   Worktree: {}", session_state.worktree_path.display());
