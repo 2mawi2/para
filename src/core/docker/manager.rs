@@ -283,4 +283,7 @@ impl DockerManager {
 
         Ok(removed)
     }
+
+    // TODO: Connect to CLI in next phase
+    // Advanced extraction with docker diff will be added when CLI integration is complete
 }
