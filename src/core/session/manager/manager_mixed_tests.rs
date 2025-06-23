@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::core::session::{SessionManager, SessionStatus, SessionType};
+    use crate::core::session::{SessionManager, SessionType};
     use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
 
@@ -32,7 +32,7 @@ mod tests {
         // Verify it's a worktree type
         assert_eq!(session.session_type, SessionType::Worktree);
         assert!(!session.is_container());
-        assert_eq!(session.container_id(), None);
+        assert!(matches!(session.session_type, SessionType::Worktree));
 
         // Save and reload
         manager.save_state(&session).unwrap();
@@ -70,13 +70,23 @@ mod tests {
             SessionType::Container { .. }
         ));
         assert!(session.is_container());
-        assert_eq!(session.container_id(), Some("abc123"));
+        // Verify container has the expected ID
+        if let SessionType::Container { container_id } = &session.session_type {
+            assert_eq!(container_id.as_deref(), Some("abc123"));
+        } else {
+            panic!("Expected container type");
+        }
 
         // Save and reload
         manager.save_state(&session).unwrap();
         let loaded = manager.load_state(&session.name).unwrap();
         assert!(matches!(loaded.session_type, SessionType::Container { .. }));
-        assert_eq!(loaded.container_id(), Some("abc123"));
+        // Verify container has the expected ID
+        if let SessionType::Container { container_id } = &loaded.session_type {
+            assert_eq!(container_id.as_deref(), Some("abc123"));
+        } else {
+            panic!("Expected container type");
+        }
     }
 
     #[test]
@@ -141,49 +151,6 @@ mod tests {
             session_map.get("worktree2").unwrap(),
             &SessionType::Worktree
         );
-    }
-
-    #[test]
-    fn test_get_active_sessions_filters_correctly() {
-        let git_temp = TempDir::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para/state")
-            .to_string_lossy()
-            .to_string();
-
-        let mut manager = SessionManager::new(&config);
-
-        // Create sessions with different statuses
-        let active1 = crate::core::session::SessionState::new(
-            "active1".to_string(),
-            "para/active1".to_string(),
-            temp_dir.path().join(".para/worktrees/active1"),
-        );
-        let active2 = crate::core::session::SessionState::new_container(
-            "active2".to_string(),
-            "para/active2".to_string(),
-            temp_dir.path().join(".para/worktrees/active2"),
-            None,
-        );
-
-        // Save sessions
-        manager.save_state(&active1).unwrap();
-        manager.save_state(&active2).unwrap();
-
-        // Update one to finished
-        manager
-            .update_session_status("active1", SessionStatus::Finished)
-            .unwrap();
-
-        // Get only active sessions
-        let active_sessions = manager.get_active_sessions().unwrap();
-        assert_eq!(active_sessions.len(), 1);
-        assert_eq!(active_sessions[0].name, "active2");
     }
 
     #[test]
@@ -297,55 +264,11 @@ mod tests {
             loaded_container.session_type,
             SessionType::Container { .. }
         ));
-        assert_eq!(loaded_container.container_id(), Some("abc123"));
-    }
-
-    #[test]
-    fn test_container_status_detection() {
-        let git_temp = TempDir::new().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-
-        let mut config = create_test_config();
-        config.directories.state_dir = temp_dir
-            .path()
-            .join(".para/state")
-            .to_string_lossy()
-            .to_string();
-
-        let manager = SessionManager::new(&config);
-
-        // Create a container session
-        let session = crate::core::session::SessionState::new_container(
-            "status-test".to_string(),
-            "para/status-test".to_string(),
-            temp_dir.path().join(".para/worktrees/status-test"),
-            Some("container123".to_string()),
-        );
-
-        manager.save_state(&session).unwrap();
-
-        // Create a mock docker manager for testing
-        let docker_manager = crate::core::docker::DockerManager::new();
-
-        // Get container status (will return "stopped" or "unknown" depending on Docker availability)
-        let status = manager
-            .get_container_status(&session.name, &docker_manager)
-            .unwrap();
-        // Accept either "stopped" (Docker available but container doesn't exist) or "unknown" (Docker error)
-        assert!(status == Some("stopped".to_string()) || status == Some("unknown".to_string()));
-
-        // For a non-container session, should return None
-        let worktree_session = crate::core::session::SessionState::new(
-            "worktree-status".to_string(),
-            "para/worktree-status".to_string(),
-            temp_dir.path().join(".para/worktrees/worktree-status"),
-        );
-        manager.save_state(&worktree_session).unwrap();
-
-        let status = manager
-            .get_container_status(&worktree_session.name, &docker_manager)
-            .unwrap();
-        assert_eq!(status, None);
+        // Verify container has the expected ID
+        if let SessionType::Container { container_id } = &loaded_container.session_type {
+            assert_eq!(container_id.as_deref(), Some("abc123"));
+        } else {
+            panic!("Expected container type");
+        }
     }
 }

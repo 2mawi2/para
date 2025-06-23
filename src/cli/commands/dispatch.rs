@@ -53,21 +53,26 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         }
 
         let docker_manager = crate::core::docker::DockerManager::new(config.clone());
-        let session = session_manager.create_docker_session(session_id.clone(), &docker_manager, Some(&prompt))?;
-        
+        let session = session_manager.create_docker_session(
+            session_id.clone(),
+            &docker_manager,
+            Some(&prompt),
+        )?;
+
         // Write task file
         let state_dir = Path::new(&config.directories.state_dir);
         let task_file = state_dir.join(format!("{}.task", session_id));
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
-        
+
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
-        
+
         // Launch IDE connected to container with initial prompt
-        docker_manager.launch_container_ide(&session, Some(&prompt))
+        docker_manager
+            .launch_container_ide(&session, Some(&prompt))
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
-        
+
         session
     } else {
         // Create regular worktree session
@@ -89,22 +94,22 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         session_state.task_description = Some(prompt.clone());
         session_manager.save_state(&session_state)?;
-        
+
         // Write task file
         let state_dir = Path::new(&config.directories.state_dir);
         let task_file = state_dir.join(format!("{}.task", session_id));
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
-        
+
         create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
-        
+
         launch_claude_code(
             &config,
             &session_state.worktree_path,
             &prompt,
             args.dangerously_skip_permissions,
         )?;
-        
+
         session_state
     };
 

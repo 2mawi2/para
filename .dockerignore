@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+*.o
+*.so
+*.dylib
+*.exe
+*.dll
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Para specific
+.para/
+worktrees/
+
+# Documentation (not needed for build)
+docs/
+*.md
+
+# Test data
+tests/
+test-data/
+
+# Node modules (if any)
+node_modules/
+mcp-server-ts/node_modules/
+
+# Logs
+*.log
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Large unnecessary directories
+.cargo/
+Cargo.lock

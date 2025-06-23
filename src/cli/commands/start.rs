@@ -21,28 +21,29 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         }
 
         let docker_manager = crate::core::docker::DockerManager::new(config.clone());
-        let session = session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
-        
+        let session =
+            session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
+
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
-        
+
         // Launch IDE connected to container
-        docker_manager.launch_container_ide(&session, None)
-            .map_err(|e| crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
-        
+        docker_manager
+            .launch_container_ide(&session, None)
+            .map_err(|e| {
+                crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
+            })?;
+
         session
     } else {
         // Create regular worktree session
         let session = session_manager.create_session(session_name.clone(), None)?;
-        
+
         create_claude_local_md(&session.worktree_path, &session.name)?;
-        
+
         let ide_manager = IdeManager::new(&config);
-        ide_manager.launch(
-            &session.worktree_path,
-            args.dangerously_skip_permissions,
-        )?;
-        
+        ide_manager.launch(&session.worktree_path, args.dangerously_skip_permissions)?;
+
         session
     };
 
@@ -119,7 +120,6 @@ mod tests {
             },
             docker: DockerConfig {
                 enabled: false,
-                default_image: "ubuntu:latest".to_string(),
                 mount_workspace: true,
             },
         }

@@ -30,12 +30,19 @@ RUN useradd -m -s /bin/bash para && \
 RUN mkdir -p /workspace && \
     chown -R para:para /workspace
 
+# Copy entrypoint script
+COPY claude-entrypoint.sh /usr/local/bin/claude-entrypoint.sh
+RUN sudo chmod +x /usr/local/bin/claude-entrypoint.sh
+
 # Switch to non-root user
 USER para
 WORKDIR /workspace
 
 # Verify Claude is installed
 RUN claude --version || echo "Claude CLI installed"
+
+# Set the entrypoint to handle authentication
+ENTRYPOINT ["/usr/local/bin/claude-entrypoint.sh"]
 
 # Default command
 CMD ["/bin/bash"]

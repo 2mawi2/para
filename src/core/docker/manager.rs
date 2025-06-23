@@ -2,7 +2,7 @@
 //!
 //! Coordinates Docker operations with para session management
 
-use super::{DockerError, DockerIdeIntegration, DockerResult, DockerService};
+use super::{get_auth_resolver, DockerError, DockerIdeIntegration, DockerResult, DockerService};
 use crate::config::Config;
 use crate::core::docker::session::ContainerSession;
 use crate::core::session::SessionState;
@@ -24,17 +24,28 @@ impl DockerManager {
 
     /// Create and start a container for a session
     pub fn create_container_session(&self, session: &SessionState) -> DockerResult<()> {
+        println!("🐳 Creating Docker container for session: {}", session.name);
+
         // Check Docker is available
         self.service.health_check()?;
 
-        // Create the container
+        // Get the auth resolver and retrieve Claude credentials
+        println!("🔐 Retrieving Claude credentials from keychain...");
+        let auth_resolver = get_auth_resolver();
+        let auth_tokens = auth_resolver.get_claude_credentials()?;
+        println!("✅ Successfully retrieved Claude credentials");
+
+        // Create the container with auth tokens
+        println!("🏗️  Creating container with image: para-claude:latest");
         let _container = self.service.create_container(
             &session.name,
             &self.config.docker,
             &session.worktree_path,
+            Some(&auth_tokens),
         )?;
 
         // Start it
+        println!("▶️  Starting container: para-{}", session.name);
         self.service.start_container(&session.name)?;
 
         Ok(())

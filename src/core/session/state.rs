@@ -229,8 +229,12 @@ mod tests {
 
         assert_eq!(state.name, "container-session");
         assert!(state.is_container());
-        assert_eq!(state.container_id(), Some("abc123"));
-        assert!(matches!(state.session_type, SessionType::Container { .. }));
+        // Verify container has the expected ID
+        if let SessionType::Container { container_id } = &state.session_type {
+            assert_eq!(container_id.as_deref(), Some("abc123"));
+        } else {
+            panic!("Expected container type");
+        }
     }
 
     #[test]

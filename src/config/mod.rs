@@ -179,6 +179,10 @@ mod tests {
                 preserve_on_finish: true,
                 auto_cleanup_days: Some(14),
             },
+            docker: DockerConfig {
+                enabled: false,
+                mount_workspace: true,
+            },
         };
 
         assert_eq!(config.get_branch_prefix(), "feature");
@@ -238,6 +242,10 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: DockerConfig {
+                enabled: false,
+                mount_workspace: true,
+            },
         };
         assert!(valid_config.validate().is_ok());
 
@@ -276,6 +284,10 @@ mod tests {
                 default_name_format: "%Y%m%d".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
+            },
+            docker: DockerConfig {
+                enabled: false,
+                mount_workspace: true,
             },
         };
         assert!(config_wrapper_disabled.validate().is_ok());
@@ -320,6 +332,7 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
+            docker: defaults::default_docker_config(),
         };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
@@ -354,6 +367,7 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
+            docker: defaults::default_docker_config(),
         };
 
         // Test 1: Manually save config and verify it can be loaded
