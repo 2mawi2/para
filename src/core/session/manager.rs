@@ -292,6 +292,7 @@ impl SessionManager {
     }
 
     /// Get all active sessions including both worktree and container sessions
+    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
     pub fn get_active_sessions(&self) -> Result<Vec<SessionState>> {
         let sessions = self.list_sessions()?;
         Ok(sessions
@@ -301,6 +302,7 @@ impl SessionManager {
     }
 
     /// Get container status for a session if it's a container session
+    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
     pub fn get_container_status(
         &self,
         session_name: &str,
@@ -420,6 +422,7 @@ impl SessionManager {
         GitignoreManager::create_para_internal_gitignore(para_dir)
     }
 
+    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
     pub fn create_docker_session(
         &mut self,
         name: String,
@@ -443,6 +446,7 @@ impl SessionManager {
         Ok(session_state)
     }
 
+    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
     pub fn cancel_session(&mut self, session_name: &str, force: bool) -> Result<()> {
         let session = self.load_state(session_name)?;
 

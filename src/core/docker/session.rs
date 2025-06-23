@@ -123,7 +123,7 @@ pub enum PortProtocol {
 }
 
 /// Resource limits for containers
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResourceLimits {
     /// CPU limit (number of CPUs, can be fractional)
     pub cpu_limit: Option<f64>,
@@ -137,19 +137,6 @@ pub struct ResourceLimits {
     pub blkio_weight: Option<u16>,
     /// Maximum number of PIDs
     pub pids_limit: Option<i64>,
-}
-
-impl Default for ResourceLimits {
-    fn default() -> Self {
-        Self {
-            cpu_limit: None,
-            memory_limit: None,
-            memory_swap_limit: None,
-            cpu_shares: None,
-            blkio_weight: None,
-            pids_limit: None,
-        }
-    }
 }
 
 /// Health check configuration

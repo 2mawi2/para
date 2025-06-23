@@ -3,6 +3,8 @@
 //! This module provides containerization support for para sessions,
 //! allowing developers to work in isolated Docker environments.
 
+#![allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
