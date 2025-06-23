@@ -59,6 +59,8 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             docker_config.network_isolation = false;
         }
         if let Some(ref domains) = args.allow_domains {
+            // Automatically enable network isolation when --allow-domains is used
+            docker_config.network_isolation = true;
             let additional_domains: Vec<String> = domains
                 .split(',')
                 .map(|s| s.trim().to_string())
