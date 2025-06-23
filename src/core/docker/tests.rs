@@ -3,8 +3,13 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::core::docker::config::{ProjectType, detect_project_type};
+    use crate::core::docker::manager::DockerManager;
+    use crate::core::docker::service::ContainerStats;
+    use crate::core::docker::session::MountType;
+    use crate::core::session::SessionState;
+    use crate::core::session::state::SessionStatus;
     use crate::test_utils::test_helpers::*;
-    use async_trait::async_trait;
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
@@ -35,9 +40,8 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl DockerService for MockDockerService {
-        async fn create_session(
+        fn create_session(
             &self,
             session_name: &str,
             config: &DockerConfig,
@@ -50,18 +54,18 @@ mod tests {
                 config.default_image.clone(),
                 working_dir.to_path_buf(),
             );
-            
+
             session.add_para_labels();
-            
+
             self.containers
                 .lock()
                 .unwrap()
                 .insert(session_name.to_string(), session.clone());
-            
+
             Ok(session)
         }
 
-        async fn start_session(&self, session_name: &str) -> DockerResult<()> {
+        fn start_session(&self, session_name: &str) -> DockerResult<()> {
             let mut containers = self.containers.lock().unwrap();
             match containers.get_mut(session_name) {
                 Some(container) => {
@@ -80,7 +84,7 @@ mod tests {
             }
         }
 
-        async fn stop_session(&self, session_name: &str) -> DockerResult<()> {
+        fn stop_session(&self, session_name: &str) -> DockerResult<()> {
             let mut containers = self.containers.lock().unwrap();
             match containers.get_mut(session_name) {
                 Some(container) => {
@@ -99,19 +103,19 @@ mod tests {
             }
         }
 
-        async fn finish_session(&self, session_name: &str, remove: bool) -> DockerResult<()> {
-            self.stop_session(session_name).await?;
+        fn finish_session(&self, session_name: &str, remove: bool) -> DockerResult<()> {
+            self.stop_session(session_name)?;
             if remove {
                 self.containers.lock().unwrap().remove(session_name);
             }
             Ok(())
         }
 
-        async fn cancel_session(&self, session_name: &str) -> DockerResult<()> {
-            self.finish_session(session_name, true).await
+        fn cancel_session(&self, session_name: &str) -> DockerResult<()> {
+            self.finish_session(session_name, true)
         }
 
-        async fn get_container_status(&self, session_name: &str) -> DockerResult<ContainerStatus> {
+        fn get_container_status(&self, session_name: &str) -> DockerResult<ContainerStatus> {
             self.containers
                 .lock()
                 .unwrap()
@@ -122,7 +126,7 @@ mod tests {
                 })
         }
 
-        async fn health_check(&self) -> DockerResult<()> {
+        fn health_check(&self) -> DockerResult<()> {
             if self.health_check_result {
                 Ok(())
             } else {
@@ -132,7 +136,7 @@ mod tests {
             }
         }
 
-        async fn ensure_image(&self, image: &str) -> DockerResult<()> {
+        fn ensure_image(&self, image: &str) -> DockerResult<()> {
             let mut images = self.images.lock().unwrap();
             if !images.contains(&image.to_string()) {
                 images.push(image.to_string());
@@ -140,12 +144,12 @@ mod tests {
             Ok(())
         }
 
-        async fn list_sessions(&self) -> DockerResult<Vec<ContainerSession>> {
+        fn list_sessions(&self) -> DockerResult<Vec<ContainerSession>> {
             Ok(self.containers.lock().unwrap().values().cloned().collect())
         }
 
         // Stub implementations for other methods
-        async fn exec_in_container(
+        fn exec_in_container(
             &self,
             _session_name: &str,
             _command: &str,
@@ -155,11 +159,11 @@ mod tests {
             Ok("Mock output".to_string())
         }
 
-        async fn attach_to_container(&self, _session_name: &str) -> DockerResult<()> {
+        fn attach_to_container(&self, _session_name: &str) -> DockerResult<()> {
             Ok(())
         }
 
-        async fn get_logs(
+        fn get_logs(
             &self,
             _session_name: &str,
             _follow: bool,
@@ -168,7 +172,7 @@ mod tests {
             Ok("Mock logs".to_string())
         }
 
-        async fn copy_to_container(
+        fn copy_to_container(
             &self,
             _session_name: &str,
             _src: &Path,
@@ -177,7 +181,7 @@ mod tests {
             Ok(())
         }
 
-        async fn copy_from_container(
+        fn copy_from_container(
             &self,
             _session_name: &str,
             _src: &Path,
@@ -186,7 +190,7 @@ mod tests {
             Ok(())
         }
 
-        async fn update_resources(
+        fn update_resources(
             &self,
             _session_name: &str,
             _cpu_limit: Option<f64>,
@@ -195,7 +199,7 @@ mod tests {
             Ok(())
         }
 
-        async fn get_stats(&self, _session_name: &str) -> DockerResult<ContainerStats> {
+        fn get_stats(&self, _session_name: &str) -> DockerResult<ContainerStats> {
             Ok(ContainerStats {
                 cpu_usage_percent: 25.0,
                 memory_usage_bytes: 1073741824,
@@ -207,13 +211,13 @@ mod tests {
             })
         }
 
-        async fn wait_for_status(
+        fn wait_for_status(
             &self,
             session_name: &str,
             expected_status: ContainerStatus,
             _timeout_seconds: u64,
         ) -> DockerResult<()> {
-            let status = self.get_container_status(session_name).await?;
+            let status = self.get_container_status(session_name)?;
             if status == expected_status {
                 Ok(())
             } else {
@@ -248,7 +252,7 @@ mod tests {
             "rust:latest".to_string(),
             PathBuf::from("/workspace"),
         );
-        
+
         assert_eq!(session.container_id, "container-123");
         assert_eq!(session.session_name, "test-session");
         assert_eq!(session.status, ContainerStatus::Created);
@@ -259,14 +263,14 @@ mod tests {
     #[test]
     fn test_project_type_detection() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Test Rust detection
         std::fs::write(temp_dir.path().join("Cargo.toml"), "").unwrap();
         assert_eq!(
             detect_project_type(&temp_dir.path().to_path_buf()),
             ProjectType::Rust
         );
-        
+
         // Test Node detection
         std::fs::remove_file(temp_dir.path().join("Cargo.toml")).unwrap();
         std::fs::write(temp_dir.path().join("package.json"), "{}").unwrap();
@@ -276,81 +280,86 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_docker_manager_container_lifecycle() {
+    #[test]
+    fn test_docker_manager_container_lifecycle() {
         let git_temp = TempDir::new().unwrap();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        
+
         let config = create_test_config();
         let docker_config = DockerConfig::default();
         let mock_service = Arc::new(MockDockerService::new());
         let manager = DockerManager::new(mock_service.clone(), config, docker_config);
-        
+
         // Create a test session state
         let session_state = SessionState {
             name: "test-session".to_string(),
             branch: "para/test-session".to_string(),
             worktree_path: temp_dir.path().to_path_buf(),
             created_at: chrono::Utc::now(),
-            status: crate::core::status::SessionStatus::Active,
+            status: SessionStatus::Active,
             task_description: None,
             last_activity: None,
             git_stats: None,
+            is_docker: true,
         };
-        
+
         // Test container creation
         let container = manager
             .create_container_for_session(&session_state)
-            .await
             .unwrap();
         assert_eq!(container.session_name, "test-session");
         assert_eq!(container.status, ContainerStatus::Created);
-        
+
         // Test container start
-        manager.start_container("test-session").await.unwrap();
-        let status = manager.sync_container_status("test-session").await.unwrap();
+        manager.start_container("test-session").unwrap();
+        let status = manager.sync_container_status("test-session").unwrap();
         assert_eq!(status, ContainerStatus::Running);
-        
+
         // Test container stop
-        manager.stop_container("test-session").await.unwrap();
-        let status = manager.sync_container_status("test-session").await.unwrap();
+        manager.stop_container("test-session").unwrap();
+        let status = manager.sync_container_status("test-session").unwrap();
         assert_eq!(status, ContainerStatus::Stopped);
-        
+
         // Test container finish with removal
-        manager.finish_container("test-session", true).await.unwrap();
-        let result = mock_service.get_container_status("test-session").await;
+        manager
+            .finish_container("test-session", true)
+            .unwrap();
+        let result = mock_service.get_container_status("test-session");
         assert!(matches!(result, Err(DockerError::ContainerNotFound { .. })));
     }
 
-    #[tokio::test]
-    async fn test_docker_manager_error_handling() {
+    #[test]
+    fn test_docker_manager_error_handling() {
         let git_temp = TempDir::new().unwrap();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        
+
         let config = create_test_config();
         let docker_config = DockerConfig::default();
         let mock_service = Arc::new(MockDockerService::new());
         let manager = DockerManager::new(mock_service, config, docker_config);
-        
+
         // Test starting non-existent container
-        let result = manager.start_container("non-existent").await;
+        let result = manager.start_container("non-existent");
         assert!(matches!(result, Err(DockerError::ContainerNotFound { .. })));
-        
+
         // Test stopping non-running container
-        let result = manager.stop_container("non-existent").await;
-        assert!(matches!(result, Err(DockerError::ContainerNotRunning { .. })));
+        let result = manager.stop_container("non-existent");
+        assert!(matches!(
+            result,
+            Err(DockerError::ContainerNotRunning { .. })
+        ));
     }
 
-    #[tokio::test]
-    async fn test_docker_health_check() {
+    #[test]
+    fn test_docker_health_check() {
         let mock_service = MockDockerService::new();
-        assert!(mock_service.health_check().await.is_ok());
-        
+        assert!(mock_service.health_check().is_ok());
+
         let failing_service = MockDockerService::with_failing_health_check();
         assert!(matches!(
-            failing_service.health_check().await,
+            failing_service.health_check(),
             Err(DockerError::DaemonNotAvailable(_))
         ));
     }
@@ -365,7 +374,7 @@ mod tests {
             blkio_weight: Some(500),
             pids_limit: Some(1000),
         };
-        
+
         assert_eq!(limits.cpu_limit, Some(2.5));
         assert_eq!(limits.memory_limit, Some(4294967296));
     }
@@ -378,7 +387,7 @@ mod tests {
             read_only: true,
             mount_type: MountType::Bind,
         };
-        
+
         // In actual implementation, variable expansion would happen
         assert!(mapping.source.contains("$HOME"));
         assert!(mapping.read_only);

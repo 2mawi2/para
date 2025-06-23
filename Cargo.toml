@@ -32,7 +32,7 @@ ratatui = "0.28"
 crossterm = "0.28"
 copypasta = "0.10"
 fs2 = "0.4"
-bollard = "0.15"
+bollard = { version = "0.15", features = ["chrono"] }
 
 [lints.rust]
 warnings = "deny"

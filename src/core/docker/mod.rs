@@ -20,7 +20,8 @@ pub mod mock;
 mod tests;
 
 // Re-export main types from submodules
-pub use config::{DockerConfig, ResourceLimits, VolumeMapping};
+pub use config::{DockerConfig, VolumeMapping};
+pub use session::ResourceLimits;
 pub use error::{DockerError, DockerResult};
 pub use service::DockerService;
 pub use session::{ContainerSession, ContainerStatus};

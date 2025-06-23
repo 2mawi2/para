@@ -1,4 +1,4 @@
-use crate::core::docker::{DockerService, DockerSessionConfig};
+use crate::core::docker::DockerSessionConfig;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::process::Command;
@@ -298,95 +298,96 @@ impl MockDockerService {
     }
 }
 
-impl DockerService for MockDockerService {
-    fn is_docker_available(&self) -> bool {
-        self.docker_available
-    }
-
-    fn start_container(&self, session_name: &str, config: &DockerSessionConfig) -> Result<()> {
-        let mut containers = self.containers.lock().unwrap();
-        if containers.contains_key(session_name) {
-            anyhow::bail!("Container already exists");
-        }
-
-        containers.insert(
-            session_name.to_string(),
-            MockContainerState {
-                running: true,
-                config: config.clone(),
-                logs: vec!["Container started".to_string()],
-            },
-        );
-        Ok(())
-    }
-
-    fn stop_container(&self, session_name: &str) -> Result<()> {
-        let mut containers = self.containers.lock().unwrap();
-        match containers.get_mut(session_name) {
-            Some(state) => {
-                state.running = false;
-                state.logs.push("Container stopped".to_string());
-                Ok(())
-            }
-            None => anyhow::bail!("Container not found"),
-        }
-    }
-
-    fn remove_container(&self, session_name: &str) -> Result<()> {
-        let mut containers = self.containers.lock().unwrap();
-        containers
-            .remove(session_name)
-            .ok_or_else(|| anyhow::anyhow!("Container not found"))?;
-        Ok(())
-    }
-
-    fn is_container_running(&self, session_name: &str) -> Result<bool> {
-        let containers = self.containers.lock().unwrap();
-        match containers.get(session_name) {
-            Some(state) => Ok(state.running),
-            None => Ok(false),
-        }
-    }
-
-    fn exec_in_container(&self, session_name: &str, command: &[&str]) -> Result<String> {
-        let containers = self.containers.lock().unwrap();
-        match containers.get(session_name) {
-            Some(state) if state.running => Ok(format!("Executed: {}", command.join(" "))),
-            Some(_) => anyhow::bail!("Container is not running"),
-            None => anyhow::bail!("Container not found"),
-        }
-    }
-
-    fn get_container_logs(&self, session_name: &str, tail: Option<usize>) -> Result<String> {
-        let containers = self.containers.lock().unwrap();
-        match containers.get(session_name) {
-            Some(state) => {
-                let logs = if let Some(n) = tail {
-                    state
-                        .logs
-                        .iter()
-                        .rev()
-                        .take(n)
-                        .rev()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                } else {
-                    state.logs.clone()
-                };
-                Ok(logs.join("\n"))
-            }
-            None => anyhow::bail!("Container not found"),
-        }
-    }
-
-    fn list_para_containers(&self) -> Result<Vec<String>> {
-        let containers = self.containers.lock().unwrap();
-        Ok(containers
-            .keys()
-            .map(|name| format!("para-{}", name))
-            .collect())
-    }
-}
+// Remove this conflicting impl - we have a new DockerService trait
+// impl DockerService for MockDockerService {
+//     fn is_docker_available(&self) -> bool {
+//         self.docker_available
+//     }
+//
+//     fn start_container(&self, session_name: &str, config: &DockerSessionConfig) -> Result<()> {
+//         let mut containers = self.containers.lock().unwrap();
+//         if containers.contains_key(session_name) {
+//             anyhow::bail!("Container already exists");
+//         }
+//
+//         containers.insert(
+//             session_name.to_string(),
+//             MockContainerState {
+//                 running: true,
+//                 config: config.clone(),
+//                 logs: vec!["Container started".to_string()],
+//             },
+//         );
+//         Ok(())
+//     }
+//
+//     fn stop_container(&self, session_name: &str) -> Result<()> {
+//         let mut containers = self.containers.lock().unwrap();
+//         match containers.get_mut(session_name) {
+//             Some(state) => {
+//                 state.running = false;
+//                 state.logs.push("Container stopped".to_string());
+//                 Ok(())
+//             }
+//             None => anyhow::bail!("Container not found"),
+//         }
+//     }
+//
+//     fn remove_container(&self, session_name: &str) -> Result<()> {
+//         let mut containers = self.containers.lock().unwrap();
+//         containers
+//             .remove(session_name)
+//             .ok_or_else(|| anyhow::anyhow!("Container not found"))?;
+//         Ok(())
+//     }
+//
+//     fn is_container_running(&self, session_name: &str) -> Result<bool> {
+//         let containers = self.containers.lock().unwrap();
+//         match containers.get(session_name) {
+//             Some(state) => Ok(state.running),
+//             None => Ok(false),
+//         }
+//     }
+//
+//     fn exec_in_container(&self, session_name: &str, command: &[&str]) -> Result<String> {
+//         let containers = self.containers.lock().unwrap();
+//         match containers.get(session_name) {
+//             Some(state) if state.running => Ok(format!("Executed: {}", command.join(" "))),
+//             Some(_) => anyhow::bail!("Container is not running"),
+//             None => anyhow::bail!("Container not found"),
+//         }
+//     }
+//
+//     fn get_container_logs(&self, session_name: &str, tail: Option<usize>) -> Result<String> {
+//         let containers = self.containers.lock().unwrap();
+//         match containers.get(session_name) {
+//             Some(state) => {
+//                 let logs = if let Some(n) = tail {
+//                     state
+//                         .logs
+//                         .iter()
+//                         .rev()
+//                         .take(n)
+//                         .rev()
+//                         .cloned()
+//                         .collect::<Vec<_>>()
+//                 } else {
+//                     state.logs.clone()
+//                 };
+//                 Ok(logs.join("\n"))
+//             }
+//             None => anyhow::bail!("Container not found"),
+//         }
+//     }
+//
+//     fn list_para_containers(&self) -> Result<Vec<String>> {
+//         let containers = self.containers.lock().unwrap();
+//         Ok(containers
+//             .keys()
+//             .map(|name| format!("para-{}", name))
+//             .collect())
+//     }
+// }
 
 /// Helper functions for creating test configurations and environments
 #[allow(dead_code)]
