@@ -33,6 +33,8 @@ test-data/
 # Node modules (if any)
 node_modules/
 mcp-server-ts/node_modules/
+mcp-server-ts/build/
+mcp-server-ts/dist/
 
 # Logs
 *.log
