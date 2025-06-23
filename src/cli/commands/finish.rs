@@ -161,7 +161,13 @@ fn perform_pre_finish_operations(
         .map(|s| s.name.clone())
         .unwrap_or_else(|| feature_branch.to_string());
 
-    if config.is_real_ide_environment() {
+    // Check if this is a container session
+    let is_container_session = session_info
+        .as_ref()
+        .map(|s| s.is_container())
+        .unwrap_or(false);
+
+    if !is_container_session && config.is_real_ide_environment() {
         let platform = get_platform_manager();
 
         let ide_to_close = if config.ide.name == "claude" && config.is_wrapper_enabled() {
@@ -175,7 +181,7 @@ fn perform_pre_finish_operations(
         }
     }
 
-    if config.should_auto_stage() {
+    if !is_container_session && config.should_auto_stage() {
         if let Err(e) = git_service.stage_all_changes() {
             eprintln!(
                 "Warning: Auto-staging failed: {}. Please stage changes manually.",
@@ -188,6 +194,72 @@ fn perform_pre_finish_operations(
     Ok(())
 }
 
+fn handle_container_finish(
+    session_info: &SessionState,
+    args: &FinishArgs,
+    config: &Config,
+) -> Result<FinishResult> {
+    use crate::core::docker::{
+        extraction::{ExtractionOptions, ProgressCallback},
+        manager::DockerManager,
+        service::MockDockerService,
+        DockerConfig,
+    };
+    use std::sync::Arc;
+
+    println!("Extracting changes from container session...");
+
+    // Load Docker configuration
+    let docker_config = DockerConfig::default(); // TODO: Load from config
+
+    // Create Docker service - use mock for now, replace with real implementation
+    let docker_service = Arc::new(MockDockerService);
+
+    // Create Docker manager
+    let docker_manager = DockerManager::new(docker_service, config.clone(), docker_config);
+
+    // Set up progress reporting
+    let progress_callback: ProgressCallback = Box::new(|msg| {
+        println!("  {}", msg);
+    });
+
+    // Create extraction options
+    let extraction_options = ExtractionOptions {
+        session_name: session_info.name.clone(),
+        commit_message: args.message.clone(),
+        target_branch: args.branch.clone(),
+        include_binary: true,
+        preserve_permissions: true,
+        progress_callback: Some(progress_callback),
+    };
+
+    // Extract container changes
+    let extraction_result = docker_manager
+        .extract_container_changes(extraction_options)
+        .map_err(|e| {
+            ParaError::docker_error(format!("Failed to extract container changes: {}", e))
+        })?;
+
+    println!("✓ Container changes extracted successfully");
+    println!("  Branch created: {}", extraction_result.branch_name);
+    println!("  Files changed: {}", extraction_result.files_changed);
+    println!(
+        "  Lines added: {}, removed: {}",
+        extraction_result.lines_added, extraction_result.lines_removed
+    );
+
+    // Stop the container if configured
+    if !config.should_preserve_on_finish() {
+        if let Err(e) = docker_manager.finish_container(&session_info.name, false) {
+            eprintln!("Warning: Failed to stop container: {}", e);
+        }
+    }
+
+    Ok(FinishResult::Success {
+        final_branch: extraction_result.branch_name,
+    })
+}
+
 pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
     let (git_service, current_dir, session_env) = initialize_finish_environment(&args)?;
     let mut session_manager = SessionManager::new(&config);
@@ -197,15 +269,31 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 
     let feature_branch = determine_feature_branch(&session_info, &session_env)?;
 
-    perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
+    // Check if this is a container session
+    let is_container_session = session_info
+        .as_ref()
+        .map(|s| s.is_container())
+        .unwrap_or(false);
 
-    let finish_request = FinishRequest {
-        feature_branch: feature_branch.clone(),
-        commit_message: args.message.clone(),
-        target_branch_name: args.branch.clone(),
+    let result = if is_container_session {
+        // Handle container finish differently
+        if let Some(ref session) = session_info {
+            handle_container_finish(session, &args, &config)?
+        } else {
+            return Err(ParaError::invalid_args("Container session info not found"));
+        }
+    } else {
+        // Traditional worktree finish
+        perform_pre_finish_operations(&session_info, &feature_branch, &config, &git_service)?;
+
+        let finish_request = FinishRequest {
+            feature_branch: feature_branch.clone(),
+            commit_message: args.message.clone(),
+            target_branch_name: args.branch.clone(),
+        };
+
+        git_service.finish_session(finish_request)?
     };
-
-    let result = git_service.finish_session(finish_request)?;
 
     let mut ctx = FinishContext {
         session_info,
