@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 pub fn execute(config: Config, args: StatusArgs) -> Result<()> {
     match args.command {
         Some(StatusCommands::Show { session, json }) => show_status(config, session, json),
+        Some(StatusCommands::Summary { json }) => show_summary(config, json),
+        Some(StatusCommands::Cleanup { dry_run }) => cleanup_status(config, dry_run),
         None => {
             // Handle the original update status functionality
             update_status(config, args)
@@ -274,6 +276,111 @@ fn display_all_statuses(statuses: &[Status]) {
             status_str
         );
     }
+}
+
+fn show_summary(config: Config, json: bool) -> Result<()> {
+    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
+        PathBuf::from(&config.directories.state_dir)
+    } else {
+        get_main_repository_root()?.join(".para").join("state")
+    };
+
+    // Use 24 hours as the default stale threshold
+    let stale_threshold_hours = 24;
+
+    let summary = Status::generate_summary(&state_dir, stale_threshold_hours)
+        .map_err(|e| ParaError::file_operation(format!("Failed to generate summary: {}", e)))?;
+
+    if json {
+        let json_output = serde_json::to_string_pretty(&summary)
+            .map_err(|e| ParaError::config_error(format!("Failed to serialize summary: {}", e)))?;
+        println!("{}", json_output);
+    } else {
+        println!("📊 Para Status Summary");
+        println!("====================\n");
+
+        println!("Sessions:");
+        println!("  Total: {}", summary.total_sessions);
+        println!("  Active: {}", summary.active_sessions);
+        println!("  Blocked: {}", summary.blocked_sessions);
+        println!("  Stale: {}", summary.stale_sessions);
+
+        println!("\nTest Status:");
+        println!("  ✅ Passed: {}", summary.test_summary.passed);
+        println!("  ❌ Failed: {}", summary.test_summary.failed);
+        println!("  ❓ Unknown: {}", summary.test_summary.unknown);
+
+        println!("\nConfidence:");
+        println!("  🟢 High: {}", summary.confidence_summary.high);
+        println!("  🟡 Medium: {}", summary.confidence_summary.medium);
+        println!("  🔴 Low: {}", summary.confidence_summary.low);
+
+        if let Some(progress) = summary.overall_progress {
+            println!("\nOverall Progress: {}%", progress);
+        }
+    }
+
+    Ok(())
+}
+
+fn cleanup_status(config: Config, dry_run: bool) -> Result<()> {
+    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
+        PathBuf::from(&config.directories.state_dir)
+    } else {
+        get_main_repository_root()?.join(".para").join("state")
+    };
+
+    // Use 24 hours as the default stale threshold
+    let stale_threshold_hours = 24;
+
+    if dry_run {
+        // Just show what would be cleaned
+        let statuses = Status::load_all(&state_dir).map_err(|e| {
+            ParaError::file_operation(format!("Failed to load status files: {}", e))
+        })?;
+
+        let mut stale_count = 0;
+        println!(
+            "🔍 Stale status files (older than {} hours):",
+            stale_threshold_hours
+        );
+
+        for status in statuses {
+            if status.is_stale(stale_threshold_hours) {
+                println!(
+                    "  📊 {}.status.json - last updated: {}",
+                    status.session_name,
+                    status.last_update.format("%Y-%m-%d %H:%M:%S UTC")
+                );
+                stale_count += 1;
+            }
+        }
+
+        if stale_count == 0 {
+            println!("  No stale status files found.");
+        } else {
+            println!(
+                "\nTotal: {} stale status files would be removed",
+                stale_count
+            );
+        }
+    } else {
+        // Actually clean up
+        let cleaned = Status::cleanup_stale(&state_dir, stale_threshold_hours).map_err(|e| {
+            ParaError::file_operation(format!("Failed to cleanup status files: {}", e))
+        })?;
+
+        if cleaned.is_empty() {
+            println!("✨ No stale status files to clean up.");
+        } else {
+            println!("🧹 Cleaned up {} stale status files:", cleaned.len());
+            for session in &cleaned {
+                println!("  ✅ Removed {}.status.json", session);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
