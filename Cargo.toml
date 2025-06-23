@@ -10,6 +10,9 @@ name = "para"
 path = "src/lib.rs"
 doctest = false
 
+[features]
+test-utils = []
+
 
 [dependencies]
 clap = { version = "4.5.39", features = ["derive", "color", "suggestions"] }
@@ -28,6 +31,7 @@ atty = "0.2"
 ratatui = "0.28"
 crossterm = "0.28"
 copypasta = "0.10"
+bollard = "0.15"
 
 [lints.rust]
 warnings = "deny"

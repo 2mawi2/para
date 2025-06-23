@@ -5,7 +5,7 @@ pub mod platform;
 pub mod ui;
 pub mod utils;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
 pub use config::Config;
