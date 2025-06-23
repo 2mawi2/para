@@ -19,6 +19,4 @@ pub use help_renderer::HelpRenderer;
 pub use status_renderer::StatusRenderer;
 pub use table_renderer::TableRenderer;
 
-// Re-export common components for future use
-#[allow(unused_imports)]
-pub use components::{DialogBuilder, TableBuilder};
+// Components are available via components::* for direct use

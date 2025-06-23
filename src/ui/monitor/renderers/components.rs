@@ -61,48 +61,6 @@ impl DialogBuilder {
     }
 }
 
-/// Builder for creating table components with consistent styling  
-#[allow(dead_code)]
-pub struct TableBuilder {
-    pub headers: Vec<String>,
-    pub selected_bg: Color,
-    pub border_color: Color,
-}
-
-impl TableBuilder {
-    pub fn new() -> Self {
-        Self {
-            headers: Vec::new(),
-            selected_bg: COLOR_SELECTED_BG,
-            border_color: COLOR_BORDER,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn headers(mut self, headers: Vec<String>) -> Self {
-        self.headers = headers;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn selected_bg(mut self, color: Color) -> Self {
-        self.selected_bg = color;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn border_color(mut self, color: Color) -> Self {
-        self.border_color = color;
-        self
-    }
-}
-
-impl Default for TableBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // Helper functions for dialog creation
 pub fn create_dialog_area(f: &mut Frame, width: u16, height: u16) -> Rect {
     let area = crate::ui::monitor::centered_rect(width, height, f.area());
@@ -184,16 +142,6 @@ mod tests {
         assert_eq!(builder.width, 50);
         assert_eq!(builder.height, 20);
         assert_eq!(builder.border_color, COLOR_RED);
-    }
-
-    #[test]
-    fn test_table_builder() {
-        let builder = TableBuilder::new()
-            .headers(vec!["Col1".to_string(), "Col2".to_string()])
-            .selected_bg(COLOR_BLUE);
-
-        assert_eq!(builder.headers.len(), 2);
-        assert_eq!(builder.selected_bg, COLOR_BLUE);
     }
 
     #[test]
