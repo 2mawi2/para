@@ -133,45 +133,173 @@ impl DockerManager {
         container_id: &str,
         session: &SessionState,
     ) -> DockerResult<()> {
-        // Create workspace directory in container
-        let workspace_path = format!("/workspace/{}", session.name);
-        Command::new("docker")
+        self.validate_container_setup_inputs(container_id, session)?;
+
+        let workspace_path = self.get_safe_workspace_path(&session.name)?;
+        let mkdir_result = Command::new("docker")
             .args(["exec", container_id, "mkdir", "-p", &workspace_path])
             .output()
             .map_err(|e| {
                 DockerError::Other(anyhow::anyhow!("Failed to create workspace: {}", e))
             })?;
 
-        // Copy worktree files to container
-        let host_path = session.worktree_path.display().to_string();
-        let copy_cmd = format!("{}/.git", host_path);
-        Command::new("docker")
+        if !mkdir_result.status.success() {
+            let stderr = String::from_utf8_lossy(&mkdir_result.stderr);
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Workspace creation failed: {}",
+                stderr
+            )));
+        }
+
+        let host_path = self.validate_host_path(&session.worktree_path)?;
+
+        let git_source = format!("{}/.git", host_path);
+        let copy_result = Command::new("docker")
             .args([
                 "cp",
-                &copy_cmd,
+                &git_source,
                 &format!("{}:{}", container_id, workspace_path),
             ])
             .output()
-            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to copy files: {}", e)))?;
+            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to copy .git: {}", e)))?;
 
-        // Copy source files too
-        Command::new("docker")
-            .args([
-                "exec",
-                container_id,
-                "sh",
-                "-c",
-                &format!(
-                    "cd '{}' && cp -r '{}'/.* '{}' 2>/dev/null || true",
-                    workspace_path, host_path, workspace_path
-                ),
-            ])
+        if !copy_result.status.success() {
+            let stderr = String::from_utf8_lossy(&copy_result.stderr);
+            eprintln!("Warning: .git copy failed (non-fatal): {}", stderr);
+        }
+
+        let safe_copy_cmd = self.build_safe_copy_command(&workspace_path, &host_path)?;
+        let source_copy_result = Command::new("docker")
+            .args(["exec", container_id, "sh", "-c", &safe_copy_cmd])
             .output()
             .map_err(|e| {
                 DockerError::Other(anyhow::anyhow!("Failed to copy source files: {}", e))
             })?;
 
+        if !source_copy_result.status.success() {
+            let stderr = String::from_utf8_lossy(&source_copy_result.stderr);
+            eprintln!(
+                "Warning: Source file copy had issues (non-fatal): {}",
+                stderr
+            );
+        }
+
         Ok(())
+    }
+
+    fn validate_container_setup_inputs(
+        &self,
+        container_id: &str,
+        session: &SessionState,
+    ) -> DockerResult<()> {
+        if !container_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Invalid container ID format: {}",
+                container_id
+            )));
+        }
+
+        if session.name.contains("..") || session.name.contains('/') || session.name.contains('\\')
+        {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Session name contains unsafe characters: {}",
+                session.name
+            )));
+        }
+
+        if session.name.is_empty() || session.name.len() > 100 {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Session name is empty or too long: {}",
+                session.name
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn get_safe_workspace_path(&self, session_name: &str) -> DockerResult<String> {
+        if session_name.contains("..") || session_name.contains('/') {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Session name contains path traversal attempts: {}",
+                session_name
+            )));
+        }
+
+        let safe_path = format!("/workspace/{}", session_name);
+
+        if !safe_path.starts_with("/workspace/") {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Generated unsafe workspace path: {}",
+                safe_path
+            )));
+        }
+
+        Ok(safe_path)
+    }
+
+    fn validate_host_path(&self, worktree_path: &std::path::Path) -> DockerResult<String> {
+        let host_path = worktree_path.display().to_string();
+
+        let dangerous_paths = ["/", "/bin", "/usr", "/etc", "/var", "/tmp", "/home"];
+        for dangerous in &dangerous_paths {
+            if host_path == *dangerous || host_path.starts_with(&format!("{}/", dangerous)) {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "Refusing to operate on system directory: {}",
+                    host_path
+                )));
+            }
+        }
+
+        if !worktree_path.exists() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Source path does not exist: {}",
+                host_path
+            )));
+        }
+
+        if !worktree_path.is_dir() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Source path is not a directory: {}",
+                host_path
+            )));
+        }
+
+        Ok(host_path)
+    }
+
+    fn build_safe_copy_command(
+        &self,
+        workspace_path: &str,
+        host_path: &str,
+    ) -> DockerResult<String> {
+        if !workspace_path.starts_with("/workspace/") {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Workspace path validation failed: {}",
+                workspace_path
+            )));
+        }
+
+        let safe_cmd = format!(
+            "set -euo pipefail; cd '{}' && find '{}' -maxdepth 3 -type f -name '*.rs' -o -name '*.toml' -o -name '*.md' -o -name '*.json' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' | head -1000 | xargs -I {{}} cp '{{}}' '{}/' 2>/dev/null || true",
+            workspace_path,
+            host_path,
+            workspace_path
+        );
+
+        let forbidden_commands = ["rm", "del", "unlink", "truncate", ">", ">>"];
+        for forbidden in &forbidden_commands {
+            if safe_cmd.contains(forbidden) {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "Generated command contains forbidden operation: {}",
+                    forbidden
+                )));
+            }
+        }
+
+        Ok(safe_cmd)
     }
 
     /// Get pool statistics

@@ -54,20 +54,29 @@ impl ContainerPool {
     }
 
     /// Destroy a session's container and remove from pool tracking
-    ///
-    /// This completely removes the container, ensuring no data leakage
-    /// between sessions and proper resource cleanup.
     pub fn destroy_session_container(&self, container_id: &str) -> DockerResult<()> {
+        self.validate_container_id_for_destruction(container_id)?;
+
         let mut active = self.active_sessions.lock().unwrap();
 
-        // Remove from tracking
-        active.retain(|id| id != container_id);
+        if !active.iter().any(|id| id == container_id) {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Refusing to destroy untracked container: {}",
+                container_id
+            )));
+        }
 
-        // Stop and remove the container completely
-        let _stop_output = Command::new("docker").args(["stop", container_id]).output(); // Ignore errors - container might already be stopped
+        active.retain(|id| id != container_id);
+        drop(active); // Release lock before Docker operations
+
+        self.verify_para_container(container_id)?;
+
+        let _stop_output = Command::new("docker")
+            .args(["stop", "--time", "10", container_id])
+            .output(); // Ignore errors - container might already be stopped
 
         let remove_output = Command::new("docker")
-            .args(["rm", container_id])
+            .args(["rm", "--force", container_id]) // Force removal to handle edge cases
             .output()
             .map_err(|e| {
                 DockerError::Other(anyhow::anyhow!("Failed to remove container: {}", e))
@@ -75,6 +84,13 @@ impl ContainerPool {
 
         if !remove_output.status.success() {
             let error_msg = String::from_utf8_lossy(&remove_output.stderr);
+
+            // Re-add to tracking if removal failed (recovery)
+            let mut active = self.active_sessions.lock().unwrap();
+            if !active.iter().any(|id| id == container_id) {
+                active.push(container_id.to_string());
+            }
+
             return Err(DockerError::Other(anyhow::anyhow!(
                 "Failed to remove container {}: {}",
                 container_id,
@@ -82,7 +98,82 @@ impl ContainerPool {
             )));
         }
 
-        println!("🗑️  Destroyed container: {}", container_id);
+        println!("🗑️  Safely destroyed para container: {}", container_id);
+        Ok(())
+    }
+
+    fn validate_container_id_for_destruction(&self, container_id: &str) -> DockerResult<()> {
+        if container_id.is_empty() || container_id.len() > 100 {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Invalid container ID length: {}",
+                container_id
+            )));
+        }
+
+        if !container_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Container ID contains unsafe characters: {}",
+                container_id
+            )));
+        }
+
+        let forbidden_patterns = [
+            "docker",
+            "registry",
+            "nginx",
+            "postgres",
+            "mysql",
+            "redis",
+            "elasticsearch",
+            "mongo",
+            "ubuntu",
+            "alpine",
+            "debian",
+            "centos",
+        ];
+
+        let lower_id = container_id.to_lowercase();
+        for pattern in &forbidden_patterns {
+            if lower_id.contains(pattern) && !lower_id.starts_with("para-") {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "Refusing to destroy system-like container: {}",
+                    container_id
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_para_container(&self, container_id: &str) -> DockerResult<()> {
+        let inspect_output = Command::new("docker")
+            .args(["inspect", "--format", "{{.Name}}", container_id])
+            .output()
+            .map_err(|e| {
+                DockerError::Other(anyhow::anyhow!("Failed to inspect container: {}", e))
+            })?;
+
+        if !inspect_output.status.success() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Container {} does not exist or is not accessible",
+                container_id
+            )));
+        }
+
+        let container_name = String::from_utf8_lossy(&inspect_output.stdout);
+        let clean_name = container_name.trim().trim_start_matches('/');
+
+        if !clean_name.starts_with("para-") {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Container {} is not a para container (name: {})",
+                container_id,
+                clean_name
+            )));
+        }
+
         Ok(())
     }
 
