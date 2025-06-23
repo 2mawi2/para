@@ -21,8 +21,12 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         }
 
         let docker_manager = crate::core::docker::DockerManager::new(config.clone());
-        let session =
-            session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
+        let session = session_manager.create_docker_session(
+            session_name.clone(),
+            &docker_manager,
+            None,
+            &args.docker_args,
+        )?;
 
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
@@ -135,6 +139,7 @@ mod tests {
             name: Some("test-session".to_string()),
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -151,6 +156,7 @@ mod tests {
             name: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

@@ -19,6 +19,8 @@ import { exec, execSync } from "child_process";
 interface ParaStartArgs {
   session_name?: string;
   dangerously_skip_permissions?: boolean;
+  container?: boolean;
+  docker_args?: string[];
 }
 
 interface ParaFinishArgs {
@@ -32,6 +34,8 @@ interface ParaDispatchArgs {
   task_description?: string;
   file?: string;
   dangerously_skip_permissions?: boolean;
+  container?: boolean;
+  docker_args?: string[];
 }
 
 interface ParaListArgs {
@@ -182,6 +186,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             dangerously_skip_permissions: {
               type: "boolean",
               description: "Skip IDE permission warnings (dangerous)"
+            },
+            container: {
+              type: "boolean",
+              description: "Run session in Docker container"
+            },
+            docker_args: {
+              type: "array",
+              items: { type: "string" },
+              description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
             }
           },
           required: []
@@ -230,6 +243,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             dangerously_skip_permissions: {
               type: "boolean",
               description: "Skip IDE permission warnings (dangerous)"
+            },
+            container: {
+              type: "boolean",
+              description: "Run session in Docker container"
+            },
+            docker_args: {
+              type: "array",
+              items: { type: "string" },
+              description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
             }
           },
           required: ["session_name"]
@@ -360,6 +382,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (startArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
           }
+          if (startArgs.container) {
+            cmdArgs.push("--container");
+          }
+          if (startArgs.docker_args && startArgs.docker_args.length > 0) {
+            cmdArgs.push("--docker-args", ...startArgs.docker_args);
+          }
           result = await runParaCommand(cmdArgs);
         }
         break;
@@ -393,6 +421,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           if (dispatchArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
+          }
+          if (dispatchArgs.container) {
+            cmdArgs.push("--container");
+          }
+          if (dispatchArgs.docker_args && dispatchArgs.docker_args.length > 0) {
+            cmdArgs.push("--docker-args", ...dispatchArgs.docker_args);
           }
 
           result = await runParaCommand(cmdArgs);
