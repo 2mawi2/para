@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 
 use super::session::{MountType, ResourceLimits};
 
@@ -255,7 +255,6 @@ pub struct DockerConfigExtension {
 }
 
 /// Helper to detect project type from files in the working directory
-#[allow(dead_code)]
 pub fn detect_project_type(project_path: &Path) -> ProjectType {
     if project_path.join("Cargo.toml").exists() {
         ProjectType::Rust

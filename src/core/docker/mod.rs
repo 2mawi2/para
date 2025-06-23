@@ -10,6 +10,7 @@ use std::process::Command;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod extraction;
 pub mod manager;
 pub mod service;
 pub mod session;
