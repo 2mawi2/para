@@ -1335,6 +1335,7 @@ dependencies = [
  "directories",
  "filetime",
  "fs2",
+ "hex",
  "rand",
  "ratatui",
  "regex",
