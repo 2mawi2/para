@@ -33,7 +33,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         // Launch IDE connected to container
         docker_manager
-            .launch_container_ide(&session, None)
+            .launch_container_ide(&session, None, args.dangerously_skip_permissions)
             .map_err(|e| {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;

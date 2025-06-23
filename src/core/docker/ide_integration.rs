@@ -20,6 +20,7 @@ impl DockerIdeIntegration {
         session_dir: &Path,
         container_session: &ContainerSession,
         initial_prompt: Option<&str>,
+        dangerously_skip_permissions: bool,
     ) -> Result<()> {
         // Save initial prompt if provided
         if let Some(prompt) = initial_prompt {
@@ -30,7 +31,7 @@ impl DockerIdeIntegration {
         }
 
         // Create VS Code tasks.json for auto-run
-        Self::create_vscode_tasks(session_dir, initial_prompt)?;
+        Self::create_vscode_tasks(session_dir, initial_prompt, dangerously_skip_permissions)?;
 
         // Construct vscode-remote URI for direct container connection
         let container_name = format!("para-{}", container_session.session_name);
@@ -88,17 +89,24 @@ impl DockerIdeIntegration {
     }
 
     /// Create VS Code tasks.json for auto-run
-    fn create_vscode_tasks(session_dir: &Path, initial_prompt: Option<&str>) -> Result<()> {
+    fn create_vscode_tasks(
+        session_dir: &Path,
+        initial_prompt: Option<&str>,
+        dangerously_skip_permissions: bool,
+    ) -> Result<()> {
         let vscode_dir = session_dir.join(".vscode");
         fs::create_dir_all(&vscode_dir).map_err(|e| {
             ParaError::docker_error(format!("Failed to create .vscode directory: {}", e))
         })?;
 
         // Now that we have Claude installed in the container, we can run it directly
-        let command = if initial_prompt.is_some() {
-            "claude \"$(cat '/workspace/.initial-prompt')\""
-        } else {
-            "claude"
+        let command = match (initial_prompt.is_some(), dangerously_skip_permissions) {
+            (true, true) => {
+                "claude --dangerously-skip-permissions \"$(cat '/workspace/.initial-prompt')\""
+            }
+            (true, false) => "claude \"$(cat '/workspace/.initial-prompt')\"",
+            (false, true) => "claude --dangerously-skip-permissions",
+            (false, false) => "claude",
         };
 
         let tasks_config = serde_json::json!({
@@ -169,7 +177,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let result =
-            DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), Some("Test prompt"));
+            DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), Some("Test prompt"), false);
         assert!(result.is_ok());
 
         // Should create tasks.json that runs Claude in container
@@ -187,7 +195,7 @@ mod tests {
     fn test_create_vscode_tasks_without_prompt() {
         let temp_dir = TempDir::new().unwrap();
 
-        let result = DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), None);
+        let result = DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), None, false);
         assert!(result.is_ok());
 
         // Should still create tasks.json but with a different message
@@ -197,5 +205,19 @@ mod tests {
         let content = fs::read_to_string(tasks_file).unwrap();
         assert!(content.contains("Start Claude Code in Container"));
         assert!(!content.contains("/workspace/.initial-prompt"));
+    }
+
+    #[test]
+    fn test_create_vscode_tasks_with_dangerous_permissions() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let result =
+            DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), Some("Test prompt"), true);
+        assert!(result.is_ok());
+
+        let tasks_file = temp_dir.path().join(".vscode/tasks.json");
+        let content = fs::read_to_string(tasks_file).unwrap();
+        assert!(content.contains("--dangerously-skip-permissions"));
+        assert!(content.contains("/workspace/.initial-prompt"));
     }
 }
