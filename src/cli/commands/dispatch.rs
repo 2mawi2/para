@@ -44,7 +44,8 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     let mut session_manager = SessionManager::new(&config);
 
-    let session_state = if args.container {
+    // Track whether we're using Docker and the final config
+    let (is_container, final_docker_config) = if args.container {
         // Create Docker container session
         if !config.docker.enabled {
             return Err(ParaError::invalid_config(
@@ -67,7 +68,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         }
 
         let mut config_with_docker = config.clone();
-        config_with_docker.docker = docker_config;
+        config_with_docker.docker = docker_config.clone();
 
         let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
         let session = session_manager.create_docker_session(
@@ -90,7 +91,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .launch_container_ide(&session, Some(&prompt))
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
-        session
+        (true, docker_config)
     } else {
         // Create regular worktree session
         let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
@@ -127,11 +128,31 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        session_state
+        (false, config.docker.clone())
     };
 
-    println!("Created session '{}' with Claude Code", session_state.name);
-    println!("Session path: {}", session_state.worktree_path.display());
+    // Get session state for display
+    let session_state = session_manager
+        .list_sessions()?
+        .into_iter()
+        .find(|s| s.name == session_id)
+        .ok_or_else(|| ParaError::session_not_found(&session_id))?;
+
+    println!(
+        "✅ Created session '{}' with Claude Code",
+        session_state.name
+    );
+    if is_container {
+        println!("   Container: para-{}", session_state.name);
+        println!("   Image: para-authenticated:latest");
+
+        // Show network isolation warning if it's disabled
+        if !final_docker_config.network_isolation {
+            println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
+    }
+    println!("   Branch: {}", session_state.branch);
+    println!("   Worktree: {}", session_state.worktree_path.display());
 
     Ok(())
 }

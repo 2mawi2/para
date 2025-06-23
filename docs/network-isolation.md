@@ -2,15 +2,17 @@
 
 ## Overview
 
-Para now supports network isolation for Docker containers, providing security by default while maintaining functionality for essential services. This feature is enabled by default and follows security best practices based on Anthropic's reference implementation.
+Para supports network isolation for Docker containers, providing enhanced security while maintaining functionality for essential services. This feature follows security best practices based on Anthropic's reference implementation. Network isolation is currently **OFF by default** for backward compatibility, with a phased rollout strategy planned.
 
 ## Features
 
-### Default Network Isolation
+### Network Isolation Status
 
-- **Enabled by Default**: All new Docker containers run with network isolation unless explicitly disabled
-- **Fail-Safe**: If firewall setup fails, the container will not start to prevent insecure operation
-- **Default Allowed Domains**:
+- **Currently OFF by Default**: For backward compatibility with existing workflows
+- **Warning Display**: When network isolation is disabled, you'll see: `⚠️  Network isolation: OFF (use --allow-domains to enable)`
+- **Easy Enable**: Simply use `--allow-domains` flag to enable isolation with default or custom domains
+- **Fail-Safe**: When enabled, if firewall setup fails, the container will not start to prevent insecure operation
+- **Default Allowed Domains** (when enabled):
   - `api.anthropic.com` (Claude API)
   - `github.com` (Git operations)
   - `api.github.com` (GitHub API)
@@ -27,34 +29,48 @@ Based on Anthropic's reference implementation using:
 
 ## Usage
 
-### Basic Usage
+### Basic Usage (Without Network Isolation)
 
 ```bash
-# Start container with default network isolation
+# Start container without network isolation (current default)
 para start --container my-session
+# ⚠️  Network isolation: OFF (use --allow-domains to enable)
 
-# Dispatch with container (network isolation enabled by default)
+# Dispatch with container (no network isolation by default)
 para dispatch --container "implement user authentication"
+# ⚠️  Network isolation: OFF (use --allow-domains to enable)
 ```
 
-### Adding Custom Allowed Domains
+### Enabling Network Isolation (Recommended)
 
 ```bash
-# Allow additional domains via CLI
+# Enable network isolation with default allowed domains
+para start --container --allow-domains "" my-session
+
+# Enable with additional custom domains
 para start --container --allow-domains "api.example.com,cdn.example.com" my-session
+
+# Dispatch with network isolation enabled
+para dispatch --container --allow-domains "" "implement user authentication"
+```
+
+### Custom Allowed Domains
+
+```bash
+# Add specific domains for your use case
+para start --container --allow-domains "api.stripe.com,api.sendgrid.com" payment-feature
 
 # Multiple domains in dispatch
 para dispatch --container --allow-domains "custom-api.com,internal-service.com" "implement feature"
 ```
 
-### Disabling Network Isolation (Not Recommended)
+### Explicitly Disabling Network Isolation
 
 ```bash
-# Disable network isolation (uses host network)
+# Explicitly disable network isolation (same as current default)
 para start --container --no-network-isolation my-session
 
-# Dispatch without network isolation
-para dispatch --container --no-network-isolation "implement feature"
+# Note: This is currently equivalent to not using --allow-domains
 ```
 
 ### Configuration File
@@ -66,8 +82,25 @@ Add to your para configuration:
   "docker": {
     "enabled": true,
     "mount_workspace": true,
-    "network_isolation": true,
+    "network_isolation": false,  // Currently defaults to false
     "allowed_domains": [
+      "my-api.com",
+      "internal-service.com"
+    ]
+  }
+}
+```
+
+To enable network isolation by default in your configuration:
+
+```json
+{
+  "docker": {
+    "enabled": true,
+    "mount_workspace": true,
+    "network_isolation": true,   // Enable by default
+    "allowed_domains": [
+      // Add any additional domains beyond the defaults
       "my-api.com",
       "internal-service.com"
     ]
@@ -123,14 +156,27 @@ To debug network access issues, you can temporarily disable isolation:
 para start --container --no-network-isolation debug-session
 ```
 
-## Migration from Previous Versions
+## Migration and Future Plans
 
-If you're upgrading from a version without network isolation:
+### Current Status (Phased Rollout)
 
-1. **Default Behavior**: Network isolation is now enabled by default
-2. **Existing Configs**: Old configurations will automatically use network isolation
-3. **Custom Domains**: Add any additional domains you need to the configuration
-4. **Backward Compatibility**: Use `--no-network-isolation` if you need the old behavior
+1. **Default OFF**: Network isolation is currently OFF by default for backward compatibility
+2. **Warning System**: Users see a warning when network isolation is disabled
+3. **Easy Opt-in**: Use `--allow-domains` flag to enable network isolation
+4. **Configuration**: Can be enabled by default in your configuration file
+
+### Future Plans
+
+1. **Phase 1 (Current)**: Network isolation OFF by default with warnings
+2. **Phase 2 (Future)**: Network isolation ON by default with opt-out option
+3. **Phase 3 (Later)**: Network isolation always ON for maximum security
+
+### Migration Tips
+
+- **Test with isolation**: Try `--allow-domains ""` to test your workflows with isolation
+- **Identify required domains**: Note any additional domains your workflows need
+- **Update configuration**: Add `network_isolation: true` to enable by default
+- **Gradual adoption**: Enable for specific sessions first before making it default
 
 ## Security Considerations
 

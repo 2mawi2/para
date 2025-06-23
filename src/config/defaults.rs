@@ -63,13 +63,13 @@ pub fn default_docker_config() -> DockerConfig {
     DockerConfig {
         enabled: false,
         mount_workspace: true,
-        network_isolation: true,
+        network_isolation: false, // Default to OFF for backward compatibility
         allowed_domains: default_allowed_domains(),
     }
 }
 
 pub fn default_network_isolation() -> bool {
-    true
+    false // Default to OFF for phased rollout
 }
 
 pub fn default_allowed_domains() -> Vec<String> {

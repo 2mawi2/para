@@ -4,8 +4,8 @@ mod tests {
     use crate::config::DockerConfig;
 
     #[test]
-    fn test_default_network_isolation_enabled() {
-        assert!(default_network_isolation());
+    fn test_default_network_isolation_disabled() {
+        assert!(!default_network_isolation());
     }
 
     #[test]
@@ -19,7 +19,7 @@ mod tests {
         use crate::config::defaults::default_docker_config;
 
         let config = default_docker_config();
-        assert!(config.network_isolation);
+        assert!(!config.network_isolation); // Default is OFF
         assert!(config.allowed_domains.is_empty());
     }
 
