@@ -13,6 +13,15 @@ pub enum DockerError {
     #[error("Failed to start container: {0}")]
     ContainerStartFailed(String),
 
+    #[error("Docker image not found: {0}")]
+    ImageNotFound(String),
+
+    #[error("Insecure image: {0}")]
+    InsecureImage(String),
+
+    #[error("Network isolation verification failed: {0}")]
+    NetworkIsolationFailed(String),
+
     #[error("General error: {0}")]
     Other(#[from] anyhow::Error),
 }

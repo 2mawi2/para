@@ -51,6 +51,13 @@ WORKDIR /workspace
 # Verify Claude is installed
 RUN claude --version || echo "Claude CLI installed"
 
+# Add security labels for feature detection
+LABEL para.version="1.2.0" \
+      para.network-isolation="true" \
+      para.secure-entrypoint="true" \
+      para.build-date="${BUILD_DATE}" \
+      para.description="Para authenticated container with network isolation support"
+
 # Set the secure entrypoint to handle network isolation and authentication
 ENTRYPOINT ["/usr/local/bin/secure-entrypoint.sh"]
 
