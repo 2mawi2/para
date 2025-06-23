@@ -72,6 +72,7 @@ impl DockerManager {
         &self,
         session: &SessionState,
         initial_prompt: Option<&str>,
+        dangerously_skip_permissions: bool,
     ) -> DockerResult<()> {
         let image_name = self.get_docker_image()?;
         let container_session = ContainerSession::new(
@@ -87,6 +88,7 @@ impl DockerManager {
             &session.worktree_path,
             &container_session,
             initial_prompt,
+            dangerously_skip_permissions,
         )
         .map_err(|e| DockerError::Other(e.into()))?;
 
