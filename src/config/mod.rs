@@ -15,6 +15,8 @@ pub struct Config {
     pub directories: DirectoryConfig,
     pub git: GitConfig,
     pub session: SessionConfig,
+    #[serde(default = "defaults::default_docker_config")]
+    pub docker: DockerConfig,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -50,6 +52,13 @@ pub struct SessionConfig {
     pub default_name_format: String,
     pub preserve_on_finish: bool,
     pub auto_cleanup_days: Option<u32>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct DockerConfig {
+    pub enabled: bool,
+    pub default_image: String,
+    pub mount_workspace: bool,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;

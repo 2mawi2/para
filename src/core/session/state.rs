@@ -93,18 +93,8 @@ impl SessionState {
     }
 
     /// Check if this is a container session
-    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
     pub fn is_container(&self) -> bool {
         matches!(self.session_type, SessionType::Container { .. })
-    }
-
-    /// Get container ID if this is a container session
-    #[allow(dead_code)] // TODO: Remove when Docker CLI integration is complete
-    pub fn container_id(&self) -> Option<&str> {
-        match &self.session_type {
-            SessionType::Container { container_id } => container_id.as_deref(),
-            _ => None,
-        }
     }
 
     pub fn update_status(&mut self, status: SessionStatus) {

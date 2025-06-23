@@ -41,12 +41,9 @@ impl DockerIdeIntegration {
             service: None,
             workspace_folder: "/workspace".to_string(),
             remote_user: "vscode".to_string(),
-            post_attach_command: initial_prompt.map(|p| {
-                format!("echo 'Initial prompt saved in .initial-prompt: {}'", p)
-            }),
-            extensions: vec![
-                "ms-vscode.remote-explorer".to_string(),
-            ],
+            post_attach_command: initial_prompt
+                .map(|p| format!("echo 'Initial prompt saved in .initial-prompt: {}'", p)),
+            extensions: vec!["ms-vscode.remote-explorer".to_string()],
             settings: serde_json::json!({
                 "terminal.integrated.defaultProfile.linux": "bash",
             }),
@@ -57,17 +54,21 @@ impl DockerIdeIntegration {
             }),
         };
 
-        let devcontainer_json = serde_json::to_string_pretty(&devcontainer_config).map_err(|e| {
-            ParaError::docker_error(format!("Failed to serialize devcontainer.json: {}", e))
-        })?;
+        let devcontainer_json =
+            serde_json::to_string_pretty(&devcontainer_config).map_err(|e| {
+                ParaError::docker_error(format!("Failed to serialize devcontainer.json: {}", e))
+            })?;
 
         let devcontainer_file = devcontainer_dir.join("devcontainer.json");
         fs::write(&devcontainer_file, devcontainer_json).map_err(|e| {
             ParaError::docker_error(format!("Failed to write devcontainer.json: {}", e))
         })?;
 
-        println!("✅ Generated .devcontainer/devcontainer.json for container: {}", container_name);
-        
+        println!(
+            "✅ Generated .devcontainer/devcontainer.json for container: {}",
+            container_name
+        );
+
         Ok(())
     }
 }
@@ -107,30 +108,16 @@ struct DevContainerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::docker::session::{ContainerStatus, ResourceLimits};
-    use std::collections::HashMap;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn create_test_container_session(name: &str) -> ContainerSession {
-        ContainerSession {
-            container_id: "test-container-123".to_string(),
-            session_name: name.to_string(),
-            status: ContainerStatus::Running,
-            created_at: chrono::Utc::now(),
-            started_at: Some(chrono::Utc::now()),
-            stopped_at: None,
-            image: "ubuntu:latest".to_string(),
-            volumes: vec![],
-            ports: vec![],
-            environment: HashMap::new(),
-            working_dir: PathBuf::from("/workspace"),
-            network_mode: "bridge".to_string(),
-            hostname: format!("para-{}", name),
-            resource_limits: ResourceLimits::default(),
-            labels: HashMap::new(),
-            health_check: None,
-        }
+        ContainerSession::new(
+            "test-container-123".to_string(),
+            name.to_string(),
+            "ubuntu:latest".to_string(),
+            PathBuf::from("/workspace"),
+        )
     }
 
     #[test]

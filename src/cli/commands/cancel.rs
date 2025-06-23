@@ -17,7 +17,7 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     validate_cancel_args(&args)?;
 
     let git_service = GitService::discover()?;
-    let session_manager = SessionManager::new(&config);
+    let mut session_manager = SessionManager::new(&config);
 
     let session_name = detect_session_name(&args, &git_service, &session_manager)?;
 
@@ -33,15 +33,14 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
         );
     }
 
+    // Use session manager's cancel method which handles Docker cleanup
+    session_manager.cancel_session(&session_name, args.force)?;
+
     let archived_branch = git_service.archive_branch_with_session_name(
         &session_state.branch,
         &session_state.name,
         &config.git.branch_prefix,
     )?;
-
-    git_service.remove_worktree(&session_state.worktree_path)?;
-
-    session_manager.delete_state(&session_state.name)?;
 
     let archive_manager = crate::core::session::archive::ArchiveManager::new(&config, &git_service);
     if let Ok((old_removed, limit_removed)) = archive_manager.auto_cleanup() {

@@ -1,47 +1,29 @@
-//! Container code extraction for applying changes from containers to host Git branches
+//! Container code extraction for MVP
 //!
-//! MVP implementation - basic file copying from container mount to host
+//! For MVP, since containers mount the host directory, extraction is not needed.
+//! The finish command will work normally since all changes are already on the host.
 
 use crate::utils::Result;
 
-/// Options for extracting container changes
+/// Options for extracting container changes (MVP: not used)
+#[allow(dead_code)]
 pub struct ExtractionOptions {
-    /// The session/container name
     pub session_name: String,
-    /// The commit message for the changes
     pub commit_message: String,
-    /// Source path (container mount)
     pub source_path: std::path::PathBuf,
-    /// Target path (host worktree)
     pub target_path: std::path::PathBuf,
 }
 
 /// Result of container extraction
 #[derive(Debug)]
 pub struct ExtractionResult {
-    /// Number of files copied
     pub files_copied: usize,
 }
 
-/// Extract changes from a container session to the host
-///
-/// MVP implementation - simply copies files from the container's mounted directory
-/// back to the host worktree.
-pub fn extract_changes(options: ExtractionOptions) -> Result<ExtractionResult> {
-    // TODO: Connect to CLI in next phase
-    // For MVP, this is a placeholder that would:
-    // 1. List files in options.source_path
-    // 2. Copy modified files to options.target_path
-    // 3. Return count of files copied
-
-    println!(
-        "Extracting changes from container session: {}",
-        options.session_name
-    );
-    println!("Source: {:?}", options.source_path);
-    println!("Target: {:?}", options.target_path);
-
-    // MVP: Just return a placeholder result
+/// Extract changes from container (MVP: no-op since we mount host directory)
+pub fn extract_changes(_options: ExtractionOptions) -> Result<ExtractionResult> {
+    // MVP: Changes are already on host through volume mount
+    // No extraction needed - finish command will handle git operations
     Ok(ExtractionResult { files_copied: 0 })
 }
 

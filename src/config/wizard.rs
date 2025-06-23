@@ -11,6 +11,7 @@ pub fn run_config_wizard() -> Result<Config> {
     config.ide = configure_ide_simple()?;
     config.directories = configure_directories_simple(config.directories)?;
     config.session = configure_session_simple(config.session)?;
+    config.docker = configure_docker_simple(config.docker)?;
 
     println!("\n📋 Configuration Summary:");
     display_config_summary(&config);
@@ -121,6 +122,26 @@ fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::S
     Ok(config)
 }
 
+fn configure_docker_simple(mut config: super::DockerConfig) -> Result<super::DockerConfig> {
+    println!("\n🐳 Docker Configuration (optional)");
+    
+    config.enabled = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enable Docker container support?")
+        .default(false)
+        .interact()
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+    
+    if config.enabled {
+        config.default_image = Input::<String>::with_theme(&ColorfulTheme::default())
+            .with_prompt("Default Docker image")
+            .default(config.default_image)
+            .interact()
+            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+    }
+    
+    Ok(config)
+}
+
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);
     if config.ide.wrapper.enabled {
@@ -139,6 +160,10 @@ fn display_config_summary(config: &Config) {
         println!("  Auto-cleanup: {} days", days);
     } else {
         println!("  Auto-cleanup: disabled");
+    }
+    println!("  Docker enabled: {}", config.docker.enabled);
+    if config.docker.enabled {
+        println!("  Docker image: {}", config.docker.default_image);
     }
 }
 
