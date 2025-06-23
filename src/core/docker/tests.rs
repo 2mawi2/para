@@ -1,7 +1,7 @@
 //! Tests for Docker integration
 
 #[cfg(test)]
-mod tests {
+mod docker_tests {
     use super::super::*;
     use crate::core::docker::config::{detect_project_type, ProjectType};
     use crate::core::docker::manager::DockerManager;
@@ -274,18 +274,12 @@ mod tests {
 
         // Test Rust detection
         std::fs::write(temp_dir.path().join("Cargo.toml"), "").unwrap();
-        assert_eq!(
-            detect_project_type(&temp_dir.path().to_path_buf()),
-            ProjectType::Rust
-        );
+        assert_eq!(detect_project_type(temp_dir.path()), ProjectType::Rust);
 
         // Test Node detection
         std::fs::remove_file(temp_dir.path().join("Cargo.toml")).unwrap();
         std::fs::write(temp_dir.path().join("package.json"), "{}").unwrap();
-        assert_eq!(
-            detect_project_type(&temp_dir.path().to_path_buf()),
-            ProjectType::Node
-        );
+        assert_eq!(detect_project_type(temp_dir.path()), ProjectType::Node);
     }
 
     #[test]
