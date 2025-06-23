@@ -20,13 +20,21 @@ impl DockerService {
         session_name: &str,
         _config: &DockerConfig,
         working_dir: &Path,
+        docker_args: &[String],
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
-        let docker_args = vec![
+        let mut docker_cmd_args = vec![
             "create".to_string(),
             "--name".to_string(),
             container_name.clone(),
+        ];
+
+        // Insert user-provided Docker args before the standard args
+        docker_cmd_args.extend_from_slice(docker_args);
+
+        // Add standard args
+        docker_cmd_args.extend([
             "-v".to_string(),
             format!("{}:/workspace", working_dir.display()),
             "-w".to_string(),
@@ -34,14 +42,14 @@ impl DockerService {
             "para-authenticated:latest".to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
-        ];
+        ]);
 
         println!(
             "🐋 Running docker command: docker {}",
-            docker_args.join(" ")
+            docker_cmd_args.join(" ")
         );
         let output = Command::new("docker")
-            .args(&docker_args)
+            .args(&docker_cmd_args)
             .output()
             .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
 
