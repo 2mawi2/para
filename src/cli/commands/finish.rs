@@ -5,12 +5,8 @@ use crate::core::git::{
 };
 use crate::core::session::{SessionManager, SessionState, SessionStatus};
 use crate::platform::get_platform_manager;
-use crate::utils::{get_container_session, is_inside_container, ParaError, Result};
-use chrono::Utc;
-use serde_json::json;
+use crate::utils::{ParaError, Result};
 use std::env;
-use std::fs;
-use std::process::Command;
 
 struct FinishContext<'a> {
     session_info: Option<SessionState>,
@@ -198,108 +194,36 @@ fn perform_pre_finish_operations(
     Ok(())
 }
 
-/// Handle finishing a session from inside a container
 fn handle_container_finish(
     session_info: &SessionState,
     args: &FinishArgs,
     _config: &Config,
 ) -> Result<FinishResult> {
-    println!("📦 Finishing container session: {}", session_info.name);
+    use crate::core::docker::extraction::{extract_changes, ExtractionOptions};
 
-    // Export changes as a patch for host to apply
-    export_container_patch(session_info, args)?;
+    println!("Container session finish - MVP placeholder");
 
-    println!("✓ Container changes exported successfully");
-    println!("  Session: {}", session_info.name);
-    println!("  Commit message: {}", args.message);
-    println!("  Host will apply changes and create branch");
+    // TODO: Connect to CLI in next phase
+    // For MVP, just create the extraction options and call the placeholder
+    let extraction_options = ExtractionOptions {
+        session_name: session_info.name.clone(),
+        commit_message: args.message.clone(),
+        source_path: session_info.worktree_path.clone(),
+        target_path: session_info.worktree_path.clone(), // Same for MVP
+    };
 
+    // Call the MVP extraction function
+    let extraction_result = extract_changes(extraction_options).map_err(|e| {
+        ParaError::docker_error(format!("Failed to extract container changes: {}", e))
+    })?;
+
+    println!("✓ Container session completed");
+    println!("  Files processed: {}", extraction_result.files_copied);
+
+    // For MVP, just return success with the current branch
     Ok(FinishResult::Success {
-        final_branch: args
-            .branch
-            .clone()
-            .unwrap_or_else(|| session_info.branch.clone()),
+        final_branch: session_info.branch.clone(),
     })
-}
-
-/// Export container changes as a patch file for the host to apply
-fn export_container_patch(session_info: &SessionState, args: &FinishArgs) -> Result<()> {
-    // Ensure we have staged changes
-    let output = Command::new("git")
-        .args(["diff", "--cached", "--name-only"])
-        .output()
-        .map_err(|e| ParaError::git_error(format!("Failed to check staged changes: {}", e)))?;
-
-    let stdout_string = String::from_utf8_lossy(&output.stdout);
-    let staged_files = stdout_string.trim();
-    if staged_files.is_empty() {
-        // Auto-stage all changes like normal finish
-        println!("Auto-staging all changes...");
-        let stage_output = Command::new("git")
-            .args(["add", "."])
-            .output()
-            .map_err(|e| ParaError::git_error(format!("Failed to stage changes: {}", e)))?;
-
-        if !stage_output.status.success() {
-            return Err(ParaError::git_error(format!(
-                "Failed to stage changes: {}",
-                String::from_utf8_lossy(&stage_output.stderr)
-            )));
-        }
-    }
-
-    // Create binary patch of staged changes
-    let patch_output = Command::new("git")
-        .args(["diff", "--cached", "--binary"])
-        .output()
-        .map_err(|e| ParaError::git_error(format!("Failed to create patch: {}", e)))?;
-
-    if !patch_output.status.success() {
-        return Err(ParaError::git_error(format!(
-            "Failed to create patch: {}",
-            String::from_utf8_lossy(&patch_output.stderr)
-        )));
-    }
-
-    // Write patch file
-    let patch_path = "/workspace/.para/container-changes.patch";
-    fs::write(patch_path, patch_output.stdout)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write patch file: {}", e)))?;
-
-    // Get git author info
-    let author_name = Command::new("git")
-        .args(["config", "user.name"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "Para Agent".to_string());
-
-    let author_email = Command::new("git")
-        .args(["config", "user.email"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "agent@para.docker".to_string());
-
-    // Create commit metadata
-    let metadata = json!({
-        "message": args.message,
-        "branch": args.branch,
-        "session_name": session_info.name,
-        "author": {
-            "name": author_name,
-            "email": author_email
-        },
-        "timestamp": Utc::now().to_rfc3339(),
-    });
-
-    // Write metadata file
-    let metadata_path = "/workspace/.para/container-commit.json";
-    fs::write(metadata_path, metadata.to_string())
-        .map_err(|e| ParaError::fs_error(format!("Failed to write metadata file: {}", e)))?;
-
-    println!("📤 Patch exported to: {}", patch_path);
-    println!("📋 Metadata saved to: {}", metadata_path);
-
-    Ok(())
 }
 
 pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
@@ -311,31 +235,16 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
 
     let feature_branch = determine_feature_branch(&session_info, &session_env)?;
 
-    // Check if this is a container session OR if we're running inside a container
+    // Check if this is a container session
     let is_container_session = session_info
         .as_ref()
         .map(|s| s.is_container())
         .unwrap_or(false);
 
-    let is_inside_container_env = is_inside_container();
-
-    let result = if is_container_session || is_inside_container_env {
+    let result = if is_container_session {
         // Handle container finish differently
         if let Some(ref session) = session_info {
             handle_container_finish(session, &args, &config)?
-        } else if is_inside_container_env {
-            // We're inside a container but don't have session info
-            // Create a temporary session info for patch export
-            let container_session_name =
-                get_container_session().unwrap_or_else(|| "container-session".to_string());
-
-            let temp_session = SessionState::new(
-                container_session_name,
-                feature_branch.clone(),
-                current_dir.clone(),
-            );
-
-            handle_container_finish(&temp_session, &args, &config)?
         } else {
             return Err(ParaError::invalid_args("Container session info not found"));
         }

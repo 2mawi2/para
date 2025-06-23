@@ -2,15 +2,11 @@
 //!
 //! Coordinates Docker operations with para session management
 
-use super::{
-    ContainerPatchWatcher, DockerError, DockerIdeIntegration, DockerResult, DockerService,
-};
+use super::{DockerError, DockerIdeIntegration, DockerResult, DockerService};
 use crate::config::Config;
 use crate::core::docker::session::ContainerSession;
-use crate::core::git::GitService;
-use crate::core::session::{SessionManager, SessionState};
+use crate::core::session::SessionState;
 use std::process::Command;
-use std::thread;
 
 /// Docker manager that integrates with para sessions
 pub struct DockerManager {
@@ -71,7 +67,7 @@ impl DockerManager {
         Ok(())
     }
 
-    /// Launch IDE connected to container with patch watching
+    /// Launch IDE connected to container
     pub fn launch_container_ide(
         &self,
         session: &SessionState,
@@ -97,58 +93,5 @@ impl DockerManager {
         .map_err(|e| DockerError::Other(e.into()))?;
 
         Ok(())
-    }
-
-    /// Start watching for container patches in the background
-    #[allow(dead_code)]
-    pub fn start_patch_watcher(&self, session: &SessionState) -> DockerResult<()> {
-        let workspace_path = session.worktree_path.clone();
-        let config = self.config.clone();
-        let session_name = session.name.clone();
-
-        thread::spawn(move || {
-            if let Err(e) = Self::run_patch_watcher(&workspace_path, &config, &session_name) {
-                eprintln!("Container patch watcher error: {}", e);
-            }
-        });
-
-        println!(
-            "🔍 Started patch watcher for container session: {}",
-            session.name
-        );
-        Ok(())
-    }
-
-    /// Run the patch watcher (blocking)
-    #[allow(dead_code)]
-    fn run_patch_watcher(
-        workspace_path: &std::path::Path,
-        config: &Config,
-        session_name: &str,
-    ) -> crate::utils::Result<()> {
-        let git_service = GitService::discover_from(workspace_path)?;
-        let mut session_manager = SessionManager::new(config);
-        let watcher = ContainerPatchWatcher::new(workspace_path);
-
-        println!(
-            "🔍 Watching for patches from container session: {}",
-            session_name
-        );
-        watcher.watch_continuously(&git_service, &mut session_manager)?;
-
-        Ok(())
-    }
-
-    /// Check once for patches without continuous watching
-    #[allow(dead_code)]
-    pub fn check_for_patches(&self, session: &SessionState) -> DockerResult<bool> {
-        let git_service = GitService::discover_from(&session.worktree_path)
-            .map_err(|e| DockerError::Other(e.into()))?;
-        let mut session_manager = SessionManager::new(&self.config);
-        let watcher = ContainerPatchWatcher::new(&session.worktree_path);
-
-        watcher
-            .check_and_apply_patches(&git_service, &mut session_manager)
-            .map_err(|e| DockerError::Other(e.into()))
     }
 }
