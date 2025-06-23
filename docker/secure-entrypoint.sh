@@ -14,8 +14,8 @@ NETWORK_ISOLATION="${PARA_NETWORK_ISOLATION:-false}"
 if [ "$NETWORK_ISOLATION" = "true" ]; then
     echo "🔒 Network isolation is enabled"
     
-    # Check if we have the required capabilities using iptables test
-    if ! iptables -L >/dev/null 2>&1; then
+    # Check if we have the required capabilities using iptables test with sudo
+    if ! sudo iptables -L >/dev/null 2>&1; then
         echo "❌ Error: Cannot access iptables. Network isolation requires NET_ADMIN and NET_RAW capabilities"
         echo "   Please ensure the container is running with: --cap-add=NET_ADMIN --cap-add=NET_RAW"
         exit 1
@@ -34,10 +34,10 @@ if [ "$NETWORK_ISOLATION" = "true" ]; then
         exit 1
     fi
     
-    # Run the firewall initialization script
+    # Run the firewall initialization script with sudo
     echo "🔧 Configuring network firewall..."
     if [ -x /usr/local/bin/init-firewall.sh ]; then
-        /usr/local/bin/init-firewall.sh || {
+        sudo /usr/local/bin/init-firewall.sh || {
             echo "❌ Failed to configure network isolation"
             echo "   Container will not start to prevent insecure operation"
             exit 1

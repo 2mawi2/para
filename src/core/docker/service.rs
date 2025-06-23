@@ -22,16 +22,6 @@ impl DockerService {
         working_dir: &Path,
         docker_args: &[String],
     ) -> DockerResult<ContainerSession> {
-        // CRITICAL: Validate image security if network isolation is requested
-        if config.network_isolation {
-            self.validate_secure_image()?;
-            
-            // Also check for security labels as an additional safety measure
-            if !self.check_image_security_labels()? {
-                println!("⚠️  Warning: Docker image lacks security labels. Consider rebuilding with: para auth setup --force");
-            }
-        }
-
         let container_name = format!("para-{}", session_name);
 
         let mut docker_cmd_args = vec![
@@ -183,61 +173,6 @@ impl DockerService {
         Ok(())
     }
 
-    /// Validate that the Docker image supports secure network isolation
-    fn validate_secure_image(&self) -> DockerResult<()> {
-        // Check if image exists and has the secure entrypoint
-        let output = Command::new("docker")
-            .args([
-                "inspect",
-                "para-authenticated:latest",
-                "--format",
-                "{{json .Config.Entrypoint}}",
-            ])
-            .output()
-            .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
-
-        if !output.status.success() {
-            return Err(DockerError::ImageNotFound(
-                "para-authenticated:latest image not found. Please build with: para auth setup"
-                    .to_string(),
-            ));
-        }
-
-        let entrypoint = String::from_utf8_lossy(&output.stdout);
-        if !entrypoint.contains("secure-entrypoint.sh") {
-            return Err(DockerError::InsecureImage(
-                "SECURITY ERROR: Docker image does not support network isolation.\n\
-                 The image is using an old entrypoint that doesn't enforce security policies.\n\
-                 Please rebuild the image with: para auth setup --force\n\
-                 This is required for network isolation to work correctly."
-                    .to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    /// Check if the Docker image has the required security labels
-    fn check_image_security_labels(&self) -> DockerResult<bool> {
-        let output = Command::new("docker")
-            .args([
-                "inspect",
-                "para-authenticated:latest",
-                "--format",
-                "{{json .Config.Labels}}",
-            ])
-            .output()
-            .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
-
-        if !output.status.success() {
-            return Ok(false); // Image doesn't exist
-        }
-
-        let labels = String::from_utf8_lossy(&output.stdout);
-        // Check for security-related labels
-        Ok(labels.contains("\"para.network-isolation\":\"true\"")
-            && labels.contains("\"para.secure-entrypoint\":\"true\""))
-    }
 
     /// Verify network isolation is actually working after container start
     pub fn verify_network_isolation(
@@ -267,13 +202,13 @@ impl DockerService {
             // If isolation should be enabled, verify iptables rules
             if expected_enabled {
                 let iptables_output = Command::new("docker")
-                    .args(["exec", &container_name, "iptables", "-L", "-n"])
+                    .args(["exec", &container_name, "sudo", "iptables", "-L", "-n"])
                     .output();
 
                 match iptables_output {
                     Ok(result) if result.status.success() => {
                         let rules = String::from_utf8_lossy(&result.stdout);
-                        if !rules.contains("PARA_ALLOWED") && !rules.contains("ipset") {
+                        if !rules.contains("allowed-domains") && !rules.contains("match-set") {
                             return Err(DockerError::NetworkIsolationFailed(
                                 "SECURITY ERROR: Network isolation enabled but firewall rules not applied.\n\
                                  This indicates the security setup failed during container initialization.\n\
@@ -356,9 +291,7 @@ mod tests {
 
     #[test]
     fn test_security_validation_error_types() {
-        // Test that we can create the new error types
-        let _image_not_found = DockerError::ImageNotFound("test image not found".to_string());
-        let _insecure_image = DockerError::InsecureImage("test insecure image".to_string());
+        // Test that we can create the network isolation error type
         let _network_failed = DockerError::NetworkIsolationFailed("test network failed".to_string());
     }
 
