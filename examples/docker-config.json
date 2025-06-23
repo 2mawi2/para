@@ -1,0 +1,115 @@
+{
+  "ide": {
+    "command": "cursor",
+    "args": []
+  },
+  "directories": {
+    "state_dir": ".para/state",
+    "worktrees_dir": ".para/worktrees",
+    "snapshots_dir": ".para/snapshots"
+  },
+  "git": {
+    "default_branch": "main",
+    "branch_prefix": "para/",
+    "auto_stage_all": true,
+    "sign_commits": false
+  },
+  "session": {
+    "auto_dispatch": false,
+    "kill_previous_ide": true,
+    "ignore_patterns": [
+      "target/",
+      "node_modules/",
+      ".git/"
+    ]
+  },
+  "docker": {
+    "enabled": true,
+    "default_image": "ubuntu:22.04",
+    "image_mappings": {
+      "rust": "rust:1.75",
+      "node": "node:20-alpine",
+      "python": "python:3.11-slim",
+      "go": "golang:1.21",
+      "java": "openjdk:17-jdk-slim",
+      "ruby": "ruby:3.2",
+      "php": "php:8.2-cli",
+      "dotnet": "mcr.microsoft.com/dotnet/sdk:8.0"
+    },
+    "default_volumes": [
+      {
+        "source": "$WORKTREE",
+        "target": "/workspace",
+        "read_only": false,
+        "mount_type": "bind"
+      },
+      {
+        "source": "$HOME/.ssh",
+        "target": "/root/.ssh",
+        "read_only": true,
+        "mount_type": "bind"
+      },
+      {
+        "source": "$HOME/.gitconfig",
+        "target": "/root/.gitconfig",
+        "read_only": true,
+        "mount_type": "bind"
+      }
+    ],
+    "default_environment": {
+      "TERM": "xterm-256color",
+      "LANG": "en_US.UTF-8",
+      "TZ": "UTC"
+    },
+    "default_resource_limits": {
+      "cpu_limit": 4.0,
+      "memory_limit": 8589934592,
+      "pids_limit": 1000
+    },
+    "network": {
+      "mode": "bridge",
+      "create_custom_network": true,
+      "custom_network_name": "para-network",
+      "dns": ["8.8.8.8", "8.8.4.4"],
+      "dns_search": ["local"],
+      "extra_hosts": []
+    },
+    "build": null,
+    "registry": null,
+    "hooks": {
+      "post_create": [
+        "apt-get update && apt-get install -y git curl vim"
+      ],
+      "post_start": [
+        "echo 'Container ready for session: $PARA_SESSION_NAME'"
+      ],
+      "pre_stop": [
+        "echo 'Saving work before stopping...'"
+      ],
+      "health_check": {
+        "command": ["echo", "healthy"],
+        "interval_seconds": 30,
+        "timeout_seconds": 5,
+        "retries": 3
+      }
+    },
+    "dev_tools": {
+      "install_basics": true,
+      "additional_packages": [
+        "build-essential",
+        "wget",
+        "jq",
+        "htop"
+      ],
+      "git_config": {
+        "mount_from_host": true,
+        "user_name": null,
+        "user_email": null
+      },
+      "editor_config": {
+        "default": "vim",
+        "mount_configs": true
+      }
+    }
+  }
+}
