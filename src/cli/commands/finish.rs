@@ -45,12 +45,12 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
         ctx.session_info.as_ref().map(|s| s.worktree_path.clone())
     };
 
-    // Release container if this is a container session
+    // Destroy container if this is a container session
     if let Some(ref session) = ctx.session_info {
         if session.is_container() && ctx.config.docker.enabled {
             let docker_manager = crate::core::docker::DockerManager::new(ctx.config.clone());
-            if let Err(e) = docker_manager.release_container(session) {
-                eprintln!("Warning: Failed to release container: {}", e);
+            if let Err(e) = docker_manager.destroy_session_container(session) {
+                eprintln!("Warning: Failed to destroy container: {}", e);
             }
         }
     }
