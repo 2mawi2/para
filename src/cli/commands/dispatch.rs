@@ -57,6 +57,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             session_id.clone(),
             &docker_manager,
             Some(&prompt),
+            &args.docker_args,
         )?;
 
         // Write task file
@@ -474,6 +475,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -489,6 +491,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -507,6 +510,7 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -526,6 +530,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -545,6 +550,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -563,6 +569,7 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -578,6 +585,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -612,6 +620,7 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -636,6 +645,7 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            docker_args: vec![],
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests

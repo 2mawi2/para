@@ -64,8 +64,16 @@ pub struct StartArgs {
     pub dangerously_skip_permissions: bool,
 
     /// Run session in Docker container
-    #[arg(long, help = "Run session in Docker container")]
+    #[arg(long, short = 'c', help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Additional Docker arguments to pass through
+    #[arg(
+        long = "docker-args",
+        allow_hyphen_values = true,
+        help = "Additional Docker arguments to pass through"
+    )]
+    pub docker_args: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -87,7 +95,8 @@ pub struct StartArgs {
     
     # With Docker container
     para dispatch --container \"implement user authentication\"
-    para dispatch --container auth-feature --file requirements.md")]
+    para dispatch -c auth-feature --file requirements.md
+    para dispatch -c --docker-args \"-d\" \"implement user authentication\"")]
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
@@ -104,8 +113,16 @@ pub struct DispatchArgs {
     pub dangerously_skip_permissions: bool,
 
     /// Run session in Docker container
-    #[arg(long, help = "Run session in Docker container")]
+    #[arg(long, short = 'c', help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Additional Docker arguments to pass through
+    #[arg(
+        long = "docker-args",
+        allow_hyphen_values = true,
+        help = "Additional Docker arguments to pass through"
+    )]
+    pub docker_args: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -311,6 +328,7 @@ impl StartArgs {
         if let Some(ref name) = self.name {
             validate_session_name(name)?;
         }
+        validate_docker_args(&self.docker_args)?;
         Ok(())
     }
 }
@@ -321,9 +339,11 @@ impl DispatchArgs {
 
         // Allow no arguments if stdin is piped
         if !std::io::stdin().is_terminal() {
+            validate_docker_args(&self.docker_args)?;
             return Ok(());
         }
 
+        validate_docker_args(&self.docker_args)?;
         self.validate_args()
     }
 
@@ -342,9 +362,11 @@ impl DispatchArgs {
 
         // Allow no arguments if stdin is piped (unless skipped for testing)
         if !skip_stdin_check && !std::io::stdin().is_terminal() {
+            validate_docker_args(&self.docker_args)?;
             return Ok(());
         }
 
+        validate_docker_args(&self.docker_args)?;
         self.validate_args()
     }
 }
@@ -420,5 +442,25 @@ pub fn validate_branch_name(name: &str) -> crate::utils::Result<()> {
         ));
     }
 
+    Ok(())
+}
+
+pub fn validate_docker_args(args: &[String]) -> crate::utils::Result<()> {
+    for arg in args {
+        // Warn about potentially problematic args
+        if arg == "--rm" {
+            eprintln!("Warning: --rm will remove the container, breaking Para session management");
+        }
+        if arg.starts_with("--name") {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot override container name, Para manages this",
+            ));
+        }
+        if arg == "--name" {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot override container name, Para manages this",
+            ));
+        }
+    }
     Ok(())
 }
