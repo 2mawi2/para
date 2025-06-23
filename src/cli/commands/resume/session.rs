@@ -309,6 +309,8 @@ mod tests {
             docker: crate::config::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         };
         let service = GitService::discover_from(repo_path).unwrap();

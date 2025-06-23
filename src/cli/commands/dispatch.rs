@@ -44,7 +44,8 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     let mut session_manager = SessionManager::new(&config);
 
-    let session_state = if args.container {
+    // Track whether we're using Docker and the final config
+    let (is_container, final_docker_config) = if args.container {
         // Create Docker container session
         if !config.docker.enabled {
             return Err(ParaError::invalid_config(
@@ -52,7 +53,26 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             ));
         }
 
-        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        // Override Docker config with CLI flags
+        let mut docker_config = config.docker.clone();
+        if args.no_network_isolation {
+            docker_config.network_isolation = false;
+        }
+        if let Some(ref domains) = args.allow_domains {
+            // Automatically enable network isolation when --allow-domains is used
+            docker_config.network_isolation = true;
+            let additional_domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            docker_config.allowed_domains.extend(additional_domains);
+        }
+
+        let mut config_with_docker = config.clone();
+        config_with_docker.docker = docker_config.clone();
+
+        let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
         let session = session_manager.create_docker_session(
             session_id.clone(),
             &docker_manager,
@@ -74,7 +94,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
-        session
+        (true, docker_config)
     } else {
         // Create regular worktree session
         let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
@@ -111,11 +131,31 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        session_state
+        (false, config.docker.clone())
     };
 
-    println!("Created session '{}' with Claude Code", session_state.name);
-    println!("Session path: {}", session_state.worktree_path.display());
+    // Get session state for display
+    let session_state = session_manager
+        .list_sessions()?
+        .into_iter()
+        .find(|s| s.name == session_id)
+        .ok_or_else(|| ParaError::session_not_found(&session_id))?;
+
+    println!(
+        "✅ Created session '{}' with Claude Code",
+        session_state.name
+    );
+    if is_container {
+        println!("   Container: para-{}", session_state.name);
+        println!("   Image: para-authenticated:latest");
+
+        // Show network isolation warning if it's disabled
+        if !final_docker_config.network_isolation {
+            println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
+    }
+    println!("   Branch: {}", session_state.branch);
+    println!("   Worktree: {}", session_state.worktree_path.display());
 
     Ok(())
 }
@@ -475,6 +515,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -491,6 +533,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -510,6 +554,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -530,6 +576,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -550,6 +598,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -569,6 +619,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -585,6 +637,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -620,6 +674,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
@@ -645,6 +701,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
             docker_args: vec![],
         };
 
