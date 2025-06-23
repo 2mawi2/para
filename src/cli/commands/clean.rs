@@ -23,6 +23,7 @@ struct CleanupResults {
     stale_branches_removed: usize,
     orphaned_state_files_removed: usize,
     old_archives_removed: usize,
+    stale_status_files_removed: usize,
     errors: Vec<String>,
 }
 
@@ -75,6 +76,9 @@ impl SessionCleaner {
 
         // Find old archives to clean up
         plan.old_archives = self.find_old_archives()?;
+
+        // Find stale status files (status files older than threshold)
+        plan.stale_status_files = self.find_stale_status_files()?;
 
         Ok(plan)
     }
@@ -166,7 +170,7 @@ impl SessionCleaner {
     fn find_related_files(&self, state_dir: &std::path::Path, session_id: &str) -> Vec<PathBuf> {
         let mut related_files = Vec::new();
 
-        for suffix in &[".prompt", ".launch"] {
+        for suffix in &[".prompt", ".launch", ".status.json"] {
             let related_file = state_dir.join(format!("{}{}", session_id, suffix));
             if related_file.exists() {
                 related_files.push(related_file);
@@ -174,6 +178,31 @@ impl SessionCleaner {
         }
 
         related_files
+    }
+
+    fn find_stale_status_files(&self) -> Result<Vec<String>> {
+        use crate::core::status::Status;
+
+        let state_dir = PathBuf::from(&self.config.directories.state_dir);
+
+        if !state_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        // Use 24 hours as the default stale threshold
+        let stale_threshold_hours = 24;
+
+        // Find stale status files without removing them
+        let mut stale_sessions = Vec::new();
+        for status in Status::load_all(&state_dir).map_err(|e| {
+            crate::utils::ParaError::file_operation(format!("Failed to load status files: {}", e))
+        })? {
+            if status.is_stale(stale_threshold_hours) {
+                stale_sessions.push(status.session_name);
+            }
+        }
+
+        Ok(stale_sessions)
     }
 
     fn find_old_archives(&self) -> Result<Vec<String>> {
@@ -263,6 +292,14 @@ impl SessionCleaner {
             }
             println!();
         }
+
+        if !plan.stale_status_files.is_empty() {
+            println!("Stale Status Files ({}):", plan.stale_status_files.len());
+            for session in &plan.stale_status_files {
+                println!("  📊 {}.status.json", session);
+            }
+            println!();
+        }
     }
 
     fn confirm_cleanup(&self, plan: &CleanupPlan) -> Result<bool> {
@@ -292,6 +329,11 @@ impl SessionCleaner {
                 days
             );
             total_items += plan.old_archives.len();
+        }
+
+        if !plan.stale_status_files.is_empty() {
+            println!("  📊 {} stale status files", plan.stale_status_files.len());
+            total_items += plan.stale_status_files.len();
         }
 
         if total_items == 0 {
@@ -348,6 +390,24 @@ impl SessionCleaner {
             }
         }
 
+        // Clean stale status files
+        if !plan.stale_status_files.is_empty() {
+            use crate::core::status::Status;
+            let state_dir = PathBuf::from(&self.config.directories.state_dir);
+
+            for session_name in plan.stale_status_files {
+                let status_file = Status::status_file_path(&state_dir, &session_name);
+                match fs::remove_file(&status_file) {
+                    Ok(_) => results.stale_status_files_removed += 1,
+                    Err(e) => results.errors.push(format!(
+                        "Failed to remove status file {}: {}",
+                        status_file.display(),
+                        e
+                    )),
+                }
+            }
+        }
+
         Ok(results)
     }
 
@@ -376,6 +436,13 @@ impl SessionCleaner {
             );
         }
 
+        if results.stale_status_files_removed > 0 {
+            println!(
+                "  ✅ Removed {} stale status files",
+                results.stale_status_files_removed
+            );
+        }
+
         if !results.errors.is_empty() {
             println!("\n⚠️  Some items couldn't be cleaned:");
             for error in &results.errors {
@@ -397,6 +464,7 @@ struct CleanupPlan {
     stale_branches: Vec<String>,
     orphaned_state_files: Vec<PathBuf>,
     old_archives: Vec<String>,
+    stale_status_files: Vec<String>,
 }
 
 impl CleanupPlan {
@@ -405,6 +473,7 @@ impl CleanupPlan {
             stale_branches: Vec::new(),
             orphaned_state_files: Vec::new(),
             old_archives: Vec::new(),
+            stale_status_files: Vec::new(),
         }
     }
 
@@ -412,6 +481,7 @@ impl CleanupPlan {
         self.stale_branches.is_empty()
             && self.orphaned_state_files.is_empty()
             && self.old_archives.is_empty()
+            && self.stale_status_files.is_empty()
     }
 }
 

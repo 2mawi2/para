@@ -138,12 +138,25 @@ impl SessionManager {
     }
 
     pub fn delete_state(&self, session_name: &str) -> Result<()> {
+        // Delete the main state file
         let state_file = self.state_dir.join(format!("{}.state", session_name));
         if state_file.exists() {
             fs::remove_file(&state_file).map_err(|e| {
                 ParaError::file_operation(format!(
                     "Failed to delete session state {}: {}",
                     state_file.display(),
+                    e
+                ))
+            })?;
+        }
+
+        // Delete the status file
+        let status_file = self.state_dir.join(format!("{}.status.json", session_name));
+        if status_file.exists() {
+            fs::remove_file(&status_file).map_err(|e| {
+                ParaError::file_operation(format!(
+                    "Failed to delete session status {}: {}",
+                    status_file.display(),
                     e
                 ))
             })?;

@@ -1,7 +1,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
 use crate::utils::ParaError;
@@ -61,6 +62,32 @@ pub enum ConfidenceLevel {
     Low,
 }
 
+/// Aggregated status information for monitor display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusSummary {
+    pub total_sessions: usize,
+    pub active_sessions: usize,
+    pub blocked_sessions: usize,
+    pub stale_sessions: usize,
+    pub test_summary: TestSummary,
+    pub confidence_summary: ConfidenceSummary,
+    pub overall_progress: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestSummary {
+    pub passed: usize,
+    pub failed: usize,
+    pub unknown: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfidenceSummary {
+    pub high: usize,
+    pub medium: usize,
+    pub low: usize,
+}
+
 impl Status {
     pub fn new(
         session_name: String,
@@ -115,9 +142,24 @@ impl Status {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {}", e)))?;
 
-        fs::write(&status_file, json)
+        // Use file locking to prevent race conditions
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&status_file)
+            .map_err(|e| ParaError::fs_error(format!("Failed to open status file: {}", e)))?;
+
+        // Lock the file exclusively for writing
+        file.lock_exclusive()
+            .map_err(|e| ParaError::fs_error(format!("Failed to lock status file: {}", e)))?;
+
+        // Write the content
+        use std::io::Write;
+        file.write_all(json.as_bytes())
             .map_err(|e| ParaError::fs_error(format!("Failed to write status file: {}", e)))?;
 
+        // File lock is automatically released when the file is dropped
         Ok(())
     }
 
@@ -128,12 +170,27 @@ impl Status {
             return Ok(None);
         }
 
-        let json = fs::read_to_string(&status_file)
+        // Open file with shared lock for reading
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(&status_file)
+            .map_err(|e| ParaError::fs_error(format!("Failed to open status file: {}", e)))?;
+
+        // Lock the file for shared reading
+        FileExt::lock_shared(&file).map_err(|e| {
+            ParaError::fs_error(format!("Failed to lock status file for reading: {}", e))
+        })?;
+
+        // Read the content
+        use std::io::Read;
+        let mut json = String::new();
+        file.read_to_string(&mut json)
             .map_err(|e| ParaError::fs_error(format!("Failed to read status file: {}", e)))?;
 
         let status: Status = serde_json::from_str(&json)
             .map_err(|e| ParaError::config_error(format!("Failed to parse status file: {}", e)))?;
 
+        // File lock is automatically released when the file is dropped
         Ok(Some(status))
     }
 
@@ -205,6 +262,135 @@ impl Status {
             _ => None,
         }
     }
+
+    /// Check if the status is stale based on the last update time
+    pub fn is_stale(&self, stale_threshold_hours: u32) -> bool {
+        let now = Utc::now();
+        let duration = now.signed_duration_since(self.last_update);
+        duration.num_hours() >= stale_threshold_hours as i64
+    }
+
+    /// Load all status files from the state directory
+    pub fn load_all(state_dir: &Path) -> Result<Vec<Status>> {
+        let mut statuses = Vec::new();
+
+        if !state_dir.exists() {
+            return Ok(statuses);
+        }
+
+        for entry in fs::read_dir(state_dir)
+            .map_err(|e| ParaError::fs_error(format!("Failed to read state directory: {}", e)))?
+        {
+            let entry = entry.map_err(|e| {
+                ParaError::fs_error(format!("Failed to read directory entry: {}", e))
+            })?;
+
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                    if filename.ends_with(".status") {
+                        let session_name = filename.trim_end_matches(".status");
+                        if let Some(status) = Self::load(state_dir, session_name)? {
+                            statuses.push(status);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(statuses)
+    }
+
+    /// Clean up stale status files
+    pub fn cleanup_stale(state_dir: &Path, stale_threshold_hours: u32) -> Result<Vec<String>> {
+        let mut cleaned = Vec::new();
+
+        for status in Self::load_all(state_dir)? {
+            if status.is_stale(stale_threshold_hours) {
+                let status_file = Self::status_file_path(state_dir, &status.session_name);
+                if status_file.exists() {
+                    fs::remove_file(&status_file).map_err(|e| {
+                        ParaError::fs_error(format!("Failed to remove stale status file: {}", e))
+                    })?;
+                    cleaned.push(status.session_name);
+                }
+            }
+        }
+
+        Ok(cleaned)
+    }
+
+    /// Generate a summary of all status files
+    pub fn generate_summary(state_dir: &Path, stale_threshold_hours: u32) -> Result<StatusSummary> {
+        let statuses = Self::load_all(state_dir)?;
+
+        let mut test_summary = TestSummary {
+            passed: 0,
+            failed: 0,
+            unknown: 0,
+        };
+
+        let mut confidence_summary = ConfidenceSummary {
+            high: 0,
+            medium: 0,
+            low: 0,
+        };
+
+        let mut blocked_sessions = 0;
+        let mut stale_sessions = 0;
+        let mut active_sessions = 0;
+        let mut total_completed = 0;
+        let mut total_todos = 0;
+
+        for status in &statuses {
+            // Count test statuses
+            match status.test_status {
+                TestStatus::Passed => test_summary.passed += 1,
+                TestStatus::Failed => test_summary.failed += 1,
+                TestStatus::Unknown => test_summary.unknown += 1,
+            }
+
+            // Count confidence levels
+            match status.confidence {
+                ConfidenceLevel::High => confidence_summary.high += 1,
+                ConfidenceLevel::Medium => confidence_summary.medium += 1,
+                ConfidenceLevel::Low => confidence_summary.low += 1,
+            }
+
+            // Count blocked and stale sessions
+            if status.is_blocked {
+                blocked_sessions += 1;
+            }
+
+            if status.is_stale(stale_threshold_hours) {
+                stale_sessions += 1;
+            } else {
+                active_sessions += 1;
+            }
+
+            // Accumulate todos for overall progress
+            if let (Some(completed), Some(total)) = (status.todos_completed, status.todos_total) {
+                total_completed += completed;
+                total_todos += total;
+            }
+        }
+
+        let overall_progress = if total_todos > 0 {
+            Some(((total_completed as f32 / total_todos as f32) * 100.0).round() as u8)
+        } else {
+            None
+        };
+
+        Ok(StatusSummary {
+            total_sessions: statuses.len(),
+            active_sessions,
+            blocked_sessions,
+            stale_sessions,
+            test_summary,
+            confidence_summary,
+            overall_progress,
+        })
+    }
 }
 
 impl std::fmt::Display for TestStatus {
@@ -230,6 +416,8 @@ impl std::fmt::Display for ConfidenceLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
+    use std::time::Duration;
     use tempfile::TempDir;
 
     #[test]
@@ -456,5 +644,246 @@ mod tests {
         assert!(!json.contains("todos_completed"));
         assert!(!json.contains("todos_total"));
         assert!(json.contains("\"blocked_reason\":null"));
+    }
+
+    #[test]
+    fn test_file_locking() {
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path();
+
+        let status = Status::new(
+            "lock-test".to_string(),
+            "Testing file locks".to_string(),
+            TestStatus::Passed,
+            ConfidenceLevel::High,
+        );
+
+        // Test concurrent writes
+        let state_dir_clone = state_dir.to_path_buf();
+        let status_clone = status.clone();
+
+        let handle = thread::spawn(move || {
+            for i in 0..5 {
+                let mut s = status_clone.clone();
+                s.current_task = format!("Task from thread {}", i);
+                s.save(&state_dir_clone).unwrap();
+                thread::sleep(Duration::from_millis(10));
+            }
+        });
+
+        // Main thread writes
+        for i in 0..5 {
+            let mut s = status.clone();
+            s.current_task = format!("Task from main {}", i);
+            s.save(state_dir).unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        handle.join().unwrap();
+
+        // Verify file can be read after concurrent writes
+        let loaded = Status::load(state_dir, "lock-test").unwrap().unwrap();
+        assert!(loaded.current_task.starts_with("Task from"));
+    }
+
+    #[test]
+    fn test_is_stale() {
+        let mut status = Status::new(
+            "stale-test".to_string(),
+            "Testing staleness".to_string(),
+            TestStatus::Unknown,
+            ConfidenceLevel::Medium,
+        );
+
+        // Fresh status should not be stale
+        assert!(!status.is_stale(24));
+        assert!(!status.is_stale(1));
+
+        // Set last_update to 25 hours ago
+        status.last_update = Utc::now() - chrono::Duration::hours(25);
+        assert!(status.is_stale(24));
+        assert!(!status.is_stale(48));
+    }
+
+    #[test]
+    fn test_load_all() {
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path();
+
+        // Create multiple status files
+        let statuses = vec![
+            Status::new(
+                "session1".to_string(),
+                "Task 1".to_string(),
+                TestStatus::Passed,
+                ConfidenceLevel::High,
+            ),
+            Status::new(
+                "session2".to_string(),
+                "Task 2".to_string(),
+                TestStatus::Failed,
+                ConfidenceLevel::Low,
+            ),
+            Status::new(
+                "session3".to_string(),
+                "Task 3".to_string(),
+                TestStatus::Unknown,
+                ConfidenceLevel::Medium,
+            ),
+        ];
+
+        for status in &statuses {
+            status.save(state_dir).unwrap();
+        }
+
+        // Also create a non-status JSON file that should be ignored
+        std::fs::write(state_dir.join("other.json"), r#"{"not": "a status file"}"#).unwrap();
+
+        // Load all status files
+        let loaded = Status::load_all(state_dir).unwrap();
+        assert_eq!(loaded.len(), 3);
+
+        // Verify all sessions are loaded
+        let session_names: Vec<String> = loaded.iter().map(|s| s.session_name.clone()).collect();
+        assert!(session_names.contains(&"session1".to_string()));
+        assert!(session_names.contains(&"session2".to_string()));
+        assert!(session_names.contains(&"session3".to_string()));
+    }
+
+    #[test]
+    fn test_cleanup_stale() {
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path();
+
+        // Create fresh status
+        let fresh_status = Status::new(
+            "fresh".to_string(),
+            "Fresh task".to_string(),
+            TestStatus::Passed,
+            ConfidenceLevel::High,
+        );
+        fresh_status.save(state_dir).unwrap();
+
+        // Create stale status
+        let mut stale_status = Status::new(
+            "stale".to_string(),
+            "Stale task".to_string(),
+            TestStatus::Failed,
+            ConfidenceLevel::Low,
+        );
+        stale_status.last_update = Utc::now() - chrono::Duration::hours(48);
+        stale_status.save(state_dir).unwrap();
+
+        // Verify both files exist
+        assert!(Status::status_file_path(state_dir, "fresh").exists());
+        assert!(Status::status_file_path(state_dir, "stale").exists());
+
+        // Clean up stale files (threshold: 24 hours)
+        let cleaned = Status::cleanup_stale(state_dir, 24).unwrap();
+        assert_eq!(cleaned.len(), 1);
+        assert_eq!(cleaned[0], "stale");
+
+        // Verify only fresh file remains
+        assert!(Status::status_file_path(state_dir, "fresh").exists());
+        assert!(!Status::status_file_path(state_dir, "stale").exists());
+    }
+
+    #[test]
+    fn test_generate_summary() {
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path();
+
+        // Create various status files
+        let statuses = vec![
+            Status::new(
+                "s1".to_string(),
+                "Task 1".to_string(),
+                TestStatus::Passed,
+                ConfidenceLevel::High,
+            )
+            .with_todos(5, 10),
+            Status::new(
+                "s2".to_string(),
+                "Task 2".to_string(),
+                TestStatus::Failed,
+                ConfidenceLevel::Low,
+            )
+            .with_blocked(Some("Need help".to_string()))
+            .with_todos(2, 8),
+            Status::new(
+                "s3".to_string(),
+                "Task 3".to_string(),
+                TestStatus::Unknown,
+                ConfidenceLevel::Medium,
+            )
+            .with_todos(3, 5),
+            // Stale status
+            {
+                let mut s = Status::new(
+                    "s4".to_string(),
+                    "Stale task".to_string(),
+                    TestStatus::Passed,
+                    ConfidenceLevel::High,
+                );
+                s.last_update = Utc::now() - chrono::Duration::hours(48);
+                s
+            },
+        ];
+
+        for status in &statuses {
+            status.save(state_dir).unwrap();
+        }
+
+        // Generate summary
+        let summary = Status::generate_summary(state_dir, 24).unwrap();
+
+        assert_eq!(summary.total_sessions, 4);
+        assert_eq!(summary.active_sessions, 3);
+        assert_eq!(summary.stale_sessions, 1);
+        assert_eq!(summary.blocked_sessions, 1);
+
+        // Test summary
+        assert_eq!(summary.test_summary.passed, 2);
+        assert_eq!(summary.test_summary.failed, 1);
+        assert_eq!(summary.test_summary.unknown, 1);
+
+        // Confidence summary
+        assert_eq!(summary.confidence_summary.high, 2);
+        assert_eq!(summary.confidence_summary.medium, 1);
+        assert_eq!(summary.confidence_summary.low, 1);
+
+        // Overall progress: (5 + 2 + 3) / (10 + 8 + 5) = 10/23 ≈ 43%
+        assert_eq!(summary.overall_progress, Some(43));
+    }
+
+    #[test]
+    fn test_session_manager_cleanup() {
+        use crate::core::session::manager::SessionManager;
+        use crate::test_utils::test_helpers::create_test_config;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir.path().to_string_lossy().to_string();
+
+        let manager = SessionManager::new(&config);
+        let state_dir = Path::new(&config.directories.state_dir);
+
+        // Create a status file
+        let status = Status::new(
+            "test-session".to_string(),
+            "Test task".to_string(),
+            TestStatus::Passed,
+            ConfidenceLevel::High,
+        );
+        status.save(state_dir).unwrap();
+
+        // Verify status file exists
+        assert!(Status::status_file_path(state_dir, "test-session").exists());
+
+        // Delete state (should also delete status file)
+        manager.delete_state("test-session").unwrap();
+
+        // Verify status file is deleted
+        assert!(!Status::status_file_path(state_dir, "test-session").exists());
     }
 }
