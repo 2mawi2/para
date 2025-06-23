@@ -309,6 +309,8 @@ mod tests {
             docker: super::super::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         };
 

@@ -52,7 +52,24 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             ));
         }
 
-        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        // Override Docker config with CLI flags
+        let mut docker_config = config.docker.clone();
+        if args.no_network_isolation {
+            docker_config.network_isolation = false;
+        }
+        if let Some(ref domains) = args.allow_domains {
+            let additional_domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            docker_config.allowed_domains.extend(additional_domains);
+        }
+
+        let mut config_with_docker = config.clone();
+        config_with_docker.docker = docker_config;
+
+        let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
         let session = session_manager.create_docker_session(
             session_id.clone(),
             &docker_manager,
@@ -474,6 +491,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -489,6 +508,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -507,6 +528,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -526,6 +549,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -545,6 +570,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -563,6 +590,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -578,6 +607,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -612,6 +643,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -636,6 +669,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            no_network_isolation: false,
+            allow_domains: None,
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests

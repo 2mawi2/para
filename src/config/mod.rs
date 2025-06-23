@@ -58,6 +58,10 @@ pub struct SessionConfig {
 pub struct DockerConfig {
     pub enabled: bool,
     pub mount_workspace: bool,
+    #[serde(default = "defaults::default_network_isolation")]
+    pub network_isolation: bool,
+    #[serde(default = "defaults::default_allowed_domains")]
+    pub allowed_domains: Vec<String>,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
@@ -182,6 +186,8 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         };
 
@@ -245,6 +251,8 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         };
         assert!(valid_config.validate().is_ok());
@@ -288,6 +296,8 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                network_isolation: true,
+                allowed_domains: vec![],
             },
         };
         assert!(config_wrapper_disabled.validate().is_ok());
