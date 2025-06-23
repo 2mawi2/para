@@ -8,16 +8,16 @@ echo "🚀 Para Docker Container Starting..."
 echo "Container ID: $(hostname)"
 echo "Working directory: $(pwd)"
 
-# Check if network isolation is enabled (default: true)
-NETWORK_ISOLATION="${PARA_NETWORK_ISOLATION:-true}"
+# Check if network isolation is enabled (default: false)
+NETWORK_ISOLATION="${PARA_NETWORK_ISOLATION:-false}"
 
 if [ "$NETWORK_ISOLATION" = "true" ]; then
     echo "🔒 Network isolation is enabled"
     
-    # Check if we have the required capabilities for iptables
-    if ! [ -w /proc/sys/net ]; then
-        echo "❌ Error: Container lacks NET_ADMIN capability required for network isolation"
-        echo "   Please run with: docker run --cap-add=NET_ADMIN --cap-add=NET_RAW ..."
+    # Check if we have the required capabilities using iptables test
+    if ! iptables -L >/dev/null 2>&1; then
+        echo "❌ Error: Cannot access iptables. Network isolation requires NET_ADMIN and NET_RAW capabilities"
+        echo "   Please ensure the container is running with: --cap-add=NET_ADMIN --cap-add=NET_RAW"
         exit 1
     fi
     
