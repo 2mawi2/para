@@ -10,7 +10,6 @@ use crate::core::session::{SessionManager, SessionState};
 use super::{
     config::{detect_project_type, DockerConfig, VolumeMapping},
     error::{DockerError, DockerResult},
-    extraction::{ContainerExtractor, ExtractionOptions, ExtractionResult},
     service::DockerService,
     session::{ContainerSession, ContainerStatus},
 };
@@ -285,20 +284,6 @@ impl DockerManager {
         Ok(removed)
     }
 
-    /// Extract code changes from a container and apply them to a new Git branch
-    pub fn extract_container_changes(
-        &self,
-        options: ExtractionOptions,
-    ) -> DockerResult<ExtractionResult> {
-        // Get the Git repository
-        let git_repo = crate::core::git::GitRepository::discover().map_err(|e| {
-            DockerError::Other(anyhow::anyhow!("Failed to discover Git repository: {}", e))
-        })?;
-
-        // Create the extractor
-        let extractor = ContainerExtractor::new(self.docker_service.as_ref(), git_repo);
-
-        // Extract the changes
-        extractor.extract_container_changes(options)
-    }
+    // TODO: Connect to CLI in next phase
+    // Advanced extraction with docker diff will be added when CLI integration is complete
 }

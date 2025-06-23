@@ -197,66 +197,32 @@ fn perform_pre_finish_operations(
 fn handle_container_finish(
     session_info: &SessionState,
     args: &FinishArgs,
-    config: &Config,
+    _config: &Config,
 ) -> Result<FinishResult> {
-    use crate::core::docker::{
-        extraction::{ExtractionOptions, ProgressCallback},
-        manager::DockerManager,
-        service::MockDockerService,
-        DockerConfig,
-    };
-    use std::sync::Arc;
+    use crate::core::docker::extraction::{extract_changes, ExtractionOptions};
 
-    println!("Extracting changes from container session...");
+    println!("Container session finish - MVP placeholder");
 
-    // Load Docker configuration
-    let docker_config = DockerConfig::default(); // TODO: Load from config
-
-    // Create Docker service - use mock for now, replace with real implementation
-    let docker_service = Arc::new(MockDockerService);
-
-    // Create Docker manager
-    let docker_manager = DockerManager::new(docker_service, config.clone(), docker_config);
-
-    // Set up progress reporting
-    let progress_callback: ProgressCallback = Box::new(|msg| {
-        println!("  {}", msg);
-    });
-
-    // Create extraction options
+    // TODO: Connect to CLI in next phase
+    // For MVP, just create the extraction options and call the placeholder
     let extraction_options = ExtractionOptions {
         session_name: session_info.name.clone(),
         commit_message: args.message.clone(),
-        target_branch: args.branch.clone(),
-        include_binary: true,
-        preserve_permissions: true,
-        progress_callback: Some(progress_callback),
+        source_path: session_info.worktree_path.clone(),
+        target_path: session_info.worktree_path.clone(), // Same for MVP
     };
 
-    // Extract container changes
-    let extraction_result = docker_manager
-        .extract_container_changes(extraction_options)
-        .map_err(|e| {
-            ParaError::docker_error(format!("Failed to extract container changes: {}", e))
-        })?;
+    // Call the MVP extraction function
+    let extraction_result = extract_changes(extraction_options).map_err(|e| {
+        ParaError::docker_error(format!("Failed to extract container changes: {}", e))
+    })?;
 
-    println!("✓ Container changes extracted successfully");
-    println!("  Branch created: {}", extraction_result.branch_name);
-    println!("  Files changed: {}", extraction_result.files_changed);
-    println!(
-        "  Lines added: {}, removed: {}",
-        extraction_result.lines_added, extraction_result.lines_removed
-    );
+    println!("✓ Container session completed");
+    println!("  Files processed: {}", extraction_result.files_copied);
 
-    // Stop the container if configured
-    if !config.should_preserve_on_finish() {
-        if let Err(e) = docker_manager.finish_container(&session_info.name, false) {
-            eprintln!("Warning: Failed to stop container: {}", e);
-        }
-    }
-
+    // For MVP, just return success with the current branch
     Ok(FinishResult::Success {
-        final_branch: extraction_result.branch_name,
+        final_branch: session_info.branch.clone(),
     })
 }
 
