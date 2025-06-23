@@ -12,14 +12,18 @@ use std::process::Command;
 pub struct DockerManager {
     service: DockerService,
     config: Config,
+    network_isolation: bool,
+    allowed_domains: Vec<String>,
 }
 
 impl DockerManager {
     /// Create a new Docker manager
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, network_isolation: bool, allowed_domains: Vec<String>) -> Self {
         Self {
             service: DockerService,
             config,
+            network_isolation,
+            allowed_domains,
         }
     }
 
@@ -55,17 +59,16 @@ impl DockerManager {
         println!("🏗️  Creating container with authenticated image");
         let _container = self.service.create_container(
             &session.name,
-            &self.config.docker,
+            self.network_isolation,
+            &self.allowed_domains,
             &session.worktree_path,
             docker_args,
         )?;
 
         // Start it with verification
         println!("▶️  Starting container: para-{}", session.name);
-        self.service.start_container_with_verification(
-            &session.name,
-            self.config.docker.network_isolation,
-        )?;
+        self.service
+            .start_container_with_verification(&session.name, self.network_isolation)?;
 
         Ok(())
     }

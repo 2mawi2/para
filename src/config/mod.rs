@@ -15,8 +15,6 @@ pub struct Config {
     pub directories: DirectoryConfig,
     pub git: GitConfig,
     pub session: SessionConfig,
-    #[serde(default = "defaults::default_docker_config")]
-    pub docker: DockerConfig,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -52,16 +50,6 @@ pub struct SessionConfig {
     pub default_name_format: String,
     pub preserve_on_finish: bool,
     pub auto_cleanup_days: Option<u32>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct DockerConfig {
-    pub enabled: bool,
-    pub mount_workspace: bool,
-    #[serde(default = "defaults::default_network_isolation")]
-    pub network_isolation: bool,
-    #[serde(default = "defaults::default_allowed_domains")]
-    pub allowed_domains: Vec<String>,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
@@ -183,12 +171,6 @@ mod tests {
                 preserve_on_finish: true,
                 auto_cleanup_days: Some(14),
             },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
-            },
         };
 
         assert_eq!(config.get_branch_prefix(), "feature");
@@ -248,12 +230,6 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
-            },
         };
         assert!(valid_config.validate().is_ok());
 
@@ -292,12 +268,6 @@ mod tests {
                 default_name_format: "%Y%m%d".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
-            },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
             },
         };
         assert!(config_wrapper_disabled.validate().is_ok());
@@ -342,7 +312,6 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
-            docker: defaults::default_docker_config(),
         };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
@@ -377,7 +346,6 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
-            docker: defaults::default_docker_config(),
         };
 
         // Test 1: Manually save config and verify it can be loaded

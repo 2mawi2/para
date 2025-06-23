@@ -44,32 +44,26 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     let mut session_manager = SessionManager::new(&config);
 
-    // Track whether we're using Docker and the final config
-    let (is_container, final_docker_config) = if args.container {
+    // Track whether we're using Docker and network isolation settings
+    let (is_container, network_isolation, _allowed_domains) = if args.container {
         // Create Docker container session
-        if !config.docker.enabled {
-            return Err(ParaError::invalid_config(
-                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
-            ));
-        }
-
-        // Override Docker config with CLI flags
-        let mut docker_config = config.docker.clone();
-        if let Some(ref domains) = args.allow_domains {
+        let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
             // Enable network isolation when --allow-domains is used
-            docker_config.network_isolation = true;
             let additional_domains: Vec<String> = domains
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
-            docker_config.allowed_domains.extend(additional_domains);
-        }
+            (true, additional_domains)
+        } else {
+            (false, vec![])
+        };
 
-        let mut config_with_docker = config.clone();
-        config_with_docker.docker = docker_config.clone();
-
-        let docker_manager = crate::core::docker::DockerManager::new(config_with_docker);
+        let docker_manager = crate::core::docker::DockerManager::new(
+            config.clone(),
+            network_isolation,
+            allowed_domains.clone(),
+        );
         let session = session_manager.create_docker_session(
             session_id.clone(),
             &docker_manager,
@@ -91,7 +85,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
-        (true, docker_config)
+        (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session
         let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
@@ -128,7 +122,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        (false, config.docker.clone())
+        (false, false, vec![])
     };
 
     // Get session state for display
@@ -147,7 +141,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         println!("   Image: para-authenticated:latest");
 
         // Show network isolation warning if it's disabled
-        if !final_docker_config.network_isolation {
+        if !network_isolation {
             println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
         }
     }
@@ -744,7 +738,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -768,7 +761,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -792,7 +784,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -815,7 +806,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -839,7 +829,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);

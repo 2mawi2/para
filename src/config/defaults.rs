@@ -1,6 +1,4 @@
-use super::{
-    Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
-};
+use super::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
 pub fn default_config() -> Config {
     Config {
@@ -8,7 +6,6 @@ pub fn default_config() -> Config {
         directories: default_directory_config(),
         git: default_git_config(),
         session: default_session_config(),
-        docker: default_docker_config(),
     }
 }
 
@@ -57,23 +54,6 @@ pub fn default_session_config() -> SessionConfig {
         preserve_on_finish: false,
         auto_cleanup_days: Some(30),
     }
-}
-
-pub fn default_docker_config() -> DockerConfig {
-    DockerConfig {
-        enabled: false,
-        mount_workspace: true,
-        network_isolation: false, // Default to OFF for backward compatibility
-        allowed_domains: default_allowed_domains(),
-    }
-}
-
-pub fn default_network_isolation() -> bool {
-    false // Default to OFF for phased rollout
-}
-
-pub fn default_allowed_domains() -> Vec<String> {
-    vec![]
 }
 
 pub fn detect_ide() -> (String, String) {

@@ -11,7 +11,6 @@ pub fn run_config_wizard() -> Result<Config> {
     config.ide = configure_ide_simple()?;
     config.directories = configure_directories_simple(config.directories)?;
     config.session = configure_session_simple(config.session)?;
-    config.docker = configure_docker_simple(config.docker)?;
 
     println!("\n📋 Configuration Summary:");
     display_config_summary(&config);
@@ -122,18 +121,6 @@ fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::S
     Ok(config)
 }
 
-fn configure_docker_simple(mut config: super::DockerConfig) -> Result<super::DockerConfig> {
-    println!("\n🐳 Docker Configuration (optional)");
-
-    config.enabled = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enable Docker container support?")
-        .default(false)
-        .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
-
-    Ok(config)
-}
-
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);
     if config.ide.wrapper.enabled {
@@ -153,7 +140,6 @@ fn display_config_summary(config: &Config) {
     } else {
         println!("  Auto-cleanup: disabled");
     }
-    println!("  Docker enabled: {}", config.docker.enabled);
 }
 
 pub fn run_quick_setup() -> Result<Config> {
@@ -228,12 +214,6 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
             },
-            docker: crate::config::DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
-            },
         };
 
         display_config_summary(&config);
@@ -242,8 +222,7 @@ mod tests {
     #[test]
     fn test_config_validation_in_wizard() {
         use crate::config::{
-            Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig,
-            WrapperConfig,
+            Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
         };
 
         let config = Config {
@@ -270,12 +249,6 @@ mod tests {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(30),
-            },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                network_isolation: false,
-                allowed_domains: vec![],
             },
         };
 
