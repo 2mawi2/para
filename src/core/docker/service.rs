@@ -39,6 +39,26 @@ impl DockerService {
             format!("{}:/workspace", working_dir.display()),
             "-w".to_string(),
             "/workspace".to_string(),
+        ]);
+
+        // Mount Para state directory for session tracking
+        if let Ok(para_dir) = working_dir.join(".para").canonicalize() {
+            docker_cmd_args.extend([
+                "-v".to_string(),
+                format!("{}:/workspace/.para:rw", para_dir.display()),
+            ]);
+        }
+
+        // Set environment variables for container detection
+        docker_cmd_args.extend([
+            "-e".to_string(),
+            "PARA_CONTAINER=1".to_string(),
+            "-e".to_string(),
+            format!("PARA_SESSION={}", session_name),
+        ]);
+
+        // Add image and command
+        docker_cmd_args.extend([
             "para-authenticated:latest".to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
