@@ -10,49 +10,49 @@ use std::path::PathBuf;
 pub struct ContainerSession {
     /// Unique container ID assigned by Docker
     pub container_id: String,
-    
+
     /// Para session name (matches the worktree name)
     pub session_name: String,
-    
+
     /// Current status of the container
     pub status: ContainerStatus,
-    
+
     /// Docker image used for this container
     pub image: String,
-    
+
     /// Volume mount mappings (host_path -> container_path)
     pub volumes: Vec<VolumeMount>,
-    
+
     /// Port mappings (host_port -> container_port)
     pub ports: Vec<PortMapping>,
-    
+
     /// Environment variables set in the container
     pub environment: HashMap<String, String>,
-    
+
     /// Working directory inside the container
     pub working_dir: PathBuf,
-    
+
     /// Network mode (bridge, host, none, or custom network name)
     pub network_mode: String,
-    
+
     /// Container hostname
     pub hostname: String,
-    
+
     /// When the container was created
     pub created_at: DateTime<Utc>,
-    
+
     /// When the container was last started
     pub started_at: Option<DateTime<Utc>>,
-    
+
     /// When the container was stopped
     pub stopped_at: Option<DateTime<Utc>>,
-    
+
     /// Resource limits applied to the container
     pub resource_limits: ResourceLimits,
-    
+
     /// Custom labels for container metadata
     pub labels: HashMap<String, String>,
-    
+
     /// Health check configuration
     pub health_check: Option<HealthCheckConfig>,
 }
@@ -220,8 +220,11 @@ impl ContainerSession {
 
     /// Add default para labels to identify containers
     pub fn add_para_labels(&mut self) {
-        self.labels.insert("para.session".to_string(), self.session_name.clone());
-        self.labels.insert("para.managed".to_string(), "true".to_string());
-        self.labels.insert("para.created_at".to_string(), self.created_at.to_rfc3339());
+        self.labels
+            .insert("para.session".to_string(), self.session_name.clone());
+        self.labels
+            .insert("para.managed".to_string(), "true".to_string());
+        self.labels
+            .insert("para.created_at".to_string(), self.created_at.to_rfc3339());
     }
 }

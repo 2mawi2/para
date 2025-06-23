@@ -4,41 +4,41 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::session::{MountType, PortMapping, ResourceLimits};
+use super::session::{MountType, ResourceLimits};
 
 /// Docker configuration for para sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DockerConfig {
     /// Whether Docker integration is enabled
     pub enabled: bool,
-    
+
     /// Default Docker image to use if not specified
     pub default_image: String,
-    
+
     /// Image selection based on detected project type
     pub image_mappings: HashMap<ProjectType, String>,
-    
+
     /// Default volume mappings for all containers
     pub default_volumes: Vec<VolumeMapping>,
-    
+
     /// Default environment variables
     pub default_environment: HashMap<String, String>,
-    
+
     /// Default resource limits
     pub default_resource_limits: ResourceLimits,
-    
+
     /// Network configuration
     pub network: NetworkConfig,
-    
+
     /// Build configuration for custom images
     pub build: Option<BuildConfig>,
-    
+
     /// Registry configuration for private images
     pub registry: Option<RegistryConfig>,
-    
+
     /// Container lifecycle hooks
     pub hooks: LifecycleHooks,
-    
+
     /// Development tool configurations
     pub dev_tools: DevToolsConfig,
 }
@@ -188,7 +188,10 @@ impl Default for DockerConfig {
         image_mappings.insert(ProjectType::Java, "openjdk:17".to_string());
         image_mappings.insert(ProjectType::Ruby, "ruby:latest".to_string());
         image_mappings.insert(ProjectType::Php, "php:8-cli".to_string());
-        image_mappings.insert(ProjectType::Dotnet, "mcr.microsoft.com/dotnet/sdk:7.0".to_string());
+        image_mappings.insert(
+            ProjectType::Dotnet,
+            "mcr.microsoft.com/dotnet/sdk:7.0".to_string(),
+        );
 
         let default_volumes = vec![
             VolumeMapping {
@@ -257,21 +260,20 @@ pub fn detect_project_type(project_path: &PathBuf) -> ProjectType {
         ProjectType::Rust
     } else if project_path.join("package.json").exists() {
         ProjectType::Node
-    } else if project_path.join("requirements.txt").exists() 
-           || project_path.join("setup.py").exists() 
-           || project_path.join("pyproject.toml").exists() {
+    } else if project_path.join("requirements.txt").exists()
+        || project_path.join("setup.py").exists()
+        || project_path.join("pyproject.toml").exists()
+    {
         ProjectType::Python
     } else if project_path.join("go.mod").exists() {
         ProjectType::Go
-    } else if project_path.join("pom.xml").exists() 
-           || project_path.join("build.gradle").exists() {
+    } else if project_path.join("pom.xml").exists() || project_path.join("build.gradle").exists() {
         ProjectType::Java
     } else if project_path.join("Gemfile").exists() {
         ProjectType::Ruby
     } else if project_path.join("composer.json").exists() {
         ProjectType::Php
-    } else if project_path.join("*.csproj").exists() 
-           || project_path.join("*.fsproj").exists() {
+    } else if project_path.join("*.csproj").exists() || project_path.join("*.fsproj").exists() {
         ProjectType::Dotnet
     } else {
         ProjectType::Custom("unknown".to_string())

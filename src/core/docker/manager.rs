@@ -8,10 +8,10 @@ use crate::config::Config;
 use crate::core::session::{SessionManager, SessionState};
 
 use super::{
-    config::{detect_project_type, DockerConfig},
+    config::{detect_project_type, DockerConfig, VolumeMapping},
     error::{DockerError, DockerResult},
     service::DockerService,
-    session::{ContainerSession, ContainerStatus, VolumeMount},
+    session::{ContainerSession, ContainerStatus},
 };
 
 /// Manages Docker containers for para sessions
@@ -43,7 +43,7 @@ impl DockerManager {
     }
 
     /// Create a Docker container for a para session
-    pub async fn create_container_for_session(
+    pub fn create_container_for_session(
         &self,
         session_state: &SessionState,
     ) -> DockerResult<ContainerSession> {
@@ -57,7 +57,7 @@ impl DockerManager {
             .unwrap_or_else(|| self.docker_config.default_image.clone());
 
         // Ensure the image is available
-        self.docker_service.ensure_image(&image).await?;
+        self.docker_service.ensure_image(&image)?;
 
         // Create container with session-specific configuration
         let mut container_config = self.docker_config.clone();
@@ -73,14 +73,11 @@ impl DockerManager {
         container_config.default_volumes.insert(0, worktree_volume);
 
         // Create the container
-        let container = self
-            .docker_service
-            .create_session(
-                &session_state.name,
-                &container_config,
-                Path::new("/workspace"),
-            )
-            .await?;
+        let container = self.docker_service.create_session(
+            &session_state.name,
+            &container_config,
+            Path::new("/workspace"),
+        )?;
 
         // Save container metadata
         self.save_container_metadata(&session_state.name, &container)?;
@@ -89,10 +86,10 @@ impl DockerManager {
     }
 
     /// Start a container for an existing session
-    pub async fn start_container(&self, session_name: &str) -> DockerResult<()> {
+    pub fn start_container(&self, session_name: &str) -> DockerResult<()> {
         // Check if container exists
-        let status = self.docker_service.get_container_status(session_name).await?;
-        
+        let status = self.docker_service.get_container_status(session_name)?;
+
         match status {
             ContainerStatus::Running => {
                 return Err(DockerError::ContainerAlreadyRunning {
@@ -108,28 +105,30 @@ impl DockerManager {
         }
 
         // Start the container
-        self.docker_service.start_session(session_name).await?;
+        self.docker_service.start_session(session_name)?;
 
         // Wait for container to be ready
         self.docker_service
-            .wait_for_status(session_name, ContainerStatus::Running, 30)
-            .await?;
+            .wait_for_status(session_name, ContainerStatus::Running, 30)?;
 
         // Run post-start hooks
         for command in &self.docker_config.hooks.post_start {
-            self.docker_service
-                .exec_in_container(session_name, "sh", &["-c".to_string(), command.clone()], None)
-                .await?;
+            self.docker_service.exec_in_container(
+                session_name,
+                "sh",
+                &["-c".to_string(), command.clone()],
+                None,
+            )?;
         }
 
         Ok(())
     }
 
     /// Stop a container for a session
-    pub async fn stop_container(&self, session_name: &str) -> DockerResult<()> {
+    pub fn stop_container(&self, session_name: &str) -> DockerResult<()> {
         // Check if container is running
-        let status = self.docker_service.get_container_status(session_name).await?;
-        
+        let status = self.docker_service.get_container_status(session_name)?;
+
         if !matches!(status, ContainerStatus::Running) {
             return Err(DockerError::ContainerNotRunning {
                 name: session_name.to_string(),
@@ -139,29 +138,28 @@ impl DockerManager {
         // Run pre-stop hooks
         for command in &self.docker_config.hooks.pre_stop {
             // Ignore errors in pre-stop hooks
-            let _ = self.docker_service
-                .exec_in_container(session_name, "sh", &["-c".to_string(), command.clone()], None)
-                .await;
+            let _ = self.docker_service.exec_in_container(
+                session_name,
+                "sh",
+                &["-c".to_string(), command.clone()],
+                None,
+            );
         }
 
         // Stop the container
-        self.docker_service.stop_session(session_name).await
+        self.docker_service.stop_session(session_name)
     }
 
     /// Finish a session and optionally remove its container
-    pub async fn finish_container(
-        &self,
-        session_name: &str,
-        remove: bool,
-    ) -> DockerResult<()> {
+    pub fn finish_container(&self, session_name: &str, remove: bool) -> DockerResult<()> {
         // Stop the container if running
-        let status = self.docker_service.get_container_status(session_name).await?;
+        let status = self.docker_service.get_container_status(session_name)?;
         if matches!(status, ContainerStatus::Running) {
-            self.stop_container(session_name).await?;
+            self.stop_container(session_name)?;
         }
 
         if remove {
-            self.docker_service.finish_session(session_name, true).await?;
+            self.docker_service.finish_session(session_name, true)?;
             self.remove_container_metadata(session_name)?;
         }
 
@@ -169,52 +167,51 @@ impl DockerManager {
     }
 
     /// Execute a command in a container
-    pub async fn exec_in_container(
+    pub fn exec_in_container(
         &self,
         session_name: &str,
         command: &str,
         args: &[String],
     ) -> DockerResult<String> {
         // Ensure container is running
-        let status = self.docker_service.get_container_status(session_name).await?;
+        let status = self.docker_service.get_container_status(session_name)?;
         if !matches!(status, ContainerStatus::Running) {
-            self.start_container(session_name).await?;
+            self.start_container(session_name)?;
         }
 
         self.docker_service
             .exec_in_container(session_name, command, args, None)
-            .await
     }
 
     /// Open an interactive shell in a container
-    pub async fn attach_to_container(&self, session_name: &str) -> DockerResult<()> {
+    pub fn attach_to_container(&self, session_name: &str) -> DockerResult<()> {
         // Ensure container is running
-        let status = self.docker_service.get_container_status(session_name).await?;
+        let status = self.docker_service.get_container_status(session_name)?;
         if !matches!(status, ContainerStatus::Running) {
-            self.start_container(session_name).await?;
+            self.start_container(session_name)?;
         }
 
-        self.docker_service.attach_to_container(session_name).await
+        self.docker_service.attach_to_container(session_name)
     }
 
     /// List all Docker containers managed by para
-    pub async fn list_containers(&self) -> DockerResult<Vec<ContainerSession>> {
-        self.docker_service.list_sessions().await
+    pub fn list_containers(&self) -> DockerResult<Vec<ContainerSession>> {
+        self.docker_service.list_sessions()
     }
 
     /// Get container logs
-    pub async fn get_logs(
+    pub fn get_logs(
         &self,
         session_name: &str,
         follow: bool,
         tail: Option<usize>,
     ) -> DockerResult<String> {
-        self.docker_service.get_logs(session_name, follow, tail).await
+        self.docker_service.get_logs(session_name, follow, tail)
     }
 
     /// Check Docker daemon health
-    pub async fn health_check(&self) -> DockerResult<()> {
-        self.docker_service.health_check().await
+    pub fn health_check(&self) -> DockerResult<()> {
+        self.docker_service.health_check()
     }
 
     /// Save container metadata to state directory
@@ -235,7 +232,7 @@ impl DockerManager {
         if !metadata_path.exists() {
             return Ok(None);
         }
-        
+
         let metadata_json = std::fs::read_to_string(metadata_path)?;
         let container: ContainerSession = serde_json::from_str(&metadata_json)?;
         Ok(Some(container))
@@ -251,36 +248,38 @@ impl DockerManager {
     }
 
     /// Sync container status with Docker daemon
-    pub async fn sync_container_status(&self, session_name: &str) -> DockerResult<ContainerStatus> {
-        let status = self.docker_service.get_container_status(session_name).await?;
-        
+    pub fn sync_container_status(&self, session_name: &str) -> DockerResult<ContainerStatus> {
+        let status = self.docker_service.get_container_status(session_name)?;
+
         // Update metadata if container exists
         if let Ok(Some(mut metadata)) = self.load_container_metadata(session_name) {
             metadata.status = status.clone();
             let _ = self.save_container_metadata(session_name, &metadata);
         }
-        
+
         Ok(status)
     }
 
     /// Clean up orphaned containers (containers without corresponding para sessions)
-    pub async fn cleanup_orphaned_containers(&self) -> DockerResult<Vec<String>> {
-        let containers = self.docker_service.list_sessions().await?;
+    pub fn cleanup_orphaned_containers(&self) -> DockerResult<Vec<String>> {
+        let containers = self.docker_service.list_sessions()?;
         let session_manager = SessionManager::new(&self.config);
-        let sessions = session_manager.list_sessions()?;
+        let sessions = session_manager.list_sessions()
+            .map_err(|e| DockerError::Other(anyhow::anyhow!("Session manager error: {}", e)))?;
         let session_names: Vec<String> = sessions.into_iter().map(|s| s.name).collect();
-        
+
         let mut removed = Vec::new();
-        
+
         for container in containers {
             if !session_names.contains(&container.session_name) {
                 // Container exists but session doesn't - clean it up
-                self.docker_service.cancel_session(&container.session_name).await?;
+                self.docker_service
+                    .cancel_session(&container.session_name)?;
                 self.remove_container_metadata(&container.session_name)?;
                 removed.push(container.session_name);
             }
         }
-        
+
         Ok(removed)
     }
 }

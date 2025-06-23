@@ -57,6 +57,9 @@ pub enum DockerError {
 
     #[error("Docker API error: {0}")]
     ApiError(String),
+
+    #[error("General error: {0}")]
+    Other(#[from] anyhow::Error),
 }
 
 pub type DockerResult<T> = Result<T, DockerError>;
