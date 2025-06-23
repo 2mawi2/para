@@ -55,11 +55,8 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Override Docker config with CLI flags
         let mut docker_config = config.docker.clone();
-        if args.no_network_isolation {
-            docker_config.network_isolation = false;
-        }
         if let Some(ref domains) = args.allow_domains {
-            // Automatically enable network isolation when --allow-domains is used
+            // Enable network isolation when --allow-domains is used
             docker_config.network_isolation = true;
             let additional_domains: Vec<String> = domains
                 .split(',')
@@ -515,7 +512,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -533,7 +529,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -554,7 +549,6 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -576,7 +570,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -598,7 +591,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -619,7 +611,6 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -637,7 +628,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -674,7 +664,6 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
@@ -701,7 +690,6 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
-            no_network_isolation: false,
             allow_domains: None,
             docker_args: vec![],
         };
