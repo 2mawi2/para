@@ -195,7 +195,7 @@ mod tests {
         assert!(tasks_file.exists());
 
         let content = fs::read_to_string(tasks_file).unwrap();
-        assert!(content.contains("Para container session ready"));
+        assert!(content.contains("Start Claude Code in Container"));
         assert!(!content.contains("/workspace/.initial-prompt"));
     }
 }

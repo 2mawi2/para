@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod cancel;
 pub mod clean;
 pub mod common;

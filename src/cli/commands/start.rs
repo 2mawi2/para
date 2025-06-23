@@ -50,7 +50,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     println!("✅ Session '{}' started successfully", session_name);
     if args.container {
         println!("   Container: para-{}", session_name);
-        println!("   Image: para-claude:latest");
+        println!("   Image: para-authenticated:latest");
     }
     println!("   Branch: {}", session_state.branch);
     println!("   Worktree: {}", session_state.worktree_path.display());
