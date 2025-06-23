@@ -121,6 +121,7 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         }
     }

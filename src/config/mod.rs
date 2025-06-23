@@ -58,6 +58,7 @@ pub struct SessionConfig {
 pub struct DockerConfig {
     pub enabled: bool,
     pub mount_workspace: bool,
+    pub max_containers: usize,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
@@ -182,6 +183,7 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
 
@@ -245,6 +247,7 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
         assert!(valid_config.validate().is_ok());
@@ -288,6 +291,7 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
         assert!(config_wrapper_disabled.validate().is_ok());

@@ -6,6 +6,7 @@ pub mod error;
 pub mod extraction;
 pub mod ide_integration;
 pub mod manager;
+pub mod pool;
 pub mod service;
 pub mod session;
 
@@ -16,5 +17,5 @@ pub mod mock;
 pub use error::{DockerError, DockerResult};
 pub use ide_integration::DockerIdeIntegration;
 pub use manager::DockerManager;
+pub use pool::ContainerPool;
 pub use service::DockerService;
-pub use session::ContainerSession;
