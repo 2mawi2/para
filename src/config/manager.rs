@@ -309,6 +309,7 @@ mod tests {
             docker: super::super::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
 

@@ -131,6 +131,21 @@ fn configure_docker_simple(mut config: super::DockerConfig) -> Result<super::Doc
         .interact()
         .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
 
+    if config.enabled {
+        config.max_containers = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Maximum concurrent Docker containers")
+            .default(config.max_containers)
+            .validate_with(|input: &usize| {
+                if *input > 0 && *input <= 10 {
+                    Ok(())
+                } else {
+                    Err("Must be between 1 and 10")
+                }
+            })
+            .interact()
+            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+    }
+
     Ok(config)
 }
 
@@ -154,6 +169,9 @@ fn display_config_summary(config: &Config) {
         println!("  Auto-cleanup: disabled");
     }
     println!("  Docker enabled: {}", config.docker.enabled);
+    if config.docker.enabled {
+        println!("  Max containers: {}", config.docker.max_containers);
+    }
 }
 
 pub fn run_quick_setup() -> Result<Config> {
@@ -231,6 +249,7 @@ mod tests {
             docker: crate::config::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
 
@@ -272,6 +291,7 @@ mod tests {
             docker: DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
 

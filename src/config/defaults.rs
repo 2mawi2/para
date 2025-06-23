@@ -63,6 +63,7 @@ pub fn default_docker_config() -> DockerConfig {
     DockerConfig {
         enabled: false,
         mount_workspace: true,
+        max_containers: 5,
     }
 }
 

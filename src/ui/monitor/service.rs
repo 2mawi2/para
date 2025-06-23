@@ -673,6 +673,7 @@ mod tests {
             docker: crate::config::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         }
     }
@@ -707,6 +708,7 @@ mod tests {
             docker: crate::config::DockerConfig {
                 enabled: false,
                 mount_workspace: true,
+                max_containers: 3,
             },
         };
 

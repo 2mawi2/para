@@ -34,6 +34,8 @@ copypasta = "0.10"
 fs2 = "0.4"
 bollard = { version = "0.15", features = ["chrono"] }
 hex = "0.4"
+uuid = { version = "1.5", features = ["v4"] }
+ctrlc = "3.4"
 
 [lints.rust]
 warnings = "deny"

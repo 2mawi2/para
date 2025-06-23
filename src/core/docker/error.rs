@@ -10,9 +10,6 @@ pub enum DockerError {
     #[error("Failed to create container: {0}")]
     ContainerCreationFailed(String),
 
-    #[error("Failed to start container: {0}")]
-    ContainerStartFailed(String),
-
     #[error("General error: {0}")]
     Other(#[from] anyhow::Error),
 }
