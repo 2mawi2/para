@@ -134,11 +134,21 @@ impl ContainerPool {
 
     /// Reset a container for reuse
     fn reset_container(&self, container_id: &str) -> DockerResult<()> {
-        // Clean up container workspace
-        let _output = Command::new("docker")
-            .args(["exec", container_id, "rm", "-rf", "/workspace/*"])
+        // Safely clean up the entire workspace directory and recreate it
+        // This avoids shell expansion issues and ensures complete cleanup
+        let _remove_output = Command::new("docker")
+            .args(["exec", container_id, "rm", "-rf", "/workspace"])
             .output()
-            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to clean workspace: {}", e)))?;
+            .map_err(|e| {
+                DockerError::Other(anyhow::anyhow!("Failed to remove workspace: {}", e))
+            })?;
+
+        let _create_output = Command::new("docker")
+            .args(["exec", container_id, "mkdir", "-p", "/workspace"])
+            .output()
+            .map_err(|e| {
+                DockerError::Other(anyhow::anyhow!("Failed to recreate workspace: {}", e))
+            })?;
 
         // Reset git config in case it was modified
         let _output = Command::new("docker")
@@ -243,7 +253,7 @@ mod tests {
     fn test_pool_enforces_maximum_limit() {
         // Create a pool with max size of 3
         let pool = ContainerPool::new(3);
-        
+
         // Simulate acquiring containers up to the limit
         {
             let mut in_use = pool.in_use.lock().unwrap();
@@ -251,14 +261,14 @@ mod tests {
             in_use.push("container-2".to_string());
             in_use.push("container-3".to_string());
         }
-        
+
         // Verify pool is at capacity
         assert_eq!(pool.containers_in_use(), 3);
         assert_eq!(pool.containers_available(), 0);
-        
+
         // Try to acquire another container - should fail
         let result = pool.acquire();
-        
+
         // Verify it returns the expected error
         assert!(result.is_err());
         if let Err(DockerError::Other(err)) = result {
@@ -275,41 +285,41 @@ mod tests {
     fn test_pool_reuse_after_release() {
         // Create a pool with max size of 2
         let pool = ContainerPool::new(2);
-        
+
         // Simulate 2 containers in use (at capacity)
         {
             let mut in_use = pool.in_use.lock().unwrap();
             in_use.push("container-1".to_string());
             in_use.push("container-2".to_string());
         }
-        
+
         assert_eq!(pool.containers_in_use(), 2);
-        
+
         // Try to acquire - should fail (pool exhausted)
         let result = pool.acquire();
         assert!(result.is_err());
-        
+
         // Release one container
         {
             let mut in_use = pool.in_use.lock().unwrap();
             let mut available = pool.available.lock().unwrap();
-            
+
             // Simulate release
             in_use.retain(|id| id != "container-1");
             available.push_back("container-1".to_string());
         }
-        
+
         assert_eq!(pool.containers_in_use(), 1);
         assert_eq!(pool.containers_available(), 1);
-        
+
         // Now acquire should succeed (reusing the released container)
         let result = pool.acquire();
         assert!(result.is_ok());
-        
+
         if let Ok(container_id) = result {
             assert_eq!(container_id, "container-1");
         }
-        
+
         // Pool should be at capacity again
         assert_eq!(pool.containers_in_use(), 2);
         assert_eq!(pool.containers_available(), 0);
@@ -318,15 +328,11 @@ mod tests {
     #[test]
     fn test_pool_respects_configured_limit() {
         // Test with different pool sizes
-        let test_cases = vec![
-            (1, "Pool size 1"),
-            (5, "Pool size 5"),
-            (10, "Pool size 10"),
-        ];
-        
+        let test_cases = vec![(1, "Pool size 1"), (5, "Pool size 5"), (10, "Pool size 10")];
+
         for (max_size, description) in test_cases {
             let pool = ContainerPool::new(max_size);
-            
+
             // Fill the pool to capacity
             {
                 let mut in_use = pool.in_use.lock().unwrap();
@@ -334,22 +340,22 @@ mod tests {
                     in_use.push(format!("container-{}", i));
                 }
             }
-            
+
             // Verify pool is at configured capacity
             assert_eq!(pool.containers_in_use(), max_size, "{}", description);
             assert_eq!(pool.max_size(), max_size, "{}", description);
-            
+
             // Try to exceed limit
             let result = pool.acquire();
             assert!(result.is_err(), "{}: Should not exceed limit", description);
-            
+
             // Verify error message contains the correct limit
             if let Err(DockerError::Other(err)) = result {
                 let error_msg = err.to_string();
                 assert!(
                     error_msg.contains(&format!("max: {}", max_size)),
-                    "{}: Error should mention limit {}", 
-                    description, 
+                    "{}: Error should mention limit {}",
+                    description,
                     max_size
                 );
             }
