@@ -60,9 +60,12 @@ impl DockerManager {
             docker_args,
         )?;
 
-        // Start it
+        // Start it with verification
         println!("▶️  Starting container: para-{}", session.name);
-        self.service.start_container(&session.name)?;
+        self.service.start_container_with_verification(
+            &session.name,
+            self.config.docker.network_isolation,
+        )?;
 
         Ok(())
     }
