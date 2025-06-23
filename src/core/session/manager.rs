@@ -428,6 +428,7 @@ impl SessionManager {
         name: String,
         docker_config: &crate::core::docker::DockerSessionConfig,
         docker_manager: &crate::core::docker::DockerManager,
+        initial_prompt: Option<&str>,
     ) -> Result<SessionState> {
         // Create a container-type session
         let session_state = self.create_session_with_type(
@@ -442,6 +443,36 @@ impl SessionManager {
             .map_err(|e| ParaError::docker_error(format!("Failed to start container: {}", e)))?;
 
         // TODO: Update session with actual container ID after creation
+        
+        // Generate IDE integration files (MVP)
+        let session_dir = &session_state.worktree_path;
+        
+        // Create a minimal container session info for devcontainer generation
+        let container_session = crate::core::docker::session::ContainerSession {
+                container_id: "pending".to_string(), // TODO: Get actual ID from docker_manager
+                session_name: session_state.name.clone(),
+                status: crate::core::docker::session::ContainerStatus::Running,
+                created_at: chrono::Utc::now(),
+                started_at: Some(chrono::Utc::now()),
+                stopped_at: None,
+                image: docker_config.image.clone(),
+                volumes: vec![],
+                ports: vec![],
+                environment: std::collections::HashMap::new(),
+                working_dir: docker_config.workdir.clone().map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from("/workspace")),
+                network_mode: "bridge".to_string(),
+                hostname: format!("para-{}", session_state.name),
+                resource_limits: crate::core::docker::session::ResourceLimits::default(),
+                labels: std::collections::HashMap::new(),
+                health_check: None,
+            };
+            
+            // Generate devcontainer config
+            crate::core::docker::DockerIdeIntegration::generate_devcontainer_config(
+                session_dir,
+                &container_session,
+                initial_prompt,
+            )?;
 
         Ok(session_state)
     }
