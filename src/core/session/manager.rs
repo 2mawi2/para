@@ -333,11 +333,13 @@ impl SessionManager {
 
         // Check if state_dir ends with ".para/state"
         if state_path.file_name()?.to_str()? == "state" {
-            if let Some(parent) = state_path.parent() {
+            return state_path.parent().and_then(|parent| {
                 if parent.file_name()?.to_str()? == ".para" {
-                    return Some(parent.to_path_buf());
+                    Some(parent.to_path_buf())
+                } else {
+                    None
                 }
-            }
+            });
         }
         None
     }
@@ -346,11 +348,13 @@ impl SessionManager {
     fn get_para_directory_from_subtrees(&self, subtrees_path: &Path) -> Option<PathBuf> {
         // Check if subtrees_path ends with ".para/worktrees"
         if subtrees_path.file_name()?.to_str()? == "worktrees" {
-            if let Some(parent) = subtrees_path.parent() {
+            return subtrees_path.parent().and_then(|parent| {
                 if parent.file_name()?.to_str()? == ".para" {
-                    return Some(parent.to_path_buf());
+                    Some(parent.to_path_buf())
+                } else {
+                    None
                 }
-            }
+            });
         }
         None
     }
@@ -358,6 +362,57 @@ impl SessionManager {
     /// Ensure .para/.gitignore exists with appropriate content
     fn ensure_para_gitignore_exists(&self, para_dir: &Path) -> Result<()> {
         GitignoreManager::create_para_internal_gitignore(para_dir)
+    }
+
+    #[allow(dead_code)]
+    pub fn create_docker_session(
+        &mut self,
+        name: String,
+        docker_config: &crate::core::docker::DockerSessionConfig,
+        docker_manager: &crate::core::docker::DockerManager,
+    ) -> Result<SessionState> {
+        // First create a regular session
+        let mut session_state = self.create_session(name, None)?;
+
+        // Mark it as a Docker session
+        session_state.is_docker = true;
+
+        // Start the Docker container
+        docker_manager
+            .start_container(&session_state.name, docker_config)
+            .map_err(|e| ParaError::docker_error(format!("Failed to start container: {}", e)))?;
+
+        // Save the updated state
+        self.save_state(&session_state)?;
+
+        Ok(session_state)
+    }
+
+    #[allow(dead_code)]
+    pub fn cancel_session(&mut self, session_name: &str, force: bool) -> Result<()> {
+        let session = self.load_state(session_name)?;
+
+        // If it's a Docker session, stop the container
+        if session.is_docker {
+            let docker_manager = crate::core::docker::DockerManager::new();
+            let _ = docker_manager.stop_container(session_name);
+            let _ = docker_manager.remove_container(session_name);
+        }
+
+        // Remove the session state file
+        let state_file = self.state_dir.join(format!("{}.state", session_name));
+        if state_file.exists() {
+            fs::remove_file(&state_file)
+                .map_err(|e| ParaError::fs_error(format!("Failed to remove state file: {}", e)))?;
+        }
+
+        // Clean up the worktree if requested or if it's a Docker session
+        if (force || session.is_docker) && session.worktree_path.exists() {
+            fs::remove_dir_all(&session.worktree_path)
+                .map_err(|e| ParaError::fs_error(format!("Failed to remove worktree: {}", e)))?;
+        }
+
+        Ok(())
     }
 }
 
