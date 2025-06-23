@@ -20,23 +20,40 @@ impl DockerService {
         session_name: &str,
         _config: &DockerConfig,
         working_dir: &Path,
+        auth_tokens: Option<&crate::core::docker::ClaudeAuthTokens>,
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
-        // For MVP, use docker CLI directly
+        let mut docker_args = vec![
+            "create".to_string(),
+            "--name".to_string(),
+            container_name.clone(),
+            "-v".to_string(),
+            format!("{}:/workspace", working_dir.display()),
+            "-w".to_string(),
+            "/workspace".to_string(),
+        ];
+
+        // Add authentication environment variables if provided
+        if let Some(tokens) = auth_tokens {
+            docker_args.extend([
+                "-e".to_string(),
+                format!("CLAUDE_CREDENTIALS_JSON={}", tokens.credentials_json),
+            ]);
+        }
+
+        docker_args.extend([
+            "para-claude:latest".to_string(),
+            "sleep".to_string(),
+            "infinity".to_string(),
+        ]);
+
+        println!(
+            "🐋 Running docker command: docker {}",
+            docker_args.join(" ")
+        );
         let output = Command::new("docker")
-            .args(&[
-                "create",
-                "--name",
-                &container_name,
-                "-v",
-                &format!("{}:/workspace", working_dir.display()),
-                "-w",
-                "/workspace",
-                "para-claude:latest",
-                "sleep",
-                "infinity", // Keep container running
-            ])
+            .args(&docker_args)
             .output()
             .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
 
@@ -61,7 +78,7 @@ impl DockerService {
         let container_name = format!("para-{}", session_name);
 
         let output = Command::new("docker")
-            .args(&["start", &container_name])
+            .args(["start", &container_name])
             .output()
             .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
 
@@ -77,7 +94,7 @@ impl DockerService {
     /// Check if Docker is available
     pub fn health_check(&self) -> DockerResult<()> {
         let output = Command::new("docker")
-            .args(&["version"])
+            .args(["version"])
             .output()
             .map_err(|e| DockerError::DaemonNotAvailable(format!("Docker not found: {}", e)))?;
 

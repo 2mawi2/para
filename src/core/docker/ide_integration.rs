@@ -57,7 +57,7 @@ impl DockerIdeIntegration {
         // Launch IDE with remote URI
         let mut cmd = Command::new(ide_command);
         cmd.arg("--folder-uri").arg(&remote_uri);
-        
+
         // Detach the IDE process
         cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::null());
@@ -65,7 +65,10 @@ impl DockerIdeIntegration {
 
         match cmd.spawn() {
             Ok(_) => {
-                println!("🚀 Launching VS Code connected to container: {}", container_name);
+                println!(
+                    "🚀 Launching VS Code connected to container: {}",
+                    container_name
+                );
                 println!("   Container: {}", container_name);
                 println!("   Workspace: /workspace");
                 if initial_prompt.is_some() {
@@ -95,7 +98,7 @@ impl DockerIdeIntegration {
         let command = if initial_prompt.is_some() {
             "claude \"$(cat '/workspace/.initial-prompt')\""
         } else {
-            "echo 'Para container session ready. Run: claude'"
+            "claude"
         };
 
         let tasks_config = serde_json::json!({
@@ -122,19 +125,16 @@ impl DockerIdeIntegration {
         let tasks_json = serde_json::to_string_pretty(&tasks_config).map_err(|e| {
             ParaError::docker_error(format!("Failed to serialize tasks.json: {}", e))
         })?;
-        
-        fs::write(&tasks_file, tasks_json).map_err(|e| {
-            ParaError::docker_error(format!("Failed to write tasks.json: {}", e))
-        })?;
+
+        fs::write(&tasks_file, tasks_json)
+            .map_err(|e| ParaError::docker_error(format!("Failed to write tasks.json: {}", e)))?;
 
         Ok(())
     }
 
     /// Hex encode a string for vscode-remote URI
     fn hex_encode_string(s: &str) -> String {
-        s.bytes()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
+        s.bytes().map(|b| format!("{:02x}", b)).collect::<String>()
     }
 }
 
@@ -153,19 +153,23 @@ mod tests {
 
     #[test]
     fn test_hex_encode_string() {
-        assert_eq!(DockerIdeIntegration::hex_encode_string("hello"), "68656c6c6f");
-        assert_eq!(DockerIdeIntegration::hex_encode_string("para-test-123"), "706172612d746573742d313233");
+        assert_eq!(
+            DockerIdeIntegration::hex_encode_string("hello"),
+            "68656c6c6f"
+        );
+        assert_eq!(
+            DockerIdeIntegration::hex_encode_string("para-test-123"),
+            "706172612d746573742d313233"
+        );
         assert_eq!(DockerIdeIntegration::hex_encode_string(""), "");
     }
 
     #[test]
     fn test_create_vscode_tasks_with_prompt() {
         let temp_dir = TempDir::new().unwrap();
-        
-        let result = DockerIdeIntegration::create_vscode_tasks(
-            temp_dir.path(),
-            Some("Test prompt"),
-        );
+
+        let result =
+            DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), Some("Test prompt"));
         assert!(result.is_ok());
 
         // Should create tasks.json that runs Claude in container
@@ -182,17 +186,14 @@ mod tests {
     #[test]
     fn test_create_vscode_tasks_without_prompt() {
         let temp_dir = TempDir::new().unwrap();
-        
-        let result = DockerIdeIntegration::create_vscode_tasks(
-            temp_dir.path(),
-            None,
-        );
+
+        let result = DockerIdeIntegration::create_vscode_tasks(temp_dir.path(), None);
         assert!(result.is_ok());
 
         // Should still create tasks.json but with a different message
         let tasks_file = temp_dir.path().join(".vscode/tasks.json");
         assert!(tasks_file.exists());
-        
+
         let content = fs::read_to_string(tasks_file).unwrap();
         assert!(content.contains("Para container session ready"));
         assert!(!content.contains("/workspace/.initial-prompt"));

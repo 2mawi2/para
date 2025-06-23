@@ -306,6 +306,10 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: super::super::DockerConfig {
+                enabled: false,
+                mount_workspace: true,
+            },
         };
 
         let json = serde_json::to_string_pretty(&claude_config).unwrap();

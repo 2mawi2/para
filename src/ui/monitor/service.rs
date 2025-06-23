@@ -670,6 +670,10 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: crate::config::DockerConfig {
+                enabled: false,
+                mount_workspace: true,
+            },
         }
     }
 
@@ -699,6 +703,10 @@ mod tests {
                 default_name_format: "%Y%m%d-%H%M%S".to_string(),
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
+            },
+            docker: crate::config::DockerConfig {
+                enabled: false,
+                mount_workspace: true,
             },
         };
 
