@@ -17,6 +17,170 @@ pub enum TaskTransformation {
     NoChange,
 }
 
+/// Represents a parsed tasks.json document
+#[derive(Debug)]
+pub struct TaskDocument {
+    json: Value,
+}
+
+impl TaskDocument {
+    /// Create a new TaskDocument from JSON value
+    fn new(json: Value) -> Self {
+        Self { json }
+    }
+
+    /// Get mutable reference to tasks array, returns empty if missing
+    fn get_tasks_mut(&mut self) -> Result<Option<&mut Vec<Value>>> {
+        match self.json.get_mut("tasks") {
+            Some(tasks) => match tasks.as_array_mut() {
+                Some(array) => Ok(Some(array)),
+                None => Err(ParaError::fs_error(
+                    "Tasks field is not an array".to_string(),
+                )),
+            },
+            None => Ok(None), // No tasks array is okay, nothing to transform
+        }
+    }
+
+    /// Convert back to JSON value
+    fn into_json(self) -> Value {
+        self.json
+    }
+}
+
+/// Configuration for command transformation
+#[derive(Debug)]
+pub struct TransformConfig {
+    pub has_skip_permissions: bool,
+}
+
+/// Pipeline for transforming Claude commands
+#[derive(Debug)]
+pub struct CommandTransformer {
+    has_skip_permissions: bool,
+}
+
+impl CommandTransformer {
+    /// Create a new CommandTransformer
+    pub fn new(has_skip_permissions: bool) -> Self {
+        Self {
+            has_skip_permissions,
+        }
+    }
+
+    /// Transform a command value if needed
+    pub fn transform(&self, command: &CommandValue) -> Result<CommandValue> {
+        match command {
+            CommandValue::String(cmd) => {
+                let transformed = self.transform_string_command(cmd);
+                Ok(CommandValue::String(transformed))
+            }
+            CommandValue::Array(_) => Ok(command.clone()),
+            CommandValue::Other(_) => Ok(command.clone()),
+        }
+    }
+
+    /// Check if a command needs transformation
+    pub fn needs_transformation(&self, command: &str) -> bool {
+        self.is_claude_command(command) && !command.contains("-c")
+    }
+
+    /// Apply permission flags to a command
+    pub fn apply_permission_flags(&self, command: &str) -> String {
+        if self.has_skip_permissions {
+            self.transform_with_skip_permissions(command)
+        } else {
+            self.transform_regular_command(command)
+        }
+    }
+
+    pub fn transform_string_command(&self, command: &str) -> String {
+        if !self.is_claude_command(command) {
+            return command.to_string();
+        }
+
+        if self.is_prompt_file_command(command) {
+            return self.create_continue_command();
+        }
+
+        if self.needs_transformation(command) {
+            return self.apply_permission_flags(command);
+        }
+
+        command.to_string()
+    }
+
+    fn is_claude_command(&self, command: &str) -> bool {
+        command.starts_with("claude")
+    }
+
+    fn is_prompt_file_command(&self, command: &str) -> bool {
+        command.contains(".claude_prompt_temp")
+            || (command.contains("$(cat") && command.contains("rm "))
+    }
+
+    fn create_continue_command(&self) -> String {
+        if self.has_skip_permissions {
+            "claude --dangerously-skip-permissions -c".to_string()
+        } else {
+            "claude -c".to_string()
+        }
+    }
+
+    pub fn transform_with_skip_permissions(&self, command: &str) -> String {
+        if command.contains("claude --dangerously-skip-permissions") && !command.contains("-c") {
+            command.replace(
+                "claude --dangerously-skip-permissions",
+                "claude --dangerously-skip-permissions -c",
+            )
+        } else {
+            command.to_string()
+        }
+    }
+
+    pub fn transform_regular_command(&self, command: &str) -> String {
+        if command.contains("-c") {
+            return command.to_string();
+        }
+
+        if command == "claude" {
+            "claude -c".to_string()
+        } else if command.starts_with("claude ") {
+            command.replace("claude ", "claude -c ")
+        } else {
+            command.to_string()
+        }
+    }
+}
+
+/// Wrapper for different command value types
+#[derive(Clone, Debug)]
+pub enum CommandValue {
+    String(String),
+    Array(Vec<Value>),
+    Other(Value),
+}
+
+impl CommandValue {
+    /// Create CommandValue from serde_json::Value
+    fn from_value(value: &Value) -> Self {
+        match value {
+            Value::String(s) => CommandValue::String(s.clone()),
+            Value::Array(arr) => CommandValue::Array(arr.clone()),
+            other => CommandValue::Other(other.clone()),
+        }
+    }
+
+    /// Convert CommandValue back to serde_json::Value
+    fn to_value(&self) -> Value {
+        match self {
+            CommandValue::String(s) => Value::String(s.clone()),
+            CommandValue::Array(arr) => Value::Array(arr.clone()),
+            CommandValue::Other(val) => val.clone(),
+        }
+    }
+}
+
 /// Handle Claude task JSON transformations
 pub fn transform_claude_tasks_file(path: &Path) -> Result<()> {
     let tasks_file = path.join(".vscode/tasks.json");
@@ -28,6 +192,60 @@ pub fn transform_claude_tasks_file(path: &Path) -> Result<()> {
     let config = detect_task_configuration(&tasks_file)?;
     let transformation = determine_transformation(&config);
     apply_transformation(&tasks_file, transformation)
+}
+
+/// Load and parse tasks.json file into a TaskDocument
+fn load_and_parse_tasks(file_path: &Path) -> Result<TaskDocument> {
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+
+    let json = serde_json::from_str(&content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
+
+    Ok(TaskDocument::new(json))
+}
+
+/// Transform commands in a TaskDocument using the provided config
+fn transform_commands(tasks: &mut TaskDocument, config: &TransformConfig) -> Result<()> {
+    let transformer = CommandTransformer::new(config.has_skip_permissions);
+
+    if let Some(tasks_array) = tasks.get_tasks_mut()? {
+        for task in tasks_array {
+            transform_task_command(task, &transformer)?;
+        }
+    }
+    // If no tasks array exists, that's fine - nothing to transform
+
+    Ok(())
+}
+
+/// Transform a single task's command field
+fn transform_task_command(task: &mut Value, transformer: &CommandTransformer) -> Result<()> {
+    let command_field = match task.get_mut("command") {
+        Some(cmd) => cmd,
+        None => return Ok(()), // No command field, nothing to transform
+    };
+
+    let command_value = CommandValue::from_value(command_field);
+    let transformed = transformer.transform(&command_value)?;
+
+    // Only update if the command actually changed
+    let new_value = transformed.to_value();
+    if *command_field != new_value {
+        *command_field = new_value;
+    }
+
+    Ok(())
+}
+
+/// Save transformed tasks back to file
+fn save_transformed_tasks(tasks: TaskDocument, file_path: &Path) -> Result<()> {
+    let json = tasks.into_json();
+    let updated_content = serde_json::to_string_pretty(&json)
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
+
+    fs::write(file_path, updated_content)
+        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
 }
 
 fn detect_task_configuration(tasks_file: &Path) -> Result<TaskConfiguration> {
@@ -75,129 +293,80 @@ fn apply_transformation(tasks_file: &Path, transformation: TaskTransformation) -
         TaskTransformation::NoChange => Ok(()),
         TaskTransformation::RemovePromptFileAndAddContinue {
             has_skip_permissions,
-        } => apply_remove_prompt_file_transformation(tasks_file, has_skip_permissions),
+        } => apply_unified_transformation(tasks_file, has_skip_permissions),
         TaskTransformation::AddContinueFlag {
             has_skip_permissions,
-        } => apply_add_continue_flag_transformation(tasks_file, has_skip_permissions),
+        } => apply_unified_transformation(tasks_file, has_skip_permissions),
     }
 }
 
-fn apply_remove_prompt_file_transformation(
-    tasks_file: &Path,
-    has_skip_permissions: bool,
-) -> Result<()> {
-    let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-    let mut json: Value = serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
-
-    let new_command = if has_skip_permissions {
-        "claude --dangerously-skip-permissions -c"
-    } else {
-        "claude -c"
+/// Unified transformation function using the new pipeline
+fn apply_unified_transformation(tasks_file: &Path, has_skip_permissions: bool) -> Result<()> {
+    let mut tasks = load_and_parse_tasks(tasks_file)?;
+    let config = TransformConfig {
+        has_skip_permissions,
     };
-
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command) = task.get_mut("command").and_then(|c| c.as_str()) {
-                if command.contains(".claude_prompt_temp")
-                    || (command.contains("$(cat") && command.contains("rm "))
-                {
-                    task["command"] = Value::String(new_command.to_string());
-                }
-            }
-        }
-    }
-
-    let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
-
-    fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+    transform_commands(&mut tasks, &config)?;
+    save_transformed_tasks(tasks, tasks_file)
 }
 
-/// Loads and parses a tasks.json file
+#[cfg(test)]
+/// Legacy function for backward compatibility - delegates to new pipeline
 fn load_tasks_json(tasks_file: &Path) -> Result<Value> {
-    let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
-
-    serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))
+    let tasks = load_and_parse_tasks(tasks_file)?;
+    Ok(tasks.into_json())
 }
 
-/// Saves a JSON value to a tasks.json file with pretty formatting
+#[cfg(test)]
+/// Legacy function for backward compatibility - delegates to new pipeline
 fn save_tasks_json(tasks_file: &Path, json: Value) -> Result<()> {
-    let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
-
-    fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+    let tasks = TaskDocument::new(json);
+    save_transformed_tasks(tasks, tasks_file)
 }
 
+#[cfg(test)]
 /// Checks if a command needs the continue flag added
 fn needs_continue_flag(command: &str) -> bool {
     !command.contains("-c")
 }
 
+#[cfg(test)]
 /// Transforms a Claude command to include the continue flag
 fn transform_claude_command(command: &str, has_skip_permissions: bool) -> String {
-    if has_skip_permissions {
-        transform_claude_command_with_skip_permissions(command)
-    } else {
-        transform_claude_command_regular(command)
-    }
+    let transformer = CommandTransformer::new(has_skip_permissions);
+    transformer.transform_string_command(command)
 }
 
+#[cfg(test)]
 /// Transforms Claude commands with --dangerously-skip-permissions flag
 fn transform_claude_command_with_skip_permissions(command: &str) -> String {
-    if command.contains("claude --dangerously-skip-permissions") && needs_continue_flag(command) {
-        command.replace(
-            "claude --dangerously-skip-permissions",
-            "claude --dangerously-skip-permissions -c",
-        )
-    } else {
-        command.to_string()
-    }
+    let transformer = CommandTransformer::new(true);
+    transformer.transform_with_skip_permissions(command)
 }
 
+#[cfg(test)]
 /// Transforms regular Claude commands (without --dangerously-skip-permissions)
 fn transform_claude_command_regular(command: &str) -> String {
-    if command == "claude" {
-        "claude -c".to_string()
-    } else if command.starts_with("claude ") && needs_continue_flag(command) {
-        command.replace("claude ", "claude -c ")
-    } else {
-        command.to_string()
-    }
+    let transformer = CommandTransformer::new(false);
+    transformer.transform_regular_command(command)
 }
 
+#[cfg(test)]
+/// Legacy compatibility function for tests
+fn apply_remove_prompt_file_transformation(
+    tasks_file: &Path,
+    has_skip_permissions: bool,
+) -> Result<()> {
+    apply_unified_transformation(tasks_file, has_skip_permissions)
+}
+
+#[cfg(test)]
+/// Legacy compatibility function for tests
 fn apply_add_continue_flag_transformation(
     tasks_file: &Path,
     has_skip_permissions: bool,
 ) -> Result<()> {
-    let mut json = load_tasks_json(tasks_file)?;
-
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command_value) = task.get_mut("command") {
-                // Only transform string commands, preserve arrays and other types unchanged
-                if let Some(command_str) = command_value.as_str() {
-                    let updated_command =
-                        transform_claude_command(command_str, has_skip_permissions);
-
-                    if updated_command != command_str {
-                        *command_value = Value::String(updated_command);
-                    }
-                }
-                // Arrays and other non-string values are left unchanged
-            }
-        }
-    }
-
-    save_tasks_json(tasks_file, json)
+    apply_unified_transformation(tasks_file, has_skip_permissions)
 }
 
 #[cfg(test)]
