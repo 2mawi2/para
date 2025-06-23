@@ -1,47 +1,46 @@
-use para::core::docker::{DockerManager, DockerService, DockerSessionConfig};
+use para::config::defaults::default_config;
+use para::core::docker::manager::DockerManager;
+use para::core::docker::service::MockDockerService;
+use para::core::docker::{DockerConfig, DockerService};
+use std::sync::Arc;
 
 #[test]
 fn test_docker_manager_creation() {
-    let docker_manager = DockerManager::new();
-    // Just verify it can be created
-    assert!(docker_manager.is_docker_available() || !docker_manager.is_docker_available());
+    // Create mock service and config for testing
+    let mock_service = Arc::new(MockDockerService);
+    let config = default_config();
+    let docker_config = DockerConfig::default();
+
+    let _docker_manager = DockerManager::new(mock_service.clone(), config, docker_config);
+
+    // Test that the service responds
+    assert!(mock_service.health_check().is_ok());
 }
 
 #[test]
-fn test_docker_session_config_serialization() {
-    let config = DockerSessionConfig {
-        image: "rust:latest".to_string(),
-        volumes: vec![("/host/path".to_string(), "/container/path".to_string())],
-        env_vars: vec![("KEY".to_string(), "value".to_string())],
-        workdir: Some("/workspace".to_string()),
-    };
+fn test_docker_config_serialization() {
+    let config = DockerConfig::default();
 
     // Test serialization
     let json = serde_json::to_string(&config).unwrap();
-    assert!(json.contains("rust:latest"));
-    assert!(json.contains("/host/path"));
-    assert!(json.contains("/container/path"));
+    assert!(json.contains("ubuntu:latest"));
+    assert!(json.contains("enabled"));
 
     // Test deserialization
-    let deserialized: DockerSessionConfig = serde_json::from_str(&json).unwrap();
-    assert_eq!(deserialized.image, config.image);
-    assert_eq!(deserialized.volumes.len(), 1);
-    assert_eq!(deserialized.env_vars.len(), 1);
-    assert_eq!(deserialized.workdir, Some("/workspace".to_string()));
+    let deserialized: DockerConfig = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.default_image, config.default_image);
+    assert_eq!(deserialized.enabled, config.enabled);
 }
 
 #[test]
 fn test_docker_availability_check() {
-    let docker_manager = DockerManager::new();
+    // Test the mock service health check
+    let mock_service = MockDockerService;
+    let health_result = mock_service.health_check();
 
-    // This test just verifies the function runs without panicking
-    let available = docker_manager.is_docker_available();
-
-    if available {
-        println!("Docker is available on this system");
-    } else {
-        println!("Docker is not available on this system");
-    }
+    // Mock service should always be healthy
+    assert!(health_result.is_ok());
+    println!("Mock Docker service is available");
 }
 
 #[test]
@@ -58,9 +57,12 @@ fn test_docker_container_name_generation() {
 
 #[test]
 fn test_docker_service_trait_implementation() {
-    // Verify that DockerManager implements DockerService trait
-    let docker_manager = DockerManager::new();
-    let _service: &dyn DockerService = &docker_manager;
+    // Verify that MockDockerService implements DockerService trait
+    let mock_service = MockDockerService;
+    let _service: &dyn DockerService = &mock_service;
+
+    // Test that we can use it as a service
+    assert!(mock_service.health_check().is_ok());
 }
 
 // Testcontainers tests - These would require testcontainers to be a regular dependency

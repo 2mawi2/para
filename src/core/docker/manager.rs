@@ -264,7 +264,8 @@ impl DockerManager {
     pub fn cleanup_orphaned_containers(&self) -> DockerResult<Vec<String>> {
         let containers = self.docker_service.list_sessions()?;
         let session_manager = SessionManager::new(&self.config);
-        let sessions = session_manager.list_sessions()
+        let sessions = session_manager
+            .list_sessions()
             .map_err(|e| DockerError::Other(anyhow::anyhow!("Session manager error: {}", e)))?;
         let session_names: Vec<String> = sessions.into_iter().map(|s| s.name).collect();
 
