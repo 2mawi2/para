@@ -97,12 +97,22 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             })?;
         }
 
+        // Get the current branch as the parent branch
+        let parent_branch = git_service
+            .repository()
+            .get_current_branch()
+            .unwrap_or_else(|_| "main".to_string());
+
         git_service
             .create_worktree(&branch_name, &session_path)
             .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-        let mut session_state =
-            SessionState::new(session_id.clone(), branch_name, session_path.clone());
+        let mut session_state = SessionState::with_parent_branch(
+            session_id.clone(),
+            branch_name,
+            session_path.clone(),
+            parent_branch,
+        );
 
         session_state.task_description = Some(prompt.clone());
         session_manager.save_state(&session_state)?;

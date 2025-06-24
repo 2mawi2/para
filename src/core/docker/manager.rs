@@ -313,22 +313,25 @@ impl DockerManager {
             )));
         }
 
+        // Validate user inputs first
+        let forbidden_patterns = [
+            "rm", "del", "unlink", "truncate", ";", "&&", "||", "|", "`", "$",
+        ];
+        for forbidden in &forbidden_patterns {
+            if workspace_path.contains(forbidden) || host_path.contains(forbidden) {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "Path contains forbidden pattern: {}",
+                    forbidden
+                )));
+            }
+        }
+
         let safe_cmd = format!(
             "set -euo pipefail; cd '{}' && find '{}' -maxdepth 3 -type f -name '*.rs' -o -name '*.toml' -o -name '*.md' -o -name '*.json' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' | head -1000 | xargs -I {{}} cp '{{}}' '{}/' 2>/dev/null || true",
             workspace_path,
             host_path,
             workspace_path
         );
-
-        let forbidden_commands = ["rm", "del", "unlink", "truncate", ">", ">>"];
-        for forbidden in &forbidden_commands {
-            if safe_cmd.contains(forbidden) {
-                return Err(DockerError::Other(anyhow::anyhow!(
-                    "Generated command contains forbidden operation: {}",
-                    forbidden
-                )));
-            }
-        }
 
         Ok(safe_cmd)
     }
