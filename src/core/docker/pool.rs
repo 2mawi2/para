@@ -26,7 +26,8 @@ impl ContainerPool {
         // Query Docker for ALL containers with names starting with "para-"
         let output = Command::new("docker")
             .args([
-                "ps", "-a",  // -a flag includes stopped containers
+                "ps",
+                "-a", // -a flag includes stopped containers
                 "--format",
                 "{{.ID}}",
                 "--filter",
@@ -52,7 +53,7 @@ impl ContainerPool {
 
         Ok(container_ids)
     }
-    
+
     /// Get list of active (running) para containers from Docker
     fn get_active_containers(&self) -> DockerResult<Vec<String>> {
         // Query Docker for all containers with names starting with "para-"
@@ -282,7 +283,6 @@ impl ContainerPool {
     pub fn max_size(&self) -> usize {
         self.max_size
     }
-    
 
     /// Clean up all containers in the pool
     pub fn cleanup(&self) -> DockerResult<()> {
