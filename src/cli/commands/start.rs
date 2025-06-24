@@ -12,29 +12,44 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
     let session_name = determine_session_name(&args, &session_manager)?;
 
-    let session_state = if args.container {
+    // Track whether we're using Docker and network isolation settings
+    let (is_container, network_isolation, _allowed_domains) = if args.container {
         // Create Docker container session
-        if !config.docker.enabled {
-            return Err(crate::utils::ParaError::invalid_config(
-                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
-            ));
-        }
+        let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
+            // Enable network isolation when --allow-domains is used
+            let additional_domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            (true, additional_domains)
+        } else {
+            (false, vec![])
+        };
 
-        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
-        let session =
-            session_manager.create_docker_session(session_name.clone(), &docker_manager, None)?;
+        let docker_manager = crate::core::docker::DockerManager::new(
+            config.clone(),
+            network_isolation,
+            allowed_domains.clone(),
+        );
+        let session = session_manager.create_docker_session(
+            session_name.clone(),
+            &docker_manager,
+            None,
+            &args.docker_args,
+        )?;
 
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
         // Launch IDE connected to container
         docker_manager
-            .launch_container_ide(&session, None)
+            .launch_container_ide(&session, None, args.dangerously_skip_permissions)
             .map_err(|e| {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;
 
-        session
+        (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session
         let session = session_manager.create_session(session_name.clone(), None)?;
@@ -44,13 +59,24 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         let ide_manager = IdeManager::new(&config);
         ide_manager.launch(&session.worktree_path, args.dangerously_skip_permissions)?;
 
-        session
+        (false, false, vec![])
     };
 
+    let session_state = session_manager
+        .list_sessions()?
+        .into_iter()
+        .find(|s| s.name == session_name)
+        .ok_or_else(|| crate::utils::ParaError::session_not_found(&session_name))?;
+
     println!("✅ Session '{}' started successfully", session_name);
-    if args.container {
+    if is_container {
         println!("   Container: para-{}", session_name);
         println!("   Image: para-authenticated:latest");
+
+        // Show network isolation warning if it's disabled
+        if !network_isolation {
+            println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
     }
     println!("   Branch: {}", session_state.branch);
     println!("   Worktree: {}", session_state.worktree_path.display());
@@ -80,7 +106,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 mod tests {
     use super::*;
     use crate::config::{
-        Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
+        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
     use tempfile::TempDir;
 
@@ -118,11 +144,6 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
-            docker: DockerConfig {
-                enabled: false,
-                mount_workspace: true,
-                max_containers: 3,
-            },
         }
     }
 
@@ -136,6 +157,8 @@ mod tests {
             name: Some("test-session".to_string()),
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -152,6 +175,8 @@ mod tests {
             name: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

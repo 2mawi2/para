@@ -1,6 +1,4 @@
-use super::{
-    Config, DirectoryConfig, DockerConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
-};
+use super::{Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig};
 
 pub fn default_config() -> Config {
     Config {
@@ -8,7 +6,6 @@ pub fn default_config() -> Config {
         directories: default_directory_config(),
         git: default_git_config(),
         session: default_session_config(),
-        docker: default_docker_config(),
     }
 }
 
@@ -56,14 +53,6 @@ pub fn default_session_config() -> SessionConfig {
         default_name_format: "%Y%m%d-%H%M%S".to_string(),
         preserve_on_finish: false,
         auto_cleanup_days: Some(30),
-    }
-}
-
-pub fn default_docker_config() -> DockerConfig {
-    DockerConfig {
-        enabled: false,
-        mount_workspace: true,
-        max_containers: 5,
     }
 }
 
