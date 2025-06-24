@@ -4,7 +4,7 @@ use crate::core::status::Status;
 use crate::ui::monitor::activity::detect_last_activity;
 use crate::ui::monitor::cache::ActivityCache;
 use crate::ui::monitor::{SessionInfo, SessionStatus};
-use crate::utils::Result;
+use crate::utils::{get_main_repository_root, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -130,10 +130,18 @@ impl SessionService {
     }
 
     fn enrich_with_agent_status(&self, mut sessions: Vec<SessionInfo>) -> Result<Vec<SessionInfo>> {
-        let state_dir = Path::new(&self.config.directories.state_dir);
-
+        // Resolve state directory path correctly, same as status command
+        let state_dir = if Path::new(&self.config.directories.state_dir).is_absolute() {
+            PathBuf::from(&self.config.directories.state_dir)
+        } else {
+            // Get the main repository root and join the relative state directory
+            let repo_root = get_main_repository_root()
+                .map_err(|e| crate::utils::ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+            repo_root.join(&self.config.directories.state_dir)
+        };
+        
         for session_info in &mut sessions {
-            let agent_status = Status::load(state_dir, &session_info.name).ok().flatten();
+            let agent_status = Status::load(&state_dir, &session_info.name).ok().flatten();
 
             let (test_status, confidence, diff_stats, todo_percentage, is_blocked, agent_task) =
                 if let Some(ref status) = agent_status {
@@ -159,6 +167,7 @@ impl SessionService {
             session_info.diff_stats = diff_stats;
             session_info.todo_percentage = todo_percentage;
             session_info.is_blocked = is_blocked;
+            
         }
 
         Ok(sessions)
