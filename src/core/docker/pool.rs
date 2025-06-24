@@ -6,7 +6,6 @@
 use super::{DockerError, DockerResult};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
-use uuid::Uuid;
 
 /// Pool that manages Docker container lifecycle with resource limits
 ///
@@ -59,31 +58,6 @@ impl ContainerPool {
         Ok(())
     }
 
-    /// Create a new dedicated container for a session
-    ///
-    /// Each session gets its own isolated container. The pool only manages
-    /// the count to enforce resource limits, not container reuse.
-    pub fn create_session_container(&self, session_name: &str) -> DockerResult<String> {
-        let mut active = self.active_sessions.lock().unwrap();
-
-        // Check if we can create a new container
-        if active.len() >= self.max_size {
-            return Err(DockerError::Other(anyhow::anyhow!(
-                "Docker container pool exhausted (max: {}). Finish some sessions or increase max_containers in config.",
-                self.max_size
-            )));
-        }
-
-        // Create a dedicated container for this session
-        let container_id = self.create_new_container(session_name)?;
-        active.push(container_id.clone());
-
-        println!(
-            "🐳 Created container for session {}: {}",
-            session_name, container_id
-        );
-        Ok(container_id)
-    }
 
     /// Destroy a session's container and remove from pool tracking
     pub fn destroy_session_container(&self, container_id: &str) -> DockerResult<()> {
@@ -234,33 +208,6 @@ impl ContainerPool {
         Ok(())
     }
 
-    /// Create a new container for the session
-    fn create_new_container(&self, session_name: &str) -> DockerResult<String> {
-        let container_name = format!("para-{}-{}", session_name, Uuid::new_v4());
-
-        let output = Command::new("docker")
-            .args([
-                "run",
-                "-dt",
-                "--name",
-                &container_name,
-                "para-authenticated:latest",
-                "sleep",
-                "infinity",
-            ])
-            .output()
-            .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(DockerError::ContainerCreationFailed(format!(
-                "Failed to create container: {}",
-                error_msg
-            )));
-        }
-
-        Ok(container_name)
-    }
 }
 
 impl Drop for ContainerPool {
