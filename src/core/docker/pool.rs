@@ -5,25 +5,20 @@
 
 use super::{DockerError, DockerResult};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
 
 /// Pool that manages Docker container lifecycle with resource limits
 ///
-/// This pool enforces limits on concurrent containers by maintaining
-/// internal state to track container creation, even if containers fail
-/// to run properly.
+/// This pool enforces limits on concurrent containers by querying
+/// Docker directly for the current state. Docker is the single source
+/// of truth for container existence.
 pub struct ContainerPool {
     max_size: usize,
-    active_sessions: Arc<Mutex<Vec<String>>>,
 }
 
 impl ContainerPool {
     /// Create a new container pool with the specified maximum size
     pub fn new(max_size: usize) -> Self {
-        Self { 
-            max_size,
-            active_sessions: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { max_size }
     }
 
     /// Get ALL para containers from Docker (including stopped/exited)
@@ -197,10 +192,6 @@ impl ContainerPool {
             )));
         }
 
-        // Remove from internal tracking
-        let mut active = self.active_sessions.lock().unwrap();
-        active.retain(|id| id != container_id);
-        
         println!("🗑️  Safely destroyed para container: {}", container_id);
         Ok(())
     }
