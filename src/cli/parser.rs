@@ -233,6 +233,13 @@ pub enum ConfigCommands {
     Edit,
     /// Reset configuration to defaults
     Reset,
+    /// Set configuration value using JSON path
+    Set {
+        /// JSON path using dot notation (e.g., ide.name, git.auto_stage)
+        path: String,
+        /// Value to set
+        value: String,
+    },
 }
 
 #[derive(Args, Debug)]
