@@ -64,6 +64,11 @@ interface ParaStatusShowArgs {
   json?: boolean;
 }
 
+interface ParaConfigSetArgs {
+  path: string;
+  value: string | boolean | number;
+}
+
 // Dynamic discovery needed to support homebrew, dev builds, and system installations
 function findParaBinary(): string {
   // Check if MCP server is running from homebrew
@@ -325,6 +330,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: "para_config_set",
+        description: "Set para configuration values using JSON path notation. Supports setting IDE, Git, directories, and session configuration. Values are automatically typed (string, boolean, number).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "JSON path using dot notation (e.g., 'ide.name', 'git.auto_stage', 'ide.wrapper.command', 'session.auto_cleanup_days')"
+            },
+            value: {
+              oneOf: [
+                { type: "string" },
+                { type: "boolean" },
+                { type: "number" }
+              ],
+              description: "Value to set - automatically typed based on input"
+            }
+          },
+          required: ["path", "value"]
+        }
+      },
+      {
         name: "para_cancel",
         description: "DESTRUCTIVE: Permanently delete a para session, removing its worktree and branch. All uncommitted work will be lost. WARNING: Never use this on your current session - it will delete all your work! Use para_finish or para_recover instead. Only use this to clean up abandoned sessions.",
         inputSchema: {
@@ -480,6 +507,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "para_config_show":
         result = await runParaCommand(["config", "show"]);
+        break;
+
+      case "para_config_set":
+        {
+          const configSetArgs = args as unknown as ParaConfigSetArgs;
+          const cmdArgs = ["config", "set", configSetArgs.path, String(configSetArgs.value)];
+          result = await runParaCommand(cmdArgs);
+        }
         break;
 
       case "para_cancel":
