@@ -65,12 +65,12 @@ impl DockerManager {
         // Check Docker is available
         self.service.health_check()?;
 
-        // Create dedicated container for this session using pool
-        let container_id = self.pool.create_session_container(&session.name)?;
+        // Check pool capacity BEFORE creating container
+        self.pool.check_capacity()?;
 
         // Create the container with CLI parameters (authentication is now baked into the image)
         println!("🏗️  Creating container with authenticated image");
-        let _container = self.service.create_container(
+        let container_session = self.service.create_container(
             &session.name,
             self.network_isolation,
             &self.allowed_domains,
@@ -82,6 +82,10 @@ impl DockerManager {
         println!("▶️  Starting container: para-{}", session.name);
         self.service
             .start_container_with_verification(&session.name, self.network_isolation)?;
+
+        // Add the successfully created container to pool tracking
+        let container_id = container_session.container_id.clone();
+        self.pool.add_container(&session.name, &container_id)?;
 
         // Setup workspace in container
         self.setup_container_workspace(&container_id, session)?;
