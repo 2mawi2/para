@@ -78,14 +78,14 @@ impl DockerManager {
             docker_args,
         )?;
 
+        // Add the successfully created container to pool tracking immediately
+        let container_id = container_session.container_id.clone();
+        self.pool.add_container(&session.name, &container_id)?;
+
         // Start it with verification
         println!("▶️  Starting container: para-{}", session.name);
         self.service
             .start_container_with_verification(&session.name, self.network_isolation)?;
-
-        // Add the successfully created container to pool tracking
-        let container_id = container_session.container_id.clone();
-        self.pool.add_container(&session.name, &container_id)?;
 
         // Setup workspace in container
         self.setup_container_workspace(&container_id, session)?;
