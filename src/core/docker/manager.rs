@@ -22,7 +22,7 @@ impl DockerManager {
     /// Create a new Docker manager
     pub fn new(config: Config, network_isolation: bool, allowed_domains: Vec<String>) -> Self {
         // Use CLI-only approach: pool size is passed as runtime parameter, not from config
-        let pool_size = 3; // Default pool size, can be made configurable via CLI flag later
+        let pool_size = 1; // TEMPORARY: Set to 1 for testing, should be 5 in production
         let pool = Arc::new(ContainerPool::new(pool_size));
 
         Self {
@@ -66,6 +66,7 @@ impl DockerManager {
         self.service.health_check()?;
 
         // Check pool capacity BEFORE creating container
+        println!("🔍 Checking pool capacity before creating container...");
         self.pool.check_capacity()?;
 
         // Create the container with CLI parameters (authentication is now baked into the image)
