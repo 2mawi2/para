@@ -135,9 +135,11 @@ impl SessionService {
             PathBuf::from(&self.config.directories.state_dir)
         } else {
             // Get the main repository root and join the relative state directory
-            let repo_root = get_main_repository_root()
-                .map_err(|e| crate::utils::ParaError::git_error(format!("Not in a para repository: {}", e)))?;
-            repo_root.join(&self.config.directories.state_dir)
+            // If we can't find repository root, gracefully fall back to the relative path
+            match get_main_repository_root() {
+                Ok(repo_root) => repo_root.join(&self.config.directories.state_dir),
+                Err(_) => PathBuf::from(&self.config.directories.state_dir), // Graceful fallback
+            }
         };
         
         for session_info in &mut sessions {
