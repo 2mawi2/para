@@ -97,107 +97,93 @@ describe('Para MCP Server', () => {
 
   describe('Command Argument Building', () => {
     test('should build para_start command with session name', () => {
-      const _args = { session_name: 'test-session' };
       const expectedArgs = ['start', 'test-session'];
       
       expect(expectedArgs).toEqual(['start', 'test-session']);
     });
 
     test('should build para_start command with dangerously_skip_permissions', () => {
-      const _args = { 
-        session_name: 'test-session',
-        dangerously_skip_permissions: true 
-      };
       const expectedArgs = ['start', 'test-session', '--dangerously-skip-permissions'];
       
       expect(expectedArgs).toEqual(['start', 'test-session', '--dangerously-skip-permissions']);
     });
 
     test('should build para_finish command with required commit message', () => {
-      const _args = { commit_message: 'Add new feature' };
       const expectedArgs = ['finish', 'Add new feature'];
       
       expect(expectedArgs).toEqual(['finish', 'Add new feature']);
     });
 
     test('should build para_finish command with session and branch', () => {
-      const _args = { 
-        commit_message: 'Add new feature',
-        session: 'test-session',
-        branch: 'feature-branch'
-      };
       const expectedArgs = ['finish', 'Add new feature', 'test-session', '--branch', 'feature-branch'];
       
       expect(expectedArgs).toEqual(['finish', 'Add new feature', 'test-session', '--branch', 'feature-branch']);
     });
 
     test('should build para_dispatch command with session name and file', () => {
-      const _args = { 
-        session_name: 'api-agent',
-        file: 'tasks/api-task.md'
-      };
       const expectedArgs = ['dispatch', 'api-agent', '--file', 'tasks/api-task.md'];
       
       expect(expectedArgs).toEqual(['dispatch', 'api-agent', '--file', 'tasks/api-task.md']);
     });
 
     test('should build para_dispatch command with task description', () => {
-      const _args = { 
-        session_name: 'ui-agent',
-        task_description: 'Build user interface components'
-      };
       const expectedArgs = ['dispatch', 'ui-agent', 'Build user interface components'];
       
       expect(expectedArgs).toEqual(['dispatch', 'ui-agent', 'Build user interface components']);
     });
 
     test('should build para_list command with all flags', () => {
-      const _args = { 
-        verbose: true,
-        archived: true,
-        quiet: true
-      };
       const expectedArgs = ['list', '--verbose', '--archived', '--quiet'];
       
       expect(expectedArgs).toEqual(['list', '--verbose', '--archived', '--quiet']);
     });
 
     test('should build para_recover command with session name', () => {
-      const _args = { session_name: 'lost-session' };
       const expectedArgs = ['recover', 'lost-session'];
       
       expect(expectedArgs).toEqual(['recover', 'lost-session']);
     });
 
     test('should build para_resume command with all options', () => {
-      const _args = { 
-        session: 'active-session',
-        prompt: 'Continue with implementation',
-        file: 'additional-context.md'
-      };
       const expectedArgs = ['resume', 'active-session', '--prompt', 'Continue with implementation', '--file', 'additional-context.md'];
       
       expect(expectedArgs).toEqual(['resume', 'active-session', '--prompt', 'Continue with implementation', '--file', 'additional-context.md']);
     });
 
     test('should build para_cancel command with force flag', () => {
-      const _args = { 
-        session_name: 'abandoned-session',
-        force: true
-      };
       const expectedArgs = ['cancel', 'abandoned-session', '--force'];
       
       expect(expectedArgs).toEqual(['cancel', 'abandoned-session', '--force']);
     });
 
     test('should build para_status_show command with JSON output', () => {
-      const _args = { 
-        session: 'agent-session',
-        json: true
-      };
       const expectedArgs = ['status', 'show', 'agent-session', '--json'];
       
       expect(expectedArgs).toEqual(['status', 'show', 'agent-session', '--json']);
+    });
+
+    test('should build para_config_set command with string value', () => {
+      const expectedArgs = ['config', 'set', 'ide.name', 'cursor'];
+      
+      expect(expectedArgs).toEqual(['config', 'set', 'ide.name', 'cursor']);
+    });
+
+    test('should build para_config_set command with boolean value', () => {
+      const expectedArgs = ['config', 'set', 'git.auto_stage', 'true'];
+      
+      expect(expectedArgs).toEqual(['config', 'set', 'git.auto_stage', 'true']);
+    });
+
+    test('should build para_config_set command with number value', () => {
+      const expectedArgs = ['config', 'set', 'session.auto_cleanup_days', '14'];
+      
+      expect(expectedArgs).toEqual(['config', 'set', 'session.auto_cleanup_days', '14']);
+    });
+
+    test('should build para_config_set command with nested path', () => {
+      const expectedArgs = ['config', 'set', 'ide.wrapper.command', 'cursor'];
+      
+      expect(expectedArgs).toEqual(['config', 'set', 'ide.wrapper.command', 'cursor']);
     });
   });
 
@@ -293,6 +279,35 @@ describe('Para MCP Server', () => {
       expect(expectedTool.inputSchema.required).toContain("session_name");
     });
 
+    test('should define para_config_set tool with correct schema', () => {
+      const expectedTool = {
+        name: "para_config_set",
+        description: expect.stringContaining("Set para configuration values"),
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: expect.stringContaining("JSON path using dot notation")
+            },
+            value: {
+              oneOf: [
+                { type: "string" },
+                { type: "boolean" },
+                { type: "number" }
+              ],
+              description: expect.stringContaining("Value to set")
+            }
+          },
+          required: ["path", "value"]
+        }
+      };
+      
+      expect(expectedTool.name).toBe("para_config_set");
+      expect(expectedTool.inputSchema.required).toEqual(["path", "value"]);
+      expect(expectedTool.inputSchema.properties.value.oneOf).toHaveLength(3);
+    });
+
     test('should define all required tools', () => {
       const expectedTools = [
         'para_start',
@@ -302,6 +317,7 @@ describe('Para MCP Server', () => {
         'para_recover',
         'para_resume',
         'para_config_show',
+        'para_config_set',
         'para_cancel',
         'para_status_show'
       ];
