@@ -27,6 +27,38 @@ impl ContainerPool {
         }
     }
 
+    /// Check if pool has capacity for a new container
+    pub fn check_capacity(&self) -> DockerResult<()> {
+        let active = self.active_sessions.lock().unwrap();
+        if active.len() >= self.max_size {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Docker container pool exhausted (max: {}). Finish some sessions or increase max_containers.",
+                self.max_size
+            )));
+        }
+        Ok(())
+    }
+
+    /// Add a container to pool tracking
+    pub fn add_container(&self, session_name: &str, container_id: &str) -> DockerResult<()> {
+        let mut active = self.active_sessions.lock().unwrap();
+        
+        // Double-check capacity hasn't changed
+        if active.len() >= self.max_size {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Docker container pool exhausted during container creation (max: {})",
+                self.max_size
+            )));
+        }
+        
+        active.push(container_id.to_string());
+        println!(
+            "🐳 Added container to pool tracking for session {}: {}",
+            session_name, container_id
+        );
+        Ok(())
+    }
+
     /// Create a new dedicated container for a session
     ///
     /// Each session gets its own isolated container. The pool only manages
@@ -339,6 +371,35 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_pool_capacity_checking() {
+        let pool = ContainerPool::new(2);
+        
+        // Should have capacity initially
+        assert!(pool.check_capacity().is_ok());
+        
+        // Add containers to capacity
+        pool.add_container("test1", "container1").unwrap();
+        assert_eq!(pool.active_containers(), 1);
+        assert!(pool.check_capacity().is_ok());
+        
+        pool.add_container("test2", "container2").unwrap();
+        assert_eq!(pool.active_containers(), 2);
+        
+        // At capacity, check_capacity should fail (can't add more)
+        let capacity_check = pool.check_capacity();
+        assert!(capacity_check.is_err());
+        assert!(capacity_check.unwrap_err().to_string().contains("exhausted"));
+        
+        // Try to exceed capacity - add_container should also fail
+        let result = pool.add_container("test3", "container3");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("exhausted"));
+        
+        // Pool count should remain unchanged after failed add
+        assert_eq!(pool.active_containers(), 2);
     }
 
     #[test]
