@@ -118,8 +118,13 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 fn calculate_diff_stats_for_session(
     session_state: &crate::core::session::SessionState,
 ) -> Result<DiffStats> {
-    // Find the parent branch (usually main/master)
-    let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)?;
+    // Use the stored parent branch if available, otherwise fall back to detection
+    let parent_branch = if let Some(ref stored_parent) = session_state.parent_branch {
+        stored_parent.clone()
+    } else {
+        // For backwards compatibility with existing sessions
+        find_parent_branch(&session_state.worktree_path, &session_state.branch)?
+    };
 
     // Calculate diff stats
     calculate_diff_stats(&session_state.worktree_path, &parent_branch)

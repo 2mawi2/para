@@ -4,6 +4,7 @@
 mod tests {
     use crate::core::session::{SessionManager, SessionType};
     use crate::test_utils::test_helpers::*;
+    use std::process::Command;
     use tempfile::TempDir;
 
     #[test]
@@ -57,11 +58,12 @@ mod tests {
 
         // Create a container session state manually
         let worktree_path = temp_dir.path().join(".para/worktrees/test-container");
-        let session = crate::core::session::SessionState::new_container(
+        let session = crate::core::session::SessionState::new_container_with_parent_branch(
             "test-container".to_string(),
             "para/test-container".to_string(),
             worktree_path,
             Some("abc123".to_string()),
+            "main".to_string(),
         );
 
         // Verify it's a container type
@@ -111,11 +113,12 @@ mod tests {
                 "para/worktree1".to_string(),
                 temp_dir.path().join(".para/worktrees/worktree1"),
             ),
-            crate::core::session::SessionState::new_container(
+            crate::core::session::SessionState::new_container_with_parent_branch(
                 "container1".to_string(),
                 "para/container1".to_string(),
                 temp_dir.path().join(".para/worktrees/container1"),
                 None,
+                "main".to_string(),
             ),
             crate::core::session::SessionState::new(
                 "worktree2".to_string(),
@@ -169,11 +172,12 @@ mod tests {
         let mut manager = SessionManager::new(&config);
 
         // Create a container session state
-        let session = crate::core::session::SessionState::new_container(
+        let session = crate::core::session::SessionState::new_container_with_parent_branch(
             "test-cancel".to_string(),
             "para/test-cancel".to_string(),
             temp_dir.path().join(".para/worktrees/test-cancel"),
             None,
+            "main".to_string(),
         );
 
         // Save it
@@ -244,11 +248,12 @@ mod tests {
             "para/persist-worktree".to_string(),
             temp_dir.path().join(".para/worktrees/persist-worktree"),
         );
-        let container = crate::core::session::SessionState::new_container(
+        let container = crate::core::session::SessionState::new_container_with_parent_branch(
             "persist-container".to_string(),
             "para/persist-container".to_string(),
             temp_dir.path().join(".para/worktrees/persist-container"),
             Some("abc123".to_string()),
+            "main".to_string(),
         );
 
         // Save and reload sessions
@@ -270,5 +275,103 @@ mod tests {
         } else {
             panic!("Expected container type");
         }
+    }
+
+    #[test]
+    fn test_create_session_captures_parent_branch() {
+        // Create isolated test environment
+        let (git_temp, git_service) = setup_test_repo();
+        let repo_path = git_service.repository().root.clone();
+
+        // Create .para and state directories first to avoid race conditions
+        let para_dir = repo_path.join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        // Create a develop branch and switch to it
+        Command::new("git")
+            .current_dir(&repo_path)
+            .args(["checkout", "-b", "develop"])
+            .output()
+            .expect("Failed to create develop branch");
+
+        // Change to the repo directory for the test
+        let _original_dir = std::env::current_dir().ok();
+        std::env::set_current_dir(&repo_path).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        config.directories.subtrees_dir = ".para/worktrees".to_string();
+
+        let mut manager = SessionManager::new(&config);
+
+        // Create session from develop branch
+        let session_state = manager
+            .create_session_with_type("test-feature".to_string(), None, None)
+            .unwrap();
+
+        // Verify parent branch is captured
+        assert_eq!(session_state.parent_branch, Some("develop".to_string()));
+        assert_eq!(session_state.name, "test-feature");
+
+        // Reload and verify persistence
+        let loaded = manager.load_state("test-feature").unwrap();
+        assert_eq!(loaded.parent_branch, Some("develop".to_string()));
+
+        drop(git_temp); // Ensure cleanup
+    }
+
+    #[test]
+    fn test_create_container_session_captures_parent_branch() {
+        // Create isolated test environment
+        let (git_temp, git_service) = setup_test_repo();
+        let repo_path = git_service.repository().root.clone();
+
+        // Create .para and state directories first
+        let para_dir = repo_path.join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        // Create a feature/base branch and switch to it
+        Command::new("git")
+            .current_dir(&repo_path)
+            .args(["checkout", "-b", "feature/base"])
+            .output()
+            .expect("Failed to create feature/base branch");
+
+        // Change to the repo directory for the test
+        let _original_dir = std::env::current_dir().ok();
+        std::env::set_current_dir(&repo_path).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+        config.directories.subtrees_dir = ".para/worktrees".to_string();
+
+        let mut manager = SessionManager::new(&config);
+
+        // Create container session from feature/base branch
+        let session_state = manager
+            .create_session_with_type(
+                "test-container".to_string(),
+                None,
+                Some(SessionType::Container {
+                    container_id: Some("container123".to_string()),
+                }),
+            )
+            .unwrap();
+
+        // Verify parent branch is captured for container sessions too
+        assert_eq!(
+            session_state.parent_branch,
+            Some("feature/base".to_string())
+        );
+        assert_eq!(session_state.name, "test-container");
+        assert!(session_state.is_container());
+
+        // Reload and verify persistence
+        let loaded = manager.load_state("test-container").unwrap();
+        assert_eq!(loaded.parent_branch, Some("feature/base".to_string()));
+
+        drop(git_temp); // Ensure cleanup
     }
 }
