@@ -4,12 +4,18 @@ FROM ubuntu:22.04
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install system dependencies including network security tools
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     sudo \
     ca-certificates \
+    iptables \
+    ipset \
+    dnsutils \
+    iproute2 \
+    aggregate \
+    jq \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,9 +36,13 @@ RUN useradd -m -s /bin/bash para && \
 RUN mkdir -p /workspace && \
     chown -R para:para /workspace
 
-# Copy entrypoint script
+# Copy security and entrypoint scripts
+COPY init-firewall.sh /usr/local/bin/init-firewall.sh
+COPY secure-entrypoint.sh /usr/local/bin/secure-entrypoint.sh
 COPY claude-entrypoint.sh /usr/local/bin/claude-entrypoint.sh
-RUN sudo chmod +x /usr/local/bin/claude-entrypoint.sh
+RUN chmod +x /usr/local/bin/init-firewall.sh && \
+    chmod +x /usr/local/bin/secure-entrypoint.sh && \
+    chmod +x /usr/local/bin/claude-entrypoint.sh
 
 # Switch to non-root user
 USER para
@@ -41,8 +51,15 @@ WORKDIR /workspace
 # Verify Claude is installed
 RUN claude --version || echo "Claude CLI installed"
 
-# Set the entrypoint to handle authentication
-ENTRYPOINT ["/usr/local/bin/claude-entrypoint.sh"]
+# Add security labels for feature detection
+LABEL para.version="1.2.0" \
+      para.network-isolation="true" \
+      para.secure-entrypoint="true" \
+      para.build-date="${BUILD_DATE}" \
+      para.description="Para authenticated container with network isolation support"
+
+# Set the secure entrypoint to handle network isolation and authentication
+ENTRYPOINT ["/usr/local/bin/secure-entrypoint.sh"]
 
 # Default command
 CMD ["/bin/bash"]

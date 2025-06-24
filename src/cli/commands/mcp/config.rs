@@ -117,7 +117,6 @@ pub fn create_mcp_json() -> Result<bool> {
 
     fs::write(mcp_path, formatted_config)
         .map_err(|e| ParaError::fs_error(format!("Failed to write .mcp.json: {}", e)))?;
-
     Ok(true)
 }
 

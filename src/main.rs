@@ -37,22 +37,19 @@ fn setup_cleanup_handler() {
 }
 
 fn cleanup_docker_containers() {
-    if let Ok(config) = config::Config::load_or_create() {
-        if config.docker.enabled {
-            use std::process::Command;
+    // CLI-only approach: always attempt cleanup regardless of config
+    use std::process::Command;
 
-            // Find and stop all para pool containers
-            if let Ok(output) = Command::new("docker")
-                .args(["ps", "-a", "--filter", "name=para-pool-", "-q"])
-                .output()
-            {
-                let container_ids = String::from_utf8_lossy(&output.stdout);
-                for id in container_ids.lines() {
-                    if !id.trim().is_empty() {
-                        let _ = Command::new("docker").args(["stop", id.trim()]).output();
-                        let _ = Command::new("docker").args(["rm", id.trim()]).output();
-                    }
-                }
+    // Find and stop all para pool containers
+    if let Ok(output) = Command::new("docker")
+        .args(["ps", "-a", "--filter", "name=para-pool-", "-q"])
+        .output()
+    {
+        let container_ids = String::from_utf8_lossy(&output.stdout);
+        for id in container_ids.lines() {
+            if !id.trim().is_empty() {
+                let _ = Command::new("docker").args(["stop", id.trim()]).output();
+                let _ = Command::new("docker").args(["rm", id.trim()]).output();
             }
         }
     }

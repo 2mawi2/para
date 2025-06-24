@@ -44,19 +44,31 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     let mut session_manager = SessionManager::new(&config);
 
-    let session_state = if args.container {
+    // Track whether we're using Docker and network isolation settings
+    let (is_container, network_isolation, _allowed_domains) = if args.container {
         // Create Docker container session
-        if !config.docker.enabled {
-            return Err(ParaError::invalid_config(
-                "Docker is not enabled in configuration. Run 'para config' to enable Docker support."
-            ));
-        }
+        let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
+            // Enable network isolation when --allow-domains is used
+            let additional_domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            (true, additional_domains)
+        } else {
+            (false, vec![])
+        };
 
-        let docker_manager = crate::core::docker::DockerManager::new(config.clone());
+        let docker_manager = crate::core::docker::DockerManager::new(
+            config.clone(),
+            network_isolation,
+            allowed_domains.clone(),
+        );
         let session = session_manager.create_docker_session(
             session_id.clone(),
             &docker_manager,
             Some(&prompt),
+            &args.docker_args,
         )?;
 
         // Write task file
@@ -70,10 +82,10 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Launch IDE connected to container with initial prompt
         docker_manager
-            .launch_container_ide(&session, Some(&prompt))
+            .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
-        session
+        (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session
         let subtrees_path = repo_root.join(&config.directories.subtrees_dir);
@@ -110,11 +122,31 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        session_state
+        (false, false, vec![])
     };
 
-    println!("Created session '{}' with Claude Code", session_state.name);
-    println!("Session path: {}", session_state.worktree_path.display());
+    // Get session state for display
+    let session_state = session_manager
+        .list_sessions()?
+        .into_iter()
+        .find(|s| s.name == session_id)
+        .ok_or_else(|| ParaError::session_not_found(&session_id))?;
+
+    println!(
+        "✅ Created session '{}' with Claude Code",
+        session_state.name
+    );
+    if is_container {
+        println!("   Container: para-{}", session_state.name);
+        println!("   Image: para-authenticated:latest");
+
+        // Show network isolation warning if it's disabled
+        if !network_isolation {
+            println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
+    }
+    println!("   Branch: {}", session_state.branch);
+    println!("   Worktree: {}", session_state.worktree_path.display());
 
     Ok(())
 }
@@ -487,6 +519,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -502,6 +536,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -520,6 +556,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -539,6 +577,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -558,6 +598,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -576,6 +618,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -591,6 +635,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -625,6 +671,8 @@ mod tests {
             file: Some(file_path),
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -649,6 +697,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -682,6 +732,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         // This should work with explicit args regardless of stdin status
@@ -712,6 +764,8 @@ mod tests {
             file: Some(file_path), // Should take priority
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args_with_file
@@ -727,6 +781,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
@@ -745,6 +801,8 @@ mod tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
 
         // The current implementation has a logical flaw:
@@ -804,7 +862,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -828,7 +885,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -852,7 +908,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -875,7 +930,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);
@@ -899,7 +953,6 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
-            docker: crate::config::defaults::default_docker_config(),
         };
 
         let result = validate_claude_code_ide(&config);

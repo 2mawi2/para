@@ -13,6 +13,9 @@ pub mod session;
 #[cfg(test)]
 pub mod mock;
 
+#[cfg(test)]
+pub mod network_isolation_tests;
+
 // Re-export main types
 pub use error::{DockerError, DockerResult};
 pub use ide_integration::DockerIdeIntegration;

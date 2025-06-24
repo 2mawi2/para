@@ -64,8 +64,23 @@ pub struct StartArgs {
     pub dangerously_skip_permissions: bool,
 
     /// Run session in Docker container
-    #[arg(long, help = "Run session in Docker container")]
+    #[arg(long, short = 'c', help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Enable network isolation and allow access to specified domains (comma-separated)
+    #[arg(
+        long,
+        help = "Enable network isolation and allow access to specified domains (comma-separated). Use empty string for default domains only."
+    )]
+    pub allow_domains: Option<String>,
+
+    /// Additional Docker arguments to pass through
+    #[arg(
+        long = "docker-args",
+        allow_hyphen_values = true,
+        help = "Additional Docker arguments to pass through"
+    )]
+    pub docker_args: Vec<String>,
 }
 
 #[derive(Args, Debug)]
@@ -104,8 +119,23 @@ pub struct DispatchArgs {
     pub dangerously_skip_permissions: bool,
 
     /// Run session in Docker container
-    #[arg(long, help = "Run session in Docker container")]
+    #[arg(long, short = 'c', help = "Run session in Docker container")]
     pub container: bool,
+
+    /// Enable network isolation and allow access to specified domains (comma-separated)
+    #[arg(
+        long,
+        help = "Enable network isolation and allow access to specified domains (comma-separated). Use empty string for default domains only."
+    )]
+    pub allow_domains: Option<String>,
+
+    /// Additional Docker arguments to pass through
+    #[arg(
+        long = "docker-args",
+        allow_hyphen_values = true,
+        help = "Additional Docker arguments to pass through"
+    )]
+    pub docker_args: Vec<String>,
 }
 
 #[derive(Args, Debug)]

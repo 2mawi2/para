@@ -182,6 +182,8 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -191,6 +193,8 @@ mod cli_tests {
             file: None,
             dangerously_skip_permissions: false,
             container: false,
+            allow_domains: None,
+            docker_args: vec![],
         };
         assert!(args.validate_impl(true).is_ok());
     }

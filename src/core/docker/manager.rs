@@ -14,18 +14,23 @@ pub struct DockerManager {
     service: DockerService,
     config: Config,
     pool: Arc<ContainerPool>,
+    network_isolation: bool,
+    allowed_domains: Vec<String>,
 }
 
 impl DockerManager {
     /// Create a new Docker manager
-    pub fn new(config: Config) -> Self {
-        let pool_size = config.docker.max_containers;
+    pub fn new(config: Config, network_isolation: bool, allowed_domains: Vec<String>) -> Self {
+        // Use CLI-only approach: pool size is passed as runtime parameter, not from config
+        let pool_size = 3; // Default pool size, can be made configurable via CLI flag later
         let pool = Arc::new(ContainerPool::new(pool_size));
 
         Self {
             service: DockerService,
             config,
             pool,
+            network_isolation,
+            allowed_domains,
         }
     }
 
@@ -47,7 +52,11 @@ impl DockerManager {
     }
 
     /// Create and start a container for a session using the pool
-    pub fn create_container_session(&self, session: &mut SessionState) -> DockerResult<()> {
+    pub fn create_container_session(
+        &self,
+        session: &mut SessionState,
+        docker_args: &[String],
+    ) -> DockerResult<()> {
         println!(
             "🐳 Setting up Docker container for session: {}",
             session.name
@@ -56,8 +65,23 @@ impl DockerManager {
         // Check Docker is available
         self.service.health_check()?;
 
-        // Create dedicated container for this session
+        // Create dedicated container for this session using pool
         let container_id = self.pool.create_session_container(&session.name)?;
+
+        // Create the container with CLI parameters (authentication is now baked into the image)
+        println!("🏗️  Creating container with authenticated image");
+        let _container = self.service.create_container(
+            &session.name,
+            self.network_isolation,
+            &self.allowed_domains,
+            &session.worktree_path,
+            docker_args,
+        )?;
+
+        // Start it with verification
+        println!("▶️  Starting container: para-{}", session.name);
+        self.service
+            .start_container_with_verification(&session.name, self.network_isolation)?;
 
         // Setup workspace in container
         self.setup_container_workspace(&container_id, session)?;
@@ -76,6 +100,7 @@ impl DockerManager {
         &self,
         session: &SessionState,
         initial_prompt: Option<&str>,
+        dangerously_skip_permissions: bool,
     ) -> DockerResult<()> {
         // Get container ID from session
         let container_id = match &session.session_type {
@@ -104,6 +129,7 @@ impl DockerManager {
             &session.worktree_path,
             &container_session,
             initial_prompt,
+            dangerously_skip_permissions,
         )
         .map_err(|e| DockerError::Other(e.into()))?;
 
