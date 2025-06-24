@@ -68,25 +68,42 @@ pub fn create_mcp_json() -> Result<bool> {
     // Try to find MCP server in multiple locations
     let mcp_server_path = find_mcp_server()?;
 
-    let mcp_config = format!(
-        r#"{{
-  "mcpServers": {{
-    "para": {{
-      "type": "stdio",
-      "command": "{}",
-      "args": {}
-    }}
-  }}
-}}"#,
-        mcp_server_path.command,
-        serde_json::to_string(&mcp_server_path.args).unwrap()
-    );
+    let para_config = serde_json::json!({
+        "type": "stdio",
+        "command": mcp_server_path.command,
+        "args": mcp_server_path.args
+    });
 
-    if std::path::Path::new(".mcp.json").exists() {
-        return Ok(false);
+    // Check if .mcp.json exists and load it
+    let mut mcp_config = if std::path::Path::new(".mcp.json").exists() {
+        let existing_content = fs::read_to_string(".mcp.json")?;
+        serde_json::from_str(&existing_content).unwrap_or_else(|_| {
+            serde_json::json!({
+                "mcpServers": {}
+            })
+        })
+    } else {
+        serde_json::json!({
+            "mcpServers": {}
+        })
+    };
+
+    // Check if para server is already configured
+    if let Some(servers) = mcp_config.get_mut("mcpServers") {
+        if servers.get("para").is_some() {
+            return Ok(false); // Already configured
+        }
+        servers["para"] = para_config;
+    } else {
+        // Add mcpServers section if it doesn't exist
+        mcp_config["mcpServers"] = serde_json::json!({
+            "para": para_config
+        });
     }
 
-    fs::write(".mcp.json", mcp_config)?;
+    // Write the updated configuration
+    let formatted_config = serde_json::to_string_pretty(&mcp_config)?;
+    fs::write(".mcp.json", formatted_config)?;
     Ok(true)
 }
 
