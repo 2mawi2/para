@@ -253,6 +253,31 @@ impl Status {
         }
     }
 
+    /// Calculate progress including the finish task
+    /// Formula: todos_finished / (todos_total + 1)
+    /// Returns 100% only if session is finished
+    pub fn calculate_progress_with_finish(&self, is_finished: bool) -> Option<u8> {
+        match (self.todos_completed, self.todos_total) {
+            // Case: Has todos
+            (Some(completed), Some(total)) => {
+                // Defensive: cap completed to total before calculation
+                let safe_completed = completed.min(total);
+                let effective_total = total + 1; // +1 for the finish task
+                let effective_completed = if is_finished {
+                    safe_completed + 1
+                } else {
+                    safe_completed
+                };
+
+                Some(((effective_completed as f32 / effective_total as f32) * 100.0).round() as u8)
+            }
+            // Case: No todos but finished
+            (None, None) if is_finished => Some(100),
+            // Case: No todos and not finished
+            _ => Some(0),
+        }
+    }
+
     pub fn format_todos(&self) -> Option<String> {
         match (self.todos_completed, self.todos_total) {
             (Some(completed), Some(total)) => {
@@ -885,5 +910,128 @@ mod tests {
 
         // Verify status file is deleted
         assert!(!Status::status_file_path(state_dir, "test-session").exists());
+    }
+
+    #[test]
+    fn test_calculate_progress_with_finish() {
+        let status = Status::new(
+            "test".to_string(),
+            "task".to_string(),
+            TestStatus::Unknown,
+            ConfidenceLevel::Medium,
+        );
+
+        // Test 1: No todos and not finished = 0%
+        assert_eq!(status.calculate_progress_with_finish(false), Some(0));
+
+        // Test 2: No todos but finished = 100%
+        assert_eq!(status.calculate_progress_with_finish(true), Some(100));
+
+        // Test 3: With todos, not finished
+        // 3/10 todos done, not finished = 3/11 = 27%
+        let status_with_todos = status.clone().with_todos(3, 10);
+        assert_eq!(
+            status_with_todos.calculate_progress_with_finish(false),
+            Some(27)
+        );
+
+        // Test 4: With todos, finished
+        // 3/10 todos done, finished = 4/11 = 36%
+        assert_eq!(
+            status_with_todos.calculate_progress_with_finish(true),
+            Some(36)
+        );
+
+        // Test 5: All todos done, not finished
+        // 10/10 todos done, not finished = 10/11 = 91%
+        let all_done = status.clone().with_todos(10, 10);
+        assert_eq!(all_done.calculate_progress_with_finish(false), Some(91));
+
+        // Test 6: All todos done and finished = 100%
+        assert_eq!(all_done.calculate_progress_with_finish(true), Some(100));
+
+        // Test 7: Edge case - 0 todos total but finished
+        let zero_todos = status.clone().with_todos(0, 0);
+        assert_eq!(zero_todos.calculate_progress_with_finish(false), Some(0));
+        assert_eq!(zero_todos.calculate_progress_with_finish(true), Some(100));
+    }
+
+    #[test]
+    fn test_progress_edge_cases() {
+        let status = Status::new(
+            "edge-test".to_string(),
+            "edge task".to_string(),
+            TestStatus::Unknown,
+            ConfidenceLevel::Medium,
+        );
+
+        // Edge case 1: Completed > Total (defensive check)
+        // Should cap at effective total
+        let invalid_status = Status {
+            session_name: "invalid".to_string(),
+            current_task: "task".to_string(),
+            test_status: TestStatus::Unknown,
+            is_blocked: false,
+            blocked_reason: None,
+            todos_completed: Some(15), // More than total!
+            todos_total: Some(10),
+            confidence: ConfidenceLevel::Medium,
+            diff_stats: None,
+            last_update: Utc::now(),
+        };
+
+        // 15 is capped to 10, so 10/11 = 91%
+        assert_eq!(
+            invalid_status.calculate_progress_with_finish(false),
+            Some(91)
+        );
+        // With finish: 11 is capped to 11, so 11/11 = 100%
+        assert_eq!(
+            invalid_status.calculate_progress_with_finish(true),
+            Some(100)
+        );
+
+        // Edge case 2: Very large numbers
+        let large_status = status.clone().with_todos(999, 1000);
+        // 999/1001 ≈ 99.8% rounds to 100%
+        assert_eq!(
+            large_status.calculate_progress_with_finish(false),
+            Some(100)
+        );
+        assert_eq!(large_status.calculate_progress_with_finish(true), Some(100));
+
+        // Edge case 3: Single todo
+        let single_todo = status.clone().with_todos(0, 1);
+        assert_eq!(single_todo.calculate_progress_with_finish(false), Some(0)); // 0/2 = 0%
+        assert_eq!(single_todo.calculate_progress_with_finish(true), Some(50)); // 1/2 = 50%
+
+        let single_todo_done = status.clone().with_todos(1, 1);
+        assert_eq!(
+            single_todo_done.calculate_progress_with_finish(false),
+            Some(50)
+        ); // 1/2 = 50%
+        assert_eq!(
+            single_todo_done.calculate_progress_with_finish(true),
+            Some(100)
+        ); // 2/2 = 100%
+    }
+
+    #[test]
+    fn test_progress_calculation_consistency() {
+        // Ensure old todo_percentage still works for backward compatibility
+        let status = Status::new(
+            "compat".to_string(),
+            "task".to_string(),
+            TestStatus::Unknown,
+            ConfidenceLevel::Medium,
+        )
+        .with_todos(7, 10);
+
+        // Old method should still return 70%
+        assert_eq!(status.todo_percentage(), Some(70));
+
+        // New method should return different value due to +1
+        // 7/11 ≈ 63.6% rounds to 64%
+        assert_eq!(status.calculate_progress_with_finish(false), Some(64));
     }
 }
