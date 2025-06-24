@@ -1,0 +1,22 @@
+name: crystal-hello
+version: 1.0.0
+
+description: |
+  A comprehensive Crystal Hello World implementation demonstrating
+  basic Crystal features, testing, and project structure.
+
+authors:
+  - Crystal Developer <crystal@example.com>
+
+crystal: ">= 1.0.0"
+
+license: MIT
+
+targets:
+  crystal-hello:
+    main: src/main.cr
+
+development_dependencies:
+  spec:
+    github: crystal-lang/spec
+    branch: master
