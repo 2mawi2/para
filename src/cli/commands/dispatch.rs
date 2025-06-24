@@ -225,13 +225,24 @@ fn create_claude_task_json(command: &str) -> String {
 
 impl DispatchArgs {
     pub fn resolve_prompt_and_session(&self) -> Result<(Option<String>, String)> {
+        // Priority order:
+        // 1. File flag (highest priority)
+        // 2. Explicit arguments
+        // 3. Stdin input (lowest priority)
+
         // If we have a --file argument, use it directly without checking stdin
         // This prevents blocking in non-terminal environments like MCP
         if self.file.is_some() {
             return self.resolve_prompt_and_session_no_stdin();
         }
 
-        // Check for stdin only when no file is provided
+        // If we have explicit arguments, use them instead of checking stdin
+        // This fixes the MCP issue where stdin is not a terminal but we have valid args
+        if self.name_or_prompt.is_some() || self.prompt.is_some() {
+            return self.resolve_prompt_and_session_no_stdin();
+        }
+
+        // Only check stdin if we don't have file flag or explicit arguments
         if !io::stdin().is_terminal() {
             let mut buffer = String::new();
             io::stdin().read_to_string(&mut buffer).map_err(|e| {
@@ -246,6 +257,8 @@ impl DispatchArgs {
             return Ok((self.name_or_prompt.clone(), buffer));
         }
 
+        // No file, no explicit args, no stdin input - fall back to no_stdin method
+        // which will return appropriate error
         self.resolve_prompt_and_session_no_stdin()
     }
 
@@ -597,6 +610,105 @@ mod tests {
         let (session, prompt) = result.unwrap();
         assert_eq!(session, None);
         assert_eq!(prompt, "implement feature");
+    }
+
+    #[test]
+    fn test_resolve_prompt_should_prioritize_explicit_args_over_stdin() {
+        // This test demonstrates the stdin detection logic issue:
+        // When we have explicit arguments (like name_or_prompt), we should use them
+        // instead of trying to read from stdin, even if stdin is not a terminal.
+        //
+        // Current problematic logic:
+        // 1. Check if file flag -> use file (CORRECT)
+        // 2. Check if stdin is not terminal -> try to read stdin (PROBLEM)
+        // 3. Fall back to explicit args (TOO LATE)
+        //
+        // Better logic would be:
+        // 1. Check if file flag -> use file
+        // 2. Check if we have explicit args -> use them
+        // 3. Check if stdin has content -> use stdin
+        // 4. Error: no input provided
+
+        let args = DispatchArgs {
+            name_or_prompt: Some("implement authentication".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        // This should work with explicit args regardless of stdin status
+        let result_no_stdin = args.resolve_prompt_and_session_no_stdin();
+        assert!(result_no_stdin.is_ok());
+        let (session, prompt) = result_no_stdin.unwrap();
+        assert_eq!(session, None);
+        assert_eq!(prompt, "implement authentication");
+
+        // The issue: resolve_prompt_and_session() might fail in non-terminal environments
+        // even when we have valid explicit arguments, because it checks stdin first
+    }
+
+    #[test]
+    fn test_dispatch_logic_priority_order() {
+        // Test that dispatch resolves arguments in the correct priority order:
+        // 1. File flag (highest priority)
+        // 2. Explicit arguments
+        // 3. Stdin input (lowest priority)
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = create_test_file(&temp_dir, "priority.txt", "file content");
+
+        // Test 1: File flag should override everything
+        let args_with_file = DispatchArgs {
+            name_or_prompt: Some("session-name".to_string()),
+            prompt: Some("explicit prompt".to_string()),
+            file: Some(file_path), // Should take priority
+            dangerously_skip_permissions: false,
+        };
+
+        let result = args_with_file
+            .resolve_prompt_and_session_no_stdin()
+            .unwrap();
+        assert_eq!(result.0, Some("session-name".to_string()));
+        assert_eq!(result.1, "file content"); // File content wins
+
+        // Test 2: Explicit args should work when no file
+        let args_explicit = DispatchArgs {
+            name_or_prompt: Some("explicit prompt text".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
+        assert_eq!(result.0, None);
+        assert_eq!(result.1, "explicit prompt text"); // Explicit args work
+    }
+
+    #[test]
+    fn test_explicit_args_should_take_priority_over_stdin() {
+        // Test that explicit arguments are used even when stdin might be available
+        // This is the correct behavior - explicit args should have higher priority
+
+        let args = DispatchArgs {
+            name_or_prompt: Some("explicit prompt".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        // The current implementation has a logical flaw:
+        // It checks stdin before checking explicit arguments
+        // This test verifies the fix where explicit args take priority
+
+        let result = args.resolve_prompt_and_session();
+        assert!(
+            result.is_ok(),
+            "Should succeed with explicit args regardless of stdin"
+        );
+
+        let (session, prompt) = result.unwrap();
+        assert_eq!(session, None);
+        assert_eq!(prompt, "explicit prompt");
     }
 
     #[test]
