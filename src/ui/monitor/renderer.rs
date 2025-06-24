@@ -209,7 +209,6 @@ impl MonitorRenderer {
         let is_selected = index == state.selected_index;
         let is_stale = session.status.should_dim();
         let base_style = self.get_base_row_style(is_selected, is_stale);
-        
 
         Row::new(vec![
             self.create_action_buttons_cell(is_selected, index, state),

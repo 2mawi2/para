@@ -141,7 +141,7 @@ impl SessionService {
                 Err(_) => PathBuf::from(&self.config.directories.state_dir), // Graceful fallback
             }
         };
-        
+
         for session_info in &mut sessions {
             let agent_status = Status::load(&state_dir, &session_info.name).ok().flatten();
 
@@ -169,7 +169,6 @@ impl SessionService {
             session_info.diff_stats = diff_stats;
             session_info.todo_percentage = todo_percentage;
             session_info.is_blocked = is_blocked;
-            
         }
 
         Ok(sessions)
