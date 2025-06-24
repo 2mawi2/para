@@ -145,18 +145,26 @@ impl SessionService {
         for session_info in &mut sessions {
             let agent_status = Status::load(&state_dir, &session_info.name).ok().flatten();
 
+            // Check if session is finished (Review or Ready status)
+            let is_finished = matches!(
+                session_info.status,
+                SessionStatus::Review | SessionStatus::Ready
+            );
+
             let (test_status, confidence, diff_stats, todo_percentage, is_blocked, agent_task) =
                 if let Some(ref status) = agent_status {
                     (
                         Some(status.test_status.clone()),
                         Some(status.confidence.clone()),
                         status.diff_stats.clone(),
-                        status.todo_percentage(),
+                        status.calculate_progress_with_finish(is_finished),
                         status.is_blocked,
                         Some(status.current_task.clone()),
                     )
                 } else {
-                    (None, None, None, None, false, None)
+                    // No agent status - return progress based on finish status alone
+                    let progress = if is_finished { Some(100) } else { Some(0) };
+                    (None, None, None, progress, false, None)
                 };
 
             // Agent task takes priority over session task
@@ -721,5 +729,148 @@ mod tests {
         // Test without stale sessions
         let result = service.load_sessions(false);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_progress_calculation_with_finish_status() {
+        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::ui::monitor::{SessionInfo, SessionStatus};
+        use chrono::Utc;
+        use std::path::PathBuf;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Test case 1: Active session with todos
+        let agent_status = Status::new(
+            "active-session".to_string(),
+            "Working on feature".to_string(),
+            TestStatus::Unknown,
+            ConfidenceLevel::Medium,
+        )
+        .with_todos(5, 10);
+
+        agent_status.save(&state_dir).unwrap();
+
+        // Create session info with Active status
+        let mut session_info = SessionInfo {
+            name: "active-session".to_string(),
+            branch: "test/branch".to_string(),
+            status: SessionStatus::Active,
+            last_activity: Utc::now(),
+            task: "Task".to_string(),
+            worktree_path: PathBuf::from("/test"),
+            test_status: None,
+            confidence: None,
+            diff_stats: None,
+            todo_percentage: None,
+            is_blocked: false,
+        };
+
+        // Test enrichment logic
+        let loaded_status = Status::load(&state_dir, "active-session")
+            .ok()
+            .flatten()
+            .unwrap();
+        let is_finished = matches!(
+            session_info.status,
+            SessionStatus::Review | SessionStatus::Ready
+        );
+        let progress = loaded_status.calculate_progress_with_finish(is_finished);
+
+        // 5/11 ≈ 45%
+        assert_eq!(progress, Some(45));
+        assert!(!is_finished);
+
+        // Test case 2: Review session with same todos
+        session_info.status = SessionStatus::Review;
+        let is_finished = matches!(
+            session_info.status,
+            SessionStatus::Review | SessionStatus::Ready
+        );
+        let progress = loaded_status.calculate_progress_with_finish(is_finished);
+
+        // 6/11 ≈ 55%
+        assert_eq!(progress, Some(55));
+        assert!(is_finished);
+
+        // Test case 3: Session with no todos but finished
+        let finished_status = Status::new(
+            "finished-no-todos".to_string(),
+            "Quick fix".to_string(),
+            TestStatus::Passed,
+            ConfidenceLevel::High,
+        );
+        finished_status.save(&state_dir).unwrap();
+
+        let loaded_no_todos = Status::load(&state_dir, "finished-no-todos")
+            .ok()
+            .flatten()
+            .unwrap();
+
+        // Not finished = 0%
+        assert_eq!(
+            loaded_no_todos.calculate_progress_with_finish(false),
+            Some(0)
+        );
+        // Finished = 100%
+        assert_eq!(
+            loaded_no_todos.calculate_progress_with_finish(true),
+            Some(100)
+        );
+    }
+
+    #[test]
+    fn test_progress_without_agent_status() {
+        use crate::ui::monitor::{SessionInfo, SessionStatus};
+        use chrono::Utc;
+        use std::path::PathBuf;
+
+        let config = create_test_config();
+        let service = SessionService::new(config);
+
+        // Create sessions without agent status
+        let sessions = vec![
+            SessionInfo {
+                name: "no-status-active".to_string(),
+                branch: "branch1".to_string(),
+                status: SessionStatus::Active,
+                last_activity: Utc::now(),
+                task: "Task 1".to_string(),
+                worktree_path: PathBuf::from("/test1"),
+                test_status: None,
+                confidence: None,
+                diff_stats: None,
+                todo_percentage: None,
+                is_blocked: false,
+            },
+            SessionInfo {
+                name: "no-status-review".to_string(),
+                branch: "branch2".to_string(),
+                status: SessionStatus::Review,
+                last_activity: Utc::now(),
+                task: "Task 2".to_string(),
+                worktree_path: PathBuf::from("/test2"),
+                test_status: None,
+                confidence: None,
+                diff_stats: None,
+                todo_percentage: None,
+                is_blocked: false,
+            },
+        ];
+
+        // Enrich sessions (simulating the logic)
+        let enriched = service.enrich_with_agent_status(sessions).unwrap();
+
+        // Active session with no agent status should show 0%
+        assert_eq!(enriched[0].todo_percentage, Some(0));
+
+        // Review session with no agent status should show 100%
+        assert_eq!(enriched[1].todo_percentage, Some(100));
     }
 }
