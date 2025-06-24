@@ -35,6 +35,10 @@ pub struct SessionState {
     #[serde(default = "default_session_type")]
     pub session_type: SessionType,
 
+    // Parent branch this session was created from
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub parent_branch: Option<String>,
+
     // Deprecated - use session_type instead
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub is_docker: Option<bool>,
@@ -67,16 +71,39 @@ impl SessionState {
             last_activity: None,
             git_stats: None,
             session_type: SessionType::Worktree,
+            parent_branch: None,
             is_docker: None,
         }
     }
 
-    /// Create a new container-based session
-    pub fn new_container(
+    pub fn with_parent_branch(
+        name: String,
+        branch: String,
+        worktree_path: PathBuf,
+        parent_branch: String,
+    ) -> Self {
+        Self {
+            name,
+            branch,
+            worktree_path,
+            created_at: Utc::now(),
+            status: SessionStatus::Active,
+            task_description: None,
+            last_activity: None,
+            git_stats: None,
+            session_type: SessionType::Worktree,
+            parent_branch: Some(parent_branch),
+            is_docker: None,
+        }
+    }
+
+    /// Create a new container-based session with parent branch
+    pub fn new_container_with_parent_branch(
         name: String,
         branch: String,
         worktree_path: PathBuf,
         container_id: Option<String>,
+        parent_branch: String,
     ) -> Self {
         Self {
             name,
@@ -88,6 +115,7 @@ impl SessionState {
             last_activity: None,
             git_stats: None,
             session_type: SessionType::Container { container_id },
+            parent_branch: Some(parent_branch),
             is_docker: None,
         }
     }
@@ -187,6 +215,7 @@ mod tests {
             last_activity: None,
             git_stats: None,
             session_type: SessionType::Worktree,
+            parent_branch: None,
             is_docker: None,
         };
 
@@ -220,11 +249,12 @@ mod tests {
 
     #[test]
     fn test_container_session_state() {
-        let state = SessionState::new_container(
+        let state = SessionState::new_container_with_parent_branch(
             "container-session".to_string(),
             "test/container-branch".to_string(),
             PathBuf::from("/path/to/worktree"),
             Some("abc123".to_string()),
+            "main".to_string(),
         );
 
         assert_eq!(state.name, "container-session");
@@ -249,14 +279,85 @@ mod tests {
         assert!(json.contains(r#""session_type":"Worktree""#));
 
         // Test container type
-        let container_session = SessionState::new_container(
+        let container_session = SessionState::new_container_with_parent_branch(
             "container".to_string(),
             "test/container".to_string(),
             PathBuf::from("/test"),
             Some("xyz789".to_string()),
+            "main".to_string(),
         );
         let json = serde_json::to_string(&container_session).unwrap();
         assert!(json.contains(r#""session_type":{"Container""#));
         assert!(json.contains("xyz789"));
+    }
+
+    #[test]
+    fn test_parent_branch_field() {
+        // Test new() constructor - should have None parent_branch
+        let state = SessionState::new(
+            "test-session".to_string(),
+            "para/test-session".to_string(),
+            PathBuf::from("/test"),
+        );
+        assert_eq!(state.parent_branch, None);
+
+        // Test with_parent_branch() constructor
+        let state_with_parent = SessionState::with_parent_branch(
+            "feature-session".to_string(),
+            "para/feature-session".to_string(),
+            PathBuf::from("/test"),
+            "develop".to_string(),
+        );
+        assert_eq!(state_with_parent.parent_branch, Some("develop".to_string()));
+    }
+
+    #[test]
+    fn test_parent_branch_serialization() {
+        // Test serialization with parent_branch
+        let state = SessionState::with_parent_branch(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+            "main".to_string(),
+        );
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains(r#""parent_branch":"main""#));
+
+        // Test serialization without parent_branch (should not include field)
+        let state_no_parent = SessionState::new(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+        );
+        let json = serde_json::to_string(&state_no_parent).unwrap();
+        assert!(!json.contains("parent_branch"));
+    }
+
+    #[test]
+    fn test_parent_branch_deserialization() {
+        // Test deserializing old sessions without parent_branch field
+        let old_json = r#"{
+            "name": "old-session",
+            "branch": "para/old-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree"
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(old_json).unwrap();
+        assert_eq!(deserialized.parent_branch, None);
+
+        // Test deserializing new sessions with parent_branch field
+        let new_json = r#"{
+            "name": "new-session",
+            "branch": "para/new-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree",
+            "parent_branch": "feature/base"
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(new_json).unwrap();
+        assert_eq!(deserialized.parent_branch, Some("feature/base".to_string()));
     }
 }
