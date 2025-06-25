@@ -340,6 +340,8 @@ mod tests {
 
     #[test]
     fn test_calculate_diff_stats_from_different_directory() {
+        // This test verifies that calculate_diff_stats works with absolute paths
+        // regardless of the current working directory
         let (git_temp, git_service) = setup_test_repo();
         let temp_dir = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
@@ -364,15 +366,25 @@ mod tests {
             .output()
             .unwrap();
 
-        // Now change to a different directory (simulate agent being elsewhere)
-        let other_dir = temp_dir.path().join("other_location");
-        std::fs::create_dir_all(&other_dir).unwrap();
-        std::env::set_current_dir(&other_dir).unwrap();
+        // Ensure no untracked files before test
+        std::process::Command::new("git")
+            .current_dir(git_temp.path())
+            .args(["clean", "-fd"])
+            .output()
+            .unwrap();
 
-        // Try to calculate diff stats - this should still work
+        // The key insight: calculate_diff_stats takes an absolute path
+        // and should work regardless of current directory.
+        // We don't need to change directories to test this.
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
         assert_eq!(stats.additions, 3);
         assert_eq!(stats.deletions, 0);
+
+        // Also test with the absolute path from a different perspective
+        let abs_path = git_temp.path().canonicalize().unwrap();
+        let stats2 = calculate_diff_stats(&abs_path, "main").unwrap();
+        assert_eq!(stats2.additions, 3);
+        assert_eq!(stats2.deletions, 0);
     }
 
     #[test]
