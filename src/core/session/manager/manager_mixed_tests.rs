@@ -280,7 +280,10 @@ mod tests {
     #[test]
     fn test_create_session_captures_parent_branch() {
         // Create isolated test environment
-        let (git_temp, git_service) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
         let repo_path = git_service.repository().root.clone();
 
         // Create .para and state directories first to avoid race conditions
@@ -295,13 +298,13 @@ mod tests {
             .output()
             .expect("Failed to create develop branch");
 
-        // Change to the repo directory for the test
-        let _original_dir = std::env::current_dir().ok();
-        std::env::set_current_dir(&repo_path).unwrap();
-
         let mut config = create_test_config();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
         config.directories.subtrees_dir = ".para/worktrees".to_string();
+
+        // Change to the repo directory for the session manager
+        let _original_dir = std::env::current_dir().ok();
+        std::env::set_current_dir(&repo_path).unwrap();
 
         let mut manager = SessionManager::new(&config);
 
@@ -318,13 +321,19 @@ mod tests {
         let loaded = manager.load_state("test-feature").unwrap();
         assert_eq!(loaded.parent_branch, Some("develop".to_string()));
 
-        drop(git_temp); // Ensure cleanup
+        // Restore original directory
+        if let Some(original_dir) = _original_dir {
+            let _ = std::env::set_current_dir(original_dir);
+        }
     }
 
     #[test]
     fn test_create_container_session_captures_parent_branch() {
         // Create isolated test environment
-        let (git_temp, git_service) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
         let repo_path = git_service.repository().root.clone();
 
         // Create .para and state directories first
@@ -339,13 +348,13 @@ mod tests {
             .output()
             .expect("Failed to create feature/base branch");
 
-        // Change to the repo directory for the test
-        let _original_dir = std::env::current_dir().ok();
-        std::env::set_current_dir(&repo_path).unwrap();
-
         let mut config = create_test_config();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
         config.directories.subtrees_dir = ".para/worktrees".to_string();
+
+        // Change to the repo directory for the session manager
+        let _original_dir = std::env::current_dir().ok();
+        std::env::set_current_dir(&repo_path).unwrap();
 
         let mut manager = SessionManager::new(&config);
 
@@ -372,6 +381,9 @@ mod tests {
         let loaded = manager.load_state("test-container").unwrap();
         assert_eq!(loaded.parent_branch, Some("feature/base".to_string()));
 
-        drop(git_temp); // Ensure cleanup
+        // Restore original directory
+        if let Some(original_dir) = _original_dir {
+            let _ = std::env::set_current_dir(original_dir);
+        }
     }
 }
