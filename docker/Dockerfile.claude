@@ -40,9 +40,11 @@ RUN mkdir -p /workspace && \
 COPY init-firewall.sh /usr/local/bin/init-firewall.sh
 COPY secure-entrypoint.sh /usr/local/bin/secure-entrypoint.sh
 COPY claude-entrypoint.sh /usr/local/bin/claude-entrypoint.sh
+COPY para-shim.sh /usr/local/bin/para
 RUN chmod +x /usr/local/bin/init-firewall.sh && \
     chmod +x /usr/local/bin/secure-entrypoint.sh && \
-    chmod +x /usr/local/bin/claude-entrypoint.sh
+    chmod +x /usr/local/bin/claude-entrypoint.sh && \
+    chmod +x /usr/local/bin/para
 
 # Switch to non-root user
 USER para

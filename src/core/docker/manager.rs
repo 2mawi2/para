@@ -100,4 +100,9 @@ impl DockerManager {
 
         Ok(())
     }
+
+    /// Stop and remove a container for a session
+    pub fn stop_container(&self, session_name: &str) -> DockerResult<()> {
+        self.service.stop_container(session_name)
+    }
 }

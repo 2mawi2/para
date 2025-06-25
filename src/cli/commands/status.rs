@@ -154,8 +154,60 @@ impl StatusDisplayHandler {
     }
 
     fn show_specific_session(&self, session_name: &str, json: bool) -> Result<()> {
-        let status = Status::load(&self.state_dir, session_name)
+        let mut status = Status::load(&self.state_dir, session_name)
             .map_err(|e| ParaError::config_error(e.to_string()))?;
+
+        // For container sessions, check for container status file
+        if let Ok(session_state) = self.session_manager.load_state(session_name) {
+            if session_state.is_container() {
+                // Check for container status.json file
+                let signal_paths = crate::core::docker::signal_files::SignalFilePaths::new(
+                    &session_state.worktree_path,
+                );
+                if let Ok(Some(container_status)) =
+                    crate::core::docker::signal_files::read_signal_file::<
+                        crate::core::docker::signal_files::ContainerStatus,
+                    >(&signal_paths.status)
+                {
+                    // Update status with container information
+                    if let Some(ref mut s) = status {
+                        s.current_task = container_status.task;
+                        if let Some(tests) = container_status.tests {
+                            if let Ok(test_status) = Status::parse_test_status(&tests) {
+                                s.test_status = test_status;
+                            }
+                        }
+                        if let Some(confidence) = container_status.confidence {
+                            if let Ok(conf_level) = Status::parse_confidence(&confidence) {
+                                s.confidence = conf_level;
+                            }
+                        }
+                        if let Some(todos) = container_status.todos {
+                            if let Ok((completed, total)) = Status::parse_todos(&todos) {
+                                s.todos_completed = Some(completed);
+                                s.todos_total = Some(total);
+                            }
+                        }
+                        s.blocked_reason = if container_status.blocked {
+                            Some(s.current_task.clone())
+                        } else {
+                            None
+                        };
+                        // Parse timestamp string to DateTime<Utc>
+                        if let Ok(parsed_time) =
+                            chrono::DateTime::parse_from_rfc3339(&container_status.timestamp)
+                        {
+                            s.last_update = parsed_time.with_timezone(&chrono::Utc);
+                        }
+
+                        // Calculate diff stats on the host
+                        if let Ok(diff_stats) = calculate_diff_stats_for_session(&session_state) {
+                            s.diff_stats = Some(diff_stats);
+                        }
+                    }
+                }
+            }
+        }
 
         match status {
             Some(s) => {

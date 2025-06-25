@@ -421,11 +421,17 @@ impl SessionManager {
     pub fn cancel_session(&mut self, session_name: &str, force: bool) -> Result<()> {
         let session = self.load_state(session_name)?;
 
-        // TODO: Connect to CLI in next phase
-        // Docker cleanup will be added when CLI integration is complete
-        // if session.is_container() {
-        //     // Docker container cleanup
-        // }
+        // Clean up Docker container if it's a container session
+        if session.is_container() {
+            let docker_manager = crate::core::docker::DockerManager::new(
+                self.config.clone(),
+                false,  // network_isolation doesn't matter for cleanup
+                vec![], // allowed_domains doesn't matter for cleanup
+            );
+            if let Err(e) = docker_manager.stop_container(&session.name) {
+                eprintln!("Warning: Failed to stop Docker container: {}", e);
+            }
+        }
 
         // Remove the session state file
         let state_file = self.state_dir.join(format!("{}.state", session_name));
