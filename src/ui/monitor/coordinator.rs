@@ -456,11 +456,11 @@ mod tests {
             height: 20,
         });
 
-        // Click on the first session row in the copy button area (positions 4-7)
+        // Click on the first session row in the copy button area (positions 12-15)
         let copy_click = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: 5, // Within copy button area (4-7)
-            row: 6,    // First data row (4 + 2 for header and border)
+            column: 13, // Within copy button area (12-15)
+            row: 6,     // First data row (4 + 2 for header and border)
             modifiers: crossterm::event::KeyModifiers::NONE,
         };
 
