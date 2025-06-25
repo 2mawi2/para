@@ -171,7 +171,7 @@ impl StatusDisplayHandler {
                         s = s.with_diff_stats(diff_stats);
                     }
                 }
-                
+
                 if json {
                     self.output_json(&s)?;
                 } else {

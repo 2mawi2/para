@@ -285,6 +285,7 @@ impl ContainerPool {
     }
 
     /// Clean up all containers in the pool
+    #[allow(dead_code)] // Used for explicit cleanup and testing
     pub fn cleanup(&self) -> DockerResult<()> {
         let active_containers = self.get_active_containers().unwrap_or_default();
 
@@ -295,13 +296,6 @@ impl ContainerPool {
         }
 
         Ok(())
-    }
-}
-
-impl Drop for ContainerPool {
-    /// Automatically cleanup containers when the pool is dropped
-    fn drop(&mut self) {
-        let _ = self.cleanup();
     }
 }
 
