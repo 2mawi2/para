@@ -49,6 +49,16 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;
 
+        // Register container session with daemon for signal monitoring
+        if let Err(e) = crate::core::daemon::client::register_container_session(
+            &session.name,
+            &session.worktree_path,
+            &config,
+        ) {
+            eprintln!("Warning: Failed to register with daemon: {}", e);
+            // Continue anyway - daemon might not be running
+        }
+
         (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session

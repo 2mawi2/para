@@ -211,34 +211,35 @@ fn perform_pre_finish_operations(
 
 fn handle_container_finish(
     session_info: &SessionState,
-    args: &FinishArgs,
+    _args: &FinishArgs,
     _config: &Config,
 ) -> Result<FinishResult> {
-    use crate::core::docker::extraction::{extract_changes, ExtractionOptions};
+    // Container finish is now handled by the signal file watcher
+    // This function is called when `para finish` is run from the host for a container session
 
-    println!("Container session finish - MVP placeholder");
+    println!("Container session finish");
 
-    // TODO: Connect to CLI in next phase
-    // For MVP, just create the extraction options and call the placeholder
-    let extraction_options = ExtractionOptions {
-        session_name: session_info.name.clone(),
-        commit_message: args.message.clone(),
-        source_path: session_info.worktree_path.clone(),
-        target_path: session_info.worktree_path.clone(), // Same for MVP
-    };
+    // Check if there's already a finish signal file (shouldn't be if called from host)
+    let signal_paths =
+        crate::core::docker::signal_files::SignalFilePaths::new(&session_info.worktree_path);
+    if signal_paths.finish.exists() {
+        return Err(ParaError::invalid_args(
+            "A finish signal is already pending. The container agent should use 'para finish' inside the container.",
+        ));
+    }
 
-    // Call the MVP extraction function
-    let extraction_result = extract_changes(extraction_options).map_err(|e| {
-        ParaError::docker_error(format!("Failed to extract container changes: {}", e))
-    })?;
+    // For host-initiated finish, we proceed with normal git operations
+    // The watcher would have already handled container-initiated finishes
+    println!(
+        "⚠️  Note: For container sessions, agents should use 'para finish' inside the container."
+    );
+    println!("   This will create a signal file that the host processes automatically.");
 
-    println!("✓ Container session completed");
-    println!("  Files processed: {}", extraction_result.files_copied);
-
-    // For MVP, just return success with the current branch
-    Ok(FinishResult::Success {
-        final_branch: session_info.branch.clone(),
-    })
+    // Since the user is finishing from the host, we return an error to guide them
+    Err(ParaError::invalid_args(
+        "Container sessions should be finished from inside the container using 'para finish'.\n\
+         The container agent should run: para finish \"commit message\"",
+    ))
 }
 
 pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
@@ -255,6 +256,14 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
         .as_ref()
         .map(|s| s.is_container())
         .unwrap_or(false);
+
+    // Debug logging to understand the issue
+    if let Some(ref session) = session_info {
+        crate::utils::debug_log(&format!(
+            "Session '{}' type: {:?}, is_container: {}",
+            session.name, session.session_type, is_container_session
+        ));
+    }
 
     let result = if is_container_session {
         // Handle container finish differently

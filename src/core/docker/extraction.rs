@@ -16,11 +16,13 @@ pub struct ExtractionOptions {
 
 /// Result of container extraction
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ExtractionResult {
     pub files_copied: usize,
 }
 
 /// Extract changes from container (MVP: no-op since we mount host directory)
+#[allow(dead_code)]
 pub fn extract_changes(_options: ExtractionOptions) -> Result<ExtractionResult> {
     // MVP: Changes are already on host through volume mount
     // No extraction needed - finish command will handle git operations
