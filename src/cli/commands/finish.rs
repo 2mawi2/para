@@ -242,6 +242,14 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
         .map(|s| s.is_container())
         .unwrap_or(false);
 
+    // Debug logging to understand the issue
+    if let Some(ref session) = session_info {
+        crate::utils::debug_log(&format!(
+            "Session '{}' type: {:?}, is_container: {}",
+            session.name, session.session_type, is_container_session
+        ));
+    }
+
     let result = if is_container_session {
         // Handle container finish differently
         if let Some(ref session) = session_info {
