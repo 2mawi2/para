@@ -7,6 +7,8 @@ use std::time::Instant;
 pub enum ButtonClick {
     Resume(usize), // Session index
     Copy(usize),   // Session index
+    Finish(usize), // Session index
+    Cancel(usize), // Session index
 }
 
 pub struct MonitorAppState {
@@ -464,13 +466,19 @@ mod tests {
         let click2 = ButtonClick::Resume(0);
         let click3 = ButtonClick::Resume(1);
         let click4 = ButtonClick::Copy(0);
+        let click5 = ButtonClick::Finish(0);
+        let click6 = ButtonClick::Cancel(0);
 
         assert_eq!(click1, click2);
         assert_ne!(click1, click3);
         assert_ne!(click1, click4);
+        assert_ne!(click1, click5);
+        assert_ne!(click1, click6);
 
         // Test Debug trait
         assert!(format!("{:?}", click1).contains("Resume"));
         assert!(format!("{:?}", click4).contains("Copy"));
+        assert!(format!("{:?}", click5).contains("Finish"));
+        assert!(format!("{:?}", click6).contains("Cancel"));
     }
 }

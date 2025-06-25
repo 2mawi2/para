@@ -233,6 +233,8 @@ impl MonitorRenderer {
         // Check if any button is clicked for this row
         let button_click = state.get_button_click();
         let resume_clicked = matches!(button_click, Some(ButtonClick::Resume(i)) if *i == index);
+        let finish_clicked = matches!(button_click, Some(ButtonClick::Finish(i)) if *i == index);
+        let cancel_clicked = matches!(button_click, Some(ButtonClick::Cancel(i)) if *i == index);
         let copy_clicked = matches!(button_click, Some(ButtonClick::Copy(i)) if *i == index);
 
         // Use box-drawing characters to create button appearance
@@ -249,6 +251,38 @@ impl MonitorRenderer {
                         })
                         .bg(if resume_clicked {
                             COLOR_GREEN
+                        } else {
+                            COLOR_SELECTED_BG
+                        })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    if finish_clicked { "[✓]" } else { "[●]" },
+                    Style::default()
+                        .fg(if finish_clicked {
+                            COLOR_WHITE
+                        } else {
+                            COLOR_GREEN
+                        })
+                        .bg(if finish_clicked {
+                            COLOR_GREEN
+                        } else {
+                            COLOR_SELECTED_BG
+                        })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    if cancel_clicked { "[✓]" } else { "[✗]" },
+                    Style::default()
+                        .fg(if cancel_clicked {
+                            COLOR_WHITE
+                        } else {
+                            COLOR_RED
+                        })
+                        .bg(if cancel_clicked {
+                            COLOR_RED
                         } else {
                             COLOR_SELECTED_BG
                         })
@@ -278,6 +312,18 @@ impl MonitorRenderer {
                     Span::styled("[✓]", Style::default().fg(COLOR_WHITE).bg(COLOR_GREEN))
                 } else {
                     Span::styled("[▶]", Style::default().fg(COLOR_GRAY))
+                },
+                Span::raw(" "),
+                if finish_clicked {
+                    Span::styled("[✓]", Style::default().fg(COLOR_WHITE).bg(COLOR_GREEN))
+                } else {
+                    Span::styled("[●]", Style::default().fg(COLOR_GRAY))
+                },
+                Span::raw(" "),
+                if cancel_clicked {
+                    Span::styled("[✓]", Style::default().fg(COLOR_WHITE).bg(COLOR_RED))
+                } else {
+                    Span::styled("[✗]", Style::default().fg(COLOR_GRAY))
                 },
                 Span::raw(" "),
                 if copy_clicked {
@@ -450,7 +496,7 @@ impl MonitorRenderer {
         Table::new(
             rows,
             [
-                Constraint::Length(9),  // Actions column
+                Constraint::Length(17), // Actions column (wider for 4 buttons)
                 Constraint::Min(20),    // Session name
                 Constraint::Length(10), // State
                 Constraint::Length(14), // Last Modified
