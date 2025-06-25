@@ -16,6 +16,8 @@ pub enum SessionAction {
     Resume(usize),
     Copy(usize),
     Integrate(usize),
+    Finish(usize),
+    Cancel(usize),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -228,20 +230,34 @@ impl EventHandler {
 
                         // Check if the clicked row is within the session list bounds
                         if table_index < sessions.len() {
-                            // Check if clicking in the actions column (first 9 characters)
+                            // Check if clicking in the actions column (first 17 characters)
                             let relative_x = mouse_x - table_area.x;
-                            if relative_x < 9 {
+                            if relative_x < 17 {
                                 // Actions column clicked
-                                // Button layout: "[▶] [📋]" (positions 0-8)
+                                // Button layout: "[▶] [✓] [✗] [📋]" (positions 0-16)
                                 // [▶] = positions 0-2
                                 // space = position 3
-                                // [📋] = positions 4-7
+                                // [✓] = positions 4-6 (Finish)
+                                // space = position 7
+                                // [✗] = positions 8-10 (Cancel)
+                                // space = position 11
+                                // [📋] = positions 12-15
                                 if relative_x < 3 {
                                     // Resume button clicked
                                     return Some(UiAction::Session(SessionAction::Resume(
                                         table_index,
                                     )));
-                                } else if (4..8).contains(&relative_x) {
+                                } else if (4..7).contains(&relative_x) {
+                                    // Finish button clicked
+                                    return Some(UiAction::Session(SessionAction::Finish(
+                                        table_index,
+                                    )));
+                                } else if (8..11).contains(&relative_x) {
+                                    // Cancel button clicked
+                                    return Some(UiAction::Session(SessionAction::Cancel(
+                                        table_index,
+                                    )));
+                                } else if (12..16).contains(&relative_x) {
                                     // Copy button clicked
                                     return Some(UiAction::Session(SessionAction::Copy(
                                         table_index,
@@ -465,11 +481,37 @@ mod tests {
             Some(UiAction::Session(SessionAction::Resume(0)))
         );
 
+        // Test clicking finish button
+        let finish_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 5, // Within finish button area (4-6)
+            row: 6,    // First data row
+            modifiers: KeyModifiers::NONE,
+        };
+
+        assert_eq!(
+            event_handler.handle_mouse_event(finish_click, &state, &sessions),
+            Some(UiAction::Session(SessionAction::Finish(0)))
+        );
+
+        // Test clicking cancel button
+        let cancel_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 9, // Within cancel button area (8-10)
+            row: 6,    // First data row
+            modifiers: KeyModifiers::NONE,
+        };
+
+        assert_eq!(
+            event_handler.handle_mouse_event(cancel_click, &state, &sessions),
+            Some(UiAction::Session(SessionAction::Cancel(0)))
+        );
+
         // Test clicking copy button
         let copy_click = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: 5, // Within copy button area (4-7)
-            row: 6,    // First data row
+            column: 13, // Within copy button area (12-15)
+            row: 6,     // First data row
             modifiers: KeyModifiers::NONE,
         };
 

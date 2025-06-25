@@ -88,6 +88,24 @@ impl ActionDispatcher {
                 }
                 Ok(ActionResult::Continue)
             }
+            SessionAction::Finish(index) => {
+                if let Some(_session) = sessions.get(index) {
+                    // Register button click for visual feedback
+                    state.register_button_click(ButtonClick::Finish(index));
+                    // Start the finish dialog instead of directly finishing
+                    state.start_finish();
+                }
+                Ok(ActionResult::Continue)
+            }
+            SessionAction::Cancel(index) => {
+                if let Some(_session) = sessions.get(index) {
+                    // Register button click for visual feedback
+                    state.register_button_click(ButtonClick::Cancel(index));
+                    // Start the cancel confirmation dialog instead of directly canceling
+                    state.start_cancel();
+                }
+                Ok(ActionResult::Continue)
+            }
         }
     }
 
