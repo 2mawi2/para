@@ -45,6 +45,21 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
         ctx.session_info.as_ref().map(|s| s.worktree_path.clone())
     };
 
+    // Destroy container if this is a container session
+    if let Some(ref session) = ctx.session_info {
+        if session.is_container() {
+            // Use CLI-only approach - default parameters for container cleanup
+            let docker_manager = crate::core::docker::DockerManager::new(
+                ctx.config.clone(),
+                false,  // network_isolation
+                vec![], // allowed_domains
+            );
+            if let Err(e) = docker_manager.destroy_session_container(session) {
+                eprintln!("Warning: Failed to destroy container: {}", e);
+            }
+        }
+    }
+
     cleanup_session_state(
         ctx.session_manager,
         ctx.session_info.clone(),

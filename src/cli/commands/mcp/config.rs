@@ -74,15 +74,25 @@ pub fn create_mcp_json() -> Result<bool> {
         "args": mcp_server_path.args
     });
 
-    // Check if .mcp.json exists and load it
-    let mut mcp_config = if std::path::Path::new(".mcp.json").exists() {
-        let existing_content = fs::read_to_string(".mcp.json")?;
-        serde_json::from_str(&existing_content).unwrap_or_else(|_| {
+    let mcp_path = std::path::Path::new(".mcp.json");
+
+    // Load existing .mcp.json or create new one
+    let mut mcp_config = if mcp_path.exists() {
+        let content = fs::read_to_string(mcp_path)
+            .map_err(|e| ParaError::fs_error(format!("Failed to read .mcp.json: {}", e)))?;
+
+        if content.trim().is_empty() {
+            // File exists but is empty, create new config
             serde_json::json!({
                 "mcpServers": {}
             })
-        })
+        } else {
+            serde_json::from_str(&content).map_err(|e| {
+                ParaError::invalid_config(format!("Invalid .mcp.json format: {}", e))
+            })?
+        }
     } else {
+        // File doesn't exist, create new config
         serde_json::json!({
             "mcpServers": {}
         })
@@ -101,9 +111,12 @@ pub fn create_mcp_json() -> Result<bool> {
         });
     }
 
-    // Write the updated configuration
-    let formatted_config = serde_json::to_string_pretty(&mcp_config)?;
-    fs::write(".mcp.json", formatted_config)?;
+    // Write the updated config with proper formatting
+    let formatted_config = serde_json::to_string_pretty(&mcp_config)
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize .mcp.json: {}", e)))?;
+
+    fs::write(mcp_path, formatted_config)
+        .map_err(|e| ParaError::fs_error(format!("Failed to write .mcp.json: {}", e)))?;
     Ok(true)
 }
 
