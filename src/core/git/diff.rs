@@ -415,10 +415,6 @@ mod tests {
 
         // We should see additions from committed file (4 lines) + untracked file (1 line)
         // Note: untracked files are now included in diff stats
-        println!(
-            "Bug test - Stats: additions={}, deletions={}",
-            stats.additions, stats.deletions
-        );
         assert_eq!(
             stats.additions, 5,
             "Expected 4 additions from committed file + 1 from untracked file"
