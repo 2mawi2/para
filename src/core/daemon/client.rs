@@ -9,6 +9,11 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
+/// Ensure daemon is running with correct version
+pub fn ensure_daemon_running() -> Result<()> {
+    start_daemon_if_needed()
+}
+
 /// Register a container session with the daemon
 pub fn register_container_session(
     session_name: &str,
@@ -75,11 +80,34 @@ fn send_command(command: &DaemonCommand) -> Result<DaemonResponse> {
     Ok(response)
 }
 
-/// Start the daemon if it's not already running
+/// Start the daemon if it's not already running or if version mismatch
 fn start_daemon_if_needed() -> Result<()> {
-    // Check if daemon is already running
-    if let Ok(DaemonResponse::Pong) = send_command(&DaemonCommand::Ping) {
-        return Ok(());
+    // Check if daemon is already running and has correct version
+    match send_command(&DaemonCommand::Version) {
+        Ok(DaemonResponse::Version(daemon_version)) => {
+            let current_version = env!("CARGO_PKG_VERSION");
+            if daemon_version == current_version {
+                // Daemon is running with correct version
+                return Ok(());
+            } else {
+                // Version mismatch - stop old daemon
+                eprintln!(
+                    "Para daemon version mismatch (daemon: {}, current: {}). Restarting...",
+                    daemon_version, current_version
+                );
+                let _ = send_command(&DaemonCommand::Shutdown);
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        }
+        Ok(DaemonResponse::Pong) => {
+            // Old daemon without version support - stop it
+            eprintln!("Found old para daemon without version support. Restarting...");
+            let _ = send_command(&DaemonCommand::Shutdown);
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        _ => {
+            // Daemon not running or not responding
+        }
     }
 
     // Get the current executable path

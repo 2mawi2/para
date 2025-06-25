@@ -11,7 +11,6 @@ pub mod worktree;
 
 pub use archive_branch_iterator::{ArchiveBranchIterator, HasTimestamp};
 pub use branch::{BranchInfo, BranchManager};
-pub use diff::{calculate_diff_stats, find_parent_branch};
 pub use finish::{FinishManager, FinishRequest, FinishResult};
 pub use repository::GitRepository;
 pub use worktree::{WorktreeInfo, WorktreeManager};

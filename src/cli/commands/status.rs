@@ -1,6 +1,5 @@
 use crate::cli::parser::{StatusArgs, StatusCommands};
 use crate::config::Config;
-use crate::core::git::{calculate_diff_stats, find_parent_branch};
 use crate::core::session::SessionManager;
 use crate::core::status::{DiffStats, Status};
 use crate::utils::{get_main_repository_root, ParaError, Result};
@@ -118,11 +117,8 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 fn calculate_diff_stats_for_session(
     session_state: &crate::core::session::SessionState,
 ) -> Result<DiffStats> {
-    // Find the parent branch (usually main/master)
-    let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)?;
-
-    // Calculate diff stats
-    calculate_diff_stats(&session_state.worktree_path, &parent_branch)
+    Status::calculate_diff_stats_for_session(session_state)
+        .map_err(|e| ParaError::git_error(format!("Failed to calculate diff stats: {}", e)))
 }
 
 struct StatusDisplayHandler {

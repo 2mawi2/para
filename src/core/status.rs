@@ -244,6 +244,21 @@ impl Status {
         Ok((completed, total))
     }
 
+    /// Calculate diff stats for a session
+    pub fn calculate_diff_stats_for_session(
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<DiffStats> {
+        use crate::core::git::diff::{calculate_diff_stats, find_parent_branch};
+
+        // Find the parent branch (usually main/master)
+        let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)
+            .map_err(|e| anyhow::anyhow!("Failed to find parent branch: {}", e))?;
+
+        // Calculate diff stats
+        calculate_diff_stats(&session_state.worktree_path, &parent_branch)
+            .map_err(|e| anyhow::anyhow!("Failed to calculate diff stats: {}", e))
+    }
+
     pub fn todo_percentage(&self) -> Option<u8> {
         match (self.todos_completed, self.todos_total) {
             (Some(completed), Some(total)) if total > 0 => {

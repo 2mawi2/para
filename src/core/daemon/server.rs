@@ -94,6 +94,9 @@ fn handle_client(
                 }
             }
             DaemonCommand::Ping => DaemonResponse::Pong,
+            DaemonCommand::Version => {
+                DaemonResponse::Version(env!("CARGO_PKG_VERSION").to_string())
+            }
             DaemonCommand::Shutdown => {
                 // Clean up all watchers
                 if let Ok(mut watchers_guard) = watchers.lock() {
