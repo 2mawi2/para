@@ -288,16 +288,43 @@ impl SessionManager {
         let sessions = self.list_sessions()?;
         let normalized_path = crate::utils::safe_resolve_path(path);
 
-        for session in sessions {
+        // First, try to find an exact match
+        for session in &sessions {
             let session_normalized = crate::utils::safe_resolve_path(&session.worktree_path);
+            crate::utils::debug_log(&format!(
+                "Comparing normalized_path {} with session {} path {}",
+                normalized_path.display(),
+                session.name,
+                session_normalized.display()
+            ));
 
-            if normalized_path == session_normalized
-                || normalized_path.starts_with(&session_normalized)
-                || session_normalized.starts_with(&normalized_path)
-            {
-                crate::utils::debug_log(&format!("Found matching session: {}", session.name));
-                return Ok(Some(session));
+            if normalized_path == session_normalized {
+                crate::utils::debug_log(&format!("Found exact matching session: {}", session.name));
+                return Ok(Some(session.clone()));
             }
+        }
+
+        // If no exact match, find the session whose worktree contains the path
+        // Sort by path length descending to find the most specific match
+        let mut matching_sessions: Vec<_> = sessions
+            .into_iter()
+            .filter_map(|session| {
+                let session_normalized = crate::utils::safe_resolve_path(&session.worktree_path);
+
+                if normalized_path.starts_with(&session_normalized) {
+                    Some((session, session_normalized))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by path length descending - longest (most specific) path first
+        matching_sessions.sort_by(|a, b| b.1.as_os_str().len().cmp(&a.1.as_os_str().len()));
+
+        if let Some((session, _)) = matching_sessions.first() {
+            crate::utils::debug_log(&format!("Found matching session: {}", session.name));
+            return Ok(Some(session.clone()));
         }
 
         crate::utils::debug_log("No matching session found");
@@ -435,11 +462,17 @@ impl SessionManager {
     pub fn cancel_session(&mut self, session_name: &str, force: bool) -> Result<()> {
         let session = self.load_state(session_name)?;
 
-        // TODO: Connect to CLI in next phase
-        // Docker cleanup will be added when CLI integration is complete
-        // if session.is_container() {
-        //     // Docker container cleanup
-        // }
+        // Clean up Docker container if it's a container session
+        if session.is_container() {
+            let docker_manager = crate::core::docker::DockerManager::new(
+                self.config.clone(),
+                false,  // network_isolation doesn't matter for cleanup
+                vec![], // allowed_domains doesn't matter for cleanup
+            );
+            if let Err(e) = docker_manager.stop_container(&session.name) {
+                eprintln!("Warning: Failed to stop Docker container: {}", e);
+            }
+        }
 
         // Remove the session state file
         let state_file = self.state_dir.join(format!("{}.state", session_name));

@@ -52,6 +52,9 @@ pub enum Commands {
     Status(StatusArgs),
     /// Manage Docker container authentication
     Auth(AuthArgs),
+    /// Manage para daemon (internal use)
+    #[command(hide = true)]
+    Daemon(DaemonArgs),
 }
 
 #[derive(Args, Debug)]
@@ -178,6 +181,10 @@ pub struct CleanArgs {
     /// Also clean backup archives (deprecated, use default behavior)
     #[arg(long, help = "Also remove archived sessions", hide = true)]
     pub backups: bool,
+
+    /// Clean orphaned Docker containers
+    #[arg(long, help = "Clean orphaned Docker containers")]
+    pub containers: bool,
 }
 
 #[derive(Args, Debug)]
@@ -458,4 +465,20 @@ pub fn validate_branch_name(name: &str) -> crate::utils::Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Args, Debug)]
+pub struct DaemonArgs {
+    #[command(subcommand)]
+    pub command: DaemonCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DaemonCommands {
+    /// Start the daemon
+    Start,
+    /// Stop the daemon
+    Stop,
+    /// Check daemon status
+    Status,
 }
