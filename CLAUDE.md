@@ -265,3 +265,8 @@ fn test_with_git_environment() {
 1. Think deeply about the problem first, and find the best option that solves the issue.
 2. If this still doesn't help: Use the user for help, but do this very rarely.
 3. Never try using dirty fixes and workarounds for a hard problem, solve it directly by thinking deep or asking the user for help.
+
+
+# Git
+
+- Before running git commands that are branch related, ensure to run 'git status' to check the branch you are on to avoid executing operations on the wrong branch.
