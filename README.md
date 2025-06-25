@@ -153,8 +153,8 @@ your-repo/
 Run `para config` to set up your IDE - it will auto-detect and configure:
 
 - **Claude Code** (recommended for AI development)
+- **VS Code** (default)
 - **Cursor** 
-- **VS Code**
 - **Any IDE with CLI support**
 
 ```bash

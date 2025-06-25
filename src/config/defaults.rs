@@ -12,13 +12,13 @@ pub fn default_config() -> Config {
 pub fn default_ide_config() -> IdeConfig {
     let detected_ide = detect_ide();
 
-    // Default to cursor if available, otherwise code
-    let wrapper_command = if is_command_available("cursor") {
-        "cursor"
-    } else if is_command_available("code") {
+    // Default to code if available, otherwise cursor
+    let wrapper_command = if is_command_available("code") {
         "code"
+    } else if is_command_available("cursor") {
+        "cursor"
     } else {
-        "cursor" // fallback
+        "code" // fallback
     };
 
     IdeConfig {

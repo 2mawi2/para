@@ -44,18 +44,18 @@ export IDE_WRAPPER_CMD="cursor"
 - **Integrated terminal** - Claude Code runs in the IDE's terminal
 - **Better UX** - no separate terminal windows to manage
 
-### Cursor (Default)
+### VS Code (Default)
 ```bash
-export IDE_NAME="cursor"  # Default
-export IDE_CMD="cursor"   # Default
-export IDE_USER_DATA_DIR=".cursor-userdata"  # Default
+export IDE_NAME="code"    # Default
+export IDE_CMD="code"     # Default
+export IDE_USER_DATA_DIR=".vscode-userdata"  # Default
 ```
 
-### VS Code
+### Cursor
 ```bash
-export IDE_NAME="code"
-export IDE_CMD="code"
-export IDE_USER_DATA_DIR=".vscode-userdata"
+export IDE_NAME="cursor"
+export IDE_CMD="cursor"
+export IDE_USER_DATA_DIR=".cursor-userdata"
 ```
 
 ### Custom IDE
