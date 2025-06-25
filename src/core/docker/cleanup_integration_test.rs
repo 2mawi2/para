@@ -26,13 +26,13 @@ mod integration_tests {
 
         // Remove any existing test container
         Command::new("docker")
-            .args(&["rm", "-f", test_container_name])
+            .args(["rm", "-f", test_container_name])
             .output()
             .ok();
 
         // Create a simple test container
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "create",
                 "--name",
                 test_container_name,
@@ -47,7 +47,7 @@ mod integration_tests {
 
         // Verify container exists
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "ps",
                 "-a",
                 "--filter",
@@ -67,7 +67,7 @@ mod integration_tests {
 
         // Verify container was removed
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "ps",
                 "-a",
                 "--filter",
@@ -107,13 +107,13 @@ mod integration_tests {
 
         // Remove any existing test container
         Command::new("docker")
-            .args(&["rm", "-f", &test_container_name])
+            .args(["rm", "-f", &test_container_name])
             .output()
             .ok();
 
         // Create a simple test container
         Command::new("docker")
-            .args(&[
+            .args([
                 "create",
                 "--name",
                 &test_container_name,
@@ -134,7 +134,7 @@ mod integration_tests {
 
         // Verify container still exists
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "ps",
                 "-a",
                 "--filter",
@@ -153,14 +153,14 @@ mod integration_tests {
 
         // Cleanup
         Command::new("docker")
-            .args(&["rm", "-f", &test_container_name])
+            .args(["rm", "-f", &test_container_name])
             .output()
             .ok();
     }
 
     fn is_docker_available() -> bool {
         Command::new("docker")
-            .args(&["info"])
+            .args(["info"])
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)

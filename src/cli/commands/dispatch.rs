@@ -85,12 +85,15 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
 
-        // Spawn signal file watcher for container session
-        let _watcher_handle = crate::core::docker::watcher::SignalFileWatcher::spawn(
-            session.name.clone(),
-            session.worktree_path.clone(),
-            config.clone(),
-        );
+        // Register container session with daemon for signal monitoring
+        if let Err(e) = crate::core::daemon::client::register_container_session(
+            &session.name,
+            &session.worktree_path,
+            &config,
+        ) {
+            eprintln!("Warning: Failed to register with daemon: {}", e);
+            // Continue anyway - daemon might not be running
+        }
 
         (true, network_isolation, allowed_domains)
     } else {

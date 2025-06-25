@@ -87,6 +87,7 @@ pub fn execute_command_with_config(
         Some(Commands::Monitor(args)) => commands::monitor::execute(config.unwrap(), args),
         Some(Commands::Status(args)) => commands::status::execute(config.unwrap(), args),
         Some(Commands::Auth(args)) => commands::auth::execute(args),
+        Some(Commands::Daemon(args)) => commands::daemon::execute(args),
         None => commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {}),
     }
 }
