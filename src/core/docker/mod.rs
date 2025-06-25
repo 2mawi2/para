@@ -8,6 +8,8 @@ pub mod ide_integration;
 pub mod manager;
 pub mod service;
 pub mod session;
+pub mod signal_files;
+pub mod watcher;
 
 #[cfg(test)]
 pub mod mock;

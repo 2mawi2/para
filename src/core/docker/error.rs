@@ -16,6 +16,9 @@ pub enum DockerError {
     #[error("Network isolation verification failed: {0}")]
     NetworkIsolationFailed(String),
 
+    #[error("Docker command failed: {0}")]
+    CommandFailed(String),
+
     #[error("General error: {0}")]
     Other(#[from] anyhow::Error),
 }

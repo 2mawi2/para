@@ -236,6 +236,65 @@ impl DockerService {
 
         Ok(())
     }
+
+    /// Stop a running container
+    pub fn stop_container(&self, session_name: &str) -> DockerResult<()> {
+        let container_name = format!("para-{}", session_name);
+
+        // Check if container exists
+        let check_output = Command::new("docker")
+            .args([
+                "ps",
+                "-a",
+                "--format",
+                "{{.Names}}",
+                "--filter",
+                &format!("name={}", container_name),
+            ])
+            .output()
+            .map_err(|e| DockerError::CommandFailed(format!("Failed to check container: {}", e)))?;
+
+        let container_list = String::from_utf8_lossy(&check_output.stdout);
+        if !container_list.contains(&container_name) {
+            // Container doesn't exist, nothing to do
+            return Ok(());
+        }
+
+        // Stop the container
+        let stop_output = Command::new("docker")
+            .args(["stop", &container_name])
+            .output()
+            .map_err(|e| DockerError::CommandFailed(format!("Failed to stop container: {}", e)))?;
+
+        if !stop_output.status.success() {
+            let stderr = String::from_utf8_lossy(&stop_output.stderr);
+            // If container is already stopped, that's fine
+            if !stderr.contains("is not running") {
+                return Err(DockerError::CommandFailed(format!(
+                    "Failed to stop container '{}': {}",
+                    container_name, stderr
+                )));
+            }
+        }
+
+        // Remove the container
+        let rm_output = Command::new("docker")
+            .args(["rm", &container_name])
+            .output()
+            .map_err(|e| {
+                DockerError::CommandFailed(format!("Failed to remove container: {}", e))
+            })?;
+
+        if !rm_output.status.success() {
+            let stderr = String::from_utf8_lossy(&rm_output.stderr);
+            return Err(DockerError::CommandFailed(format!(
+                "Failed to remove container '{}': {}",
+                container_name, stderr
+            )));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
