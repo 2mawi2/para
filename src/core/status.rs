@@ -248,14 +248,13 @@ impl Status {
     pub fn calculate_diff_stats_for_session(
         session_state: &crate::core::session::SessionState,
     ) -> Result<DiffStats> {
-        use crate::core::git::diff::{calculate_diff_stats, find_parent_branch};
+        use crate::core::git::calculate_diff_stats;
 
-        // Find the parent branch (usually main/master)
-        let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)
-            .map_err(|e| anyhow::anyhow!("Failed to find parent branch: {}", e))?;
+        // Use the parent branch from session state, or default to "main"
+        let parent_branch = session_state.parent_branch.as_deref().unwrap_or("main");
 
         // Calculate diff stats
-        calculate_diff_stats(&session_state.worktree_path, &parent_branch)
+        calculate_diff_stats(&session_state.worktree_path, parent_branch)
             .map_err(|e| anyhow::anyhow!("Failed to calculate diff stats: {}", e))
     }
 
