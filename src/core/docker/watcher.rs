@@ -223,9 +223,63 @@ impl SignalFileWatcher {
     }
 
     /// Handle status update from container
-    fn handle_status_update(&self, _status: ContainerStatus) -> Result<()> {
-        // Status updates are saved to the status file but not actively processed
-        // They will be read by monitor/status commands when needed
+    fn handle_status_update(&self, container_status: ContainerStatus) -> Result<()> {
+        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use chrono::Utc;
+        
+        // Parse container status fields into proper types
+        let test_status = container_status
+            .tests
+            .as_ref()
+            .and_then(|s| Status::parse_test_status(s).ok())
+            .unwrap_or(TestStatus::Unknown);
+            
+        let confidence = container_status
+            .confidence
+            .as_ref()
+            .and_then(|s| Status::parse_confidence(s).ok())
+            .unwrap_or(ConfidenceLevel::Medium);
+            
+        let (todos_completed, todos_total) = container_status
+            .todos
+            .as_ref()
+            .and_then(|s| Status::parse_todos(s).ok())
+            .map(|(completed, total)| (Some(completed), Some(total)))
+            .unwrap_or((None, None));
+        
+        // Create status update
+        let mut status = Status::new(
+            self.session_name.clone(),
+            container_status.task.clone(),
+            test_status,
+            confidence,
+        );
+        
+        status.is_blocked = container_status.blocked;
+        status.todos_completed = todos_completed;
+        status.todos_total = todos_total;
+        status.last_update = Utc::now();
+        
+        // Save to state directory in the main repository
+        // This ensures the monitor can find it even when running from a worktree
+        let state_dir = if self.config.directories.state_dir.starts_with('/') {
+            // Absolute path
+            std::path::PathBuf::from(&self.config.directories.state_dir)
+        } else {
+            // Relative path - resolve to main repository root
+            match crate::utils::git::get_main_repository_root_from(Some(&self.worktree_path)) {
+                Ok(repo_root) => repo_root.join(&self.config.directories.state_dir),
+                Err(_) => {
+                    // Fallback to relative path if we can't find repo root
+                    std::path::PathBuf::from(&self.config.directories.state_dir)
+                }
+            }
+        };
+        
+        status.save(&state_dir).map_err(|e| {
+            ParaError::fs_error(format!("Failed to save container status: {}", e))
+        })?;
+        
         Ok(())
     }
 }
