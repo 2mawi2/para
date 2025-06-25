@@ -413,15 +413,15 @@ mod tests {
         // Calculate diff stats
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
 
-        // We should see additions from committed file (4 lines)
-        // Note: untracked files are not included in git diff
+        // We should see additions from committed file (4 lines) + untracked file (1 line)
+        // Note: untracked files are now included in diff stats
         println!(
             "Bug test - Stats: additions={}, deletions={}",
             stats.additions, stats.deletions
         );
         assert_eq!(
-            stats.additions, 4,
-            "Expected 4 additions from committed file"
+            stats.additions, 5,
+            "Expected 4 additions from committed file + 1 from untracked file"
         );
         assert_eq!(stats.deletions, 0);
     }
