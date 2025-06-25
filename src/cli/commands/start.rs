@@ -49,6 +49,13 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
             })?;
 
+        // Spawn signal file watcher for container session
+        let _watcher_handle = crate::core::docker::watcher::SignalFileWatcher::spawn(
+            session.name.clone(),
+            session.worktree_path.clone(),
+            config.clone(),
+        );
+
         (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session

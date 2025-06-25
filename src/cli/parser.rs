@@ -178,6 +178,10 @@ pub struct CleanArgs {
     /// Also clean backup archives (deprecated, use default behavior)
     #[arg(long, help = "Also remove archived sessions", hide = true)]
     pub backups: bool,
+
+    /// Clean orphaned Docker containers
+    #[arg(long, help = "Clean orphaned Docker containers")]
+    pub containers: bool,
 }
 
 #[derive(Args, Debug)]

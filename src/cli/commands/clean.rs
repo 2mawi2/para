@@ -1,5 +1,6 @@
 use crate::cli::parser::CleanArgs;
 use crate::config::Config;
+use crate::core::docker::cleanup::ContainerCleaner;
 use crate::core::git::{GitOperations, GitService};
 use crate::utils::Result;
 use dialoguer::Confirm;
@@ -24,6 +25,7 @@ struct CleanupResults {
     orphaned_state_files_removed: usize,
     old_archives_removed: usize,
     stale_status_files_removed: usize,
+    orphaned_containers_removed: usize,
     errors: Vec<String>,
 }
 
@@ -42,7 +44,7 @@ impl SessionCleaner {
     }
 
     fn execute_clean(&self, args: CleanArgs) -> Result<()> {
-        let cleanup_plan = self.analyze_cleanup()?;
+        let cleanup_plan = self.analyze_cleanup(&args)?;
 
         if cleanup_plan.is_empty() {
             println!("🧹 Nothing to clean - your Para environment is already tidy!");
@@ -65,7 +67,7 @@ impl SessionCleaner {
         Ok(())
     }
 
-    fn analyze_cleanup(&self) -> Result<CleanupPlan> {
+    fn analyze_cleanup(&self, args: &CleanArgs) -> Result<CleanupPlan> {
         let mut plan = CleanupPlan::new();
 
         // Find stale branches (branches without corresponding state files)
@@ -79,6 +81,11 @@ impl SessionCleaner {
 
         // Find stale status files (status files older than threshold)
         plan.stale_status_files = self.find_stale_status_files()?;
+
+        // Find orphaned containers if requested
+        if args.containers {
+            plan.orphaned_containers = self.find_orphaned_containers()?;
+        }
 
         Ok(plan)
     }
@@ -261,6 +268,46 @@ impl SessionCleaner {
         })
     }
 
+    fn find_orphaned_containers(&self) -> Result<Vec<String>> {
+        use std::process::Command;
+
+        // List all para containers
+        let output = Command::new("docker")
+            .args(&[
+                "ps",
+                "-a",
+                "--filter",
+                "name=para-",
+                "--format",
+                "{{.Names}}",
+            ])
+            .output()?;
+
+        if !output.status.success() {
+            // Docker not available or command failed, return empty list
+            return Ok(Vec::new());
+        }
+
+        let container_names = String::from_utf8_lossy(&output.stdout);
+        let mut orphaned = Vec::new();
+
+        for container_name in container_names.lines() {
+            if let Some(session_name) =
+                ContainerCleaner::parse_session_from_container(container_name)
+            {
+                // Check if session exists
+                let state_file = PathBuf::from(&self.config.directories.state_dir)
+                    .join(format!("{}.state", session_name));
+
+                if !state_file.exists() {
+                    orphaned.push(container_name.to_string());
+                }
+            }
+        }
+
+        Ok(orphaned)
+    }
+
     fn show_dry_run_report(&self, plan: &CleanupPlan) {
         println!("🧹 Para Cleanup - Dry Run");
         println!("========================\n");
@@ -300,6 +347,17 @@ impl SessionCleaner {
             }
             println!();
         }
+
+        if !plan.orphaned_containers.is_empty() {
+            println!(
+                "Orphaned Docker Containers ({}):",
+                plan.orphaned_containers.len()
+            );
+            for container in &plan.orphaned_containers {
+                println!("  🐳 {}", container);
+            }
+            println!();
+        }
     }
 
     fn confirm_cleanup(&self, plan: &CleanupPlan) -> Result<bool> {
@@ -334,6 +392,14 @@ impl SessionCleaner {
         if !plan.stale_status_files.is_empty() {
             println!("  📊 {} stale status files", plan.stale_status_files.len());
             total_items += plan.stale_status_files.len();
+        }
+
+        if !plan.orphaned_containers.is_empty() {
+            println!(
+                "  🐳 {} orphaned Docker containers",
+                plan.orphaned_containers.len()
+            );
+            total_items += plan.orphaned_containers.len();
         }
 
         if total_items == 0 {
@@ -408,6 +474,35 @@ impl SessionCleaner {
             }
         }
 
+        // Clean orphaned containers
+        if !plan.orphaned_containers.is_empty() {
+            use std::process::Command;
+
+            for container_name in plan.orphaned_containers {
+                match Command::new("docker")
+                    .args(&["rm", "-f", &container_name])
+                    .output()
+                {
+                    Ok(output) if output.status.success() => {
+                        results.orphaned_containers_removed += 1;
+                    }
+                    Ok(output) => {
+                        let error = String::from_utf8_lossy(&output.stderr);
+                        results.errors.push(format!(
+                            "Failed to remove container {}: {}",
+                            container_name, error
+                        ));
+                    }
+                    Err(e) => {
+                        results.errors.push(format!(
+                            "Failed to remove container {}: {}",
+                            container_name, e
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(results)
     }
 
@@ -443,6 +538,13 @@ impl SessionCleaner {
             );
         }
 
+        if results.orphaned_containers_removed > 0 {
+            println!(
+                "  ✅ Removed {} orphaned Docker containers",
+                results.orphaned_containers_removed
+            );
+        }
+
         if !results.errors.is_empty() {
             println!("\n⚠️  Some items couldn't be cleaned:");
             for error in &results.errors {
@@ -465,6 +567,7 @@ struct CleanupPlan {
     orphaned_state_files: Vec<PathBuf>,
     old_archives: Vec<String>,
     stale_status_files: Vec<String>,
+    orphaned_containers: Vec<String>,
 }
 
 impl CleanupPlan {
@@ -474,6 +577,7 @@ impl CleanupPlan {
             orphaned_state_files: Vec::new(),
             old_archives: Vec::new(),
             stale_status_files: Vec::new(),
+            orphaned_containers: Vec::new(),
         }
     }
 
@@ -482,6 +586,7 @@ impl CleanupPlan {
             && self.orphaned_state_files.is_empty()
             && self.old_archives.is_empty()
             && self.stale_status_files.is_empty()
+            && self.orphaned_containers.is_empty()
     }
 }
 
@@ -513,6 +618,7 @@ mod tests {
             force: false,
             dry_run: false,
             backups: false,
+            containers: false,
         };
 
         assert!(!args.force);
