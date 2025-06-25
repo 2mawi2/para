@@ -119,7 +119,7 @@ fn calculate_diff_stats_for_session(
 ) -> Result<Option<DiffStats>> {
     Status::calculate_diff_stats_for_session(session_state)
         .map(Some)
-        .or_else(|_| Ok(None))
+        .or(Ok(None))
 }
 
 struct StatusDisplayHandler {
@@ -198,7 +198,9 @@ impl StatusDisplayHandler {
                         }
 
                         // Calculate diff stats on the host
-                        if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
+                        if let Ok(Some(diff_stats)) =
+                            calculate_diff_stats_for_session(&session_state)
+                        {
                             s.diff_stats = Some(diff_stats);
                         }
                     }
