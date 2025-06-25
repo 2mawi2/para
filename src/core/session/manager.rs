@@ -279,12 +279,12 @@ impl SessionManager {
         for session in &sessions {
             let session_normalized = crate::utils::safe_resolve_path(&session.worktree_path);
             crate::utils::debug_log(&format!(
-                "Comparing normalized_path {} with session {} path {}", 
-                normalized_path.display(), 
-                session.name, 
+                "Comparing normalized_path {} with session {} path {}",
+                normalized_path.display(),
+                session.name,
                 session_normalized.display()
             ));
-            
+
             if normalized_path == session_normalized {
                 crate::utils::debug_log(&format!("Found exact matching session: {}", session.name));
                 return Ok(Some(session.clone()));
@@ -297,7 +297,7 @@ impl SessionManager {
             .into_iter()
             .filter_map(|session| {
                 let session_normalized = crate::utils::safe_resolve_path(&session.worktree_path);
-                
+
                 if normalized_path.starts_with(&session_normalized) {
                     Some((session, session_normalized))
                 } else {

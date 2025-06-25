@@ -51,6 +51,12 @@ pub fn register_container_session(
 /// Send a command to the daemon
 fn send_command(command: &DaemonCommand) -> Result<DaemonResponse> {
     let socket_path = daemon_socket_path();
+
+    // Check if socket exists to avoid 5-second connection timeout
+    if !socket_path.exists() {
+        return Err(anyhow::anyhow!("Daemon socket does not exist"));
+    }
+
     let mut stream = UnixStream::connect(&socket_path)?;
 
     // Set timeout
@@ -69,7 +75,13 @@ fn send_command(command: &DaemonCommand) -> Result<DaemonResponse> {
     loop {
         match stream.read(&mut buffer) {
             Ok(0) => break,
-            Ok(n) => response.push_str(&String::from_utf8_lossy(&buffer[..n])),
+            Ok(n) => {
+                response.push_str(&String::from_utf8_lossy(&buffer[..n]));
+                // Check if we have a complete response (ends with newline)
+                if response.ends_with('\n') {
+                    break;
+                }
+            }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
             Err(e) => return Err(e.into()),
         }
