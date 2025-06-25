@@ -1,15 +1,13 @@
-//! Minimal Docker service implementation for MVP
+//! Docker service implementation for health checks
 //!
-//! This provides just enough functionality to:
-//! - Create a Docker container with mounted workspace
-//! - Start/stop containers
-//! - Extract code changes
+//! This provides core Docker functionality for the container pool system.
 
-use super::{ContainerSession, DockerError, DockerResult};
+use super::session::ContainerSession;
+use super::{DockerError, DockerResult};
 use std::path::Path;
 use std::process::Command;
 
-/// Minimal Docker service for MVP
+/// Docker service for health checks and core operations
 pub struct DockerService;
 
 impl DockerService {

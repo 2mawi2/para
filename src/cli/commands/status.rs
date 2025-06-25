@@ -1,6 +1,6 @@
 use crate::cli::parser::{StatusArgs, StatusCommands};
 use crate::config::Config;
-use crate::core::git::{calculate_diff_stats, find_parent_branch};
+use crate::core::git::calculate_diff_stats;
 use crate::core::session::SessionManager;
 use crate::core::status::{DiffStats, Status};
 use crate::utils::{get_main_repository_root, ParaError, Result};
@@ -65,7 +65,7 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 
     // Calculate diff stats if we're in a worktree
     let diff_stats = match session_manager.load_state(&session_name) {
-        Ok(session_state) => calculate_diff_stats_for_session(&session_state).ok(),
+        Ok(session_state) => calculate_diff_stats_for_session(&session_state).unwrap_or(None),
         Err(_) => None, // Session not found or error loading
     };
 
@@ -117,12 +117,18 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 
 fn calculate_diff_stats_for_session(
     session_state: &crate::core::session::SessionState,
-) -> Result<DiffStats> {
-    // Find the parent branch (usually main/master)
-    let parent_branch = find_parent_branch(&session_state.worktree_path, &session_state.branch)?;
-
-    // Calculate diff stats
-    calculate_diff_stats(&session_state.worktree_path, &parent_branch)
+) -> Result<Option<DiffStats>> {
+    // Only calculate diff if we have a parent branch
+    if let Some(ref parent_branch) = session_state.parent_branch {
+        // Calculate diff stats against the known parent branch
+        match calculate_diff_stats(&session_state.worktree_path, parent_branch) {
+            Ok(stats) => Ok(Some(stats)),
+            Err(_) => Ok(None), // If diff calculation fails, return None
+        }
+    } else {
+        // No parent branch stored, can't calculate meaningful diff
+        Ok(None)
+    }
 }
 
 struct StatusDisplayHandler {
@@ -158,7 +164,14 @@ impl StatusDisplayHandler {
             .map_err(|e| ParaError::config_error(e.to_string()))?;
 
         match status {
-            Some(s) => {
+            Some(mut s) => {
+                // Try to enrich with diff stats if we have session state
+                if let Ok(session_state) = self.session_manager.load_state(session_name) {
+                    if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
+                        s = s.with_diff_stats(diff_stats);
+                    }
+                }
+
                 if json {
                     self.output_json(&s)?;
                 } else {
@@ -180,9 +193,13 @@ impl StatusDisplayHandler {
         let mut statuses = Vec::new();
 
         for session_state in sessions {
-            if let Some(status) = Status::load(&self.state_dir, &session_state.name)
+            if let Some(mut status) = Status::load(&self.state_dir, &session_state.name)
                 .map_err(|e| ParaError::config_error(e.to_string()))?
             {
+                // Try to enrich with diff stats if we have parent branch
+                if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
+                    status = status.with_diff_stats(diff_stats);
+                }
                 statuses.push(status);
             }
         }

@@ -117,57 +117,22 @@ pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<D
     // Get all changes from merge base to current working directory
     // This includes committed changes, staged changes, and unstaged changes
     let diff_output = executor.execute(&["diff", "--numstat", &merge_base])?;
+    let mut stats = parse_diff_numstat(&diff_output)?;
 
-    // Parse and return the statistics
-    parse_diff_numstat(&diff_output)
-}
-
-/// Try to find the parent branch for a given branch
-pub fn find_parent_branch(worktree_path: &Path, current_branch: &str) -> Result<String> {
-    // Special case: if current branch is main/master, use it as parent
-    if current_branch == "main" || current_branch == "master" {
-        return Ok(current_branch.to_string());
-    }
-
-    let executor = GitCommandExecutor::new(worktree_path);
-
-    // Try to find the merge base with common default branches
-    let common_branches = ["main", "master", "develop"];
-
-    for candidate in &common_branches {
-        // Check if the candidate branch exists
-        if executor
-            .execute(&[
-                "rev-parse",
-                "--verify",
-                &format!("refs/heads/{}", candidate),
-            ])
-            .is_ok()
-        {
-            // Check if this could be the parent by finding merge-base
-            if executor
-                .execute(&["merge-base", candidate, current_branch])
-                .is_ok()
-            {
-                return Ok(candidate.to_string());
+    // Also count untracked files
+    let untracked_output = executor.execute(&["ls-files", "--others", "--exclude-standard"])?;
+    for file_path in untracked_output.lines().filter(|line| !line.is_empty()) {
+        // Get line count for each untracked file
+        let file_full_path = worktree_path.join(file_path);
+        if file_full_path.is_file() {
+            if let Ok(content) = std::fs::read_to_string(&file_full_path) {
+                let line_count = content.lines().count();
+                stats.additions += line_count;
             }
         }
     }
 
-    // Try to detect the parent from the upstream branch
-    if let Ok(upstream) = executor.execute(&[
-        "rev-parse",
-        "--abbrev-ref",
-        &format!("{}@{{upstream}}", current_branch),
-    ]) {
-        // Extract the branch name from origin/branch format
-        if let Some(branch) = upstream.split('/').next_back() {
-            return Ok(branch.to_string());
-        }
-    }
-
-    // If no common branch found, default to main
-    Ok("main".to_string())
+    Ok(stats)
 }
 
 #[cfg(test)]
@@ -244,17 +209,6 @@ mod tests {
         let result = calculate_diff_stats(git_temp.path(), "nonexistent-branch");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not exist"));
-    }
-
-    #[test]
-    fn test_find_parent_branch() {
-        let (git_temp, _git_service) = setup_test_repo();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-
-        // Should find main as the parent
-        let parent = find_parent_branch(git_temp.path(), "main").unwrap();
-        assert_eq!(parent, "main");
     }
 
     #[test]
@@ -364,46 +318,6 @@ mod tests {
         // only staged/unstaged changes will show up)
         assert_eq!(stats.additions, 2);
         assert_eq!(stats.deletions, 0);
-    }
-
-    #[test]
-    fn test_find_parent_branch_with_upstream() {
-        let (git_temp, git_service) = setup_test_repo();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-
-        // Create and checkout develop branch
-        git_service.create_branch("develop", "main").unwrap();
-        std::process::Command::new("git")
-            .current_dir(git_temp.path())
-            .args(["checkout", "develop"])
-            .output()
-            .unwrap();
-
-        // Create feature branch from develop
-        git_service
-            .create_branch("feature/test", "develop")
-            .unwrap();
-        std::process::Command::new("git")
-            .current_dir(git_temp.path())
-            .args(["checkout", "feature/test"])
-            .output()
-            .unwrap();
-
-        let parent = find_parent_branch(git_temp.path(), "feature/test").unwrap();
-        // Should find develop as it's a common branch and has merge-base
-        assert!(parent == "develop" || parent == "main");
-    }
-
-    #[test]
-    fn test_find_parent_branch_main_as_current() {
-        let (git_temp, _git_service) = setup_test_repo();
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-
-        // When current branch is main, it should return main
-        let parent = find_parent_branch(git_temp.path(), "main").unwrap();
-        assert_eq!(parent, "main");
     }
 
     #[test]
