@@ -51,7 +51,7 @@ fn configure_ide_simple() -> Result<super::IdeConfig> {
 }
 
 fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
-    let wrapper_options = vec!["cursor (Cursor IDE)", "code (VS Code)"];
+    let wrapper_options = vec!["code (VS Code)", "cursor (Cursor IDE)"];
 
     let wrapper_selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which IDE wrapper would you like to use for Claude Code?")
@@ -61,8 +61,8 @@ fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
         .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
 
     let (wrapper_name, wrapper_command) = match wrapper_selection {
-        0 => ("cursor".to_string(), "cursor".to_string()),
-        1 => ("code".to_string(), "code".to_string()),
+        0 => ("code".to_string(), "code".to_string()),
+        1 => ("cursor".to_string(), "cursor".to_string()),
         _ => unreachable!(),
     };
 
