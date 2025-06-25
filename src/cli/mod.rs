@@ -45,6 +45,27 @@ pub fn execute_command_with_config(
             },
         };
 
+    // Ensure daemon is running for any command that might need it
+    // Skip daemon check for commands that don't need it
+    let should_start_daemon = !matches!(
+        &cli.command,
+        Some(Commands::Config(_))
+            | Some(Commands::Completion(_))
+            | Some(Commands::Init)
+            | Some(Commands::Auth(_))
+            | Some(Commands::CompletionSessions)
+            | Some(Commands::CompletionBranches)
+            | Some(Commands::Daemon(_))
+    );
+
+    if should_start_daemon {
+        // Try to ensure daemon is running, but don't fail if it doesn't work
+        // The daemon is a best-effort service for container support
+        if let Err(e) = crate::core::daemon::client::ensure_daemon_running() {
+            crate::utils::debug_log(&format!("Daemon auto-start failed: {}", e));
+        }
+    }
+
     // Trigger automatic container cleanup for common commands
     if let Some(ref config) = config {
         match &cli.command {

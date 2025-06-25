@@ -226,27 +226,27 @@ impl SignalFileWatcher {
     fn handle_status_update(&self, container_status: ContainerStatus) -> Result<()> {
         use crate::core::status::{ConfidenceLevel, Status, TestStatus};
         use chrono::Utc;
-        
+
         // Parse container status fields into proper types
         let test_status = container_status
             .tests
             .as_ref()
             .and_then(|s| Status::parse_test_status(s).ok())
             .unwrap_or(TestStatus::Unknown);
-            
+
         let confidence = container_status
             .confidence
             .as_ref()
             .and_then(|s| Status::parse_confidence(s).ok())
             .unwrap_or(ConfidenceLevel::Medium);
-            
+
         let (todos_completed, todos_total) = container_status
             .todos
             .as_ref()
             .and_then(|s| Status::parse_todos(s).ok())
             .map(|(completed, total)| (Some(completed), Some(total)))
             .unwrap_or((None, None));
-        
+
         // Create status update
         let mut status = Status::new(
             self.session_name.clone(),
@@ -254,12 +254,23 @@ impl SignalFileWatcher {
             test_status,
             confidence,
         );
-        
+
         status.is_blocked = container_status.blocked;
         status.todos_completed = todos_completed;
         status.todos_total = todos_total;
         status.last_update = Utc::now();
-        
+
+        // Calculate diff stats from the worktree
+        // This runs on the host so it can access the worktree files
+        // Load the session state to get branch info
+        let session_manager = SessionManager::new(&self.config);
+        if let Ok(session_state) = session_manager.load_state(&self.session_name) {
+            // Use the shared function to calculate diff stats
+            if let Ok(diff_stats) = Status::calculate_diff_stats_for_session(&session_state) {
+                status.diff_stats = Some(diff_stats);
+            }
+        }
+
         // Save to state directory in the main repository
         // This ensures the monitor can find it even when running from a worktree
         let state_dir = if self.config.directories.state_dir.starts_with('/') {
@@ -275,11 +286,11 @@ impl SignalFileWatcher {
                 }
             }
         };
-        
-        status.save(&state_dir).map_err(|e| {
-            ParaError::fs_error(format!("Failed to save container status: {}", e))
-        })?;
-        
+
+        status
+            .save(&state_dir)
+            .map_err(|e| ParaError::fs_error(format!("Failed to save container status: {}", e)))?;
+
         Ok(())
     }
 }

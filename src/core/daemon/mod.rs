@@ -22,6 +22,8 @@ pub enum DaemonCommand {
     UnregisterSession { session_name: String },
     /// Check if daemon is alive
     Ping,
+    /// Get daemon version
+    Version,
     /// Shutdown the daemon
     Shutdown,
 }
@@ -32,6 +34,7 @@ pub enum DaemonResponse {
     Ok,
     Error(String),
     Pong,
+    Version(String),
 }
 
 /// Get the path to the daemon socket
