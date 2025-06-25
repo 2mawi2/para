@@ -58,4 +58,7 @@ node_modules/
 # Task files
 tasks.json
 tasks/ 
-.taskmaster
+.taskmaster/
+
+# Test repositories
+test-repos/
