@@ -273,7 +273,7 @@ impl SessionCleaner {
 
         // List all para containers
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "ps",
                 "-a",
                 "--filter",
@@ -480,7 +480,7 @@ impl SessionCleaner {
 
             for container_name in plan.orphaned_containers {
                 match Command::new("docker")
-                    .args(&["rm", "-f", &container_name])
+                    .args(["rm", "-f", &container_name])
                     .output()
                 {
                     Ok(output) if output.status.success() => {

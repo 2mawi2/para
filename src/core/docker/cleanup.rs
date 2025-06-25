@@ -67,7 +67,7 @@ impl ContainerCleaner {
     pub fn cleanup_orphaned_containers(&self) -> Result<()> {
         // List all para containers
         let output = Command::new("docker")
-            .args(&[
+            .args([
                 "ps",
                 "-a",
                 "--filter",
@@ -101,7 +101,7 @@ impl ContainerCleaner {
     /// Remove a single container (fire and forget)
     fn remove_container(&self, container_name: &str) {
         Command::new("docker")
-            .args(&["rm", "-f", container_name])
+            .args(["rm", "-f", container_name])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()

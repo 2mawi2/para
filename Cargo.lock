@@ -1336,6 +1336,7 @@ dependencies = [
  "filetime",
  "fs2",
  "hex",
+ "libc",
  "rand",
  "ratatui",
  "regex",

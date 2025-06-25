@@ -6,6 +6,7 @@ pub mod completion;
 pub mod completion_branches;
 pub mod completion_sessions;
 pub mod config;
+pub mod daemon;
 pub mod dispatch;
 pub mod finish;
 pub mod init;
