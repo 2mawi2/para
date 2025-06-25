@@ -8,6 +8,7 @@ mod tests;
 pub use parser::{Cli, Commands};
 
 use crate::config::ConfigManager;
+use crate::core::docker::cleanup::ContainerCleaner;
 use crate::utils::{ParaError, Result};
 
 pub fn execute_command(cli: Cli) -> Result<()> {
@@ -43,6 +44,21 @@ pub fn execute_command_with_config(
                 })?),
             },
         };
+
+    // Trigger automatic container cleanup for common commands
+    if let Some(ref config) = config {
+        match &cli.command {
+            Some(Commands::Start(_))
+            | Some(Commands::List(_))
+            | Some(Commands::Status(_))
+            | Some(Commands::Finish(_)) => {
+                // Run cleanup in background, ignore errors
+                let cleaner = ContainerCleaner::new(config.clone());
+                cleaner.maybe_cleanup_async().ok();
+            }
+            _ => {}
+        }
+    }
 
     match cli.command {
         Some(Commands::Start(args)) => {
