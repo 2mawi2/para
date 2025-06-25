@@ -135,7 +135,6 @@ pub fn calculate_diff_stats(worktree_path: &Path, base_branch: &str) -> Result<D
     Ok(stats)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,7 +210,6 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not exist"));
     }
-
 
     #[test]
     fn test_diff_stats_display() {
@@ -321,8 +319,6 @@ mod tests {
         assert_eq!(stats.additions, 2);
         assert_eq!(stats.deletions, 0);
     }
-
-
 
     #[test]
     fn test_calculate_diff_stats_path_not_exists() {
