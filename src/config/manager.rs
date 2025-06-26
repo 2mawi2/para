@@ -142,6 +142,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         }
     }
 
@@ -305,6 +306,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         };
 
         let json = serde_json::to_string_pretty(&claude_config).unwrap();

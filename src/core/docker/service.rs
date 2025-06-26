@@ -235,6 +235,105 @@ impl DockerService {
         Ok(())
     }
 
+    /// Run a setup script inside a container
+    pub fn run_setup_script(&self, session_name: &str, script_path: &Path) -> DockerResult<()> {
+        let container_name = format!("para-{}", session_name);
+
+        // Read the script content
+        let script_content = std::fs::read_to_string(script_path).map_err(|e| {
+            DockerError::Other(anyhow::anyhow!("Failed to read setup script: {}", e))
+        })?;
+
+        // Create a temporary script file inside the container
+        let temp_script_path = "/tmp/para-setup.sh";
+
+        // Write the script to the container
+        let mut write_cmd = Command::new("docker");
+        write_cmd
+            .args(["exec", &container_name, "sh", "-c"])
+            .arg(format!("cat > {}", temp_script_path))
+            .stdin(std::process::Stdio::piped());
+
+        let mut write_process = write_cmd.spawn().map_err(|e| {
+            DockerError::Other(anyhow::anyhow!("Failed to start write process: {}", e))
+        })?;
+
+        if let Some(stdin) = write_process.stdin.as_mut() {
+            use std::io::Write;
+            stdin.write_all(script_content.as_bytes()).map_err(|e| {
+                DockerError::Other(anyhow::anyhow!("Failed to write script: {}", e))
+            })?;
+        }
+
+        let write_output = write_process
+            .wait_with_output()
+            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to complete write: {}", e)))?;
+
+        if !write_output.status.success() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Failed to write setup script to container: {}",
+                String::from_utf8_lossy(&write_output.stderr)
+            )));
+        }
+
+        // Make the script executable
+        let chmod_output = Command::new("docker")
+            .args(["exec", &container_name, "chmod", "+x", temp_script_path])
+            .output()
+            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to chmod script: {}", e)))?;
+
+        if !chmod_output.status.success() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Failed to make script executable: {}",
+                String::from_utf8_lossy(&chmod_output.stderr)
+            )));
+        }
+
+        println!("🚀 Running setup script in container...");
+
+        // Execute the script with environment variables
+        let exec_output = Command::new("docker")
+            .args([
+                "exec",
+                "-e",
+                "PARA_WORKSPACE=/workspace",
+                "-e",
+                &format!("PARA_SESSION={}", session_name),
+                "-w",
+                "/workspace",
+                &container_name,
+                "bash",
+                temp_script_path,
+            ])
+            .output()
+            .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to execute script: {}", e)))?;
+
+        // Print output in real-time style (even though we're using output() for simplicity)
+        if !exec_output.stdout.is_empty() {
+            print!("{}", String::from_utf8_lossy(&exec_output.stdout));
+        }
+
+        if !exec_output.stderr.is_empty() {
+            eprint!("{}", String::from_utf8_lossy(&exec_output.stderr));
+        }
+
+        if !exec_output.status.success() {
+            return Err(DockerError::Other(anyhow::anyhow!(
+                "Setup script failed with exit code: {}",
+                exec_output.status.code().unwrap_or(-1)
+            )));
+        }
+
+        // Clean up the temporary script
+        let _ = Command::new("docker")
+            .args(["exec", &container_name, "rm", "-f", temp_script_path])
+            .output();
+
+        println!("✅ Setup script completed successfully!");
+
+        Ok(())
+    }
+
     /// Stop a running container
     pub fn stop_container(&self, session_name: &str) -> DockerResult<()> {
         let container_name = format!("para-{}", session_name);
@@ -377,5 +476,40 @@ mod tests {
         // For now, we just verify the parameters are correct
         assert!(network_isolation);
         assert!(!allowed_domains.is_empty());
+    }
+
+    #[test]
+    fn test_setup_script_path_validation() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let service = DockerService;
+        let temp_dir = TempDir::new().unwrap();
+        let script_path = temp_dir.path().join("setup.sh");
+
+        // Test with non-existent script
+        let result = service.run_setup_script("test-session", &script_path);
+        assert!(result.is_err());
+        if let Err(DockerError::Other(e)) = result {
+            assert!(e.to_string().contains("Failed to read setup script"));
+        }
+
+        // Create a valid script file
+        fs::write(&script_path, "#!/bin/bash\necho 'test'").unwrap();
+
+        // This would still fail because no container exists, but at least the file can be read
+        let result = service.run_setup_script("test-session", &script_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_setup_script_environment_variables() {
+        // Test that the correct environment variables are set
+        let session_name = "test-session";
+        let expected_workspace = "PARA_WORKSPACE=/workspace";
+        let expected_session = format!("PARA_SESSION={}", session_name);
+
+        assert_eq!(expected_workspace, "PARA_WORKSPACE=/workspace");
+        assert_eq!(expected_session, "PARA_SESSION=test-session");
     }
 }

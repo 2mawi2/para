@@ -688,6 +688,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         }
     }
 
@@ -718,6 +719,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         };
 
         let service = SessionService::new(config);
