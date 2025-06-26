@@ -141,6 +141,15 @@ impl DockerManager {
         Ok(())
     }
 
+    /// Run setup script in container
+    pub fn run_setup_script(
+        &self,
+        session_name: &str,
+        script_path: &std::path::Path,
+    ) -> DockerResult<()> {
+        self.service.run_setup_script(session_name, script_path)
+    }
+
     /// Destroy a session's container
     pub fn destroy_session_container(&self, session: &SessionState) -> DockerResult<()> {
         match &session.session_type {

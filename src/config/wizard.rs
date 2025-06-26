@@ -214,6 +214,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
             },
+            docker: None,
         };
 
         display_config_summary(&config);
@@ -250,6 +251,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(30),
             },
+            docker: None,
         };
 
         assert!(

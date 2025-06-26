@@ -84,6 +84,13 @@ pub struct StartArgs {
         help = "Additional Docker arguments to pass through"
     )]
     pub docker_args: Vec<String>,
+
+    /// Path to setup script to run inside container after startup
+    #[arg(
+        long = "setup-script",
+        help = "Path to setup script to run inside container after startup"
+    )]
+    pub setup_script: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -139,6 +146,13 @@ pub struct DispatchArgs {
         help = "Additional Docker arguments to pass through"
     )]
     pub docker_args: Vec<String>,
+
+    /// Path to setup script to run inside container after startup
+    #[arg(
+        long = "setup-script",
+        help = "Path to setup script to run inside container after startup"
+    )]
+    pub setup_script: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
