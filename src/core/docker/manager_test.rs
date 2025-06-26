@@ -32,6 +32,7 @@ mod tests {
                 auto_cleanup_days: Some(7),
             },
             docker: docker_image.map(|image| DockerConfig {
+                setup_script: None,
                 default_image: Some(image),
                 forward_env_keys: None,
             }),

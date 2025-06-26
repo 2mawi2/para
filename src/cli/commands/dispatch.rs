@@ -1232,6 +1232,8 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.docker = Some(crate::config::DockerConfig {
             setup_script: Some("config-script.sh".to_string()),
+            default_image: None,
+            forward_env_keys: None,
         });
 
         // CLI arg should take priority
@@ -1252,6 +1254,8 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.docker = Some(crate::config::DockerConfig {
             setup_script: Some("config-script.sh".to_string()),
+            default_image: None,
+            forward_env_keys: None,
         });
 
         // Default script should be found when no CLI arg
@@ -1272,6 +1276,8 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.docker = Some(crate::config::DockerConfig {
             setup_script: Some("scripts/config-script.sh".to_string()),
+            default_image: None,
+            forward_env_keys: None,
         });
 
         // Config script should be found when no CLI arg or default
@@ -1291,6 +1297,8 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.docker = Some(crate::config::DockerConfig {
             setup_script: Some(abs_script.to_string_lossy().to_string()),
+            default_image: None,
+            forward_env_keys: None,
         });
 
         // Absolute path in config should work
