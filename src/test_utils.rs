@@ -91,33 +91,15 @@ pub mod test_helpers {
         config_dir
     }
 
-    pub fn restore_environment(original_dir: PathBuf) {
-        // Try to restore directory, but don't panic if it fails
-        if let Err(_e) = std::env::set_current_dir(&original_dir) {
-            // If we can't restore to the original directory, try to go to a safe fallback
-            let _ = std::env::set_current_dir("/tmp");
-        }
-    }
-
     pub struct TestEnvironmentGuard {
-        original_dir: PathBuf,
         test_dir: PathBuf,
         test_config_path: PathBuf,
     }
 
     impl TestEnvironmentGuard {
         pub fn new(git_temp: &TempDir, temp_dir: &TempDir) -> Result<Self, std::io::Error> {
-            // Try to get the original directory, but if it fails, use a fallback
-            let original_dir = std::env::current_dir().unwrap_or_else(|_| {
-                // If current dir is invalid, try to use the git_temp parent as fallback
-                git_temp
-                    .path()
-                    .parent()
-                    .unwrap_or_else(|| std::path::Path::new("/tmp"))
-                    .to_path_buf()
-            });
-
-            std::env::set_current_dir(git_temp.path())?;
+            // Don't change the current directory - this causes race conditions in parallel tests
+            // Tests should use absolute paths instead
 
             let _config_dir = setup_isolated_test_environment(temp_dir);
 
@@ -129,7 +111,6 @@ pub mod test_helpers {
             fs::write(&test_config_path, config_json)?;
 
             Ok(TestEnvironmentGuard {
-                original_dir,
                 test_dir: git_temp.path().to_path_buf(),
                 test_config_path,
             })
@@ -176,7 +157,8 @@ pub mod test_helpers {
                 }
             }
 
-            restore_environment(self.original_dir.clone());
+            // Don't restore directory in parallel tests - it causes race conditions
+            // restore_environment(self.original_dir.clone());
         }
     }
 }
