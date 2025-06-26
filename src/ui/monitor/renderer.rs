@@ -177,7 +177,6 @@ impl MonitorRenderer {
             Cell::from("Current Task"),
             Cell::from("Tests"),
             Cell::from("Progress"),
-            Cell::from("Confidence"),
             Cell::from("Changes"),
         ])
         .style(
@@ -218,7 +217,6 @@ impl MonitorRenderer {
             Cell::from(truncate_task(&session.task, 40)).style(base_style),
             self.create_test_cell(&session.test_status, is_stale),
             self.create_progress_cell(session.todo_percentage, is_stale),
-            self.create_confidence_cell(&session.confidence, is_stale),
             self.create_diff_stats_cell(&session.diff_stats, is_stale),
         ])
         .height(1)
@@ -425,40 +423,6 @@ impl MonitorRenderer {
         }
     }
 
-    fn create_confidence_cell<'a>(
-        &self,
-        confidence: &Option<crate::core::status::ConfidenceLevel>,
-        is_stale: bool,
-    ) -> Cell<'a> {
-        match confidence {
-            Some(level) => {
-                let (text, color) = self.get_confidence_display(level, is_stale);
-                Cell::from(text).style(Style::default().fg(color))
-            }
-            None => create_default_cell_for_none("-", is_stale),
-        }
-    }
-
-    fn get_confidence_display(
-        &self,
-        level: &crate::core::status::ConfidenceLevel,
-        is_stale: bool,
-    ) -> (&'static str, Color) {
-        let dimmed_color = crate::ui::monitor::types::SessionStatus::dimmed_text_color();
-
-        match level {
-            crate::core::status::ConfidenceLevel::High => {
-                ("High", if is_stale { dimmed_color } else { COLOR_GREEN })
-            }
-            crate::core::status::ConfidenceLevel::Medium => {
-                ("Medium", if is_stale { dimmed_color } else { COLOR_ORANGE })
-            }
-            crate::core::status::ConfidenceLevel::Low => {
-                ("Low", if is_stale { dimmed_color } else { COLOR_RED })
-            }
-        }
-    }
-
     fn create_diff_stats_cell<'a>(
         &self,
         diff_stats: &Option<crate::core::status::DiffStats>,
@@ -503,7 +467,6 @@ impl MonitorRenderer {
                 Constraint::Min(30),    // Current Task
                 Constraint::Length(10), // Tests
                 Constraint::Length(13), // Progress
-                Constraint::Length(10), // Confidence
                 Constraint::Length(12), // Changes
             ],
         )
@@ -706,7 +669,6 @@ mod tests {
                 task: "Task 1".to_string(),
                 worktree_path: PathBuf::from("/tmp/session1"),
                 test_status: None,
-                confidence: None,
                 diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
@@ -719,7 +681,6 @@ mod tests {
                 task: "Task 2".to_string(),
                 worktree_path: PathBuf::from("/tmp/session2"),
                 test_status: None,
-                confidence: None,
                 diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
@@ -833,39 +794,6 @@ mod tests {
         let (text, color) =
             renderer.get_test_status_display(&crate::core::status::TestStatus::Passed, true);
         assert_eq!(text, "Passed");
-        assert_eq!(
-            color,
-            crate::ui::monitor::types::SessionStatus::dimmed_text_color()
-        );
-    }
-
-    #[test]
-    fn test_get_confidence_display() {
-        let config = create_test_config();
-        let renderer = MonitorRenderer::new(config);
-
-        // Test high confidence
-        let (text, color) =
-            renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::High, false);
-        assert_eq!(text, "High");
-        assert_eq!(color, COLOR_GREEN);
-
-        // Test medium confidence
-        let (text, color) =
-            renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::Medium, false);
-        assert_eq!(text, "Medium");
-        assert_eq!(color, COLOR_ORANGE);
-
-        // Test low confidence
-        let (text, color) =
-            renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::Low, false);
-        assert_eq!(text, "Low");
-        assert_eq!(color, COLOR_RED);
-
-        // Test stale override
-        let (text, color) =
-            renderer.get_confidence_display(&crate::core::status::ConfidenceLevel::High, true);
-        assert_eq!(text, "High");
         assert_eq!(
             color,
             crate::ui::monitor::types::SessionStatus::dimmed_text_color()
