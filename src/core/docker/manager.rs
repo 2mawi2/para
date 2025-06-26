@@ -4,6 +4,7 @@
 
 use super::{ContainerPool, DockerError, DockerIdeIntegration, DockerResult, DockerService};
 use crate::config::Config;
+use crate::core::docker::service::ContainerOptions;
 use crate::core::docker::session::ContainerSession;
 use crate::core::session::{SessionState, SessionType};
 use std::process::Command;
@@ -16,11 +17,40 @@ pub struct DockerManager {
     pool: Arc<ContainerPool>,
     network_isolation: bool,
     allowed_domains: Vec<String>,
+    docker_image: Option<String>,
+    forward_keys: bool,
 }
 
 impl DockerManager {
     /// Create a new Docker manager
     pub fn new(config: Config, network_isolation: bool, allowed_domains: Vec<String>) -> Self {
+        Self::with_image(config, network_isolation, allowed_domains, None)
+    }
+
+    /// Create a new Docker manager with a custom Docker image
+    pub fn with_image(
+        config: Config,
+        network_isolation: bool,
+        allowed_domains: Vec<String>,
+        docker_image: Option<String>,
+    ) -> Self {
+        Self::with_options(
+            config,
+            network_isolation,
+            allowed_domains,
+            docker_image,
+            true,
+        )
+    }
+
+    /// Create a new Docker manager with all options
+    pub fn with_options(
+        config: Config,
+        network_isolation: bool,
+        allowed_domains: Vec<String>,
+        docker_image: Option<String>,
+        forward_keys: bool,
+    ) -> Self {
         // Use CLI-only approach: pool size is passed as runtime parameter, not from config
         let pool_size = 5; // Default pool size, can be made configurable via CLI flag later
         let pool = Arc::new(ContainerPool::new(pool_size));
@@ -31,24 +61,69 @@ impl DockerManager {
             pool,
             network_isolation,
             allowed_domains,
+            docker_image,
+            forward_keys,
         }
     }
 
-    /// Get the appropriate Docker image name
-    fn get_docker_image(&self) -> DockerResult<&'static str> {
-        // Check if authenticated image exists
+    /// Get the appropriate Docker image name based on priority
+    fn get_docker_image(&self) -> DockerResult<String> {
+        // Priority order:
+        // 1. CLI flag (docker_image from manager)
+        // 2. Config docker.default_image
+        // 3. Default: "para-authenticated:latest"
+
+        let image = self
+            .docker_image
+            .clone()
+            .or_else(|| self.config.get_docker_image().map(|s| s.to_string()))
+            .unwrap_or_else(|| "para-authenticated:latest".to_string());
+
+        // Check if the image exists locally
         let output = Command::new("docker")
-            .args(["images", "-q", "para-authenticated:latest"])
+            .args(["images", "-q", &image])
             .output()
             .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
 
-        if output.status.success() && !output.stdout.is_empty() {
-            Ok("para-authenticated:latest")
-        } else {
-            Err(DockerError::Other(anyhow::anyhow!(
-                "The 'para-authenticated:latest' image is not available. Please build it first with authentication credentials baked in."
-            )))
+        if !output.status.success() || output.stdout.is_empty() {
+            // Image doesn't exist locally
+            if image == "para-authenticated:latest" {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "The 'para-authenticated:latest' image is not available. Please build it first with authentication credentials baked in.\n\
+                     Alternatively, you can specify a custom image using --docker-image flag."
+                )));
+            } else {
+                // Try to pull the custom image
+                println!(
+                    "🐳 Image '{}' not found locally. Attempting to pull...",
+                    image
+                );
+
+                let pull_output = Command::new("docker")
+                    .args(["pull", &image])
+                    .output()
+                    .map_err(|e| {
+                        DockerError::Other(anyhow::anyhow!("Failed to execute docker pull: {}", e))
+                    })?;
+
+                if !pull_output.status.success() {
+                    let stderr = String::from_utf8_lossy(&pull_output.stderr);
+                    return Err(DockerError::Other(anyhow::anyhow!(
+                        "Failed to pull Docker image '{}':\n{}\n\n\
+                         Please ensure:\n\
+                         1. The image name is correct\n\
+                         2. You have access to the image repository\n\
+                         3. You are logged in to the registry if required (docker login)",
+                        image,
+                        stderr
+                    )));
+                }
+
+                println!("✅ Successfully pulled image: {}", image);
+            }
         }
+
+        Ok(image)
     }
 
     /// Create and start a container for a session using the pool
@@ -69,15 +144,26 @@ impl DockerManager {
         println!("🔍 Checking pool capacity before creating container...");
         self.pool.check_capacity()?;
 
+        // Get the Docker image to use
+        let docker_image = self.get_docker_image()?;
+
         // Create the container with CLI parameters (authentication is now baked into the image)
-        println!("🏗️  Creating container with authenticated image");
-        let container_session = self.service.create_container(
-            &session.name,
-            self.network_isolation,
-            &self.allowed_domains,
-            &session.worktree_path,
+        println!("🏗️  Creating container with image: {}", docker_image);
+
+        // Get the configured API keys to forward
+        let env_keys = self.config.get_forward_env_keys();
+
+        let options = ContainerOptions {
+            session_name: &session.name,
+            network_isolation: self.network_isolation,
+            allowed_domains: &self.allowed_domains,
+            working_dir: &session.worktree_path,
             docker_args,
-        )?;
+            docker_image: &docker_image,
+            forward_keys: self.forward_keys,
+            env_keys: &env_keys,
+        };
+        let container_session = self.service.create_container(&options)?;
 
         // Add the successfully created container to pool tracking immediately
         let container_id = container_session.container_id.clone();
@@ -124,7 +210,7 @@ impl DockerManager {
         let container_session = ContainerSession::new(
             container_id,
             session.name.clone(),
-            image_name.to_string(),
+            image_name,
             session.worktree_path.clone(),
         );
 
@@ -356,3 +442,7 @@ impl DockerManager {
         (self.pool.active_containers(), self.pool.max_size())
     }
 }
+
+#[cfg(test)]
+#[path = "manager_test.rs"]
+mod manager_test;

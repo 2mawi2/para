@@ -7,20 +7,25 @@ use super::{DockerError, DockerResult};
 use std::path::Path;
 use std::process::Command;
 
+/// Options for container creation
+pub struct ContainerOptions<'a> {
+    pub session_name: &'a str,
+    pub network_isolation: bool,
+    pub allowed_domains: &'a [String],
+    pub working_dir: &'a Path,
+    pub docker_args: &'a [String],
+    pub docker_image: &'a str,
+    pub forward_keys: bool,
+    pub env_keys: &'a [String],
+}
+
 /// Docker service for health checks and core operations
 pub struct DockerService;
 
 impl DockerService {
     /// Create a new Docker container for a para session
-    pub fn create_container(
-        &self,
-        session_name: &str,
-        network_isolation: bool,
-        allowed_domains: &[String],
-        working_dir: &Path,
-        docker_args: &[String],
-    ) -> DockerResult<ContainerSession> {
-        let container_name = format!("para-{}", session_name);
+    pub fn create_container(&self, options: &ContainerOptions) -> DockerResult<ContainerSession> {
+        let container_name = format!("para-{}", options.session_name);
 
         let mut docker_cmd_args = vec![
             "create".to_string(),
@@ -29,18 +34,18 @@ impl DockerService {
         ];
 
         // Insert user-provided Docker args before the standard args
-        docker_cmd_args.extend_from_slice(docker_args);
+        docker_cmd_args.extend_from_slice(options.docker_args);
 
         // Add standard args
         docker_cmd_args.extend([
             "-v".to_string(),
-            format!("{}:/workspace", working_dir.display()),
+            format!("{}:/workspace", options.working_dir.display()),
             "-w".to_string(),
             "/workspace".to_string(),
         ]);
 
         // Configure network isolation
-        if network_isolation {
+        if options.network_isolation {
             // Add capabilities required for iptables/ipset
             docker_cmd_args.extend([
                 "--cap-add".to_string(),
@@ -62,7 +67,7 @@ impl DockerService {
 
             let all_domains: Vec<String> = default_domains
                 .into_iter()
-                .chain(allowed_domains.iter().cloned())
+                .chain(options.allowed_domains.iter().cloned())
                 .collect();
 
             if !all_domains.is_empty() {
@@ -79,9 +84,23 @@ impl DockerService {
             docker_cmd_args.extend(["-e".to_string(), "PARA_NETWORK_ISOLATION=false".to_string()]);
         }
 
+        // Add API key forwarding if enabled
+        if options.forward_keys {
+            let mut forwarded_count = 0;
+            for key in options.env_keys {
+                if let Ok(value) = std::env::var(key) {
+                    docker_cmd_args.extend(["-e".to_string(), format!("{}={}", key, value)]);
+                    forwarded_count += 1;
+                }
+            }
+            if forwarded_count > 0 {
+                println!("🔑 Forwarding {} API keys to container", forwarded_count);
+            }
+        }
+
         // Add the image and command
         docker_cmd_args.extend([
-            "para-authenticated:latest".to_string(),
+            options.docker_image.to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
         ]);
@@ -105,9 +124,9 @@ impl DockerService {
 
         Ok(ContainerSession::new(
             container_id,
-            session_name.to_string(),
-            "para-authenticated:latest".to_string(),
-            working_dir.to_path_buf(),
+            options.session_name.to_string(),
+            options.docker_image.to_string(),
+            options.working_dir.to_path_buf(),
         ))
     }
 
@@ -511,5 +530,65 @@ mod tests {
 
         assert_eq!(expected_workspace, "PARA_WORKSPACE=/workspace");
         assert_eq!(expected_session, "PARA_SESSION=test-session");
+    }
+
+    #[test]
+    fn test_api_key_env_vars() {
+        // Test that we're checking for the right API keys
+        let expected_keys = [
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GITHUB_TOKEN",
+            "PERPLEXITY_API_KEY",
+        ];
+
+        // Just verify the keys are what we expect
+        for key in &expected_keys {
+            assert!(!key.is_empty());
+            assert!(key.chars().all(|c| c.is_uppercase() || c == '_'));
+        }
+    }
+
+    #[test]
+    fn test_container_options_with_custom_env_keys() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let options = ContainerOptions {
+            session_name: "test-session",
+            network_isolation: false,
+            allowed_domains: &[],
+            working_dir: temp_dir.path(),
+            docker_args: &[],
+            docker_image: "test:latest",
+            forward_keys: true,
+            env_keys: &["CUSTOM_KEY".to_string(), "ANOTHER_KEY".to_string()],
+        };
+
+        assert_eq!(options.session_name, "test-session");
+        assert_eq!(options.docker_image, "test:latest");
+        assert!(options.forward_keys);
+        assert_eq!(options.env_keys.len(), 2);
+    }
+
+    #[test]
+    fn test_container_options_no_forward_keys() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let options = ContainerOptions {
+            session_name: "secure-session",
+            network_isolation: true,
+            allowed_domains: &["api.example.com".to_string()],
+            working_dir: temp_dir.path(),
+            docker_args: &[],
+            docker_image: "untrusted:latest",
+            forward_keys: false,
+            env_keys: &[],
+        };
+
+        assert!(!options.forward_keys);
+        assert!(options.network_isolation);
+        assert_eq!(options.docker_image, "untrusted:latest");
     }
 }
