@@ -1119,15 +1119,12 @@ mod tests {
         assert!(content.contains("Para Session Status Commands"));
         assert!(content.contains("Required status updates:"));
         assert!(content.contains("--tests"));
-        assert!(content.contains("--confidence"));
         assert!(content.contains("Test Status Guidelines:"));
         assert!(content.contains("para finish"));
 
         // Check specific command examples
         assert!(content.contains("para status \"Starting"));
-        assert!(content.contains("--tests unknown --confidence medium"));
-        assert!(content.contains("--tests passed --confidence high"));
-        assert!(content.contains("--tests failed --confidence low"));
+        assert!(content.contains("--tests"));
         assert!(content.contains("--blocked"));
         assert!(content.contains("--todos"));
 

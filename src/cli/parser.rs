@@ -318,10 +318,6 @@ pub struct StatusArgs {
     #[arg(long, help = "Test status: passed, failed, or unknown")]
     pub tests: Option<String>,
 
-    /// Confidence level (high, medium, low)
-    #[arg(long, help = "Confidence level: high, medium, or low")]
-    pub confidence: Option<String>,
-
     /// Todo progress (format: completed/total, e.g., 3/7)
     #[arg(long, help = "Todo progress in format 'completed/total' (e.g., '3/7')")]
     pub todos: Option<String>,
