@@ -132,7 +132,7 @@ The `dispatch` command creates new sessions and immediately opens Claude Code wi
 1. **Configure**: `para config` detects and configures your IDE (Cursor, Claude Code, VS Code, etc.)
 2. **Create**: `para start` creates a timestamped Git branch and separate directory
 3. **Work**: Each session gets its own IDE window and isolated workspace
-4. **Merge**: `para finish` automatically stages changes and merges back to main
+4. **Complete**: `para finish` stages changes and creates a feature branch for review
 5. **Clean**: Sessions clean up automatically
 
 **File Structure:**
