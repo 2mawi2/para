@@ -185,6 +185,8 @@ mod cli_tests {
             allow_domains: None,
             docker_args: vec![],
             setup_script: None,
+            docker_image: None,
+            no_forward_keys: false,
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -197,6 +199,8 @@ mod cli_tests {
             allow_domains: None,
             docker_args: vec![],
             setup_script: None,
+            docker_image: None,
+            no_forward_keys: false,
         };
         assert!(args.validate_impl(true).is_ok());
     }

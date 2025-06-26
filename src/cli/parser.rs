@@ -91,6 +91,21 @@ pub struct StartArgs {
         help = "Path to setup script to run inside container after startup"
     )]
     pub setup_script: Option<PathBuf>,
+
+    /// Custom Docker image to use instead of the default
+    #[arg(
+        long,
+        help = "Custom Docker image to use (e.g., 'ubuntu:22.04', 'mycompany/dev:latest')\n\
+                Priority: 1. CLI flag, 2. Config docker.default_image, 3. Default 'para-authenticated:latest'"
+    )]
+    pub docker_image: Option<String>,
+
+    /// Disable API key forwarding to the container
+    #[arg(
+        long,
+        help = "Disable automatic API key forwarding to Docker containers"
+    )]
+    pub no_forward_keys: bool,
 }
 
 #[derive(Args, Debug)]
@@ -112,7 +127,11 @@ pub struct StartArgs {
     
     # With Docker container
     para dispatch --container \"implement user authentication\"
-    para dispatch --container auth-feature --file requirements.md")]
+    para dispatch --container auth-feature --file requirements.md
+    
+    # With custom Docker image
+    para dispatch --container --docker-image node:18 \"implement Node.js feature\"
+    para dispatch --container --docker-image mycompany/dev:latest --no-forward-keys \"secure task\"")]
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
@@ -153,6 +172,21 @@ pub struct DispatchArgs {
         help = "Path to setup script to run inside container after startup"
     )]
     pub setup_script: Option<PathBuf>,
+
+    /// Custom Docker image to use instead of the default
+    #[arg(
+        long,
+        help = "Custom Docker image to use (e.g., 'ubuntu:22.04', 'mycompany/dev:latest')\n\
+                Priority: 1. CLI flag, 2. Config docker.default_image, 3. Default 'para-authenticated:latest'"
+    )]
+    pub docker_image: Option<String>,
+
+    /// Disable API key forwarding to the container
+    #[arg(
+        long,
+        help = "Disable automatic API key forwarding to Docker containers"
+    )]
+    pub no_forward_keys: bool,
 }
 
 #[derive(Args, Debug)]

@@ -58,6 +58,10 @@ pub struct SessionConfig {
 pub struct DockerConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_script: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_image: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forward_env_keys: Option<Vec<String>>,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
@@ -134,6 +138,27 @@ impl Config {
     pub fn is_real_ide_environment(&self) -> bool {
         !cfg!(test) && self.ide.command != "echo"
     }
+
+    pub fn get_docker_image(&self) -> Option<&str> {
+        self.docker
+            .as_ref()
+            .and_then(|d| d.default_image.as_deref())
+    }
+
+    pub fn get_forward_env_keys(&self) -> Vec<String> {
+        // Default API keys that are commonly used
+        const DEFAULT_KEYS: &[&str] = &[
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GITHUB_TOKEN",
+            "PERPLEXITY_API_KEY",
+        ];
+
+        self.docker
+            .as_ref()
+            .and_then(|d| d.forward_env_keys.clone())
+            .unwrap_or_else(|| DEFAULT_KEYS.iter().map(|s| s.to_string()).collect())
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +212,55 @@ mod tests {
         assert_eq!(config.get_state_dir(), "custom/state");
         assert!(!config.should_auto_stage());
         assert!(config.should_preserve_on_finish());
+        assert_eq!(config.get_docker_image(), None);
+    }
+
+    #[test]
+    fn test_docker_config_getter() {
+        let mut config = defaults::default_config();
+
+        // Test with no docker config
+        assert_eq!(config.get_docker_image(), None);
+
+        // Test with docker config but no image
+        config.docker = Some(DockerConfig {
+            setup_script: None,
+            default_image: None,
+            forward_env_keys: None,
+        });
+        assert_eq!(config.get_docker_image(), None);
+
+        // Test with docker config and image
+        config.docker = Some(DockerConfig {
+            setup_script: None,
+            default_image: Some("custom:latest".to_string()),
+            forward_env_keys: None,
+        });
+        assert_eq!(config.get_docker_image(), Some("custom:latest"));
+    }
+
+    #[test]
+    fn test_forward_env_keys() {
+        let mut config = defaults::default_config();
+
+        // Test with no docker config - should return defaults
+        let keys = config.get_forward_env_keys();
+        assert_eq!(keys.len(), 4);
+        assert!(keys.contains(&"ANTHROPIC_API_KEY".to_string()));
+        assert!(keys.contains(&"OPENAI_API_KEY".to_string()));
+        assert!(keys.contains(&"GITHUB_TOKEN".to_string()));
+        assert!(keys.contains(&"PERPLEXITY_API_KEY".to_string()));
+
+        // Test with custom keys
+        config.docker = Some(DockerConfig {
+            setup_script: None,
+            default_image: None,
+            forward_env_keys: Some(vec!["CUSTOM_KEY".to_string(), "ANOTHER_KEY".to_string()]),
+        });
+        let keys = config.get_forward_env_keys();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&"CUSTOM_KEY".to_string()));
+        assert!(keys.contains(&"ANOTHER_KEY".to_string()));
     }
 
     #[test]
