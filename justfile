@@ -130,10 +130,11 @@ test *FILTER:
     
     # Rust Format first
     printf "   Rust Format: "
-    if cargo fmt --all --quiet 2>/dev/null; then
+    if fmt_output=$(cargo fmt --all -- --check 2>&1); then
         echo "✅ formatted"
     else
         echo "❌ formatting failed"
+        echo "$fmt_output"
         exit 1
     fi
     
@@ -148,17 +149,19 @@ test *FILTER:
         fi
     else
         echo "❌ FAILED"
-        echo "$test_output" | grep -E "(test .* \.\.\. FAILED|assertion.*failed|panicked at)" | head -25
+        echo ""
+        echo "$test_output"
         exit 1
     fi
     
     # Clippy linting
     printf "   Linting: "
-    if cargo clippy --all-targets --all-features -- -D warnings >/dev/null 2>&1; then
+    if lint_output=$(cargo clippy --all-targets --all-features -- -D warnings 2>&1); then
         echo "✅ clean"
     else
         echo "❌ FAILED"
-        cargo clippy --all-targets --all-features -- -D warnings
+        echo ""
+        echo "$lint_output"
         exit 1
     fi
     
@@ -179,21 +182,21 @@ test *FILTER:
         
         printf "   TypeScript Tests: "
         if command -v bun >/dev/null 2>&1; then
-            if (cd mcp-server-ts && bun run test >/dev/null 2>&1); then
+            if ts_test_output=$(cd mcp-server-ts && bun run test 2>&1); then
                 echo "✅ passed"
             else
                 echo "❌ FAILED"
-                echo "TypeScript test output:"
-                cd mcp-server-ts && bun run test
+                echo ""
+                echo "$ts_test_output"
                 exit 1
             fi
         elif command -v npm >/dev/null 2>&1; then
-            if (cd mcp-server-ts && npm run test >/dev/null 2>&1); then
+            if ts_test_output=$(cd mcp-server-ts && npm run test 2>&1); then
                 echo "✅ passed"
             else
                 echo "❌ FAILED"
-                echo "TypeScript test output:"
-                cd mcp-server-ts && npm run test
+                echo ""
+                echo "$ts_test_output"
                 exit 1
             fi
         else
