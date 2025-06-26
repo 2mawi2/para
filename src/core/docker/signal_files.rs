@@ -30,8 +30,6 @@ pub struct ContainerStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tests: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub confidence: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<String>,
     #[serde(default)]
     pub blocked: bool,
@@ -143,7 +141,6 @@ mod tests {
         let status = ContainerStatus {
             task: "Implementing authentication".to_string(),
             tests: Some("failed".to_string()),
-            confidence: Some("medium".to_string()),
             todos: Some("3/5".to_string()),
             blocked: false,
             timestamp: "2024-01-20T10:30:00Z".to_string(),
@@ -154,7 +151,6 @@ mod tests {
 
         assert_eq!(deserialized.task, status.task);
         assert_eq!(deserialized.tests, status.tests);
-        assert_eq!(deserialized.confidence, status.confidence);
         assert_eq!(deserialized.todos, status.todos);
         assert_eq!(deserialized.blocked, status.blocked);
     }

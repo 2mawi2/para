@@ -91,7 +91,6 @@ case "$1" in
         shift
         TASK=""
         TESTS=""
-        CONFIDENCE=""
         TODOS=""
         BLOCKED=false
         
@@ -106,10 +105,6 @@ case "$1" in
             case "$1" in
                 --tests)
                     TESTS="$2"
-                    shift 2
-                    ;;
-                --confidence)
-                    CONFIDENCE="$2"
                     shift 2
                     ;;
                 --todos)
@@ -129,14 +124,13 @@ case "$1" in
         # Validate task
         if [ -z "$TASK" ]; then
             echo "Error: Task description is required" >&2
-            echo "Usage: para status \"task description\" [--tests status] [--confidence level] [--todos X/Y] [--blocked]" >&2
+            echo "Usage: para status \"task description\" [--tests status] [--todos X/Y] [--blocked]" >&2
             exit 1
         fi
         
         # Escape values for JSON
         TASK_ESCAPED=$(json_escape "$TASK")
         TESTS_ESCAPED=$(json_escape "$TESTS")
-        CONFIDENCE_ESCAPED=$(json_escape "$CONFIDENCE")
         TODOS_ESCAPED=$(json_escape "$TODOS")
         TIMESTAMP=$(get_timestamp)
         
@@ -145,7 +139,6 @@ case "$1" in
         
         # Add optional fields if provided
         [ -n "$TESTS" ] && JSON="$JSON,\"tests\":\"$TESTS_ESCAPED\""
-        [ -n "$CONFIDENCE" ] && JSON="$JSON,\"confidence\":\"$CONFIDENCE_ESCAPED\""
         [ -n "$TODOS" ] && JSON="$JSON,\"todos\":\"$TODOS_ESCAPED\""
         
         JSON="$JSON}"
@@ -162,7 +155,7 @@ case "$1" in
         echo "Usage:"
         echo "  para finish \"commit message\" [--branch <name>]"
         echo "  para cancel [--force]"
-        echo "  para status \"task\" [--tests status] [--confidence level] [--todos X/Y] [--blocked]"
+        echo "  para status \"task\" [--tests status] [--todos X/Y] [--blocked]"
         echo ""
         echo "This is a limited para implementation for use inside containers."
         echo "Commands create signal files that the host system processes."

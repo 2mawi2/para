@@ -24,7 +24,7 @@ para start test-status --container
 Once inside the container:
 ```bash
 # Update status with all fields
-para status "Implementing auth" --tests failed --confidence high --todos 3/5
+para status "Implementing auth" --tests failed --todos 3/5
 
 # Check the status file was created on the host
 # (from another terminal on the host)
@@ -32,7 +32,7 @@ ls -la .para/state/*.status.json
 cat .para/state/test-status.status.json
 
 # Update status again
-para status "Fixed tests" --tests passed --confidence high --todos 5/5
+para status "Fixed tests" --tests passed --todos 5/5
 
 # Check it was updated
 cat .para/state/test-status.status.json
@@ -42,17 +42,16 @@ cat .para/state/test-status.status.json
 - session_name
 - current_task (from the status message)
 - test_status (passed/failed/unknown)
-- confidence (high/medium/low)
 - todos_completed and todos_total
 - last_update timestamp
 
 ### 5. Test edge cases
 ```bash
 # Status without todos
-para status "Reviewing code" --tests passed --confidence medium
+para status "Reviewing code" --tests passed
 
 # Status with blocked flag
-para status "Blocked on API" --tests unknown --confidence low --blocked
+para status "Blocked on API" --tests unknown --blocked
 ```
 
 ### 6. Clean up

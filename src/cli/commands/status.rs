@@ -27,10 +27,6 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         ParaError::invalid_args("Test status (--tests) is required when updating status")
     })?;
 
-    let confidence = args.confidence.ok_or_else(|| {
-        ParaError::invalid_args("Confidence level (--confidence) is required when updating status")
-    })?;
-
     // Detect session from current directory or use provided session name
     let session_manager = SessionManager::new(&config);
 
@@ -68,12 +64,8 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         Err(_) => None, // Session not found or error loading
     };
 
-    // Parse confidence level
-    let confidence_level = Status::parse_confidence(&confidence)
-        .map_err(|e| ParaError::invalid_args(e.to_string()))?;
-
     // Create status object
-    let mut status = Status::new(session_name.clone(), task, test_status, confidence_level);
+    let mut status = Status::new(session_name.clone(), task, test_status);
 
     // Add diff stats if available
     if let Some(stats) = diff_stats {
@@ -172,11 +164,6 @@ impl StatusDisplayHandler {
                         if let Some(tests) = container_status.tests {
                             if let Ok(test_status) = Status::parse_test_status(&tests) {
                                 s.test_status = test_status;
-                            }
-                        }
-                        if let Some(confidence) = container_status.confidence {
-                            if let Ok(conf_level) = Status::parse_confidence(&confidence) {
-                                s.confidence = conf_level;
                             }
                         }
                         if let Some(todos) = container_status.todos {
@@ -281,7 +268,6 @@ fn display_status(status: &Status) {
     println!("Session: {}", status.session_name);
     println!("Task: {}", status.current_task);
     println!("Tests: {}", status.test_status);
-    println!("Confidence: {}", status.confidence);
     if let Some(diff_stats) = &status.diff_stats {
         println!("Changes: {}", diff_stats);
     }
@@ -309,10 +295,10 @@ fn display_all_statuses(statuses: &[Status]) {
     sorted_statuses.sort_by(|a, b| b.last_update.cmp(&a.last_update));
 
     println!(
-        "{:<20} {:<40} {:<10} {:<10} {:<15} {:<10}",
-        "Session", "Current Task", "Tests", "Confidence", "Progress", "Status"
+        "{:<20} {:<40} {:<10} {:<15} {:<10}",
+        "Session", "Current Task", "Tests", "Progress", "Status"
     );
-    println!("{}", "-".repeat(110));
+    println!("{}", "-".repeat(100));
 
     for status in sorted_statuses {
         let task = if status.current_task.len() > 38 {
@@ -329,11 +315,10 @@ fn display_all_statuses(statuses: &[Status]) {
         };
 
         println!(
-            "{:<20} {:<40} {:<10} {:<10} {:<15} {:<10}",
+            "{:<20} {:<40} {:<10} {:<15} {:<10}",
             status.session_name,
             task,
             status.test_status.to_string(),
-            status.confidence.to_string(),
             progress,
             status_str
         );
@@ -371,11 +356,6 @@ fn show_summary(config: Config, json: bool) -> Result<()> {
         println!("  ✅ Passed: {}", summary.test_summary.passed);
         println!("  ❌ Failed: {}", summary.test_summary.failed);
         println!("  ❓ Unknown: {}", summary.test_summary.unknown);
-
-        println!("\nConfidence:");
-        println!("  🟢 High: {}", summary.confidence_summary.high);
-        println!("  🟡 Medium: {}", summary.confidence_summary.medium);
-        println!("  🔴 Low: {}", summary.confidence_summary.low);
 
         if let Some(progress) = summary.overall_progress {
             println!("\nOverall Progress: {}%", progress);
@@ -480,7 +460,6 @@ mod tests {
             command: None,
             task: Some("Working on tests".to_string()),
             tests: Some("passed".to_string()),
-            confidence: Some("high".to_string()),
             todos: Some("3/5".to_string()),
             blocked: false,
             session: Some("test-session".to_string()),
@@ -496,10 +475,6 @@ mod tests {
         let status = loaded_status.unwrap();
         assert_eq!(status.current_task, "Working on tests");
         assert_eq!(status.test_status, crate::core::status::TestStatus::Passed);
-        assert_eq!(
-            status.confidence,
-            crate::core::status::ConfidenceLevel::High
-        );
         assert_eq!(status.todos_completed, Some(3));
         assert_eq!(status.todos_total, Some(5));
         assert!(!status.is_blocked);
@@ -534,7 +509,6 @@ mod tests {
             command: None,
             task: Some("Need help with Redis mocking".to_string()),
             tests: Some("failed".to_string()),
-            confidence: Some("low".to_string()),
             todos: None,
             blocked: true,
             session: Some("blocked-session".to_string()),
@@ -589,7 +563,6 @@ mod tests {
             command: None,
             task: Some("Auto-detected session".to_string()),
             tests: Some("unknown".to_string()),
-            confidence: Some("medium".to_string()),
             todos: None,
             blocked: false,
             session: None,
@@ -634,7 +607,6 @@ mod tests {
             "show-test".to_string(),
             "Testing show command".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
         status.save(&state_dir).unwrap();
 
@@ -646,7 +618,6 @@ mod tests {
             }),
             task: None,
             tests: None,
-            confidence: None,
             todos: None,
             blocked: false,
             session: None,
@@ -687,7 +658,6 @@ mod tests {
                 session_name,
                 format!("Working on feature {}", i),
                 crate::core::status::TestStatus::Unknown,
-                crate::core::status::ConfidenceLevel::Medium,
             );
             status.save(&state_dir).unwrap();
         }
@@ -700,7 +670,6 @@ mod tests {
             }),
             task: None,
             tests: None,
-            confidence: None,
             todos: None,
             blocked: false,
             session: None,
@@ -729,7 +698,6 @@ mod tests {
             command: None,
             task: Some("Should fail".to_string()),
             tests: Some("passed".to_string()),
-            confidence: Some("high".to_string()),
             todos: None,
             blocked: false,
             session: Some("nonexistent-session".to_string()),
@@ -771,7 +739,6 @@ mod tests {
             command: None,
             task: Some("Test task".to_string()),
             tests: Some("invalid".to_string()),
-            confidence: Some("high".to_string()),
             todos: None,
             blocked: false,
             session: Some("test-session".to_string()),
@@ -813,7 +780,6 @@ mod tests {
             command: None,
             task: Some("Test task".to_string()),
             tests: Some("passed".to_string()),
-            confidence: Some("high".to_string()),
             todos: Some("invalid-format".to_string()),
             blocked: false,
             session: Some("test-session".to_string()),
@@ -847,7 +813,6 @@ mod tests {
             command: None,
             task: None,
             tests: Some("passed".to_string()),
-            confidence: Some("high".to_string()),
             todos: None,
             blocked: false,
             session: Some("test-session".to_string()),
@@ -865,7 +830,6 @@ mod tests {
             command: None,
             task: Some("Test task".to_string()),
             tests: None,
-            confidence: Some("high".to_string()),
             todos: None,
             blocked: false,
             session: Some("test-session".to_string()),
@@ -877,24 +841,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Test status (--tests) is required"));
-
-        // Missing confidence
-        let args = StatusArgs {
-            command: None,
-            task: Some("Test task".to_string()),
-            tests: Some("passed".to_string()),
-            confidence: None,
-            todos: None,
-            blocked: false,
-            session: Some("test-session".to_string()),
-        };
-
-        let result = execute(config, args);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Confidence level (--confidence) is required"));
     }
 
     #[test]
@@ -904,7 +850,6 @@ mod tests {
             "test-session".to_string(),
             "Working on authentication".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
 
         // We can't easily test println! output, but we can test the logic
@@ -912,10 +857,6 @@ mod tests {
         assert_eq!(status.session_name, "test-session");
         assert_eq!(status.current_task, "Working on authentication");
         assert_eq!(status.test_status, crate::core::status::TestStatus::Passed);
-        assert_eq!(
-            status.confidence,
-            crate::core::status::ConfidenceLevel::High
-        );
         assert!(!status.is_blocked);
         assert!(status.format_todos().is_none());
 
@@ -946,7 +887,6 @@ mod tests {
             "session1".to_string(),
             "Task 1".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
         status1.last_update = now - Duration::hours(2); // 2 hours ago
 
@@ -954,7 +894,6 @@ mod tests {
             "session2".to_string(),
             "Task 2".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Low,
         );
         status2.last_update = now - Duration::minutes(30); // 30 minutes ago
 
@@ -962,7 +901,6 @@ mod tests {
             "session3".to_string(),
             "Task 3".to_string(),
             crate::core::status::TestStatus::Unknown,
-            crate::core::status::ConfidenceLevel::Medium,
         );
         status3.last_update = now; // now
 
@@ -987,7 +925,6 @@ mod tests {
             "session-long-task".to_string(),
             long_task.to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
 
         // Test truncation logic (mimicking what display_all_statuses does)
@@ -1008,7 +945,6 @@ mod tests {
             "blocked-session".to_string(),
             "Stuck on Redis configuration".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Low,
         )
         .with_blocked(Some("Need help with Redis mocking".to_string()));
 
@@ -1034,7 +970,6 @@ mod tests {
             "session1".to_string(),
             "Task without todos".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
         assert_eq!(
             status_no_todos
@@ -1047,7 +982,6 @@ mod tests {
             "session2".to_string(),
             "Task with todos".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         )
         .with_todos(3, 5);
         assert_eq!(
@@ -1059,7 +993,6 @@ mod tests {
             "session3".to_string(),
             "Complete task".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         )
         .with_todos(5, 5);
         assert_eq!(
@@ -1071,7 +1004,6 @@ mod tests {
             "session4".to_string(),
             "No todos done".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Low,
         )
         .with_todos(0, 3);
         assert_eq!(
@@ -1107,7 +1039,6 @@ mod tests {
             "json-test".to_string(),
             "Testing JSON output".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         )
         .with_todos(3, 5);
         status.save(&state_dir).unwrap();
@@ -1147,7 +1078,6 @@ mod tests {
                 session_name,
                 format!("JSON test task {}", i),
                 crate::core::status::TestStatus::Passed,
-                crate::core::status::ConfidenceLevel::Medium,
             );
             status.save(&state_dir).unwrap();
         }
@@ -1260,7 +1190,6 @@ mod tests {
             "abs-path-test".to_string(),
             "Testing absolute path resolution".to_string(),
             crate::core::status::TestStatus::Passed,
-            crate::core::status::ConfidenceLevel::High,
         );
         status.save(&state_dir).unwrap();
 
@@ -1298,7 +1227,6 @@ mod tests {
             "rel-path-test".to_string(),
             "Testing path resolution".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Low,
         );
         status.save(&state_dir).unwrap();
 

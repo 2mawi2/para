@@ -71,7 +71,6 @@ cat > "$SESSION_PATH/.para/status.json" << JSON
 {
   "task": "Implementing authentication",
   "tests": "failed",
-  "confidence": "high",
   "todos": "3/5",
   "blocked": false,
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -105,7 +104,6 @@ cat > "$SESSION_PATH/.para/status.json" << JSON
 {
   "task": "Fixed authentication tests",
   "tests": "passed",
-  "confidence": "high",
   "todos": "5/5",
   "blocked": false,
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

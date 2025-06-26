@@ -224,7 +224,7 @@ impl SignalFileWatcher {
 
     /// Handle status update from container
     fn handle_status_update(&self, container_status: ContainerStatus) -> Result<()> {
-        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::core::status::{Status, TestStatus};
         use chrono::Utc;
 
         // Parse container status fields into proper types
@@ -233,12 +233,6 @@ impl SignalFileWatcher {
             .as_ref()
             .and_then(|s| Status::parse_test_status(s).ok())
             .unwrap_or(TestStatus::Unknown);
-
-        let confidence = container_status
-            .confidence
-            .as_ref()
-            .and_then(|s| Status::parse_confidence(s).ok())
-            .unwrap_or(ConfidenceLevel::Medium);
 
         let (todos_completed, todos_total) = container_status
             .todos
@@ -252,7 +246,6 @@ impl SignalFileWatcher {
             self.session_name.clone(),
             container_status.task.clone(),
             test_status,
-            confidence,
         );
 
         status.is_blocked = container_status.blocked;
