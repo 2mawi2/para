@@ -4,9 +4,59 @@ use crate::config::Config;
 use crate::core::ide::IdeManager;
 use crate::core::session::SessionManager;
 use crate::utils::{generate_unique_name, validate_session_name, Result};
+use std::path::{Path, PathBuf};
+
+/// Determine which setup script to use based on priority order
+fn get_setup_script_path(
+    cli_arg: &Option<PathBuf>,
+    repo_root: &Path,
+    config: &Config,
+) -> Option<PathBuf> {
+    // 1. CLI argument has highest priority
+    if let Some(path) = cli_arg {
+        if path.exists() {
+            return Some(path.clone());
+        } else {
+            eprintln!("Warning: Setup script '{}' not found", path.display());
+            return None;
+        }
+    }
+
+    // 2. Check for default .para/setup.sh
+    let default_script = repo_root.join(".para/setup.sh");
+    if default_script.exists() {
+        return Some(default_script);
+    }
+
+    // 3. Check config for setup script path
+    if let Some(docker_config) = &config.docker {
+        if let Some(script_path) = &docker_config.setup_script {
+            let config_script = if Path::new(script_path).is_absolute() {
+                PathBuf::from(script_path)
+            } else {
+                repo_root.join(script_path)
+            };
+            if config_script.exists() {
+                return Some(config_script);
+            } else {
+                eprintln!(
+                    "Warning: Config setup script '{}' not found",
+                    config_script.display()
+                );
+            }
+        }
+    }
+
+    None
+}
 
 pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     args.validate()?;
+
+    let git_service = crate::core::git::GitService::discover().map_err(|e| {
+        crate::utils::ParaError::git_error(format!("Failed to discover git repository: {}", e))
+    })?;
+    let repo_root = git_service.repository().root.clone();
 
     let mut session_manager = SessionManager::new(&config);
 
@@ -41,6 +91,18 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
+
+        // Run setup script if specified
+        if let Some(setup_script) = get_setup_script_path(&args.setup_script, &repo_root, &config) {
+            docker_manager
+                .run_setup_script(&session.name, &setup_script)
+                .map_err(|e| {
+                    crate::utils::ParaError::docker_error(format!(
+                        "Failed to run setup script: {}",
+                        e
+                    ))
+                })?;
+        }
 
         // Launch IDE connected to container
         docker_manager
@@ -154,6 +216,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         }
     }
 
@@ -169,6 +232,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -187,6 +251,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

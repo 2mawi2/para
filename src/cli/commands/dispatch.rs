@@ -9,6 +9,50 @@ use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Determine which setup script to use based on priority order
+fn get_setup_script_path(
+    cli_arg: &Option<PathBuf>,
+    repo_root: &Path,
+    config: &Config,
+) -> Option<PathBuf> {
+    // 1. CLI argument has highest priority
+    if let Some(path) = cli_arg {
+        if path.exists() {
+            return Some(path.clone());
+        } else {
+            eprintln!("Warning: Setup script '{}' not found", path.display());
+            return None;
+        }
+    }
+
+    // 2. Check for default .para/setup.sh
+    let default_script = repo_root.join(".para/setup.sh");
+    if default_script.exists() {
+        return Some(default_script);
+    }
+
+    // 3. Check config for setup script path
+    if let Some(docker_config) = &config.docker {
+        if let Some(script_path) = &docker_config.setup_script {
+            let config_script = if Path::new(script_path).is_absolute() {
+                PathBuf::from(script_path)
+            } else {
+                repo_root.join(script_path)
+            };
+            if config_script.exists() {
+                return Some(config_script);
+            } else {
+                eprintln!(
+                    "Warning: Config setup script '{}' not found",
+                    config_script.display()
+                );
+            }
+        }
+    }
+
+    None
+}
+
 pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     args.validate()?;
 
@@ -79,6 +123,15 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
+
+        // Run setup script if specified
+        if let Some(setup_script) = get_setup_script_path(&args.setup_script, &repo_root, &config) {
+            docker_manager
+                .run_setup_script(&session.name, &setup_script)
+                .map_err(|e| {
+                    ParaError::docker_error(format!("Failed to run setup script: {}", e))
+                })?;
+        }
 
         // Launch IDE connected to container with initial prompt
         docker_manager
@@ -541,6 +594,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -558,6 +612,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -578,6 +633,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -599,6 +655,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -620,6 +677,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -640,6 +698,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -657,6 +716,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -693,6 +753,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -719,6 +780,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -754,6 +816,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         // This should work with explicit args regardless of stdin status
@@ -786,6 +849,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args_with_file
@@ -803,6 +867,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
@@ -823,6 +888,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
         };
 
         // The current implementation has a logical flaw:
@@ -882,6 +948,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -905,6 +972,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -928,6 +996,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -950,6 +1019,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -973,6 +1043,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -1100,5 +1171,111 @@ mod tests {
                 session_name
             );
         }
+    }
+
+    #[test]
+    fn test_setup_script_priority_cli_arg() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        // Create script files
+        let cli_script = repo_root.join("cli-script.sh");
+        let default_script = repo_root.join(".para/setup.sh");
+        fs::write(&cli_script, "#!/bin/bash\necho 'cli'").unwrap();
+        fs::create_dir_all(repo_root.join(".para")).unwrap();
+        fs::write(&default_script, "#!/bin/bash\necho 'default'").unwrap();
+
+        let mut config = crate::config::defaults::default_config();
+        config.docker = Some(crate::config::DockerConfig {
+            setup_script: Some("config-script.sh".to_string()),
+        });
+
+        // CLI arg should take priority
+        let result = get_setup_script_path(&Some(cli_script.clone()), repo_root, &config);
+        assert_eq!(result, Some(cli_script));
+    }
+
+    #[test]
+    fn test_setup_script_priority_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        // Create default script
+        let default_script = repo_root.join(".para/setup.sh");
+        fs::create_dir_all(repo_root.join(".para")).unwrap();
+        fs::write(&default_script, "#!/bin/bash\necho 'default'").unwrap();
+
+        let mut config = crate::config::defaults::default_config();
+        config.docker = Some(crate::config::DockerConfig {
+            setup_script: Some("config-script.sh".to_string()),
+        });
+
+        // Default script should be found when no CLI arg
+        let result = get_setup_script_path(&None, repo_root, &config);
+        assert_eq!(result, Some(default_script));
+    }
+
+    #[test]
+    fn test_setup_script_priority_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        // Create config script
+        let config_script = repo_root.join("scripts/config-script.sh");
+        fs::create_dir_all(repo_root.join("scripts")).unwrap();
+        fs::write(&config_script, "#!/bin/bash\necho 'config'").unwrap();
+
+        let mut config = crate::config::defaults::default_config();
+        config.docker = Some(crate::config::DockerConfig {
+            setup_script: Some("scripts/config-script.sh".to_string()),
+        });
+
+        // Config script should be found when no CLI arg or default
+        let result = get_setup_script_path(&None, repo_root, &config);
+        assert_eq!(result, Some(config_script));
+    }
+
+    #[test]
+    fn test_setup_script_absolute_path_in_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        // Create script with absolute path
+        let abs_script = temp_dir.path().join("absolute-script.sh");
+        fs::write(&abs_script, "#!/bin/bash\necho 'absolute'").unwrap();
+
+        let mut config = crate::config::defaults::default_config();
+        config.docker = Some(crate::config::DockerConfig {
+            setup_script: Some(abs_script.to_string_lossy().to_string()),
+        });
+
+        // Absolute path in config should work
+        let result = get_setup_script_path(&None, repo_root, &config);
+        assert_eq!(result, Some(abs_script));
+    }
+
+    #[test]
+    fn test_setup_script_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        let config = crate::config::defaults::default_config();
+
+        // No script should be found
+        let result = get_setup_script_path(&None, repo_root, &config);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_setup_script_cli_arg_not_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_root = temp_dir.path();
+
+        let non_existent = PathBuf::from("/non/existent/script.sh");
+        let config = crate::config::defaults::default_config();
+
+        // Should return None and print warning
+        let result = get_setup_script_path(&Some(non_existent), repo_root, &config);
+        assert_eq!(result, None);
     }
 }
