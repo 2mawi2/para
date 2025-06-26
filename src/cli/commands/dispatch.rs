@@ -59,11 +59,12 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             (false, vec![])
         };
 
-        let docker_manager = crate::core::docker::DockerManager::with_image(
+        let docker_manager = crate::core::docker::DockerManager::with_options(
             config.clone(),
             network_isolation,
             allowed_domains.clone(),
             args.docker_image.clone(),
+            !args.no_forward_keys,
         );
         let session = session_manager.create_docker_session(
             session_id.clone(),
@@ -172,6 +173,14 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         // Show network isolation warning if it's disabled
         if !network_isolation {
             println!("   ⚠️  Network isolation: OFF (use --allow-domains to enable)");
+        }
+
+        // Show API key warning if forwarding keys to custom images
+        if !args.no_forward_keys && args.docker_image.is_some() {
+            println!(
+                "   ⚠️  API keys: Forwarding to custom image (use --no-forward-keys to disable)"
+            );
+            println!("      Security: Only use trusted images when forwarding API keys");
         }
     }
     println!("   Branch: {}", session_state.branch);
@@ -551,6 +560,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -569,6 +579,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -590,6 +601,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -612,6 +624,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -634,6 +647,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -655,6 +669,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -673,6 +688,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -710,6 +726,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -737,6 +754,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -773,6 +791,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         // This should work with explicit args regardless of stdin status
@@ -806,6 +825,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args_with_file
@@ -824,6 +844,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
@@ -845,6 +866,7 @@ mod tests {
             allow_domains: None,
             docker_args: vec![],
             docker_image: None,
+            no_forward_keys: false,
         };
 
         // The current implementation has a logical flaw:
