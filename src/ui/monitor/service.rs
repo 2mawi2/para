@@ -86,7 +86,6 @@ impl SessionService {
                 task: format!("Session: {}", &session.name), // Will be properly set in enrich_with_tasks
                 worktree_path: session.worktree_path.clone(),
                 test_status: None,
-                confidence: None,
                 diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
@@ -151,11 +150,10 @@ impl SessionService {
                 SessionStatus::Review | SessionStatus::Ready
             );
 
-            let (test_status, confidence, diff_stats, todo_percentage, is_blocked, agent_task) =
+            let (test_status, diff_stats, todo_percentage, is_blocked, agent_task) =
                 if let Some(ref status) = agent_status {
                     (
                         Some(status.test_status.clone()),
-                        Some(status.confidence.clone()),
                         status.diff_stats.clone(),
                         status.calculate_progress_with_finish(is_finished),
                         status.is_blocked,
@@ -164,7 +162,7 @@ impl SessionService {
                 } else {
                     // No agent status - return progress based on finish status alone
                     let progress = if is_finished { Some(100) } else { Some(0) };
-                    (None, None, None, progress, false, None)
+                    (None, None, progress, false, None)
                 };
 
             // Agent task takes priority over session task
@@ -173,7 +171,6 @@ impl SessionService {
             }
 
             session_info.test_status = test_status;
-            session_info.confidence = confidence;
             session_info.diff_stats = diff_stats;
             session_info.todo_percentage = todo_percentage;
             session_info.is_blocked = is_blocked;
@@ -428,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_agent_status_integration() {
-        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::core::status::{Status, TestStatus};
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
@@ -443,7 +440,6 @@ mod tests {
             "test-session".to_string(),
             "Agent is working on authentication".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         )
         .with_todos(3, 7)
         .with_blocked(Some("Need help with Redis".to_string()));
@@ -457,16 +453,14 @@ mod tests {
         let status = loaded_status.unwrap();
 
         // Test the tuple extraction logic
-        let (test_status, confidence, todo_percentage, is_blocked, agent_task) = (
+        let (test_status, todo_percentage, is_blocked, agent_task) = (
             Some(status.test_status.clone()),
-            Some(status.confidence.clone()),
             status.todo_percentage(),
             status.is_blocked,
             Some(status.current_task.clone()),
         );
 
         assert_eq!(test_status, Some(TestStatus::Passed));
-        assert_eq!(confidence, Some(ConfidenceLevel::High));
         assert_eq!(todo_percentage, Some(43)); // 3/7 = 43%
         assert!(is_blocked);
         assert_eq!(
@@ -499,21 +493,19 @@ mod tests {
         assert!(loaded_status.is_none());
 
         // Test fallback values when no agent status
-        let (test_status, confidence, todo_percentage, is_blocked, agent_task) =
+        let (test_status, todo_percentage, is_blocked, agent_task) =
             if let Some(ref status) = loaded_status {
                 (
                     Some(status.test_status.clone()),
-                    Some(status.confidence.clone()),
                     status.todo_percentage(),
                     status.is_blocked,
                     Some(status.current_task.clone()),
                 )
             } else {
-                (None, None, None, false, None)
+                (None, None, false, None)
             };
 
         assert_eq!(test_status, None);
-        assert_eq!(confidence, None);
         assert_eq!(todo_percentage, None);
         assert!(!is_blocked);
         assert_eq!(agent_task, None);
@@ -526,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_session_info_construction_with_agent_status() {
-        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::core::status::{Status, TestStatus};
         use crate::ui::monitor::{SessionInfo, SessionStatus};
         use chrono::Utc;
         use std::path::PathBuf;
@@ -536,7 +528,6 @@ mod tests {
             "integration-session".to_string(),
             "Complex integration task".to_string(),
             TestStatus::Failed,
-            ConfidenceLevel::Low,
         )
         .with_todos(2, 10);
 
@@ -552,7 +543,6 @@ mod tests {
             task: final_task,
             worktree_path: PathBuf::from("/test/path"),
             test_status: Some(agent_status.test_status.clone()),
-            confidence: Some(agent_status.confidence.clone()),
             diff_stats: None,
             todo_percentage: agent_status.todo_percentage(),
             is_blocked: agent_status.is_blocked,
@@ -562,7 +552,6 @@ mod tests {
         assert_eq!(session_info.name, "integration-session");
         assert_eq!(session_info.task, "Complex integration task"); // Agent task priority
         assert_eq!(session_info.test_status, Some(TestStatus::Failed));
-        assert_eq!(session_info.confidence, Some(ConfidenceLevel::Low));
         assert_eq!(session_info.todo_percentage, Some(20)); // 2/10 = 20%
         assert!(!session_info.is_blocked); // Agent status not blocked
     }
@@ -605,7 +594,6 @@ mod tests {
             task: "Task 1".to_string(),
             worktree_path: PathBuf::from("/test1"),
             test_status: None,
-            confidence: None,
             diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
@@ -619,7 +607,6 @@ mod tests {
             task: "Current Task".to_string(),
             worktree_path: PathBuf::from("/test2"),
             test_status: None,
-            confidence: None,
             diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
@@ -633,7 +620,6 @@ mod tests {
             task: "Task 3".to_string(),
             worktree_path: PathBuf::from("/test3"),
             test_status: None,
-            confidence: None,
             diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
@@ -735,7 +721,7 @@ mod tests {
 
     #[test]
     fn test_progress_calculation_with_finish_status() {
-        use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+        use crate::core::status::{Status, TestStatus};
         use crate::ui::monitor::{SessionInfo, SessionStatus};
         use chrono::Utc;
         use std::path::PathBuf;
@@ -753,7 +739,6 @@ mod tests {
             "active-session".to_string(),
             "Working on feature".to_string(),
             TestStatus::Unknown,
-            ConfidenceLevel::Medium,
         )
         .with_todos(5, 10);
 
@@ -768,7 +753,6 @@ mod tests {
             task: "Task".to_string(),
             worktree_path: PathBuf::from("/test"),
             test_status: None,
-            confidence: None,
             diff_stats: None,
             todo_percentage: None,
             is_blocked: false,
@@ -806,7 +790,6 @@ mod tests {
             "finished-no-todos".to_string(),
             "Quick fix".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
         finished_status.save(&state_dir).unwrap();
 
@@ -846,7 +829,6 @@ mod tests {
                 task: "Task 1".to_string(),
                 worktree_path: PathBuf::from("/test1"),
                 test_status: None,
-                confidence: None,
                 diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,
@@ -859,7 +841,6 @@ mod tests {
                 task: "Task 2".to_string(),
                 worktree_path: PathBuf::from("/test2"),
                 test_status: None,
-                confidence: None,
                 diff_stats: None,
                 todo_percentage: None,
                 is_blocked: false,

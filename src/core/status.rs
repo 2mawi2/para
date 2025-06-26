@@ -40,7 +40,6 @@ pub struct Status {
     pub todos_completed: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos_total: Option<u32>,
-    pub confidence: ConfidenceLevel,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_stats: Option<DiffStats>,
     pub last_update: DateTime<Utc>,
@@ -54,14 +53,6 @@ pub enum TestStatus {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum ConfidenceLevel {
-    High,
-    Medium,
-    Low,
-}
-
 /// Aggregated status information for monitor display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusSummary {
@@ -70,7 +61,6 @@ pub struct StatusSummary {
     pub blocked_sessions: usize,
     pub stale_sessions: usize,
     pub test_summary: TestSummary,
-    pub confidence_summary: ConfidenceSummary,
     pub overall_progress: Option<u8>,
 }
 
@@ -81,20 +71,8 @@ pub struct TestSummary {
     pub unknown: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfidenceSummary {
-    pub high: usize,
-    pub medium: usize,
-    pub low: usize,
-}
-
 impl Status {
-    pub fn new(
-        session_name: String,
-        current_task: String,
-        test_status: TestStatus,
-        confidence: ConfidenceLevel,
-    ) -> Self {
+    pub fn new(session_name: String, current_task: String, test_status: TestStatus) -> Self {
         Self {
             session_name,
             current_task,
@@ -103,7 +81,6 @@ impl Status {
             blocked_reason: None,
             todos_completed: None,
             todos_total: None,
-            confidence,
             diff_stats: None,
             last_update: Utc::now(),
         }
@@ -203,17 +180,6 @@ impl Status {
                 "Test status must be 'passed', 'failed', or 'unknown'",
             )
             .into()),
-        }
-    }
-
-    pub fn parse_confidence(s: &str) -> Result<ConfidenceLevel> {
-        match s.to_lowercase().as_str() {
-            "high" => Ok(ConfidenceLevel::High),
-            "medium" => Ok(ConfidenceLevel::Medium),
-            "low" => Ok(ConfidenceLevel::Low),
-            _ => {
-                Err(ParaError::invalid_args("Confidence must be 'high', 'medium', or 'low'").into())
-            }
         }
     }
 
@@ -369,12 +335,6 @@ impl Status {
             unknown: 0,
         };
 
-        let mut confidence_summary = ConfidenceSummary {
-            high: 0,
-            medium: 0,
-            low: 0,
-        };
-
         let mut blocked_sessions = 0;
         let mut stale_sessions = 0;
         let mut active_sessions = 0;
@@ -387,13 +347,6 @@ impl Status {
                 TestStatus::Passed => test_summary.passed += 1,
                 TestStatus::Failed => test_summary.failed += 1,
                 TestStatus::Unknown => test_summary.unknown += 1,
-            }
-
-            // Count confidence levels
-            match status.confidence {
-                ConfidenceLevel::High => confidence_summary.high += 1,
-                ConfidenceLevel::Medium => confidence_summary.medium += 1,
-                ConfidenceLevel::Low => confidence_summary.low += 1,
             }
 
             // Count blocked and stale sessions
@@ -426,7 +379,6 @@ impl Status {
             blocked_sessions,
             stale_sessions,
             test_summary,
-            confidence_summary,
             overall_progress,
         })
     }
@@ -438,16 +390,6 @@ impl std::fmt::Display for TestStatus {
             TestStatus::Passed => write!(f, "Passed"),
             TestStatus::Failed => write!(f, "Failed"),
             TestStatus::Unknown => write!(f, "Unknown"),
-        }
-    }
-}
-
-impl std::fmt::Display for ConfidenceLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConfidenceLevel::High => write!(f, "High"),
-            ConfidenceLevel::Medium => write!(f, "Medium"),
-            ConfidenceLevel::Low => write!(f, "Low"),
         }
     }
 }
@@ -465,13 +407,11 @@ mod tests {
             "test-session".to_string(),
             "Working on feature".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
 
         assert_eq!(status.session_name, "test-session");
         assert_eq!(status.current_task, "Working on feature");
         assert_eq!(status.test_status, TestStatus::Passed);
-        assert_eq!(status.confidence, ConfidenceLevel::High);
         assert!(!status.is_blocked);
         assert!(status.blocked_reason.is_none());
         assert!(status.todos_completed.is_none());
@@ -484,7 +424,6 @@ mod tests {
             "test-session".to_string(),
             "Fixing tests".to_string(),
             TestStatus::Failed,
-            ConfidenceLevel::Low,
         )
         .with_blocked(Some("Need help with Redis mocking".to_string()));
 
@@ -501,7 +440,6 @@ mod tests {
             "test-session".to_string(),
             "Implementing feature".to_string(),
             TestStatus::Unknown,
-            ConfidenceLevel::Medium,
         )
         .with_todos(3, 7);
 
@@ -520,7 +458,6 @@ mod tests {
             "test-session".to_string(),
             "Working on tests".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         )
         .with_todos(5, 10);
 
@@ -533,7 +470,6 @@ mod tests {
         assert_eq!(loaded.session_name, status.session_name);
         assert_eq!(loaded.current_task, status.current_task);
         assert_eq!(loaded.test_status, status.test_status);
-        assert_eq!(loaded.confidence, status.confidence);
         assert_eq!(loaded.todos_completed, status.todos_completed);
         assert_eq!(loaded.todos_total, status.todos_total);
     }
@@ -565,23 +501,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_confidence() {
-        assert_eq!(
-            Status::parse_confidence("high").unwrap(),
-            ConfidenceLevel::High
-        );
-        assert_eq!(
-            Status::parse_confidence("MEDIUM").unwrap(),
-            ConfidenceLevel::Medium
-        );
-        assert_eq!(
-            Status::parse_confidence("Low").unwrap(),
-            ConfidenceLevel::Low
-        );
-        assert!(Status::parse_confidence("invalid").is_err());
-    }
-
-    #[test]
     fn test_parse_todos() {
         assert_eq!(Status::parse_todos("3/7").unwrap(), (3, 7));
         assert_eq!(Status::parse_todos("0/10").unwrap(), (0, 10));
@@ -596,12 +515,7 @@ mod tests {
 
     #[test]
     fn test_todo_percentage() {
-        let status = Status::new(
-            "test".to_string(),
-            "task".to_string(),
-            TestStatus::Unknown,
-            ConfidenceLevel::Medium,
-        );
+        let status = Status::new("test".to_string(), "task".to_string(), TestStatus::Unknown);
 
         // No todos set
         assert_eq!(status.todo_percentage(), None);
@@ -619,12 +533,7 @@ mod tests {
 
     #[test]
     fn test_format_todos() {
-        let status = Status::new(
-            "test".to_string(),
-            "task".to_string(),
-            TestStatus::Unknown,
-            ConfidenceLevel::Medium,
-        );
+        let status = Status::new("test".to_string(), "task".to_string(), TestStatus::Unknown);
 
         // No todos
         assert_eq!(status.format_todos(), None);
@@ -650,7 +559,6 @@ mod tests {
             "my-session".to_string(),
             "Implementing auth".to_string(),
             TestStatus::Failed,
-            ConfidenceLevel::Low,
         )
         .with_blocked(Some("Need Redis help".to_string()))
         .with_todos(2, 5);
@@ -661,7 +569,6 @@ mod tests {
         assert_eq!(parsed.session_name, status.session_name);
         assert_eq!(parsed.current_task, status.current_task);
         assert_eq!(parsed.test_status, status.test_status);
-        assert_eq!(parsed.confidence, status.confidence);
         assert_eq!(parsed.is_blocked, status.is_blocked);
         assert_eq!(parsed.blocked_reason, status.blocked_reason);
         assert_eq!(parsed.todos_completed, status.todos_completed);
@@ -674,7 +581,6 @@ mod tests {
             "minimal".to_string(),
             "Basic task".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
 
         let json = serde_json::to_string(&status).unwrap();
@@ -694,7 +600,6 @@ mod tests {
             "lock-test".to_string(),
             "Testing file locks".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
 
         // Test concurrent writes
@@ -731,7 +636,6 @@ mod tests {
             "stale-test".to_string(),
             "Testing staleness".to_string(),
             TestStatus::Unknown,
-            ConfidenceLevel::Medium,
         );
 
         // Fresh status should not be stale
@@ -755,19 +659,16 @@ mod tests {
                 "session1".to_string(),
                 "Task 1".to_string(),
                 TestStatus::Passed,
-                ConfidenceLevel::High,
             ),
             Status::new(
                 "session2".to_string(),
                 "Task 2".to_string(),
                 TestStatus::Failed,
-                ConfidenceLevel::Low,
             ),
             Status::new(
                 "session3".to_string(),
                 "Task 3".to_string(),
                 TestStatus::Unknown,
-                ConfidenceLevel::Medium,
             ),
         ];
 
@@ -799,7 +700,6 @@ mod tests {
             "fresh".to_string(),
             "Fresh task".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
         fresh_status.save(state_dir).unwrap();
 
@@ -808,7 +708,6 @@ mod tests {
             "stale".to_string(),
             "Stale task".to_string(),
             TestStatus::Failed,
-            ConfidenceLevel::Low,
         );
         stale_status.last_update = Utc::now() - chrono::Duration::hours(48);
         stale_status.save(state_dir).unwrap();
@@ -834,35 +733,19 @@ mod tests {
 
         // Create various status files
         let statuses = vec![
-            Status::new(
-                "s1".to_string(),
-                "Task 1".to_string(),
-                TestStatus::Passed,
-                ConfidenceLevel::High,
-            )
-            .with_todos(5, 10),
-            Status::new(
-                "s2".to_string(),
-                "Task 2".to_string(),
-                TestStatus::Failed,
-                ConfidenceLevel::Low,
-            )
-            .with_blocked(Some("Need help".to_string()))
-            .with_todos(2, 8),
-            Status::new(
-                "s3".to_string(),
-                "Task 3".to_string(),
-                TestStatus::Unknown,
-                ConfidenceLevel::Medium,
-            )
-            .with_todos(3, 5),
+            Status::new("s1".to_string(), "Task 1".to_string(), TestStatus::Passed)
+                .with_todos(5, 10),
+            Status::new("s2".to_string(), "Task 2".to_string(), TestStatus::Failed)
+                .with_blocked(Some("Need help".to_string()))
+                .with_todos(2, 8),
+            Status::new("s3".to_string(), "Task 3".to_string(), TestStatus::Unknown)
+                .with_todos(3, 5),
             // Stale status
             {
                 let mut s = Status::new(
                     "s4".to_string(),
                     "Stale task".to_string(),
                     TestStatus::Passed,
-                    ConfidenceLevel::High,
                 );
                 s.last_update = Utc::now() - chrono::Duration::hours(48);
                 s
@@ -886,11 +769,6 @@ mod tests {
         assert_eq!(summary.test_summary.failed, 1);
         assert_eq!(summary.test_summary.unknown, 1);
 
-        // Confidence summary
-        assert_eq!(summary.confidence_summary.high, 2);
-        assert_eq!(summary.confidence_summary.medium, 1);
-        assert_eq!(summary.confidence_summary.low, 1);
-
         // Overall progress: (5 + 2 + 3) / (10 + 8 + 5) = 10/23 ≈ 43%
         assert_eq!(summary.overall_progress, Some(43));
     }
@@ -912,7 +790,6 @@ mod tests {
             "test-session".to_string(),
             "Test task".to_string(),
             TestStatus::Passed,
-            ConfidenceLevel::High,
         );
         status.save(state_dir).unwrap();
 
@@ -928,12 +805,7 @@ mod tests {
 
     #[test]
     fn test_calculate_progress_with_finish() {
-        let status = Status::new(
-            "test".to_string(),
-            "task".to_string(),
-            TestStatus::Unknown,
-            ConfidenceLevel::Medium,
-        );
+        let status = Status::new("test".to_string(), "task".to_string(), TestStatus::Unknown);
 
         // Test 1: No todos and not finished = 0%
         assert_eq!(status.calculate_progress_with_finish(false), Some(0));
@@ -976,7 +848,6 @@ mod tests {
             "edge-test".to_string(),
             "edge task".to_string(),
             TestStatus::Unknown,
-            ConfidenceLevel::Medium,
         );
 
         // Edge case 1: Completed > Total (defensive check)
@@ -989,7 +860,6 @@ mod tests {
             blocked_reason: None,
             todos_completed: Some(15), // More than total!
             todos_total: Some(10),
-            confidence: ConfidenceLevel::Medium,
             diff_stats: None,
             last_update: Utc::now(),
         };
@@ -1037,7 +907,6 @@ mod tests {
             "compat".to_string(),
             "task".to_string(),
             TestStatus::Unknown,
-            ConfidenceLevel::Medium,
         )
         .with_todos(7, 10);
 

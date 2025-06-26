@@ -1,4 +1,4 @@
-use crate::core::status::{ConfidenceLevel, DiffStats, TestStatus};
+use crate::core::status::{DiffStats, TestStatus};
 use chrono::{DateTime, Utc};
 use ratatui::style::Color;
 use std::path::PathBuf;
@@ -13,7 +13,6 @@ pub struct SessionInfo {
     pub worktree_path: PathBuf,
     // Agent status fields
     pub test_status: Option<TestStatus>,
-    pub confidence: Option<ConfidenceLevel>, // Keep for backwards compatibility
     pub diff_stats: Option<DiffStats>,
     pub todo_percentage: Option<u8>,
     pub is_blocked: bool,
