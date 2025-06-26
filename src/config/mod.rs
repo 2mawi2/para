@@ -15,6 +15,8 @@ pub struct Config {
     pub directories: DirectoryConfig,
     pub git: GitConfig,
     pub session: SessionConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub docker: Option<DockerConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -50,6 +52,12 @@ pub struct SessionConfig {
     pub default_name_format: String,
     pub preserve_on_finish: bool,
     pub auto_cleanup_days: Option<u32>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct DockerConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_image: Option<String>,
 }
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
@@ -126,6 +134,12 @@ impl Config {
     pub fn is_real_ide_environment(&self) -> bool {
         !cfg!(test) && self.ide.command != "echo"
     }
+
+    pub fn get_docker_image(&self) -> Option<&str> {
+        self.docker
+            .as_ref()
+            .and_then(|d| d.default_image.as_deref())
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +185,7 @@ mod tests {
                 preserve_on_finish: true,
                 auto_cleanup_days: Some(14),
             },
+            docker: None,
         };
 
         assert_eq!(config.get_branch_prefix(), "feature");
@@ -178,6 +193,27 @@ mod tests {
         assert_eq!(config.get_state_dir(), "custom/state");
         assert!(!config.should_auto_stage());
         assert!(config.should_preserve_on_finish());
+        assert_eq!(config.get_docker_image(), None);
+    }
+
+    #[test]
+    fn test_docker_config_getter() {
+        let mut config = defaults::default_config();
+
+        // Test with no docker config
+        assert_eq!(config.get_docker_image(), None);
+
+        // Test with docker config but no image
+        config.docker = Some(DockerConfig {
+            default_image: None,
+        });
+        assert_eq!(config.get_docker_image(), None);
+
+        // Test with docker config and image
+        config.docker = Some(DockerConfig {
+            default_image: Some("custom:latest".to_string()),
+        });
+        assert_eq!(config.get_docker_image(), Some("custom:latest"));
     }
 
     #[test]
@@ -230,6 +266,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         };
         assert!(valid_config.validate().is_ok());
 
@@ -269,6 +306,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
             },
+            docker: None,
         };
         assert!(config_wrapper_disabled.validate().is_ok());
 
@@ -312,6 +350,7 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
+            docker: None,
         };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
@@ -346,6 +385,7 @@ mod tests {
             directories: defaults::default_directory_config(),
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
+            docker: None,
         };
 
         // Test 1: Manually save config and verify it can be loaded

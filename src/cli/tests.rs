@@ -184,6 +184,7 @@ mod cli_tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -195,6 +196,7 @@ mod cli_tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
         assert!(args.validate_impl(true).is_ok());
     }

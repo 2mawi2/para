@@ -84,6 +84,13 @@ pub struct StartArgs {
         help = "Additional Docker arguments to pass through"
     )]
     pub docker_args: Vec<String>,
+
+    /// Custom Docker image to use instead of the default
+    #[arg(
+        long,
+        help = "Custom Docker image to use (e.g., 'ubuntu:22.04', 'mycompany/dev:latest')"
+    )]
+    pub docker_image: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -139,6 +146,13 @@ pub struct DispatchArgs {
         help = "Additional Docker arguments to pass through"
     )]
     pub docker_args: Vec<String>,
+
+    /// Custom Docker image to use instead of the default
+    #[arg(
+        long,
+        help = "Custom Docker image to use (e.g., 'ubuntu:22.04', 'mycompany/dev:latest')"
+    )]
+    pub docker_image: Option<String>,
 }
 
 #[derive(Args, Debug)]

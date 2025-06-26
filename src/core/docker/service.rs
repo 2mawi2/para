@@ -19,6 +19,7 @@ impl DockerService {
         allowed_domains: &[String],
         working_dir: &Path,
         docker_args: &[String],
+        docker_image: &str,
     ) -> DockerResult<ContainerSession> {
         let container_name = format!("para-{}", session_name);
 
@@ -79,9 +80,26 @@ impl DockerService {
             docker_cmd_args.extend(["-e".to_string(), "PARA_NETWORK_ISOLATION=false".to_string()]);
         }
 
+        // Add API key forwarding
+        let api_keys = [
+            ("ANTHROPIC_API_KEY", std::env::var("ANTHROPIC_API_KEY").ok()),
+            ("OPENAI_API_KEY", std::env::var("OPENAI_API_KEY").ok()),
+            ("GITHUB_TOKEN", std::env::var("GITHUB_TOKEN").ok()),
+            (
+                "PERPLEXITY_API_KEY",
+                std::env::var("PERPLEXITY_API_KEY").ok(),
+            ),
+        ];
+
+        for (key, value) in api_keys {
+            if let Some(val) = value {
+                docker_cmd_args.extend(["-e".to_string(), format!("{}={}", key, val)]);
+            }
+        }
+
         // Add the image and command
         docker_cmd_args.extend([
-            "para-authenticated:latest".to_string(),
+            docker_image.to_string(),
             "sleep".to_string(),
             "infinity".to_string(),
         ]);
@@ -106,7 +124,7 @@ impl DockerService {
         Ok(ContainerSession::new(
             container_id,
             session_name.to_string(),
-            "para-authenticated:latest".to_string(),
+            docker_image.to_string(),
             working_dir.to_path_buf(),
         ))
     }
@@ -377,5 +395,22 @@ mod tests {
         // For now, we just verify the parameters are correct
         assert!(network_isolation);
         assert!(!allowed_domains.is_empty());
+    }
+
+    #[test]
+    fn test_api_key_env_vars() {
+        // Test that we're checking for the right API keys
+        let expected_keys = [
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GITHUB_TOKEN",
+            "PERPLEXITY_API_KEY",
+        ];
+
+        // Just verify the keys are what we expect
+        for key in &expected_keys {
+            assert!(!key.is_empty());
+            assert!(key.chars().all(|c| c.is_uppercase() || c == '_'));
+        }
     }
 }

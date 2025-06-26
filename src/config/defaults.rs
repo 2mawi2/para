@@ -6,6 +6,7 @@ pub fn default_config() -> Config {
         directories: default_directory_config(),
         git: default_git_config(),
         session: default_session_config(),
+        docker: None,
     }
 }
 

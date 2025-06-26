@@ -306,6 +306,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: None,
             },
+            docker: None,
         };
         let service = GitService::discover_from(repo_path).unwrap();
         (git_dir, state_dir, service, config)
