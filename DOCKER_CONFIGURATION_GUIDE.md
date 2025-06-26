@@ -105,6 +105,54 @@ Add Docker configuration:
 3. Config `docker.setup_script`
 4. No script (if none configured)
 
+## Recommended Docker Images
+
+### For Para Development
+For developing para itself, use these base images:
+
+```bash
+# Ubuntu (recommended for para development)
+para start test-dev --container --docker-image ubuntu:22.04
+
+# Debian (stable alternative)
+para start test-dev --container --docker-image debian:12
+
+# Rust official image (includes Rust toolchain)
+para start test-dev --container --docker-image rust:latest
+
+# Alpine (minimal, requires different package manager)
+para start test-dev --container --docker-image alpine:latest
+```
+
+### For General Development
+Popular base images for different tech stacks:
+
+```bash
+# Node.js/TypeScript
+para start node-app --container --docker-image node:20
+
+# Python
+para start ml-project --container --docker-image python:3.11
+
+# Go
+para start go-service --container --docker-image golang:1.21
+
+# Ruby
+para start rails-app --container --docker-image ruby:3.2
+
+# Java
+para start spring-app --container --docker-image openjdk:17
+
+# Multi-purpose development
+para start fullstack --container --docker-image buildpack-deps:jammy
+```
+
+### Security Considerations
+- Use `--no-forward-keys` for untrusted images
+- Prefer official images from Docker Hub
+- Use specific tags instead of `latest` for reproducibility
+- Consider network isolation for sensitive work
+
 ## Example Setup Scripts
 
 ### Basic Development Setup
