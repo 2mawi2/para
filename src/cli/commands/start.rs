@@ -27,10 +27,11 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             (false, vec![])
         };
 
-        let docker_manager = crate::core::docker::DockerManager::new(
+        let docker_manager = crate::core::docker::DockerManager::with_image(
             config.clone(),
             network_isolation,
             allowed_domains.clone(),
+            args.docker_image.clone(),
         );
         let session = session_manager.create_docker_session(
             session_name.clone(),
@@ -81,7 +82,15 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     println!("✅ Session '{}' started successfully", session_name);
     if is_container {
         println!("   Container: para-{}", session_name);
-        println!("   Image: para-authenticated:latest");
+
+        // Show the actual Docker image being used
+        if let Some(ref custom_image) = args.docker_image {
+            println!("   Image: {} (custom)", custom_image);
+        } else if let Some(config_image) = config.get_docker_image() {
+            println!("   Image: {} (from config)", config_image);
+        } else {
+            println!("   Image: para-authenticated:latest (default)");
+        }
 
         // Show network isolation warning if it's disabled
         if !network_isolation {
@@ -154,6 +163,7 @@ mod tests {
                 preserve_on_finish: false,
                 auto_cleanup_days: Some(7),
             },
+            docker: None,
         }
     }
 
@@ -169,6 +179,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -187,6 +198,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();

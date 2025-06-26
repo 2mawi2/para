@@ -16,11 +16,22 @@ pub struct DockerManager {
     pool: Arc<ContainerPool>,
     network_isolation: bool,
     allowed_domains: Vec<String>,
+    docker_image: Option<String>,
 }
 
 impl DockerManager {
     /// Create a new Docker manager
     pub fn new(config: Config, network_isolation: bool, allowed_domains: Vec<String>) -> Self {
+        Self::with_image(config, network_isolation, allowed_domains, None)
+    }
+
+    /// Create a new Docker manager with a custom Docker image
+    pub fn with_image(
+        config: Config,
+        network_isolation: bool,
+        allowed_domains: Vec<String>,
+        docker_image: Option<String>,
+    ) -> Self {
         // Use CLI-only approach: pool size is passed as runtime parameter, not from config
         let pool_size = 5; // Default pool size, can be made configurable via CLI flag later
         let pool = Arc::new(ContainerPool::new(pool_size));
@@ -31,24 +42,39 @@ impl DockerManager {
             pool,
             network_isolation,
             allowed_domains,
+            docker_image,
         }
     }
 
-    /// Get the appropriate Docker image name
-    fn get_docker_image(&self) -> DockerResult<&'static str> {
-        // Check if authenticated image exists
-        let output = Command::new("docker")
-            .args(["images", "-q", "para-authenticated:latest"])
-            .output()
-            .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
+    /// Get the appropriate Docker image name based on priority
+    fn get_docker_image(&self) -> DockerResult<String> {
+        // Priority order:
+        // 1. CLI flag (docker_image from manager)
+        // 2. Config docker.default_image
+        // 3. Default: "para-authenticated:latest"
 
-        if output.status.success() && !output.stdout.is_empty() {
-            Ok("para-authenticated:latest")
-        } else {
-            Err(DockerError::Other(anyhow::anyhow!(
-                "The 'para-authenticated:latest' image is not available. Please build it first with authentication credentials baked in."
-            )))
+        let image = self
+            .docker_image
+            .clone()
+            .or_else(|| self.config.get_docker_image().map(|s| s.to_string()))
+            .unwrap_or_else(|| "para-authenticated:latest".to_string());
+
+        // If using the default image, check if it exists
+        if image == "para-authenticated:latest" {
+            let output = Command::new("docker")
+                .args(["images", "-q", &image])
+                .output()
+                .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
+
+            if !output.status.success() || output.stdout.is_empty() {
+                return Err(DockerError::Other(anyhow::anyhow!(
+                    "The 'para-authenticated:latest' image is not available. Please build it first with authentication credentials baked in.\n\
+                     Alternatively, you can specify a custom image using --docker-image flag."
+                )));
+            }
         }
+
+        Ok(image)
     }
 
     /// Create and start a container for a session using the pool
@@ -69,14 +95,18 @@ impl DockerManager {
         println!("🔍 Checking pool capacity before creating container...");
         self.pool.check_capacity()?;
 
+        // Get the Docker image to use
+        let docker_image = self.get_docker_image()?;
+
         // Create the container with CLI parameters (authentication is now baked into the image)
-        println!("🏗️  Creating container with authenticated image");
+        println!("🏗️  Creating container with image: {}", docker_image);
         let container_session = self.service.create_container(
             &session.name,
             self.network_isolation,
             &self.allowed_domains,
             &session.worktree_path,
             docker_args,
+            &docker_image,
         )?;
 
         // Add the successfully created container to pool tracking immediately
@@ -124,7 +154,7 @@ impl DockerManager {
         let container_session = ContainerSession::new(
             container_id,
             session.name.clone(),
-            image_name.to_string(),
+            image_name,
             session.worktree_path.clone(),
         );
 
@@ -347,3 +377,7 @@ impl DockerManager {
         (self.pool.active_containers(), self.pool.max_size())
     }
 }
+
+#[cfg(test)]
+#[path = "manager_test.rs"]
+mod manager_test;

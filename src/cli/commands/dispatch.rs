@@ -59,10 +59,11 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             (false, vec![])
         };
 
-        let docker_manager = crate::core::docker::DockerManager::new(
+        let docker_manager = crate::core::docker::DockerManager::with_image(
             config.clone(),
             network_isolation,
             allowed_domains.clone(),
+            args.docker_image.clone(),
         );
         let session = session_manager.create_docker_session(
             session_id.clone(),
@@ -158,7 +159,15 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     );
     if is_container {
         println!("   Container: para-{}", session_state.name);
-        println!("   Image: para-authenticated:latest");
+
+        // Show the actual Docker image being used
+        if let Some(ref custom_image) = args.docker_image {
+            println!("   Image: {} (custom)", custom_image);
+        } else if let Some(config_image) = config.get_docker_image() {
+            println!("   Image: {} (from config)", config_image);
+        } else {
+            println!("   Image: para-authenticated:latest (default)");
+        }
 
         // Show network isolation warning if it's disabled
         if !network_isolation {
@@ -541,6 +550,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -558,6 +568,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -578,6 +589,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -599,6 +611,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -620,6 +633,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -640,6 +654,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -657,6 +672,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -693,6 +709,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -719,6 +736,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -754,6 +772,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         // This should work with explicit args regardless of stdin status
@@ -786,6 +805,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args_with_file
@@ -803,6 +823,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
@@ -823,6 +844,7 @@ mod tests {
             container: false,
             allow_domains: None,
             docker_args: vec![],
+            docker_image: None,
         };
 
         // The current implementation has a logical flaw:
@@ -882,6 +904,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -905,6 +928,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -928,6 +952,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -950,6 +975,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -973,6 +999,7 @@ mod tests {
             directories: crate::config::defaults::default_directory_config(),
             git: crate::config::defaults::default_git_config(),
             session: crate::config::defaults::default_session_config(),
+            docker: None,
         };
 
         let result = validate_claude_code_ide(&config);
