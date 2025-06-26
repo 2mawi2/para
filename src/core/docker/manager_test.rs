@@ -33,6 +33,7 @@ mod tests {
             },
             docker: docker_image.map(|image| DockerConfig {
                 default_image: Some(image),
+                forward_env_keys: None,
             }),
         }
     }
@@ -76,5 +77,27 @@ mod tests {
         assert!(manager.network_isolation);
         assert_eq!(manager.allowed_domains, vec!["test.com".to_string()]);
         assert_eq!(manager.docker_image, None);
+    }
+
+    #[test]
+    fn test_docker_manager_forward_keys() {
+        // Test that forward_keys defaults to true for backward compatibility
+        let config = create_test_config_with_docker(None);
+        let manager = DockerManager::new(config, false, vec![]);
+
+        assert!(manager.forward_keys);
+
+        // Test with_image also defaults to true
+        let config2 = create_test_config_with_docker(None);
+        let manager2 =
+            DockerManager::with_image(config2, false, vec![], Some("test:latest".to_string()));
+
+        assert!(manager2.forward_keys);
+
+        // Test with_options can set it to false
+        let config3 = create_test_config_with_docker(None);
+        let manager3 = DockerManager::with_options(config3, false, vec![], None, false);
+
+        assert!(!manager3.forward_keys);
     }
 }
