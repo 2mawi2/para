@@ -142,13 +142,19 @@ impl Status {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {}", e)))?;
 
+        // Write to a temporary file first, then rename atomically
+        // Use a unique temp file name to avoid conflicts in concurrent writes
+        use rand::Rng;
+        let random_id: u32 = rand::thread_rng().gen();
+        let temp_file = status_file.with_extension(format!("tmp.{}", random_id));
+
         // Use file locking to prevent race conditions
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&status_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to open status file: {}", e)))?;
+            .open(&temp_file)
+            .map_err(|e| ParaError::fs_error(format!("Failed to open temp status file: {}", e)))?;
 
         // Lock the file exclusively for writing
         file.lock_exclusive()
@@ -159,7 +165,17 @@ impl Status {
         file.write_all(json.as_bytes())
             .map_err(|e| ParaError::fs_error(format!("Failed to write status file: {}", e)))?;
 
-        // File lock is automatically released when the file is dropped
+        // Sync to disk
+        file.sync_all()
+            .map_err(|e| ParaError::fs_error(format!("Failed to sync status file: {}", e)))?;
+
+        // Explicitly drop to release lock before rename
+        drop(file);
+
+        // Rename atomically
+        fs::rename(temp_file, status_file)
+            .map_err(|e| ParaError::fs_error(format!("Failed to rename status file: {}", e)))?;
+
         Ok(())
     }
 
@@ -170,28 +186,59 @@ impl Status {
             return Ok(None);
         }
 
+        // Skip temporary files that might be in the process of being written
+        if status_file.extension().is_some_and(|ext| ext == "tmp") {
+            return Ok(None);
+        }
+
         // Open file with shared lock for reading
-        let mut file = OpenOptions::new()
-            .read(true)
-            .open(&status_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to open status file: {}", e)))?;
+        match OpenOptions::new().read(true).open(&status_file) {
+            Ok(mut file) => {
+                // Lock the file for shared reading
+                FileExt::lock_shared(&file).map_err(|e| {
+                    ParaError::fs_error(format!("Failed to lock status file for reading: {}", e))
+                })?;
 
-        // Lock the file for shared reading
-        FileExt::lock_shared(&file).map_err(|e| {
-            ParaError::fs_error(format!("Failed to lock status file for reading: {}", e))
-        })?;
-
-        // Read the content
-        use std::io::Read;
-        let mut json = String::new();
-        file.read_to_string(&mut json)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read status file: {}", e)))?;
-
-        let status: Status = serde_json::from_str(&json)
-            .map_err(|e| ParaError::config_error(format!("Failed to parse status file: {}", e)))?;
-
-        // File lock is automatically released when the file is dropped
-        Ok(Some(status))
+                // Read the content
+                use std::io::Read;
+                let mut json = String::new();
+                match file.read_to_string(&mut json) {
+                    Ok(_) => {
+                        // Try to parse the content
+                        match serde_json::from_str(&json) {
+                            Ok(status) => Ok(Some(status)),
+                            Err(e) => {
+                                // If parsing fails and the file is empty or contains partial data,
+                                // treat it as if the status doesn't exist yet
+                                if json.trim().is_empty() || e.is_eof() {
+                                    Ok(None)
+                                } else {
+                                    Err(ParaError::config_error(format!(
+                                        "Failed to parse status file: {}",
+                                        e
+                                    ))
+                                    .into())
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => Err(ParaError::fs_error(format!(
+                        "Failed to read status file: {}",
+                        e
+                    ))
+                    .into()),
+                }
+            }
+            Err(e) => {
+                // If the file was deleted between the exists check and open,
+                // treat it as if it doesn't exist
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Ok(None)
+                } else {
+                    Err(ParaError::fs_error(format!("Failed to open status file: {}", e)).into())
+                }
+            }
+        }
     }
 
     pub fn parse_test_status(s: &str) -> Result<TestStatus> {
