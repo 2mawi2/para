@@ -4,6 +4,7 @@ use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitRepository, GitService, SessionEnvironment,
 };
 use crate::core::session::{SessionManager, SessionState, SessionStatus};
+use crate::core::status::{ConfidenceLevel, Status, TestStatus};
 use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
@@ -23,8 +24,22 @@ fn cleanup_session_state(
     session_manager: &mut SessionManager,
     session_info: Option<SessionState>,
     feature_branch: &str,
-    _config: &Config,
+    config: &Config,
 ) -> Result<()> {
+    // First, update the status file to show 100% completion
+    if let Some(ref session_state) = session_info {
+        update_final_status(session_state, config)?;
+    } else if let Ok(sessions) = session_manager.list_sessions() {
+        // Fallback: find session by branch name
+        for session in &sessions {
+            if session.branch == feature_branch {
+                update_final_status(session, config)?;
+                break;
+            }
+        }
+    }
+
+    // Then update session status to Review
     if let Some(session_state) = session_info {
         session_manager.update_session_status(&session_state.name, SessionStatus::Review)?;
     } else if let Ok(sessions) = session_manager.list_sessions() {
@@ -301,6 +316,57 @@ pub fn execute(config: Config, args: FinishArgs) -> Result<()> {
             handle_finish_success(final_branch, &mut ctx)?;
         }
     }
+
+    Ok(())
+}
+
+fn update_final_status(session_state: &SessionState, config: &Config) -> Result<()> {
+    let state_dir = if std::path::Path::new(&config.directories.state_dir).is_absolute() {
+        std::path::PathBuf::from(&config.directories.state_dir)
+    } else {
+        // Get the main repository root for state directory
+        if let Ok(root) = crate::utils::get_main_repository_root() {
+            root.join(&config.directories.state_dir)
+        } else {
+            // Fallback to current directory
+            std::env::current_dir()?.join(&config.directories.state_dir)
+        }
+    };
+
+    // Load existing status or create new one
+    let status = match Status::load(&state_dir, &session_state.name)
+        .map_err(|e| ParaError::config_error(format!("Failed to load status: {}", e)))?
+    {
+        Some(mut existing_status) => {
+            // Update existing status to show 100% completion
+            existing_status.current_task = "Review".to_string();
+            existing_status.test_status = TestStatus::Passed;
+            existing_status.confidence = ConfidenceLevel::High;
+            existing_status.is_blocked = false;
+            existing_status.blocked_reason = None;
+
+            // Set todos to 100% if they exist
+            if let Some(total) = existing_status.todos_total {
+                existing_status.todos_completed = Some(total);
+            }
+
+            existing_status
+        }
+        None => {
+            // Create a new status with 100% completion
+            Status::new(
+                session_state.name.clone(),
+                "Review".to_string(),
+                TestStatus::Passed,
+                ConfidenceLevel::High,
+            )
+        }
+    };
+
+    // Save the updated status
+    status
+        .save(&state_dir)
+        .map_err(|e| ParaError::config_error(format!("Failed to save status: {}", e)))?;
 
     Ok(())
 }
@@ -662,5 +728,125 @@ mod tests {
             .load_state("no-preserve-test")
             .expect("Session should exist");
         assert!(matches!(updated_session.status, SessionStatus::Review));
+    }
+
+    #[test]
+    fn test_finish_updates_status_to_100_percent() {
+        // Test that finish command updates status to 100% completion
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
+        let state_dir = std::path::Path::new(&config.directories.state_dir);
+
+        let session_state = SessionState::new(
+            "status-test-session".to_string(),
+            "test/status-branch".to_string(),
+            repo_path.join("test-worktree"),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Create an initial status with incomplete todos
+        let initial_status = Status::new(
+            "status-test-session".to_string(),
+            "Working on feature".to_string(),
+            crate::core::status::TestStatus::Failed,
+            crate::core::status::ConfidenceLevel::Medium,
+        )
+        .with_todos(3, 5);
+        initial_status
+            .save(state_dir)
+            .expect("Failed to save initial status");
+
+        // Call cleanup_session_state (which is called during finish)
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state),
+            "test/status-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Load the updated status
+        let updated_status = Status::load(state_dir, "status-test-session")
+            .expect("Failed to load status")
+            .expect("Status should exist");
+
+        // Verify status was updated to 100%
+        assert_eq!(updated_status.current_task, "Review");
+        assert_eq!(
+            updated_status.test_status,
+            crate::core::status::TestStatus::Passed
+        );
+        assert_eq!(
+            updated_status.confidence,
+            crate::core::status::ConfidenceLevel::High
+        );
+        assert!(!updated_status.is_blocked);
+        assert_eq!(updated_status.todos_completed, Some(5)); // Should be equal to total
+        assert_eq!(updated_status.todos_total, Some(5));
+    }
+
+    #[test]
+    fn test_finish_creates_status_if_missing() {
+        // Test that finish creates a status file if it doesn't exist
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
+        let state_dir = std::path::Path::new(&config.directories.state_dir);
+
+        let session_state = SessionState::new(
+            "new-status-session".to_string(),
+            "test/new-status-branch".to_string(),
+            repo_path.join("test-worktree"),
+        );
+
+        session_manager
+            .save_state(&session_state)
+            .expect("Failed to save session state");
+
+        // Verify no status exists initially
+        assert!(Status::load(state_dir, "new-status-session")
+            .expect("Failed to check status")
+            .is_none());
+
+        // Call cleanup_session_state
+        let result = cleanup_session_state(
+            &mut session_manager,
+            Some(session_state),
+            "test/new-status-branch",
+            &config,
+        );
+        assert!(result.is_ok());
+
+        // Verify status was created
+        let created_status = Status::load(state_dir, "new-status-session")
+            .expect("Failed to load status")
+            .expect("Status should have been created");
+
+        assert_eq!(created_status.current_task, "Review");
+        assert_eq!(
+            created_status.test_status,
+            crate::core::status::TestStatus::Passed
+        );
+        assert_eq!(
+            created_status.confidence,
+            crate::core::status::ConfidenceLevel::High
+        );
+        assert!(!created_status.is_blocked);
+        assert_eq!(created_status.todos_completed, None); // No todos when created fresh
+        assert_eq!(created_status.todos_total, None);
     }
 }
