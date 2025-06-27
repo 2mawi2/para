@@ -4,7 +4,7 @@ use crate::core::git::{
     FinishRequest, FinishResult, GitOperations, GitRepository, GitService, SessionEnvironment,
 };
 use crate::core::session::{SessionManager, SessionState, SessionStatus};
-use crate::core::status::{ConfidenceLevel, Status, TestStatus};
+use crate::core::status::{Status, TestStatus};
 use crate::platform::get_platform_manager;
 use crate::utils::{ParaError, Result};
 use std::env;
@@ -346,7 +346,6 @@ fn update_final_status(session_state: &SessionState, config: &Config) -> Result<
                 existing_status.test_status = TestStatus::Passed;
             }
 
-            existing_status.confidence = ConfidenceLevel::High;
             existing_status.is_blocked = false;
             existing_status.blocked_reason = None;
 
@@ -363,7 +362,6 @@ fn update_final_status(session_state: &SessionState, config: &Config) -> Result<
                 session_state.name.clone(),
                 "Review".to_string(),
                 TestStatus::Passed,
-                ConfidenceLevel::High,
             )
         }
     };
@@ -763,7 +761,6 @@ mod tests {
             "status-test-session".to_string(),
             "Working on feature".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Medium,
         )
         .with_todos(3, 5);
         initial_status
@@ -790,10 +787,6 @@ mod tests {
         assert_eq!(
             updated_status.test_status,
             crate::core::status::TestStatus::Failed
-        );
-        assert_eq!(
-            updated_status.confidence,
-            crate::core::status::ConfidenceLevel::High
         );
         assert!(!updated_status.is_blocked);
         assert_eq!(updated_status.todos_completed, Some(5)); // Should be equal to total
@@ -847,10 +840,6 @@ mod tests {
             created_status.test_status,
             crate::core::status::TestStatus::Passed
         );
-        assert_eq!(
-            created_status.confidence,
-            crate::core::status::ConfidenceLevel::High
-        );
         assert!(!created_status.is_blocked);
         assert_eq!(created_status.todos_completed, None); // No todos when created fresh
         assert_eq!(created_status.todos_total, None);
@@ -883,7 +872,6 @@ mod tests {
             "failed-status-session".to_string(),
             "Working on feature".to_string(),
             crate::core::status::TestStatus::Failed,
-            crate::core::status::ConfidenceLevel::Low,
         );
         failed_status
             .save(state_dir)
@@ -921,7 +909,6 @@ mod tests {
             "unknown-status-session".to_string(),
             "Working on feature".to_string(),
             crate::core::status::TestStatus::Unknown,
-            crate::core::status::ConfidenceLevel::Medium,
         );
         unknown_status
             .save(state_dir)
