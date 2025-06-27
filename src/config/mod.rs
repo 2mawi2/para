@@ -17,6 +17,8 @@ pub struct Config {
     pub session: SessionConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docker: Option<DockerConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup_script: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -205,6 +207,7 @@ mod tests {
                 auto_cleanup_days: Some(14),
             },
             docker: None,
+            setup_script: None,
         };
 
         assert_eq!(config.get_branch_prefix(), "feature");
@@ -314,6 +317,7 @@ mod tests {
                 auto_cleanup_days: Some(7),
             },
             docker: None,
+            setup_script: None,
         };
         assert!(valid_config.validate().is_ok());
 
@@ -354,6 +358,7 @@ mod tests {
                 auto_cleanup_days: None,
             },
             docker: None,
+            setup_script: None,
         };
         assert!(config_wrapper_disabled.validate().is_ok());
 
@@ -398,6 +403,7 @@ mod tests {
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
             docker: None,
+            setup_script: None,
         };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
@@ -433,6 +439,7 @@ mod tests {
             git: defaults::default_git_config(),
             session: defaults::default_session_config(),
             docker: None,
+            setup_script: None,
         };
 
         // Test 1: Manually save config and verify it can be loaded

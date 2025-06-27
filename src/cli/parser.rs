@@ -85,10 +85,10 @@ pub struct StartArgs {
     )]
     pub docker_args: Vec<String>,
 
-    /// Path to setup script to run inside container after startup
+    /// Path to setup script to run after session creation
     #[arg(
         long = "setup-script",
-        help = "Path to setup script to run inside container after startup"
+        help = "Path to setup script to run after session creation (before IDE launch)"
     )]
     pub setup_script: Option<PathBuf>,
 
@@ -166,10 +166,10 @@ pub struct DispatchArgs {
     )]
     pub docker_args: Vec<String>,
 
-    /// Path to setup script to run inside container after startup
+    /// Path to setup script to run after session creation
     #[arg(
         long = "setup-script",
-        help = "Path to setup script to run inside container after startup"
+        help = "Path to setup script to run after session creation (before IDE launch)"
     )]
     pub setup_script: Option<PathBuf>,
 

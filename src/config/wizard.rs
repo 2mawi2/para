@@ -215,6 +215,7 @@ mod tests {
                 auto_cleanup_days: None,
             },
             docker: None,
+            setup_script: None,
         };
 
         display_config_summary(&config);
@@ -252,6 +253,7 @@ mod tests {
                 auto_cleanup_days: Some(30),
             },
             docker: None,
+            setup_script: None,
         };
 
         assert!(
