@@ -360,6 +360,9 @@ mod tests {
         crate::core::docker::signal_files::write_signal_file(&signal_paths.finish, &finish_signal)
             .unwrap();
 
+        // Give the filesystem time to sync the atomic write
+        thread::sleep(Duration::from_millis(50));
+
         // Wait for watcher to process signal
         let start = std::time::Instant::now();
         while !handle.has_stopped() && start.elapsed() < Duration::from_secs(5) {
@@ -409,6 +412,9 @@ mod tests {
         let cancel_signal = CancelSignal { force: true };
         crate::core::docker::signal_files::write_signal_file(&signal_paths.cancel, &cancel_signal)
             .unwrap();
+
+        // Give the filesystem time to sync the atomic write
+        thread::sleep(Duration::from_millis(50));
 
         // Wait for watcher to process signal
         let start = std::time::Instant::now();
