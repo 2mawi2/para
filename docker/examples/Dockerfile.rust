@@ -1,0 +1,38 @@
+# Para Rust Development Image
+# This image includes Rust toolchain and common development tools
+
+FROM para-claude:latest
+
+# Switch to root for package installation
+USER root
+
+# Install system dependencies for Rust development
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install common Rust tools
+RUN cargo install \
+    cargo-watch \
+    cargo-edit \
+    cargo-expand
+
+# Install just command runner
+RUN JUST_VERSION="1.16.0" && \
+    ARCH=$(dpkg --print-architecture | sed 's/arm64/aarch64/') && \
+    curl -L "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" | \
+    tar xz -C /usr/local/bin/
+
+# Set working directory
+WORKDIR /workspace
+
+# Entry point (sleep infinity for para to manage)
+CMD ["sleep", "infinity"]

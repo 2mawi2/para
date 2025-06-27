@@ -44,6 +44,51 @@ impl DockerService {
             "/workspace".to_string(),
         ]);
 
+        // Mount auth volume for custom images (non-para-authenticated images)
+        if options.docker_image != "para-authenticated:latest" {
+            // Try to find the auth volume - it might use different user IDs on different systems
+            // First try with USER env var
+            let user_id = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
+            let primary_volume = format!("para-auth-claude-{}", user_id);
+            
+            // Check if primary volume exists
+            let primary_check = Command::new("docker")
+                .args(["volume", "inspect", &primary_volume])
+                .output()
+                .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
+            
+            let auth_volume = if primary_check.status.success() {
+                Some(primary_volume)
+            } else {
+                // If not found, look for any para-auth-claude volume
+                let volume_list = Command::new("docker")
+                    .args(["volume", "ls", "--format", "{{.Name}}"])
+                    .output()
+                    .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
+                
+                if volume_list.status.success() {
+                    let volumes = String::from_utf8_lossy(&volume_list.stdout);
+                    volumes
+                        .lines()
+                        .find(|line| line.starts_with("para-auth-claude-"))
+                        .map(|s| s.to_string())
+                } else {
+                    None
+                }
+            };
+            
+            if let Some(volume_name) = auth_volume {
+                // Mount the auth volume
+                docker_cmd_args.extend([
+                    "-v".to_string(),
+                    format!("{}:/root/.config", volume_name),
+                ]);
+                println!("🔐 Mounting auth volume: {}", volume_name);
+            } else {
+                println!("⚠️  No auth volume found. Run 'para auth' to set up authentication.");
+            }
+        }
+
         // Configure network isolation
         if options.network_isolation {
             // Add capabilities required for iptables/ipset
