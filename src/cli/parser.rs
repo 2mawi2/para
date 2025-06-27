@@ -19,7 +19,7 @@ pub enum Commands {
     Start(StartArgs),
     /// Start Claude Code session with prompt (supports stdin piping)
     Dispatch(DispatchArgs),
-    /// Squash all changes into single commit
+    /// Complete session and create feature branch for review
     Finish(FinishArgs),
     /// Cancel session (moves to archive)
     Cancel(CancelArgs),

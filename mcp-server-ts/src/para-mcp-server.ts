@@ -207,7 +207,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "para_finish",
-        description: "Rarely used by orchestrator. Creates branch without merging. Agents use CLI 'para finish' command instead. Only use if you started a manual session with para_start and want to save work without merging.",
+        description: "Complete session and create feature branch for review. Creates commit and branch from session work. Agents typically use CLI 'para finish' command instead.",
         inputSchema: {
           type: "object",
           properties: {
