@@ -42,6 +42,10 @@ pub struct SessionState {
     // Deprecated - use session_type instead
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub is_docker: Option<bool>,
+
+    // Whether session was created with dangerous_skip_permissions flag
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub dangerous_skip_permissions: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,14 +77,16 @@ impl SessionState {
             session_type: SessionType::Worktree,
             parent_branch: None,
             is_docker: None,
+            dangerous_skip_permissions: None,
         }
     }
 
-    pub fn with_parent_branch(
+    pub fn with_parent_branch_and_flags(
         name: String,
         branch: String,
         worktree_path: PathBuf,
         parent_branch: String,
+        dangerous_skip_permissions: bool,
     ) -> Self {
         Self {
             name,
@@ -94,16 +100,22 @@ impl SessionState {
             session_type: SessionType::Worktree,
             parent_branch: Some(parent_branch),
             is_docker: None,
+            dangerous_skip_permissions: if dangerous_skip_permissions {
+                Some(true)
+            } else {
+                None
+            },
         }
     }
 
-    /// Create a new container-based session with parent branch
-    pub fn new_container_with_parent_branch(
+    /// Create a new container-based session with parent branch and flags
+    pub fn new_container_with_parent_branch_and_flags(
         name: String,
         branch: String,
         worktree_path: PathBuf,
         container_id: Option<String>,
         parent_branch: String,
+        dangerous_skip_permissions: bool,
     ) -> Self {
         Self {
             name,
@@ -117,6 +129,11 @@ impl SessionState {
             session_type: SessionType::Container { container_id },
             parent_branch: Some(parent_branch),
             is_docker: None,
+            dangerous_skip_permissions: if dangerous_skip_permissions {
+                Some(true)
+            } else {
+                None
+            },
         }
     }
 
@@ -217,6 +234,7 @@ mod tests {
             session_type: SessionType::Worktree,
             parent_branch: None,
             is_docker: None,
+            dangerous_skip_permissions: None,
         };
 
         // Should be able to serialize and deserialize Review status
@@ -249,12 +267,13 @@ mod tests {
 
     #[test]
     fn test_container_session_state() {
-        let state = SessionState::new_container_with_parent_branch(
+        let state = SessionState::new_container_with_parent_branch_and_flags(
             "container-session".to_string(),
             "test/container-branch".to_string(),
             PathBuf::from("/path/to/worktree"),
             Some("abc123".to_string()),
             "main".to_string(),
+            false,
         );
 
         assert_eq!(state.name, "container-session");
@@ -279,12 +298,13 @@ mod tests {
         assert!(json.contains(r#""session_type":"Worktree""#));
 
         // Test container type
-        let container_session = SessionState::new_container_with_parent_branch(
+        let container_session = SessionState::new_container_with_parent_branch_and_flags(
             "container".to_string(),
             "test/container".to_string(),
             PathBuf::from("/test"),
             Some("xyz789".to_string()),
             "main".to_string(),
+            false,
         );
         let json = serde_json::to_string(&container_session).unwrap();
         assert!(json.contains(r#""session_type":{"Container""#));
@@ -302,11 +322,12 @@ mod tests {
         assert_eq!(state.parent_branch, None);
 
         // Test with_parent_branch() constructor
-        let state_with_parent = SessionState::with_parent_branch(
+        let state_with_parent = SessionState::with_parent_branch_and_flags(
             "feature-session".to_string(),
             "para/feature-session".to_string(),
             PathBuf::from("/test"),
             "develop".to_string(),
+            false,
         );
         assert_eq!(state_with_parent.parent_branch, Some("develop".to_string()));
     }
@@ -314,11 +335,12 @@ mod tests {
     #[test]
     fn test_parent_branch_serialization() {
         // Test serialization with parent_branch
-        let state = SessionState::with_parent_branch(
+        let state = SessionState::with_parent_branch_and_flags(
             "test".to_string(),
             "para/test".to_string(),
             PathBuf::from("/test"),
             "main".to_string(),
+            false,
         );
         let json = serde_json::to_string(&state).unwrap();
         assert!(json.contains(r#""parent_branch":"main""#));
@@ -359,5 +381,75 @@ mod tests {
         }"#;
         let deserialized: SessionState = serde_json::from_str(new_json).unwrap();
         assert_eq!(deserialized.parent_branch, Some("feature/base".to_string()));
+    }
+
+    #[test]
+    fn test_dangerous_skip_permissions_field() {
+        // Test new() constructor - should have None dangerous_skip_permissions
+        let state = SessionState::new(
+            "test-session".to_string(),
+            "para/test-session".to_string(),
+            PathBuf::from("/test"),
+        );
+        assert_eq!(state.dangerous_skip_permissions, None);
+
+        // Test setting dangerous_skip_permissions
+        let mut state_with_flag = SessionState::new(
+            "dangerous-session".to_string(),
+            "para/dangerous-session".to_string(),
+            PathBuf::from("/test"),
+        );
+        state_with_flag.dangerous_skip_permissions = Some(true);
+        assert_eq!(state_with_flag.dangerous_skip_permissions, Some(true));
+    }
+
+    #[test]
+    fn test_dangerous_skip_permissions_serialization() {
+        // Test serialization with dangerous_skip_permissions
+        let mut state = SessionState::new(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+        );
+        state.dangerous_skip_permissions = Some(true);
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains(r#""dangerous_skip_permissions":true"#));
+
+        // Test serialization without dangerous_skip_permissions (should not include field)
+        let state_no_flag = SessionState::new(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+        );
+        let json = serde_json::to_string(&state_no_flag).unwrap();
+        assert!(!json.contains("dangerous_skip_permissions"));
+    }
+
+    #[test]
+    fn test_dangerous_skip_permissions_deserialization() {
+        // Test deserializing old sessions without dangerous_skip_permissions field
+        let old_json = r#"{
+            "name": "old-session",
+            "branch": "para/old-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree"
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(old_json).unwrap();
+        assert_eq!(deserialized.dangerous_skip_permissions, None);
+
+        // Test deserializing new sessions with dangerous_skip_permissions field
+        let new_json = r#"{
+            "name": "new-session",
+            "branch": "para/new-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree",
+            "dangerous_skip_permissions": true
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(new_json).unwrap();
+        assert_eq!(deserialized.dangerous_skip_permissions, Some(true));
     }
 }

@@ -39,12 +39,26 @@ impl SessionManager {
         &self.config
     }
 
+    pub fn state_dir(&self) -> &PathBuf {
+        &self.state_dir
+    }
+
+    #[allow(dead_code)]
     pub fn create_session(
         &mut self,
         name: String,
         base_branch: Option<String>,
     ) -> Result<SessionState> {
-        self.create_session_with_type(name, base_branch, None)
+        self.create_session_with_type(name, base_branch, None, false)
+    }
+
+    pub fn create_session_with_flags(
+        &mut self,
+        name: String,
+        base_branch: Option<String>,
+        dangerous_skip_permissions: bool,
+    ) -> Result<SessionState> {
+        self.create_session_with_type(name, base_branch, None, dangerous_skip_permissions)
     }
 
     /// Create a session with specified type (worktree or container)
@@ -53,6 +67,7 @@ impl SessionManager {
         name: String,
         base_branch: Option<String>,
         session_type: Option<super::state::SessionType>,
+        dangerous_skip_permissions: bool,
     ) -> Result<SessionState> {
         let git_service = GitService::discover().map_err(|e| {
             ParaError::git_error(format!("Failed to discover git repository: {}", e))
@@ -106,19 +121,21 @@ impl SessionManager {
 
         let session_state = match session_type {
             Some(super::state::SessionType::Container { container_id }) => {
-                SessionState::new_container_with_parent_branch(
+                SessionState::new_container_with_parent_branch_and_flags(
                     final_session_name,
                     branch_name,
                     worktree_path,
                     container_id,
                     parent_branch,
+                    dangerous_skip_permissions,
                 )
             }
-            _ => SessionState::with_parent_branch(
+            _ => SessionState::with_parent_branch_and_flags(
                 final_session_name,
                 branch_name,
                 worktree_path,
                 parent_branch,
+                dangerous_skip_permissions,
             ),
         };
 
@@ -432,18 +449,20 @@ impl SessionManager {
         GitignoreManager::create_para_internal_gitignore(para_dir)
     }
 
-    pub fn create_docker_session(
+    pub fn create_docker_session_with_flags(
         &mut self,
         name: String,
         docker_manager: &crate::core::docker::DockerManager,
         _initial_prompt: Option<&str>,
         docker_args: &[String],
+        dangerous_skip_permissions: bool,
     ) -> Result<SessionState> {
         // Create a container-type session
         let mut session_state = self.create_session_with_type(
             name,
             None,
             Some(super::state::SessionType::Container { container_id: None }),
+            dangerous_skip_permissions,
         )?;
 
         // Create the Docker container and update session with container ID
@@ -1048,11 +1067,12 @@ mod tests {
         let manager = SessionManager::new(&config);
 
         // Test creating session with parent branch
-        let session = SessionState::with_parent_branch(
+        let session = SessionState::with_parent_branch_and_flags(
             "feature-test".to_string(),
             "para/feature-test".to_string(),
             temp_dir.path().join("worktree"),
             "develop".to_string(),
+            false,
         );
 
         // Save and reload to test persistence
@@ -1090,5 +1110,85 @@ mod tests {
         // Should load successfully with None parent_branch
         assert_eq!(loaded.parent_branch, None);
         assert_eq!(loaded.name, "old-format");
+    }
+
+    #[test]
+    fn test_dangerous_skip_permissions_persistence() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create session with dangerous_skip_permissions set to true
+        let mut session = SessionState::with_parent_branch_and_flags(
+            "dangerous-session".to_string(),
+            "para/dangerous-session".to_string(),
+            temp_dir.path().join("worktree"),
+            "main".to_string(),
+            true,
+        );
+
+        // Verify the flag is set
+        assert_eq!(session.dangerous_skip_permissions, Some(true));
+
+        // Save and reload
+        manager.save_state(&session).unwrap();
+        let loaded = manager.load_state("dangerous-session").unwrap();
+
+        // Should persist the dangerous_skip_permissions flag
+        assert_eq!(loaded.dangerous_skip_permissions, Some(true));
+        assert_eq!(loaded.name, "dangerous-session");
+
+        // Create session with dangerous_skip_permissions set to false
+        session = SessionState::with_parent_branch_and_flags(
+            "safe-session".to_string(),
+            "para/safe-session".to_string(),
+            temp_dir.path().join("worktree2"),
+            "main".to_string(),
+            false,
+        );
+
+        // Verify the flag is None (not Some(false))
+        assert_eq!(session.dangerous_skip_permissions, None);
+
+        // Save and reload
+        manager.save_state(&session).unwrap();
+        let loaded = manager.load_state("safe-session").unwrap();
+
+        // Should have None for dangerous_skip_permissions
+        assert_eq!(loaded.dangerous_skip_permissions, None);
+    }
+
+    #[test]
+    fn test_dangerous_skip_permissions_backward_compatibility() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut config = default_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para/state")
+            .to_string_lossy()
+            .to_string();
+        let manager = SessionManager::new(&config);
+
+        // Create session without dangerous_skip_permissions field (old format)
+        let session = SessionState::new(
+            "legacy-session".to_string(),
+            "para/legacy-session".to_string(),
+            temp_dir.path().join("worktree"),
+        );
+
+        // Save and reload
+        manager.save_state(&session).unwrap();
+        let loaded = manager.load_state("legacy-session").unwrap();
+
+        // Should load successfully with None dangerous_skip_permissions
+        assert_eq!(loaded.dangerous_skip_permissions, None);
+        assert_eq!(loaded.name, "legacy-session");
     }
 }
