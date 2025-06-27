@@ -39,6 +39,10 @@ impl SessionManager {
         &self.config
     }
 
+    pub fn state_dir(&self) -> &PathBuf {
+        &self.state_dir
+    }
+
     #[allow(dead_code)]
     pub fn create_session(
         &mut self,
@@ -443,22 +447,6 @@ impl SessionManager {
     /// Ensure .para/.gitignore exists with appropriate content
     fn ensure_para_gitignore_exists(&self, para_dir: &Path) -> Result<()> {
         GitignoreManager::create_para_internal_gitignore(para_dir)
-    }
-
-    pub fn create_docker_session(
-        &mut self,
-        name: String,
-        docker_manager: &crate::core::docker::DockerManager,
-        _initial_prompt: Option<&str>,
-        docker_args: &[String],
-    ) -> Result<SessionState> {
-        self.create_docker_session_with_flags(
-            name,
-            docker_manager,
-            _initial_prompt,
-            docker_args,
-            false,
-        )
     }
 
     pub fn create_docker_session_with_flags(
@@ -1079,11 +1067,12 @@ mod tests {
         let manager = SessionManager::new(&config);
 
         // Test creating session with parent branch
-        let session = SessionState::with_parent_branch(
+        let session = SessionState::with_parent_branch_and_flags(
             "feature-test".to_string(),
             "para/feature-test".to_string(),
             temp_dir.path().join("worktree"),
             "develop".to_string(),
+            false,
         );
 
         // Save and reload to test persistence

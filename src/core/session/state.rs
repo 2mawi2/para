@@ -81,29 +81,6 @@ impl SessionState {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn with_parent_branch(
-        name: String,
-        branch: String,
-        worktree_path: PathBuf,
-        parent_branch: String,
-    ) -> Self {
-        Self {
-            name,
-            branch,
-            worktree_path,
-            created_at: Utc::now(),
-            status: SessionStatus::Active,
-            task_description: None,
-            last_activity: None,
-            git_stats: None,
-            session_type: SessionType::Worktree,
-            parent_branch: Some(parent_branch),
-            is_docker: None,
-            dangerous_skip_permissions: None,
-        }
-    }
-
     pub fn with_parent_branch_and_flags(
         name: String,
         branch: String,
@@ -128,31 +105,6 @@ impl SessionState {
             } else {
                 None
             },
-        }
-    }
-
-    /// Create a new container-based session with parent branch
-    #[allow(dead_code)]
-    pub fn new_container_with_parent_branch(
-        name: String,
-        branch: String,
-        worktree_path: PathBuf,
-        container_id: Option<String>,
-        parent_branch: String,
-    ) -> Self {
-        Self {
-            name,
-            branch,
-            worktree_path,
-            created_at: Utc::now(),
-            status: SessionStatus::Active,
-            task_description: None,
-            last_activity: None,
-            git_stats: None,
-            session_type: SessionType::Container { container_id },
-            parent_branch: Some(parent_branch),
-            is_docker: None,
-            dangerous_skip_permissions: None,
         }
     }
 
@@ -315,12 +267,13 @@ mod tests {
 
     #[test]
     fn test_container_session_state() {
-        let state = SessionState::new_container_with_parent_branch(
+        let state = SessionState::new_container_with_parent_branch_and_flags(
             "container-session".to_string(),
             "test/container-branch".to_string(),
             PathBuf::from("/path/to/worktree"),
             Some("abc123".to_string()),
             "main".to_string(),
+            false,
         );
 
         assert_eq!(state.name, "container-session");
@@ -345,12 +298,13 @@ mod tests {
         assert!(json.contains(r#""session_type":"Worktree""#));
 
         // Test container type
-        let container_session = SessionState::new_container_with_parent_branch(
+        let container_session = SessionState::new_container_with_parent_branch_and_flags(
             "container".to_string(),
             "test/container".to_string(),
             PathBuf::from("/test"),
             Some("xyz789".to_string()),
             "main".to_string(),
+            false,
         );
         let json = serde_json::to_string(&container_session).unwrap();
         assert!(json.contains(r#""session_type":{"Container""#));
@@ -368,11 +322,12 @@ mod tests {
         assert_eq!(state.parent_branch, None);
 
         // Test with_parent_branch() constructor
-        let state_with_parent = SessionState::with_parent_branch(
+        let state_with_parent = SessionState::with_parent_branch_and_flags(
             "feature-session".to_string(),
             "para/feature-session".to_string(),
             PathBuf::from("/test"),
             "develop".to_string(),
+            false,
         );
         assert_eq!(state_with_parent.parent_branch, Some("develop".to_string()));
     }
@@ -380,11 +335,12 @@ mod tests {
     #[test]
     fn test_parent_branch_serialization() {
         // Test serialization with parent_branch
-        let state = SessionState::with_parent_branch(
+        let state = SessionState::with_parent_branch_and_flags(
             "test".to_string(),
             "para/test".to_string(),
             PathBuf::from("/test"),
             "main".to_string(),
+            false,
         );
         let json = serde_json::to_string(&state).unwrap();
         assert!(json.contains(r#""parent_branch":"main""#));
