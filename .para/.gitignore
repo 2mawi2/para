@@ -1,0 +1,6 @@
+# Ignore all para contents except configuration and setup scripts
+*
+!.gitignore
+!setup.sh
+!setup-docker.sh
+!setup-worktree.sh
