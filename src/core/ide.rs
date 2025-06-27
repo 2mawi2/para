@@ -4,6 +4,15 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+/// Options for launching IDE with specific features
+#[derive(Debug, Clone, Default)]
+pub struct LaunchOptions {
+    pub skip_permissions: bool,
+    pub continue_conversation: bool,
+    pub claude_session_id: Option<String>,
+    pub prompt: Option<String>,
+}
+
 pub struct IdeManager {
     config: IdeConfig,
 }
@@ -16,15 +25,14 @@ impl IdeManager {
     }
 
     pub fn launch(&self, path: &Path, skip_permissions: bool) -> Result<()> {
-        self.launch_with_options(path, skip_permissions, false)
+        let options = LaunchOptions {
+            skip_permissions,
+            ..Default::default()
+        };
+        self.launch_with_options(path, options)
     }
 
-    pub fn launch_with_options(
-        &self,
-        path: &Path,
-        skip_permissions: bool,
-        continue_conversation: bool,
-    ) -> Result<()> {
+    pub fn launch_with_options(&self, path: &Path, options: LaunchOptions) -> Result<()> {
         // All IDEs require wrapper mode for cloud-based launching
         if !self.config.wrapper.enabled {
             return Err(ParaError::ide_error(
@@ -36,7 +44,7 @@ impl IdeManager {
             "▶ launching {} inside {} wrapper...",
             self.config.name, self.config.wrapper.name
         );
-        self.launch_wrapper_with_options(path, skip_permissions, continue_conversation)
+        self.launch_wrapper_with_options(path, options)
     }
 
     fn is_wrapper_test_mode(&self) -> bool {
@@ -44,23 +52,10 @@ impl IdeManager {
         wrapper_cmd == "true" || wrapper_cmd.starts_with("echo ")
     }
 
-    fn launch_wrapper_with_options(
-        &self,
-        path: &Path,
-        skip_permissions: bool,
-        continue_conversation: bool,
-    ) -> Result<()> {
+    fn launch_wrapper_with_options(&self, path: &Path, options: LaunchOptions) -> Result<()> {
         match self.config.wrapper.name.as_str() {
-            "cursor" => self.launch_cursor_wrapper_with_options(
-                path,
-                skip_permissions,
-                continue_conversation,
-            ),
-            "code" => self.launch_vscode_wrapper_with_options(
-                path,
-                skip_permissions,
-                continue_conversation,
-            ),
+            "cursor" => self.launch_cursor_wrapper_with_options(path, options),
+            "code" => self.launch_vscode_wrapper_with_options(path, options),
             _ => Err(ParaError::ide_error(format!(
                 "Unsupported wrapper IDE: '{}'. Please use 'cursor' or 'code' as wrapper.",
                 self.config.wrapper.name
@@ -71,10 +66,9 @@ impl IdeManager {
     fn launch_cursor_wrapper_with_options(
         &self,
         path: &Path,
-        skip_permissions: bool,
-        continue_conversation: bool,
+        options: LaunchOptions,
     ) -> Result<()> {
-        self.write_autorun_task_with_options(path, skip_permissions, continue_conversation)?;
+        self.write_autorun_task_with_options(path, &options)?;
 
         if self.is_wrapper_test_mode() {
             println!("▶ skipping Cursor wrapper launch (test stub)");
@@ -128,10 +122,9 @@ impl IdeManager {
     fn launch_vscode_wrapper_with_options(
         &self,
         path: &Path,
-        skip_permissions: bool,
-        continue_conversation: bool,
+        options: LaunchOptions,
     ) -> Result<()> {
-        self.write_autorun_task_with_options(path, skip_permissions, continue_conversation)?;
+        self.write_autorun_task_with_options(path, &options)?;
 
         if self.is_wrapper_test_mode() {
             println!("▶ skipping VS Code wrapper launch (test stub)");
@@ -183,19 +176,13 @@ impl IdeManager {
         Ok(())
     }
 
-    fn write_autorun_task_with_options(
-        &self,
-        path: &Path,
-        skip_permissions: bool,
-        continue_conversation: bool,
-    ) -> Result<()> {
+    fn write_autorun_task_with_options(&self, path: &Path, options: &LaunchOptions) -> Result<()> {
         let vscode_dir = path.join(".vscode");
         fs::create_dir_all(&vscode_dir).map_err(|e| {
             ParaError::ide_error(format!("Failed to create .vscode directory: {}", e))
         })?;
 
-        let ide_command =
-            self.build_ide_wrapper_command_with_options(skip_permissions, continue_conversation);
+        let ide_command = self.build_ide_wrapper_command_with_options(options);
         let task_label = format!("Start {}", self.config.name);
         let task_json = self.generate_ide_task_json(&task_label, &ide_command);
 
@@ -206,18 +193,31 @@ impl IdeManager {
         Ok(())
     }
 
-    fn build_ide_wrapper_command_with_options(
-        &self,
-        skip_permissions: bool,
-        continue_conversation: bool,
-    ) -> String {
+    fn build_ide_wrapper_command_with_options(&self, options: &LaunchOptions) -> String {
         let mut base_cmd = self.config.command.clone();
 
         if self.config.name.as_str() == "claude" {
-            if skip_permissions {
+            if options.skip_permissions {
                 base_cmd.push_str(" --dangerously-skip-permissions");
             }
-            if continue_conversation {
+
+            // Handle session continuation with proper quoting
+            if let Some(ref session_id) = options.claude_session_id {
+                if !session_id.is_empty() {
+                    base_cmd.push_str(&format!(" -r \"{}\"", session_id));
+
+                    // Add prompt if provided
+                    if let Some(ref prompt) = options.prompt {
+                        // Escape quotes in prompt and add it
+                        let escaped_prompt = prompt.replace('"', "\\\"");
+                        base_cmd.push_str(&format!(" \"{}\"", escaped_prompt));
+                    }
+                } else {
+                    // Empty session ID, fall back to -c
+                    base_cmd.push_str(" -c");
+                }
+            } else if options.continue_conversation {
+                // Fallback to -c flag if no session ID
                 base_cmd.push_str(" -c");
             }
         }
@@ -226,6 +226,8 @@ impl IdeManager {
     }
 
     fn generate_ide_task_json(&self, label: &str, command: &str) -> String {
+        // Escape quotes in the command for JSON
+        let escaped_command = command.replace('"', "\\\"");
         format!(
             r#"{{
     "version": "2.0.0",
@@ -249,7 +251,7 @@ impl IdeManager {
         }}
     ]
 }}"#,
-            label, command
+            label, escaped_command
         )
     }
 }
@@ -339,7 +341,8 @@ mod tests {
         let manager = IdeManager::new(&config);
 
         // Test task generation
-        let result = manager.write_autorun_task_with_options(temp_dir.path(), false, false);
+        let options = LaunchOptions::default();
+        let result = manager.write_autorun_task_with_options(temp_dir.path(), &options);
         assert!(result.is_ok());
 
         // Check that .vscode/tasks.json was created
@@ -384,7 +387,11 @@ mod tests {
         let manager = IdeManager::new(&config);
 
         // Test with continue_conversation = false
-        let result = manager.launch_with_options(temp_dir.path(), true, false);
+        let options = LaunchOptions {
+            skip_permissions: true,
+            ..Default::default()
+        };
+        let result = manager.launch_with_options(temp_dir.path(), options);
         assert!(result.is_ok());
 
         // Check that tasks.json doesn't contain -c flag
@@ -394,7 +401,12 @@ mod tests {
         assert!(!content.contains(" -c"));
 
         // Test with continue_conversation = true
-        let result = manager.launch_with_options(temp_dir.path(), true, true);
+        let options = LaunchOptions {
+            skip_permissions: true,
+            continue_conversation: true,
+            ..Default::default()
+        };
+        let result = manager.launch_with_options(temp_dir.path(), options);
         assert!(result.is_ok());
 
         // Check that tasks.json contains -c flag
@@ -408,19 +420,33 @@ mod tests {
         let manager = IdeManager::new(&config);
 
         // Test basic command
-        let cmd = manager.build_ide_wrapper_command_with_options(false, false);
+        let options = LaunchOptions::default();
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "claude");
 
         // Test with skip permissions
-        let cmd = manager.build_ide_wrapper_command_with_options(true, false);
+        let options = LaunchOptions {
+            skip_permissions: true,
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "claude --dangerously-skip-permissions");
 
         // Test with continue conversation
-        let cmd = manager.build_ide_wrapper_command_with_options(false, true);
+        let options = LaunchOptions {
+            continue_conversation: true,
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "claude -c");
 
         // Test with both options
-        let cmd = manager.build_ide_wrapper_command_with_options(true, true);
+        let options = LaunchOptions {
+            skip_permissions: true,
+            continue_conversation: true,
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "claude --dangerously-skip-permissions -c");
     }
 
@@ -430,11 +456,62 @@ mod tests {
         let manager = IdeManager::new(&config);
 
         // Test that non-Claude IDEs just use the base command
-        let cmd = manager.build_ide_wrapper_command_with_options(false, false);
+        let options = LaunchOptions::default();
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "cursor");
 
         // Test with options - should still be just the base command
-        let cmd = manager.build_ide_wrapper_command_with_options(true, true);
+        let options = LaunchOptions {
+            skip_permissions: true,
+            continue_conversation: true,
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
         assert_eq!(cmd, "cursor");
+    }
+
+    #[test]
+    fn test_build_ide_wrapper_command_with_session_id() {
+        let config = create_test_config("claude", "claude");
+        let manager = IdeManager::new(&config);
+
+        // Test with session ID only
+        let options = LaunchOptions {
+            claude_session_id: Some("12345678-1234-1234-1234-123456789012".to_string()),
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
+        assert_eq!(cmd, "claude -r \"12345678-1234-1234-1234-123456789012\"");
+
+        // Test with session ID and prompt
+        let options = LaunchOptions {
+            claude_session_id: Some("12345678-1234-1234-1234-123456789012".to_string()),
+            prompt: Some("continue implementing the feature".to_string()),
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
+        assert_eq!(cmd, "claude -r \"12345678-1234-1234-1234-123456789012\" \"continue implementing the feature\"");
+
+        // Test with session ID, prompt with quotes
+        let options = LaunchOptions {
+            claude_session_id: Some("12345678-1234-1234-1234-123456789012".to_string()),
+            prompt: Some("add \"test\" functionality".to_string()),
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
+        assert_eq!(
+            cmd,
+            "claude -r \"12345678-1234-1234-1234-123456789012\" \"add \\\"test\\\" functionality\""
+        );
+
+        // Test that session ID takes precedence over continue_conversation
+        let options = LaunchOptions {
+            claude_session_id: Some("12345678-1234-1234-1234-123456789012".to_string()),
+            continue_conversation: true,
+            ..Default::default()
+        };
+        let cmd = manager.build_ide_wrapper_command_with_options(&options);
+        assert_eq!(cmd, "claude -r \"12345678-1234-1234-1234-123456789012\"");
+        assert!(!cmd.contains(" -c")); // Should not contain -c flag
     }
 }

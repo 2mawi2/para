@@ -2,7 +2,7 @@ use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
-use crate::core::ide::IdeManager;
+use crate::core::ide::{IdeManager, LaunchOptions};
 use crate::core::session::state::SessionState;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
@@ -10,6 +10,7 @@ use dialoguer::Select;
 use std::env;
 use std::path::Path;
 
+use super::claude_session::find_claude_session;
 use super::context::{process_resume_context, save_resume_context};
 use super::repair::repair_worktree_path;
 use super::task_transform::transform_claude_tasks_file;
@@ -36,14 +37,18 @@ pub fn resume_specific_session(
         // Prepare session files
         prepare_session_files(&session_state.worktree_path, &session_state.name)?;
 
-        // Handle resume context
-        handle_resume_context(&session_state.worktree_path, &session_state.name, args)?;
+        // Handle resume context and get processed content
+        let processed_context = process_resume_context(args)?;
+        if let Some(ref context) = processed_context {
+            save_resume_context(&session_state.worktree_path, &session_state.name, context)?;
+        }
 
-        // Launch IDE
+        // Launch IDE with prompt if provided
         launch_ide_for_session(
             config,
             &session_state.worktree_path,
-            session_state.dangerous_skip_permissions.unwrap_or(false),
+            args,
+            processed_context.as_ref(),
         )?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
@@ -89,10 +94,18 @@ pub fn resume_specific_session(
         // Prepare session files using extracted function
         prepare_session_files(&matching_worktree.path, &session_name_for_files)?;
 
-        // Handle resume context using extracted function
-        handle_resume_context(&matching_worktree.path, &session_name_for_files, args)?;
+        // Handle resume context and get processed content
+        let processed_context = process_resume_context(args)?;
+        if let Some(ref context) = processed_context {
+            save_resume_context(&matching_worktree.path, &session_name_for_files, context)?;
+        }
 
-        launch_ide_for_session(config, &matching_worktree.path, skip_permissions)?;
+        launch_ide_for_session(
+            config,
+            &matching_worktree.path,
+            args,
+            processed_context.as_ref(),
+        )?;
         println!(
             "✅ Resumed session at '{}'",
             matching_worktree.path.display()
@@ -115,6 +128,9 @@ pub fn detect_and_resume_session(
         SessionEnvironment::Worktree { branch, .. } => {
             println!("Current directory is a worktree for branch: {}", branch);
 
+            // Process resume context once
+            let processed_context = process_resume_context(args)?;
+
             // Try to find session from current directory or branch
             let session_opt = session_manager
                 .list_sessions()?
@@ -124,18 +140,13 @@ pub fn detect_and_resume_session(
             if let Some(ref session) = session_opt {
                 create_claude_local_md(&current_dir, &session.name)?;
 
-                // Process and save resume context if provided
-                if let Some(context) = process_resume_context(args)? {
-                    save_resume_context(&current_dir, &session.name, &context)?;
+                // Save resume context if provided
+                if let Some(ref context) = processed_context {
+                    save_resume_context(&current_dir, &session.name, context)?;
                 }
             }
 
-            let skip_permissions = session_opt
-                .as_ref()
-                .and_then(|s| s.dangerous_skip_permissions)
-                .unwrap_or(false);
-
-            launch_ide_for_session(config, &current_dir, skip_permissions)?;
+            launch_ide_for_session(config, &current_dir, args, processed_context.as_ref())?;
             println!("✅ Resumed current session");
             Ok(())
         }
@@ -193,14 +204,16 @@ pub fn list_and_select_session(
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
         // Process and save resume context if provided
-        if let Some(context) = process_resume_context(args)? {
-            save_resume_context(&session.worktree_path, &session.name, &context)?;
+        let processed_context = process_resume_context(args)?;
+        if let Some(ref context) = processed_context {
+            save_resume_context(&session.worktree_path, &session.name, context)?;
         }
 
         launch_ide_for_session(
             config,
             &session.worktree_path,
-            session.dangerous_skip_permissions.unwrap_or(false),
+            args,
+            processed_context.as_ref(),
         )?;
         println!("✅ Resumed session '{}'", session.name);
     }
@@ -227,28 +240,63 @@ fn prepare_session_files(worktree_path: &Path, session_name: &str) -> Result<()>
     Ok(())
 }
 
-fn handle_resume_context(
-    worktree_path: &Path,
-    session_name: &str,
-    args: &ResumeArgs,
+fn launch_ide_for_session(
+    config: &Config,
+    path: &Path,
+    _args: &ResumeArgs,
+    processed_context: Option<&String>,
 ) -> Result<()> {
-    // Process and save resume context if provided
-    if let Some(context) = process_resume_context(args)? {
-        save_resume_context(worktree_path, session_name, &context)?;
-    }
-    Ok(())
-}
-
-fn launch_ide_for_session(config: &Config, path: &Path, skip_permissions: bool) -> Result<()> {
     let ide_manager = IdeManager::new(config);
 
-    // For Claude Code in wrapper mode, always use continuation flag when resuming
+    // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
-        println!("▶ resuming Claude Code session with conversation continuation...");
-        // Update existing tasks.json to include -c flag
-        transform_claude_tasks_file(path)?;
-        ide_manager.launch_with_options(path, skip_permissions, true)
+        let mut launch_options = LaunchOptions {
+            skip_permissions: false,
+            ..Default::default()
+        };
+
+        // Try to find existing Claude session
+        match find_claude_session(path) {
+            Ok(Some(claude_session)) => {
+                if claude_session.id.is_empty() {
+                    println!("⚠️  Found Claude session but ID is empty");
+                    launch_options.continue_conversation = true;
+                } else {
+                    println!("🔗 Found existing Claude session: {}", claude_session.id);
+                    launch_options.claude_session_id = Some(claude_session.id);
+
+                    // Include prompt from processed context (file or inline prompt)
+                    if let Some(_context) = processed_context {
+                        println!("▶ resuming Claude Code session with prompt...");
+                    } else {
+                        println!("▶ resuming Claude Code session with conversation history...");
+                    }
+                }
+            }
+            Ok(None) => {
+                // No existing session found, use continuation flag
+                println!("▶ starting new Claude Code session...");
+                launch_options.continue_conversation = true;
+
+                // Update existing tasks.json to include -c flag
+                transform_claude_tasks_file(path)?;
+            }
+            Err(e) => {
+                println!("⚠️  Error finding Claude session: {}", e);
+                launch_options.continue_conversation = true;
+            }
+        }
+
+        // Launch with shared claude launcher
+        let claude_options = crate::core::claude_launcher::ClaudeLaunchOptions {
+            skip_permissions: launch_options.skip_permissions,
+            session_id: launch_options.claude_session_id.clone(),
+            continue_conversation: launch_options.continue_conversation,
+            prompt_content: processed_context.cloned(),
+        };
+        crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {
+        let skip_permissions = false; // Default to false for non-Claude IDEs
         ide_manager.launch(path, skip_permissions)
     }
 }
@@ -256,84 +304,26 @@ fn launch_ide_for_session(config: &Config, path: &Path, skip_permissions: bool) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
-    };
     use crate::core::session::state::SessionState;
+    use crate::test_utils::test_helpers::*;
     use std::fs;
-    use std::process::Command;
     use tempfile::TempDir;
-
-    fn setup_test_repo() -> (TempDir, TempDir, GitService, Config) {
-        let git_dir = TempDir::new().expect("tmp git");
-        let state_dir = TempDir::new().expect("tmp state");
-        let repo_path = git_dir.path();
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .unwrap();
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test"])
-            .status()
-            .unwrap();
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .unwrap();
-        fs::write(repo_path.join("README.md"), "# Test").unwrap();
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["add", "README.md"])
-            .status()
-            .unwrap();
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "init"])
-            .status()
-            .unwrap();
-
-        let config = Config {
-            ide: IdeConfig {
-                name: "test".into(),
-                command: "echo".into(),
-                user_data_dir: None,
-                wrapper: WrapperConfig {
-                    enabled: true,
-                    name: "cursor".into(),
-                    command: "echo".into(),
-                },
-            },
-            directories: DirectoryConfig {
-                subtrees_dir: "subtrees/para".into(),
-                state_dir: state_dir
-                    .path()
-                    .join(".para_state")
-                    .to_string_lossy()
-                    .to_string(),
-            },
-            git: GitConfig {
-                branch_prefix: "para".into(),
-                auto_stage: true,
-                auto_commit: false,
-            },
-            session: SessionConfig {
-                default_name_format: "%Y%m%d-%H%M%S".into(),
-                preserve_on_finish: false,
-                auto_cleanup_days: None,
-            },
-            docker: None,
-            setup_script: None,
-        };
-        let service = GitService::discover_from(repo_path).unwrap();
-        (git_dir, state_dir, service, config)
-    }
 
     #[test]
     fn test_resume_base_name_fallback() {
-        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
         let session_manager = SessionManager::new(&config);
 
         // create timestamped session state only
@@ -365,7 +355,19 @@ mod tests {
     // Integration tests for new resume functionality
     #[test]
     fn test_resume_with_prompt_integration() {
-        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
         let session_manager = SessionManager::new(&config);
 
         // Create a test session
@@ -407,7 +409,19 @@ mod tests {
 
     #[test]
     fn test_resume_with_file_integration() {
-        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
         let session_manager = SessionManager::new(&config);
 
         // Create a test session
@@ -459,7 +473,19 @@ mod tests {
 
     #[test]
     fn test_resume_backwards_compatibility() {
-        let (_git_tmp, _state_tmp, git_service, config) = setup_test_repo();
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
         let session_manager = SessionManager::new(&config);
 
         // Create a test session
@@ -497,4 +523,7 @@ mod tests {
             .join("resume_context.md");
         assert!(!context_file.exists());
     }
+
+    // Test removed - Claude session integration testing moved to integration tests
+    // The core functionality is tested through unit tests in ide.rs and claude_session.rs
 }
