@@ -4,6 +4,7 @@ use crate::core::git::GitService;
 use crate::core::session::SessionManager;
 use crate::utils::{ParaError, Result};
 
+mod claude_session;
 mod context;
 mod repair;
 mod session;

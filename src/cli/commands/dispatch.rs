@@ -7,7 +7,6 @@ use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Determine which setup script to use based on priority order
 fn get_setup_script_path(
@@ -277,6 +276,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             )?;
         }
 
+        create_launch_metadata(&config, &session_state.worktree_path)?;
         launch_claude_code(
             &config,
             &session_state.worktree_path,
@@ -349,48 +349,21 @@ fn launch_claude_code(
     prompt: &str,
     skip_permissions: bool,
 ) -> Result<()> {
-    let temp_prompt_file = session_path.join(".claude_prompt_temp");
-    if !prompt.is_empty() {
-        fs::write(&temp_prompt_file, prompt)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write temp prompt file: {}", e)))?;
-    }
-
-    launch_claude_in_ide(config, session_path, &temp_prompt_file, skip_permissions)
-}
-
-fn launch_claude_in_ide(
-    config: &Config,
-    session_path: &Path,
-    temp_prompt_file: &Path,
-    skip_permissions: bool,
-) -> Result<()> {
-    let vscode_dir = session_path.join(".vscode");
-    fs::create_dir_all(&vscode_dir)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
-
-    let mut base_cmd = config.ide.command.clone();
-    if skip_permissions {
-        base_cmd.push_str(" --dangerously-skip-permissions");
-    }
-
-    let claude_task_cmd = if temp_prompt_file.exists() {
-        format!(
-            "{} \"$(cat '{}'; rm '{}')\"",
-            base_cmd,
-            temp_prompt_file.display(),
-            temp_prompt_file.display()
-        )
-    } else {
-        base_cmd
+    let options = crate::core::claude_launcher::ClaudeLaunchOptions {
+        skip_permissions,
+        session_id: None,
+        continue_conversation: false,
+        prompt_content: if prompt.is_empty() {
+            None
+        } else {
+            Some(prompt.to_string())
+        },
     };
 
-    let tasks_json = create_claude_task_json(&claude_task_cmd);
-    let tasks_file = vscode_dir.join("tasks.json");
-    fs::write(&tasks_file, tasks_json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
+    crate::core::claude_launcher::launch_claude_with_context(config, session_path, options)
+}
 
-    let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
-
+fn create_launch_metadata(config: &Config, session_path: &Path) -> Result<()> {
     let state_dir = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".para_state");
@@ -412,63 +385,7 @@ fn launch_claude_in_ide(
     fs::write(&launch_file, launch_content)
         .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
 
-    let mut cmd = Command::new(ide_command);
-    cmd.current_dir(session_path);
-    cmd.arg(session_path);
-
-    // Detach the IDE process from the parent's stdio to prevent blocking
-    cmd.stdin(std::process::Stdio::null());
-    cmd.stdout(std::process::Stdio::null());
-    cmd.stderr(std::process::Stdio::null());
-
-    match cmd.spawn() {
-        Ok(_) => {
-            println!("Opened {} workspace", ide_name);
-        }
-        Err(e) => {
-            return Err(ParaError::ide_error(format!(
-                "Failed to launch {}: {}. Check that '{}' is installed and accessible.",
-                ide_name, e, ide_command
-            )));
-        }
-    }
-
     Ok(())
-}
-
-fn create_claude_task_json(command: &str) -> String {
-    format!(
-        r#"{{
-  "version": "2.0.0",
-  "tasks": [
-    {{
-      "label": "Start Claude Code with Prompt",
-      "type": "shell",
-      "command": "{}",
-      "options": {{
-        "env": {{
-          "FORCE_COLOR": "1",
-          "TERM": "xterm-256color"
-        }}
-      }},
-      "group": {{
-        "kind": "build",
-        "isDefault": true
-      }},
-      "presentation": {{
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new"
-      }},
-      "runOptions": {{
-        "runOn": "folderOpen"
-      }}
-    }}
-  ]
-}}"#,
-        command.replace('"', "\\\"")
-    )
 }
 
 impl DispatchArgs {
