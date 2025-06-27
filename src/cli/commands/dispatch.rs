@@ -110,15 +110,16 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.docker_image.clone(),
             !args.no_forward_keys,
         );
-        let session = session_manager.create_docker_session(
+        let session = session_manager.create_docker_session_with_flags(
             session_id.clone(),
             &docker_manager,
             Some(&prompt),
             &args.docker_args,
+            args.dangerously_skip_permissions,
         )?;
 
         // Write task file
-        let state_dir = Path::new(&config.directories.state_dir);
+        let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{}.task", session_id));
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
@@ -184,7 +185,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         session_manager.save_state(&session_state)?;
 
         // Write task file
-        let state_dir = Path::new(&config.directories.state_dir);
+        let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{}.task", session_id));
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
