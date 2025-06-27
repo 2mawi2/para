@@ -4,21 +4,48 @@ Para supports running custom setup scripts when creating new worktree sessions. 
 
 ## Quick Start
 
-Create a setup script at `.para/setup.sh` in your repository:
+Para supports environment-specific setup scripts for different development workflows:
+
+### For Docker Development
+Create `.para/setup-docker.sh` for container-based sessions:
 
 ```bash
 #!/bin/bash
-echo "Setting up session: $PARA_SESSION"
+echo "Setting up Docker session: $PARA_SESSION"
+echo "Working in: $PARA_WORKSPACE"
+
+# Install dependencies in container
+apt-get update && apt-get install -y build-essential
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+```
+
+### For Regular Worktrees  
+Create `.para/setup-worktree.sh` for native development:
+
+```bash
+#!/bin/bash
+echo "Setting up worktree session: $PARA_SESSION"
 echo "Working in: $PARA_WORKSPACE"
 
 # Your setup commands here
 npm install
+echo "Ready for development!"
 ```
 
-The script will run automatically when you start a new session:
+### Generic Setup
+Create `.para/setup.sh` for both environments (fallback):
 
 ```bash
-para start my-feature
+#!/bin/bash
+echo "Setting up session: $PARA_SESSION"
+npm install
+```
+
+Scripts run automatically when you start sessions:
+
+```bash
+para start my-feature              # Uses .para/setup-worktree.sh
+para start my-feature --container  # Uses .para/setup-docker.sh
 ```
 
 ## Configuration Options
@@ -28,8 +55,11 @@ para start my-feature
 Setup scripts are discovered in the following order (first match wins):
 
 1. **CLI Flag**: `para start --setup-script scripts/custom-setup.sh`
-2. **Default Location**: `.para/setup.sh` (auto-detected)
-3. **Config File**: Set `setup_script` in your para config
+2. **Environment-Specific Default**:
+   - Docker: `.para/setup-docker.sh`
+   - Worktree: `.para/setup-worktree.sh`
+3. **Generic Default**: `.para/setup.sh` (fallback for both environments)
+4. **Config File**: Set `setup_script` or `docker.setup_script` in your para config
 
 ### Config File Setup
 

@@ -23,13 +23,26 @@ fn get_setup_script_path(
         }
     }
 
-    // 2. Check for default .para/setup.sh
+    // 2. Check for environment-specific default scripts
+    if is_docker {
+        let docker_script = repo_root.join(".para/setup-docker.sh");
+        if docker_script.exists() {
+            return Some(docker_script);
+        }
+    } else {
+        let worktree_script = repo_root.join(".para/setup-worktree.sh");
+        if worktree_script.exists() {
+            return Some(worktree_script);
+        }
+    }
+
+    // 3. Check for generic default .para/setup.sh
     let default_script = repo_root.join(".para/setup.sh");
     if default_script.exists() {
         return Some(default_script);
     }
 
-    // 3. Check config for setup script path
+    // 4. Check config for setup script path
     // For Docker, check docker.setup_script first, then fall back to general setup_script
     if is_docker {
         if let Some(docker_config) = &config.docker {
