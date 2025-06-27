@@ -61,22 +61,9 @@ echo "   UID/GID: $(id)"
 echo "   Working Dir: $(pwd)"
 echo "   Network Isolation: $NETWORK_ISOLATION"
 
-# Check if Claude is available
-if command -v claude >/dev/null 2>&1; then
-    echo "   Claude CLI: Available ($(claude --version 2>&1 | head -n1 || echo 'version unknown'))"
-else
-    echo "   Claude CLI: Not found"
-fi
-
 echo ""
 echo "🎯 Ready to execute command: $*"
 echo ""
 
-# Execute the original entrypoint or command
-if [ -x /usr/local/bin/claude-entrypoint.sh ] && [ "$1" != "/usr/local/bin/claude-entrypoint.sh" ]; then
-    # Chain to the original Claude entrypoint
-    exec /usr/local/bin/claude-entrypoint.sh "$@"
-else
-    # Execute the command directly
-    exec "$@"
-fi
+# Execute the command directly
+exec "$@"

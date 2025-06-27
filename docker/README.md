@@ -26,9 +26,15 @@ para start my-feature --container --docker-image para-dev:latest
 
 ## Files
 
-- `Dockerfile.para-dev` - Dockerfile for the development image
-- `build-para-dev-image.sh` - Script to build the image
-- Other Docker files are for para's container features (not for para development itself)
+### Para Development Files
+- `Dockerfile.para-dev` - Dockerfile for the development image with all tools pre-installed
+- `build-para-dev-image.sh` - Script to build the para-dev image
+- `README.md` - This documentation file
+
+### Para Container Feature Files
+- `para-shim.sh` - Signal File Protocol implementation for container-to-host communication
+- `secure-entrypoint.sh` - Security entrypoint for network isolation features
+- `init-firewall.sh` - Network firewall configuration for container isolation
 
 ## Benefits
 
