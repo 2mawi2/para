@@ -86,11 +86,6 @@ pub fn resume_specific_session(
             .map(|s| s.name.clone())
             .unwrap_or_else(|| session_name.to_string());
 
-        let skip_permissions = session_opt
-            .as_ref()
-            .and_then(|s| s.dangerous_skip_permissions)
-            .unwrap_or(false);
-
         // Prepare session files using extracted function
         prepare_session_files(&matching_worktree.path, &session_name_for_files)?;
 

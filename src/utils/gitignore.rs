@@ -156,7 +156,7 @@ impl GitignoreManager {
         let gitignore_path = para_dir.join(".gitignore");
 
         if !gitignore_path.exists() {
-            let gitignore_content = 
+            let gitignore_content =
                 "# Ignore all para contents except configuration and setup scripts\n\
                  *\n\
                  !.gitignore\n\
