@@ -3,7 +3,7 @@ Your task is to orchestrate the review and merge of the following `para` branche
 **Phase 1: Parallel Review**
 Use your internal `Task` tool to review each branch in parallel. IMPORTANT you must start all the initial review Tasks with your task tool in parallel for each review that can be performed in parallel. For each branch, start a new sub-task with the following instructions:
 > **Sub-Task Prompt Template:**
-> "You are a code reviewer. Review the changes on the branch `{{branch_name}}` against the current branc (run 'git status' first). **CRITICAL:** Do NOT check out the branch; only use `git diff <current_branch>..{{branch_name}}`. If the changes are perfect, respond with only the word `OK`. Otherwise, respond with `NEEDS_FIX:` followed by a brief explanation."
+> "You are a code reviewer. Review the changes on the branch `{{branch_name}}` against the current branch (run 'git status' first to confirm current branch). **CRITICAL:** Do NOT check out the branch; only use `git diff <current_branch>..{{branch_name}}` (this shows exactly what changes merging {{branch_name}} would bring to the current branch). If the changes are perfect, respond with only the word `OK`. Otherwise, respond with `NEEDS_FIX:` followed by a brief explanation."
 
 **Phase 2: Decision and Merge**
 1.  Wait for all reviews to complete.
