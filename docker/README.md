@@ -1,88 +1,108 @@
 # Docker Images for Para Development
 
-This directory contains Docker configurations for para development.
+This directory contains Docker configurations and scripts for para development with custom Docker images.
 
 ## Prerequisites
 
 1. **Docker installed and running** (Docker Desktop, Colima, etc.)
 2. **Para installed** (`just install` from the para repo)
+3. **Para authenticated** (`para auth` to create `para-authenticated:latest`)
 
-## Workflow A: The Standard Para Workflow
+## The Custom Docker Workflow
 
-This is the recommended workflow for most users. It relies on the official `para-claude:latest` image and the standard `para auth` command.
+Para supports repository-specific Docker images through `.para/Dockerfile.custom`. This allows each repository to define its own development environment.
 
-### Step 1: Ensure You Have the Base Image
+### Step 1: Create Your Custom Dockerfile
 
-Check if you have the `para-claude:latest` image:
-```bash
-docker images | grep para-claude
-```
-
-If you don't have it, you'll need to build or obtain the base image first. The `para-claude:latest` image should include the Claude Code CLI.
-
-### Step 2: Authenticate
-
-Run the standard authentication command:
-```bash
-para auth
-```
-This will create the `para-authenticated:latest` image, which is ready for use.
-
-### Step 3: Use for Development
-
-Now you can use the authenticated image for your development tasks:
-```bash
-# All agents now use your authenticated custom image
-para dispatch my-feature --container
-
-# para automatically uses para-authenticated:latest
-```
-
-## Customizing the Development Environment
-
-If you need to add more tools to your development environment, you can build a custom image on top of `para-claude:latest`.
-
-### Step 1: Modify the Dockerfile
-
-Edit `Dockerfile.para-dev` to add your required tools. For example:
+Create `.para/Dockerfile.custom` in your repository:
 
 ```dockerfile
 FROM para-claude:latest
 
-# Add your custom tools
-RUN apt-get update && apt-get install -y \
+# Install your project-specific tools
+RUN sudo apt-get update && sudo apt-get install -y \
+    build-essential \
     python3-pip \
-    net-tools
+    postgresql-client \
+    && sudo rm -rf /var/lib/apt/lists/*
+
+# Add any other customizations
+WORKDIR /workspace
 ```
 
-### Step 2: Build Your Custom Dev Image
+### Step 2: Build Your Custom Image
 
 Run the build script:
 ```bash
-./build-para-dev-image.sh
+./docker/build-custom-image.sh
 ```
-This creates a new `para-dev:latest` image with your tools.
 
-### Step 3: Authenticate Your Custom Image
+This will:
+- Look for `.para/Dockerfile.custom` first (repository-specific)
+- Fall back to `docker/Dockerfile.para-dev` if not found
+- Create an image named `para-<repo-name>:latest`
 
-Now, run `para auth` and tell it to use your new dev image as the base:
+### Step 3: Create Authenticated Version
+
+Add authentication to your custom image:
+```bash
+./docker/create-custom-authenticated.sh para-<repo-name>:latest
+```
+
+This creates an authenticated version by copying credentials from `para-authenticated:latest`.
+
+### Step 4: Use Your Custom Image
 
 ```bash
-para config set docker.base_image para-dev:latest
-para auth
+para dispatch my-feature --container --docker-image para-authenticated:latest
 ```
 
-This will create `para-authenticated:latest` based on your customized `para-dev` image.
+The container now has:
+- ✅ All tools from your custom Dockerfile
+- ✅ Claude authentication
+- ✅ Para integration
 
-## Files
+## Example: Para Development Image
 
-- `Dockerfile.para-dev`: Dockerfile for building a custom development image on top of `para-claude:latest`.
-- `build-para-dev-image.sh`: Script to build the `para-dev:latest` image.
-- `README.md`: This documentation file.
+The para repository includes its own `.para/Dockerfile.custom` with:
+- Rust toolchain
+- Just command runner
+- Node.js/npm
+- Build essentials
+- Development tools (jq, ripgrep)
 
-## Why This Workflow?
+## Scripts
 
-- **Simplicity**: Relies on standard `para` commands.
-- **Consistency**: Ensures that the authentication mechanism is compatible with the base image.
-- **Extensibility**: Allows for easy customization of the development environment without breaking core functionality.
+- `build-custom-image.sh`: Builds custom images from `.para/Dockerfile.custom`
+- `create-custom-authenticated.sh`: Adds authentication to custom images
+- `fresh-auth.sh`: Alternative script for fresh authentication (if needed)
+- `reauth-custom-images.sh`: Reauthenticate when tokens expire
+
+## File Structure
+
+```
+your-repo/
+├── .para/
+│   ├── Dockerfile.custom      # Your custom Docker configuration (tracked in git)
+│   ├── worktrees/            # Para worktrees (ignored)
+│   └── state/                # Para state (ignored)
+└── docker/                   # Para docker scripts (from para repo)
+    ├── build-custom-image.sh
+    └── create-custom-authenticated.sh
+```
+
+## Notes
+
+- The `.para/Dockerfile.custom` file is tracked in git (not ignored)
+- Each repository can have its own custom development environment
+- Authentication is copied from `para-authenticated:latest`, so you only authenticate once
+- Custom images are layered on top of `para-claude:latest` for compatibility
+
+## Reauthentication
+
+When authentication tokens expire:
+
+1. **Quick fix**: Run `./docker/reauth-custom-images.sh` to reauthenticate everything
+2. **Manual**: Run `para auth reauth` then rebuild custom images
+3. **Details**: See [REAUTHENTICATION.md](REAUTHENTICATION.md) for all options
 

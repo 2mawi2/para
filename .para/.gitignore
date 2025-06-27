@@ -4,3 +4,4 @@
 !setup.sh
 !setup-docker.sh
 !setup-worktree.sh
+!Dockerfile.custom
