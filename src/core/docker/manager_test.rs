@@ -36,6 +36,7 @@ mod tests {
                 default_image: Some(image),
                 forward_env_keys: None,
             }),
+            setup_script: None,
         }
     }
 
