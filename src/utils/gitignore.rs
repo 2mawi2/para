@@ -156,8 +156,13 @@ impl GitignoreManager {
         let gitignore_path = para_dir.join(".gitignore");
 
         if !gitignore_path.exists() {
-            let gitignore_content =
-                "# Ignore all para contents except configuration\n*\n!.gitignore\n";
+            let gitignore_content = 
+                "# Ignore all para contents except configuration and setup scripts\n\
+                 *\n\
+                 !.gitignore\n\
+                 !setup.sh\n\
+                 !setup-docker.sh\n\
+                 !setup-worktree.sh\n";
             fs::write(&gitignore_path, gitignore_content).map_err(|e| {
                 ParaError::fs_error(format!(
                     "Failed to create .para/.gitignore file at {}: {}",
@@ -257,6 +262,9 @@ mod tests {
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert!(content.contains("*"));
         assert!(content.contains("!.gitignore"));
+        assert!(content.contains("!setup.sh"));
+        assert!(content.contains("!setup-docker.sh"));
+        assert!(content.contains("!setup-worktree.sh"));
     }
 
     #[test]
