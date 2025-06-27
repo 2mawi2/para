@@ -99,7 +99,7 @@ impl GitignoreManager {
     /// Check if .para is already properly ignored in the gitignore content
     fn is_para_already_ignored(content: &str) -> bool {
         // Check for various forms of .para ignoring
-        let patterns = [".para/", ".para", "/.para/", "/.para"];
+        let patterns = [".para/", ".para", "/.para/", "/.para", ".para/*"];
 
         for line in content.lines() {
             let line = line.trim();
@@ -119,7 +119,7 @@ impl GitignoreManager {
 
     /// Add .para to gitignore file
     fn add_para_to_gitignore(gitignore_path: &Path) -> Result<()> {
-        let para_entry = "\n# Para directories and state files\n.para/\n";
+        let para_entry = "\n# Para directories and state files\n# Ignore everything in .para except Dockerfile.custom\n.para/*\n!.para/Dockerfile.custom\n";
 
         if gitignore_path.exists() {
             // Append to existing gitignore
@@ -162,7 +162,8 @@ impl GitignoreManager {
                  !.gitignore\n\
                  !setup.sh\n\
                  !setup-docker.sh\n\
-                 !setup-worktree.sh\n";
+                 !setup-worktree.sh\n\
+                 !Dockerfile.custom\n";
             fs::write(&gitignore_path, gitignore_content).map_err(|e| {
                 ParaError::fs_error(format!(
                     "Failed to create .para/.gitignore file at {}: {}",
@@ -194,7 +195,8 @@ mod tests {
         assert!(gitignore_path.exists());
 
         let content = fs::read_to_string(&gitignore_path).unwrap();
-        assert!(content.contains(".para/"));
+        assert!(content.contains(".para/*"));
+        assert!(content.contains("!.para/Dockerfile.custom"));
         assert!(content.contains("Para directories and state files"));
     }
 
@@ -212,7 +214,8 @@ mod tests {
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert!(content.contains("*.log"));
         assert!(content.contains("target/"));
-        assert!(content.contains(".para/"));
+        assert!(content.contains(".para/*"));
+        assert!(content.contains("!.para/Dockerfile.custom"));
         assert!(content.contains("Para directories and state files"));
     }
 
@@ -240,6 +243,7 @@ mod tests {
         ));
         assert!(GitignoreManager::is_para_already_ignored("/.para/\n"));
         assert!(GitignoreManager::is_para_already_ignored(".para\n"));
+        assert!(GitignoreManager::is_para_already_ignored(".para/*\n"));
 
         assert!(!GitignoreManager::is_para_already_ignored(
             "*.log\ntarget/\n"
@@ -265,6 +269,7 @@ mod tests {
         assert!(content.contains("!setup.sh"));
         assert!(content.contains("!setup-docker.sh"));
         assert!(content.contains("!setup-worktree.sh"));
+        assert!(content.contains("!Dockerfile.custom"));
     }
 
     #[test]

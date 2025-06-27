@@ -60,4 +60,8 @@ tasks/
 # Test repositories
 test-repos/
 # Para directories and state files
+# Ignore everything in .para except Dockerfile.custom
+.para/*
+!.para/Dockerfile.custom
+# Para directories and state files
 .para/
