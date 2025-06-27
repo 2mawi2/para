@@ -105,6 +105,60 @@ Add Docker configuration:
 3. Config `docker.setup_script`
 4. No script (if none configured)
 
+## Recommended Docker Images
+
+### Option 1: Pre-built Para Development Image (Recommended)
+
+Build a custom image with all dependencies pre-installed:
+
+```bash
+# One-time setup: Build the para-dev image
+cd /path/to/para
+./docker/build-para-dev-image.sh
+
+# Now use it for development (starts instantly!)
+para start my-feature --container --docker-image para-dev:latest
+```
+
+The `para-dev:latest` image includes:
+- Ubuntu 22.04 base
+- Rust toolchain (latest stable)
+- Just command runner
+- Node.js 20.x and npm
+- Bun (optional, faster npm alternative)
+- All system dependencies for building para
+
+### Option 2: Use Base Images (Slower Initial Setup)
+
+If you prefer not to build a custom image:
+
+```bash
+# Ubuntu (requires full setup - 5-10 minutes first run)
+para start test-docker-dev --container --docker-image ubuntu:22.04
+
+# Rust official image (faster - Rust pre-installed)
+para start test-docker-dev --container --docker-image rust:latest
+```
+
+### Development Workflow with Pre-built Image
+
+```bash
+# 1. Build the image once
+./docker/build-para-dev-image.sh
+
+# 2. Start development sessions instantly
+para start feature-x --container --docker-image para-dev:latest
+
+# 3. Inside the container, everything is ready
+just test     # Run all tests
+just build    # Build para
+just fmt      # Format code
+just lint     # Run linting
+
+# 4. When done, create your branch
+para finish "Add feature X"
+```
+
 ## Example Setup Scripts
 
 ### Basic Development Setup

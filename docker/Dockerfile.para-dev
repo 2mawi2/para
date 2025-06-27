@@ -1,0 +1,67 @@
+# Para Development Docker Image
+# This image includes all dependencies needed to build and test para
+
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    curl \
+    git \
+    ca-certificates \
+    wget \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install just command runner (prebuilt binary for speed)
+RUN JUST_VERSION="1.16.0" && \
+    ARCH=$(dpkg --print-architecture | sed 's/arm64/aarch64/') && \
+    wget -q "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" && \
+    tar xzf "just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" && \
+    mv just /usr/local/bin/ && \
+    rm "just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz"
+
+# Install Node.js 20.x
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install bun (optional, but faster than npm)
+RUN curl -fsSL https://bun.sh/install | bash || true
+ENV PATH="/root/.bun/bin:${PATH}"
+
+# Configure git defaults (needed for tests)
+RUN git config --global user.email "dev@example.com" && \
+    git config --global user.name "Para Developer" && \
+    git config --global init.defaultBranch main
+
+# Pre-create cargo directories to speed up builds
+RUN mkdir -p /root/.cargo/registry && \
+    mkdir -p /root/.cargo/git
+
+# Set working directory
+WORKDIR /workspace
+
+# Add a helpful message
+RUN echo '#!/bin/bash\n\
+echo "🚀 Para development environment ready!"\n\
+echo ""\n\
+echo "Available commands:"\n\
+echo "  just test   - Run all tests"\n\
+echo "  just build  - Build para"\n\
+echo "  just lint   - Run linting"\n\
+echo "  just fmt    - Format code"\n\
+echo ""\n\
+exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]
