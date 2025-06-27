@@ -675,6 +675,7 @@ mod tests {
                 auto_cleanup_days: Some(7),
             },
             docker: None,
+            setup_script: None,
         }
     }
 
@@ -706,6 +707,7 @@ mod tests {
                 auto_cleanup_days: Some(7),
             },
             docker: None,
+            setup_script: None,
         };
 
         let service = SessionService::new(config);
