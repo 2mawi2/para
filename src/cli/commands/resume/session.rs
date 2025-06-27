@@ -40,7 +40,11 @@ pub fn resume_specific_session(
         handle_resume_context(&session_state.worktree_path, &session_state.name, args)?;
 
         // Launch IDE
-        launch_ide_for_session(config, &session_state.worktree_path)?;
+        launch_ide_for_session(
+            config,
+            &session_state.worktree_path,
+            session_state.dangerous_skip_permissions.unwrap_or(false),
+        )?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
         // Fallback: maybe the state file was timestamped (e.g. test4_20250611-XYZ)
@@ -67,15 +71,20 @@ pub fn resume_specific_session(
             })
             .ok_or_else(|| ParaError::session_not_found(session_name.to_string()))?;
 
-        // Try to find session name from matching worktree, fallback to search session name
-        let session_name_for_files = session_manager
-            .list_sessions()?
-            .into_iter()
-            .find(|s| {
-                s.worktree_path == matching_worktree.path || s.branch == matching_worktree.branch
-            })
-            .map(|s| s.name)
+        // Try to find session from matching worktree
+        let session_opt = session_manager.list_sessions()?.into_iter().find(|s| {
+            s.worktree_path == matching_worktree.path || s.branch == matching_worktree.branch
+        });
+
+        let session_name_for_files = session_opt
+            .as_ref()
+            .map(|s| s.name.clone())
             .unwrap_or_else(|| session_name.to_string());
+
+        let skip_permissions = session_opt
+            .as_ref()
+            .and_then(|s| s.dangerous_skip_permissions)
+            .unwrap_or(false);
 
         // Prepare session files using extracted function
         prepare_session_files(&matching_worktree.path, &session_name_for_files)?;
@@ -83,7 +92,7 @@ pub fn resume_specific_session(
         // Handle resume context using extracted function
         handle_resume_context(&matching_worktree.path, &session_name_for_files, args)?;
 
-        launch_ide_for_session(config, &matching_worktree.path)?;
+        launch_ide_for_session(config, &matching_worktree.path, skip_permissions)?;
         println!(
             "✅ Resumed session at '{}'",
             matching_worktree.path.display()
@@ -106,22 +115,27 @@ pub fn detect_and_resume_session(
         SessionEnvironment::Worktree { branch, .. } => {
             println!("Current directory is a worktree for branch: {}", branch);
 
-            // Try to find session name from current directory or branch
-            if let Some(session_name) = session_manager
+            // Try to find session from current directory or branch
+            let session_opt = session_manager
                 .list_sessions()?
                 .into_iter()
-                .find(|s| s.worktree_path == current_dir || s.branch == branch)
-                .map(|s| s.name.clone())
-            {
-                create_claude_local_md(&current_dir, &session_name)?;
+                .find(|s| s.worktree_path == current_dir || s.branch == branch);
+
+            if let Some(ref session) = session_opt {
+                create_claude_local_md(&current_dir, &session.name)?;
 
                 // Process and save resume context if provided
                 if let Some(context) = process_resume_context(args)? {
-                    save_resume_context(&current_dir, &session_name, &context)?;
+                    save_resume_context(&current_dir, &session.name, &context)?;
                 }
             }
 
-            launch_ide_for_session(config, &current_dir)?;
+            let skip_permissions = session_opt
+                .as_ref()
+                .and_then(|s| s.dangerous_skip_permissions)
+                .unwrap_or(false);
+
+            launch_ide_for_session(config, &current_dir, skip_permissions)?;
             println!("✅ Resumed current session");
             Ok(())
         }
@@ -183,7 +197,11 @@ pub fn list_and_select_session(
             save_resume_context(&session.worktree_path, &session.name, &context)?;
         }
 
-        launch_ide_for_session(config, &session.worktree_path)?;
+        launch_ide_for_session(
+            config,
+            &session.worktree_path,
+            session.dangerous_skip_permissions.unwrap_or(false),
+        )?;
         println!("✅ Resumed session '{}'", session.name);
     }
 
@@ -221,7 +239,7 @@ fn handle_resume_context(
     Ok(())
 }
 
-fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
+fn launch_ide_for_session(config: &Config, path: &Path, skip_permissions: bool) -> Result<()> {
     let ide_manager = IdeManager::new(config);
 
     // For Claude Code in wrapper mode, always use continuation flag when resuming
@@ -229,9 +247,9 @@ fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
         println!("▶ resuming Claude Code session with conversation continuation...");
         // Update existing tasks.json to include -c flag
         transform_claude_tasks_file(path)?;
-        ide_manager.launch_with_options(path, false, true)
+        ide_manager.launch_with_options(path, skip_permissions, true)
     } else {
-        ide_manager.launch(path, false)
+        ide_manager.launch(path, skip_permissions)
     }
 }
 

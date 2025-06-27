@@ -58,13 +58,15 @@ mod tests {
 
         // Create a container session state manually
         let worktree_path = temp_dir.path().join(".para/worktrees/test-container");
-        let session = crate::core::session::SessionState::new_container_with_parent_branch(
-            "test-container".to_string(),
-            "para/test-container".to_string(),
-            worktree_path,
-            Some("abc123".to_string()),
-            "main".to_string(),
-        );
+        let session =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "test-container".to_string(),
+                "para/test-container".to_string(),
+                worktree_path,
+                Some("abc123".to_string()),
+                "main".to_string(),
+                false,
+            );
 
         // Verify it's a container type
         assert!(matches!(
@@ -113,12 +115,13 @@ mod tests {
                 "para/worktree1".to_string(),
                 temp_dir.path().join(".para/worktrees/worktree1"),
             ),
-            crate::core::session::SessionState::new_container_with_parent_branch(
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
                 "container1".to_string(),
                 "para/container1".to_string(),
                 temp_dir.path().join(".para/worktrees/container1"),
                 None,
                 "main".to_string(),
+                false,
             ),
             crate::core::session::SessionState::new(
                 "worktree2".to_string(),
@@ -172,13 +175,15 @@ mod tests {
         let mut manager = SessionManager::new(&config);
 
         // Create a container session state
-        let session = crate::core::session::SessionState::new_container_with_parent_branch(
-            "test-cancel".to_string(),
-            "para/test-cancel".to_string(),
-            temp_dir.path().join(".para/worktrees/test-cancel"),
-            None,
-            "main".to_string(),
-        );
+        let session =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "test-cancel".to_string(),
+                "para/test-cancel".to_string(),
+                temp_dir.path().join(".para/worktrees/test-cancel"),
+                None,
+                "main".to_string(),
+                false,
+            );
 
         // Save it
         manager.save_state(&session).unwrap();
@@ -248,13 +253,15 @@ mod tests {
             "para/persist-worktree".to_string(),
             temp_dir.path().join(".para/worktrees/persist-worktree"),
         );
-        let container = crate::core::session::SessionState::new_container_with_parent_branch(
-            "persist-container".to_string(),
-            "para/persist-container".to_string(),
-            temp_dir.path().join(".para/worktrees/persist-container"),
-            Some("abc123".to_string()),
-            "main".to_string(),
-        );
+        let container =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "persist-container".to_string(),
+                "para/persist-container".to_string(),
+                temp_dir.path().join(".para/worktrees/persist-container"),
+                Some("abc123".to_string()),
+                "main".to_string(),
+                false,
+            );
 
         // Save and reload sessions
         manager.save_state(&worktree).unwrap();
@@ -310,7 +317,7 @@ mod tests {
 
         // Create session from develop branch
         let session_state = manager
-            .create_session_with_type("test-feature".to_string(), None, None)
+            .create_session_with_type("test-feature".to_string(), None, None, false)
             .unwrap();
 
         // Verify parent branch is captured
@@ -366,6 +373,7 @@ mod tests {
                 Some(SessionType::Container {
                     container_id: Some("container123".to_string()),
                 }),
+                false,
             )
             .unwrap();
 
