@@ -37,6 +37,7 @@ mod tests {
                 forward_env_keys: None,
             }),
             setup_script: None,
+            sandbox: None,
         }
     }
 

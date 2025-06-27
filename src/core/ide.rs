@@ -289,6 +289,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 

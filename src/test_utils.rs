@@ -19,6 +19,7 @@ pub mod test_helpers {
         config.ide.name = "test-ide".to_string();
         config.ide.command = "echo".to_string();
         config.ide.wrapper.command = "echo".to_string();
+        // Sandbox is None by default in default_config
         config
     }
 

@@ -216,6 +216,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         display_config_summary(&config);
@@ -254,6 +255,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         assert!(

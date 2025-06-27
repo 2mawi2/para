@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
 use crate::utils::{ParaError, Result};
 use std::fs;
 use std::path::Path;
@@ -23,6 +24,19 @@ pub fn launch_claude_with_context(
     let vscode_dir = session_path.join(".vscode");
     fs::create_dir_all(&vscode_dir)
         .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
+
+    // Check if sandboxing is enabled and available
+    let should_sandbox = config
+        .sandbox
+        .as_ref()
+        .map(|s| s.enabled && cfg!(target_os = "macos"))
+        .unwrap_or(false);
+
+    if should_sandbox && !is_sandbox_available() {
+        eprintln!(
+            "⚠️  Warning: Sandbox is enabled but sandbox-exec is not available on this system"
+        );
+    }
 
     // Build base command
     let mut base_cmd = config.ide.command.clone();
@@ -94,8 +108,31 @@ pub fn launch_claude_with_context(
         }
     };
 
+    // Apply sandboxing if enabled
+    let final_command = if should_sandbox && is_sandbox_available() {
+        let profile = config
+            .sandbox
+            .as_ref()
+            .map(|s| s.profile.as_str())
+            .unwrap_or("permissive-open");
+
+        match wrap_with_sandbox(&claude_task_cmd, session_path, profile) {
+            Ok(sandboxed_cmd) => {
+                println!("🔒 Sandboxing enabled for Claude CLI");
+                sandboxed_cmd
+            }
+            Err(e) => {
+                eprintln!("⚠️  Warning: Failed to apply sandbox: {}", e);
+                eprintln!("   Continuing without sandboxing");
+                claude_task_cmd
+            }
+        }
+    } else {
+        claude_task_cmd
+    };
+
     // Create tasks.json with the command
-    let tasks_json = create_claude_task_json(&claude_task_cmd);
+    let tasks_json = create_claude_task_json(&final_command);
     let tasks_file = vscode_dir.join("tasks.json");
     fs::write(&tasks_file, tasks_json)
         .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
@@ -161,6 +198,7 @@ fn create_claude_task_json(command: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::sandbox::launcher::is_sandbox_available;
     use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
 
@@ -542,5 +580,125 @@ mod tests {
         assert!(json.contains("\"runOptions\""));
         assert!(json.contains("\"runOn\": \"folderOpen\""));
         // Simple task doesn't have problemMatcher or dependsOrder
+    }
+
+    #[test]
+    fn test_launch_claude_with_sandbox_enabled() {
+        // Skip test on non-macOS platforms
+        if !cfg!(target_os = "macos") {
+            return;
+        }
+
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        let mut config = create_test_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "permissive-open".to_string(),
+        });
+
+        let options = ClaudeLaunchOptions::default();
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Check tasks.json was created
+        let tasks_content = fs::read_to_string(session_path.join(".vscode/tasks.json")).unwrap();
+
+        // If sandbox-exec is available, the command should be wrapped
+        if is_sandbox_available() {
+            assert!(tasks_content.contains("sandbox-exec"));
+            assert!(tasks_content.contains("-D 'TARGET_DIR="));
+            assert!(tasks_content.contains("-D 'TMP_DIR="));
+            assert!(tasks_content.contains("-D 'HOME_DIR="));
+            assert!(tasks_content.contains("-D 'CACHE_DIR="));
+        } else {
+            // Without sandbox-exec, it should fall back to regular command
+            assert!(!tasks_content.contains("sandbox-exec"));
+        }
+    }
+
+    #[test]
+    fn test_launch_claude_with_sandbox_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        let mut config = create_test_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: false,
+            profile: "permissive-open".to_string(),
+        });
+
+        let options = ClaudeLaunchOptions::default();
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Check tasks.json doesn't contain sandbox commands
+        let tasks_content = fs::read_to_string(session_path.join(".vscode/tasks.json")).unwrap();
+        assert!(!tasks_content.contains("sandbox-exec"));
+    }
+
+    #[test]
+    fn test_launch_claude_no_sandbox_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        let mut config = create_test_config();
+        config.sandbox = None;
+
+        let options = ClaudeLaunchOptions::default();
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Check tasks.json doesn't contain sandbox commands
+        let tasks_content = fs::read_to_string(session_path.join(".vscode/tasks.json")).unwrap();
+        assert!(!tasks_content.contains("sandbox-exec"));
+    }
+
+    #[test]
+    fn test_launch_claude_sandbox_with_complex_options() {
+        // Skip test on non-macOS platforms
+        if !cfg!(target_os = "macos") {
+            return;
+        }
+
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        let mut config = create_test_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "permissive-open".to_string(),
+        });
+
+        let options = ClaudeLaunchOptions {
+            skip_permissions: true,
+            session_id: Some("test-123".to_string()),
+            continue_conversation: false,
+            prompt_content: Some("Test prompt".to_string()),
+        };
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Check tasks.json contains all expected elements
+        let tasks_content = fs::read_to_string(session_path.join(".vscode/tasks.json")).unwrap();
+
+        if is_sandbox_available() {
+            assert!(tasks_content.contains("sandbox-exec"));
+            // The entire Claude command should be wrapped in sh -c
+            assert!(tasks_content.contains("sh -c"));
+            // Should still contain the Claude-specific flags
+            assert!(tasks_content.contains("--dangerously-skip-permissions"));
+            assert!(tasks_content.contains("-r"));
+            assert!(tasks_content.contains("test-123"));
+        }
     }
 }

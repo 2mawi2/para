@@ -998,6 +998,7 @@ mod tests {
             session: crate::config::defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -1023,6 +1024,7 @@ mod tests {
             session: crate::config::defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -1048,6 +1050,7 @@ mod tests {
             session: crate::config::defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -1072,6 +1075,7 @@ mod tests {
             session: crate::config::defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let result = validate_claude_code_ide(&config);
@@ -1097,6 +1101,7 @@ mod tests {
             session: crate::config::defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let result = validate_claude_code_ide(&config);

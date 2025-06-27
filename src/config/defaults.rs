@@ -8,6 +8,7 @@ pub fn default_config() -> Config {
         session: default_session_config(),
         docker: None,
         setup_script: None,
+        sandbox: None,
     }
 }
 
