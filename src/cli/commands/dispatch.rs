@@ -172,11 +172,12 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .create_worktree(&branch_name, &session_path)
             .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-        let mut session_state = SessionState::with_parent_branch(
+        let mut session_state = SessionState::with_parent_branch_and_flags(
             session_id.clone(),
             branch_name,
             session_path.clone(),
             parent_branch,
+            args.dangerously_skip_permissions,
         );
 
         session_state.task_description = Some(prompt.clone());

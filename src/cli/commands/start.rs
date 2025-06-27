@@ -84,11 +84,12 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             args.docker_image.clone(),
             !args.no_forward_keys,
         );
-        let session = session_manager.create_docker_session(
+        let session = session_manager.create_docker_session_with_flags(
             session_name.clone(),
             &docker_manager,
             None,
             &args.docker_args,
+            args.dangerously_skip_permissions,
         )?;
 
         // Create CLAUDE.local.md in the session directory
@@ -126,7 +127,11 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         (true, network_isolation, allowed_domains)
     } else {
         // Create regular worktree session
-        let session = session_manager.create_session(session_name.clone(), None)?;
+        let session = session_manager.create_session_with_flags(
+            session_name.clone(),
+            None,
+            args.dangerously_skip_permissions,
+        )?;
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
