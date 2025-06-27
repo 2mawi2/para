@@ -356,6 +356,9 @@ mod tests {
             config.clone(),
         );
 
+        // Give the watcher thread time to start
+        thread::sleep(Duration::from_millis(100));
+
         // Create a test file and finish signal
         fs::write(worktree_path.join("test.txt"), "test content").unwrap();
 
@@ -410,6 +413,9 @@ mod tests {
             worktree_path.clone(),
             config.clone(),
         );
+
+        // Give the watcher thread time to start
+        thread::sleep(Duration::from_millis(100));
 
         // Create cancel signal
         let signal_paths = SignalFilePaths::new(&worktree_path);
