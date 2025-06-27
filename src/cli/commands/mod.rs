@@ -17,3 +17,6 @@ pub mod recover;
 pub mod resume;
 pub mod start;
 pub mod status;
+
+#[cfg(test)]
+mod dangerous_flag_test;

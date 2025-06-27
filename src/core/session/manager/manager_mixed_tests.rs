@@ -310,7 +310,7 @@ mod tests {
 
         // Create session from develop branch
         let session_state = manager
-            .create_session_with_type("test-feature".to_string(), None, None)
+            .create_session_with_type("test-feature".to_string(), None, None, false)
             .unwrap();
 
         // Verify parent branch is captured
@@ -366,6 +366,7 @@ mod tests {
                 Some(SessionType::Container {
                     container_id: Some("container123".to_string()),
                 }),
+                false,
             )
             .unwrap();
 
