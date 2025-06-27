@@ -340,7 +340,12 @@ fn update_final_status(session_state: &SessionState, config: &Config) -> Result<
         Some(mut existing_status) => {
             // Update existing status to show 100% completion
             existing_status.current_task = "Review".to_string();
-            existing_status.test_status = TestStatus::Passed;
+
+            // Only update test status to Passed if it was Unknown, otherwise preserve current status
+            if existing_status.test_status == TestStatus::Unknown {
+                existing_status.test_status = TestStatus::Passed;
+            }
+
             existing_status.confidence = ConfidenceLevel::High;
             existing_status.is_blocked = false;
             existing_status.blocked_reason = None;
@@ -781,9 +786,10 @@ mod tests {
 
         // Verify status was updated to 100%
         assert_eq!(updated_status.current_task, "Review");
+        // Test status should remain Failed (not be overridden to Passed)
         assert_eq!(
             updated_status.test_status,
-            crate::core::status::TestStatus::Passed
+            crate::core::status::TestStatus::Failed
         );
         assert_eq!(
             updated_status.confidence,
@@ -848,5 +854,95 @@ mod tests {
         assert!(!created_status.is_blocked);
         assert_eq!(created_status.todos_completed, None); // No todos when created fresh
         assert_eq!(created_status.todos_total, None);
+    }
+
+    #[test]
+    fn test_finish_preserves_failed_test_status() {
+        // Test that finish preserves Failed test status but updates Unknown to Passed
+        let temp_dir = TempDir::new().unwrap();
+        let git_temp = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let config = create_test_config_with_dir(&temp_dir);
+        let mut session_manager = SessionManager::new(&config);
+        let repo_path = git_service.repository().root.clone();
+        let state_dir = std::path::Path::new(&config.directories.state_dir);
+
+        // Test 1: Failed status should be preserved
+        let session_state_failed = SessionState::new(
+            "failed-status-session".to_string(),
+            "test/failed-branch".to_string(),
+            repo_path.join("test-worktree-failed"),
+        );
+        session_manager
+            .save_state(&session_state_failed)
+            .expect("Failed to save session state");
+
+        let failed_status = Status::new(
+            "failed-status-session".to_string(),
+            "Working on feature".to_string(),
+            crate::core::status::TestStatus::Failed,
+            crate::core::status::ConfidenceLevel::Low,
+        );
+        failed_status
+            .save(state_dir)
+            .expect("Failed to save failed status");
+
+        cleanup_session_state(
+            &mut session_manager,
+            Some(session_state_failed),
+            "test/failed-branch",
+            &config,
+        )
+        .expect("Failed to cleanup session state");
+
+        let updated_failed_status = Status::load(state_dir, "failed-status-session")
+            .expect("Failed to load status")
+            .expect("Status should exist");
+
+        assert_eq!(updated_failed_status.current_task, "Review");
+        assert_eq!(
+            updated_failed_status.test_status,
+            crate::core::status::TestStatus::Failed
+        );
+
+        // Test 2: Unknown status should be updated to Passed
+        let session_state_unknown = SessionState::new(
+            "unknown-status-session".to_string(),
+            "test/unknown-branch".to_string(),
+            repo_path.join("test-worktree-unknown"),
+        );
+        session_manager
+            .save_state(&session_state_unknown)
+            .expect("Failed to save session state");
+
+        let unknown_status = Status::new(
+            "unknown-status-session".to_string(),
+            "Working on feature".to_string(),
+            crate::core::status::TestStatus::Unknown,
+            crate::core::status::ConfidenceLevel::Medium,
+        );
+        unknown_status
+            .save(state_dir)
+            .expect("Failed to save unknown status");
+
+        cleanup_session_state(
+            &mut session_manager,
+            Some(session_state_unknown),
+            "test/unknown-branch",
+            &config,
+        )
+        .expect("Failed to cleanup session state");
+
+        let updated_unknown_status = Status::load(state_dir, "unknown-status-session")
+            .expect("Failed to load status")
+            .expect("Status should exist");
+
+        assert_eq!(updated_unknown_status.current_task, "Review");
+        assert_eq!(
+            updated_unknown_status.test_status,
+            crate::core::status::TestStatus::Passed
+        );
     }
 }
