@@ -107,51 +107,57 @@ Add Docker configuration:
 
 ## Recommended Docker Images
 
-### For Para Development
-For developing para itself, use these base images:
+### Option 1: Pre-built Para Development Image (Recommended)
+
+Build a custom image with all dependencies pre-installed:
 
 ```bash
-# Ubuntu (recommended for para development)
-para start test-dev --container --docker-image ubuntu:22.04
+# One-time setup: Build the para-dev image
+cd /path/to/para
+./docker/build-para-dev-image.sh
 
-# Debian (stable alternative)
-para start test-dev --container --docker-image debian:12
-
-# Rust official image (includes Rust toolchain)
-para start test-dev --container --docker-image rust:latest
-
-# Alpine (minimal, requires different package manager)
-para start test-dev --container --docker-image alpine:latest
+# Now use it for development (starts instantly!)
+para start my-feature --container --docker-image para-dev:latest
 ```
 
-### For General Development
-Popular base images for different tech stacks:
+The `para-dev:latest` image includes:
+- Ubuntu 22.04 base
+- Rust toolchain (latest stable)
+- Just command runner
+- Node.js 20.x and npm
+- Bun (optional, faster npm alternative)
+- All system dependencies for building para
+
+### Option 2: Use Base Images (Slower Initial Setup)
+
+If you prefer not to build a custom image:
 
 ```bash
-# Node.js/TypeScript
-para start node-app --container --docker-image node:20
+# Ubuntu (requires full setup - 5-10 minutes first run)
+para start test-docker-dev --container --docker-image ubuntu:22.04
 
-# Python
-para start ml-project --container --docker-image python:3.11
-
-# Go
-para start go-service --container --docker-image golang:1.21
-
-# Ruby
-para start rails-app --container --docker-image ruby:3.2
-
-# Java
-para start spring-app --container --docker-image openjdk:17
-
-# Multi-purpose development
-para start fullstack --container --docker-image buildpack-deps:jammy
+# Rust official image (faster - Rust pre-installed)
+para start test-docker-dev --container --docker-image rust:latest
 ```
 
-### Security Considerations
-- Use `--no-forward-keys` for untrusted images
-- Prefer official images from Docker Hub
-- Use specific tags instead of `latest` for reproducibility
-- Consider network isolation for sensitive work
+### Development Workflow with Pre-built Image
+
+```bash
+# 1. Build the image once
+./docker/build-para-dev-image.sh
+
+# 2. Start development sessions instantly
+para start feature-x --container --docker-image para-dev:latest
+
+# 3. Inside the container, everything is ready
+just test     # Run all tests
+just build    # Build para
+just fmt      # Format code
+just lint     # Run linting
+
+# 4. When done, create your branch
+para finish "Add feature X"
+```
 
 ## Example Setup Scripts
 
