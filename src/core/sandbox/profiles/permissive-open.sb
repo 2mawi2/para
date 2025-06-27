@@ -23,10 +23,11 @@
     ;; Para-specific directories in user home
     (subpath (string-append (param "HOME_DIR") "/.para"))
     
-    ;; Claude-specific directories
+    ;; Claude-specific directories and files
     (subpath (string-append (param "HOME_DIR") "/.claude"))
     (subpath (string-append (param "HOME_DIR") "/.config/claude"))
     (subpath (string-append (param "HOME_DIR") "/Library/Application Support/Claude"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json"))
     
     ;; Standard output streams
     (literal "/dev/stdout")
