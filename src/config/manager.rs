@@ -144,6 +144,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 
@@ -309,6 +310,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let json = serde_json::to_string_pretty(&claude_config).unwrap();

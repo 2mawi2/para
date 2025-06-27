@@ -59,3 +59,5 @@ tasks/
 
 # Test repositories
 test-repos/
+# Para directories and state files
+.para/
