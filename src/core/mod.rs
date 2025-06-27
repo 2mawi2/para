@@ -1,3 +1,4 @@
+pub mod claude_launcher;
 pub mod daemon;
 pub mod docker;
 pub mod git;
