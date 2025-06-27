@@ -2,7 +2,7 @@ use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
-use crate::core::ide::IdeManager;
+use crate::core::ide::{IdeManager, LaunchOptions};
 use crate::core::session::state::SessionState;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
@@ -10,6 +10,7 @@ use dialoguer::Select;
 use std::env;
 use std::path::Path;
 
+use super::claude_session::find_claude_session;
 use super::context::{process_resume_context, save_resume_context};
 use super::repair::repair_worktree_path;
 use super::task_transform::transform_claude_tasks_file;
@@ -39,8 +40,8 @@ pub fn resume_specific_session(
         // Handle resume context
         handle_resume_context(&session_state.worktree_path, &session_state.name, args)?;
 
-        // Launch IDE
-        launch_ide_for_session(config, &session_state.worktree_path)?;
+        // Launch IDE with prompt if provided
+        launch_ide_for_session(config, &session_state.worktree_path, args)?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
         // Fallback: maybe the state file was timestamped (e.g. test4_20250611-XYZ)
@@ -83,7 +84,7 @@ pub fn resume_specific_session(
         // Handle resume context using extracted function
         handle_resume_context(&matching_worktree.path, &session_name_for_files, args)?;
 
-        launch_ide_for_session(config, &matching_worktree.path)?;
+        launch_ide_for_session(config, &matching_worktree.path, args)?;
         println!(
             "✅ Resumed session at '{}'",
             matching_worktree.path.display()
@@ -121,7 +122,7 @@ pub fn detect_and_resume_session(
                 }
             }
 
-            launch_ide_for_session(config, &current_dir)?;
+            launch_ide_for_session(config, &current_dir, args)?;
             println!("✅ Resumed current session");
             Ok(())
         }
@@ -183,7 +184,7 @@ pub fn list_and_select_session(
             save_resume_context(&session.worktree_path, &session.name, &context)?;
         }
 
-        launch_ide_for_session(config, &session.worktree_path)?;
+        launch_ide_for_session(config, &session.worktree_path, args)?;
         println!("✅ Resumed session '{}'", session.name);
     }
 
@@ -221,15 +222,50 @@ fn handle_resume_context(
     Ok(())
 }
 
-fn launch_ide_for_session(config: &Config, path: &Path) -> Result<()> {
+fn launch_ide_for_session(config: &Config, path: &Path, args: &ResumeArgs) -> Result<()> {
     let ide_manager = IdeManager::new(config);
 
-    // For Claude Code in wrapper mode, always use continuation flag when resuming
+    // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
-        println!("▶ resuming Claude Code session with conversation continuation...");
-        // Update existing tasks.json to include -c flag
-        transform_claude_tasks_file(path)?;
-        ide_manager.launch_with_options(path, false, true)
+        let mut launch_options = LaunchOptions {
+            skip_permissions: false,
+            ..Default::default()
+        };
+
+        // Try to find existing Claude session
+        match find_claude_session(path) {
+            Ok(Some(claude_session)) => {
+                if claude_session.id.is_empty() {
+                    println!("⚠️  Found Claude session but ID is empty");
+                    launch_options.continue_conversation = true;
+                } else {
+                    println!("🔗 Found existing Claude session: {}", claude_session.id);
+                    launch_options.claude_session_id = Some(claude_session.id);
+
+                    // Include prompt from args if provided
+                    if args.prompt.is_some() {
+                        launch_options.prompt = args.prompt.clone();
+                        println!("▶ resuming Claude Code session with prompt...");
+                    } else {
+                        println!("▶ resuming Claude Code session with conversation history...");
+                    }
+                }
+            }
+            Ok(None) => {
+                // No existing session found, use continuation flag
+                println!("▶ starting new Claude Code session...");
+                launch_options.continue_conversation = true;
+
+                // Update existing tasks.json to include -c flag
+                transform_claude_tasks_file(path)?;
+            }
+            Err(e) => {
+                println!("⚠️  Error finding Claude session: {}", e);
+                launch_options.continue_conversation = true;
+            }
+        }
+
+        ide_manager.launch_with_options(path, launch_options)
     } else {
         ide_manager.launch(path, false)
     }
@@ -478,4 +514,7 @@ mod tests {
             .join("resume_context.md");
         assert!(!context_file.exists());
     }
+
+    // Test removed - Claude session integration testing moved to integration tests
+    // The core functionality is tested through unit tests in ide.rs and claude_session.rs
 }
