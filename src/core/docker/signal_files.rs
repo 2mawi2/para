@@ -61,21 +61,67 @@ pub fn read_signal_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Opt
         return Ok(None);
     }
 
-    let content = std::fs::read_to_string(path)?;
-    let signal = serde_json::from_str(&content)?;
-    Ok(Some(signal))
+    // Skip temporary files that might be in the process of being written
+    if path.extension().is_some_and(|ext| ext == "tmp") {
+        return Ok(None);
+    }
+
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            // Try to parse the content
+            match serde_json::from_str(&content) {
+                Ok(signal) => Ok(Some(signal)),
+                Err(e) => {
+                    // If parsing fails and the file is empty or contains partial data,
+                    // treat it as if the signal doesn't exist yet
+                    if content.trim().is_empty() || e.is_eof() {
+                        Ok(None)
+                    } else {
+                        Err(e.into())
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            // If the file was deleted between the exists check and read,
+            // treat it as if it doesn't exist
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(e.into())
+            }
+        }
+    }
 }
 
-/// Write a signal file
+/// Write a signal file atomically
 #[allow(dead_code)]
 pub fn write_signal_file<T: Serialize>(path: &Path, signal: &T) -> Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
     // Ensure the parent directory exists
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
     let content = serde_json::to_string_pretty(signal)?;
-    std::fs::write(path, content)?;
+
+    // Write to a temporary file first with explicit sync
+    let temp_path = path.with_extension("tmp");
+    {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&temp_path)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?; // Ensure data is written to disk
+    }
+
+    // Rename atomically
+    std::fs::rename(temp_path, path)?;
+
     Ok(())
 }
 
