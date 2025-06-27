@@ -32,8 +32,6 @@ ratatui = "0.28"
 crossterm = "0.28"
 copypasta = "0.10"
 fs2 = "0.4"
-bollard = { version = "0.15", features = ["chrono"] }
-hex = "0.4"
 uuid = { version = "1.5", features = ["v4"] }
 ctrlc = "3.4"
 libc = "0.2"
@@ -44,4 +42,3 @@ warnings = "deny"
 [dev-dependencies]
 tempfile = "3.8"
 filetime = "0.2"
-uuid = { version = "1.5", features = ["v4"] }
