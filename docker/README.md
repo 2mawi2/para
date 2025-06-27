@@ -2,53 +2,87 @@
 
 This directory contains Docker configurations for para development.
 
-## Quick Start
+## Prerequisites
 
-### 1. Build the Para Development Image
+1. **Docker installed and running** (Docker Desktop, Colima, etc.)
+2. **Para installed** (`just install` from the para repo)
+
+## Workflow A: The Standard Para Workflow
+
+This is the recommended workflow for most users. It relies on the official `para-claude:latest` image and the standard `para auth` command.
+
+### Step 1: Ensure You Have the Base Image
+
+Check if you have the `para-claude:latest` image:
+```bash
+docker images | grep para-claude
+```
+
+If you don't have it, you'll need to build or obtain the base image first. The `para-claude:latest` image should include the Claude Code CLI.
+
+### Step 2: Authenticate
+
+Run the standard authentication command:
+```bash
+para auth
+```
+This will create the `para-authenticated:latest` image, which is ready for use.
+
+### Step 3: Use for Development
+
+Now you can use the authenticated image for your development tasks:
+```bash
+# All agents now use your authenticated custom image
+para dispatch my-feature --container
+
+# para automatically uses para-authenticated:latest
+```
+
+## Customizing the Development Environment
+
+If you need to add more tools to your development environment, you can build a custom image on top of `para-claude:latest`.
+
+### Step 1: Modify the Dockerfile
+
+Edit `Dockerfile.para-dev` to add your required tools. For example:
+
+```dockerfile
+FROM para-claude:latest
+
+# Add your custom tools
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    net-tools
+```
+
+### Step 2: Build Your Custom Dev Image
+
+Run the build script:
 ```bash
 ./build-para-dev-image.sh
 ```
+This creates a new `para-dev:latest` image with your tools.
 
-This creates `para-dev:latest` with all dependencies pre-installed:
-- Rust toolchain
-- Just command runner  
-- Node.js and npm/bun
-- All system packages needed
+### Step 3: Authenticate Your Custom Image
 
-### 2. Use for Development
+Now, run `para auth` and tell it to use your new dev image as the base:
+
 ```bash
-# Start a new feature
-para start my-feature --container --docker-image para-dev:latest
-
-# The container starts instantly with everything ready!
-# No waiting for dependency installation
+para config set docker.base_image para-dev:latest
+para auth
 ```
+
+This will create `para-authenticated:latest` based on your customized `para-dev` image.
 
 ## Files
 
-### Para Development Files
-- `Dockerfile.para-dev` - Dockerfile for the development image with all tools pre-installed
-- `build-para-dev-image.sh` - Script to build the para-dev image
-- `README.md` - This documentation file
+- `Dockerfile.para-dev`: Dockerfile for building a custom development image on top of `para-claude:latest`.
+- `build-para-dev-image.sh`: Script to build the `para-dev:latest` image.
+- `README.md`: This documentation file.
 
-### Para Container Feature Files
-- `para-shim.sh` - Signal File Protocol implementation for container-to-host communication
-- `secure-entrypoint.sh` - Security entrypoint for network isolation features
-- `init-firewall.sh` - Network firewall configuration for container isolation
+## Why This Workflow?
 
-## Benefits
+- **Simplicity**: Relies on standard `para` commands.
+- **Consistency**: Ensures that the authentication mechanism is compatible with the base image.
+- **Extensibility**: Allows for easy customization of the development environment without breaking core functionality.
 
-1. **Fast Startup**: Containers start in seconds, not minutes
-2. **Consistent Environment**: Same tools and versions every time
-3. **Clean Isolation**: Each feature gets a fresh environment
-4. **No Local Setup**: Don't need Rust/Node.js on your host
-
-## Customization
-
-Edit `Dockerfile.para-dev` to:
-- Add more tools
-- Pin specific Rust versions
-- Include additional dependencies
-- Set up your preferred shell/tools
-
-Then rebuild with `./build-para-dev-image.sh`

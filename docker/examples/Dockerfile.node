@@ -1,0 +1,31 @@
+# Para Node.js Development Image
+# This image includes Node.js and common JS/TS development tools
+
+FROM para-claude:latest
+
+# Switch to root for package installation
+USER root
+
+# Install Node.js 20.x and development tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install global npm packages
+RUN npm install -g \
+    typescript \
+    @types/node \
+    ts-node \
+    nodemon \
+    pnpm \
+    yarn
+
+# Set working directory
+WORKDIR /workspace
+
+# Entry point (sleep infinity for para to manage)
+CMD ["sleep", "infinity"]
