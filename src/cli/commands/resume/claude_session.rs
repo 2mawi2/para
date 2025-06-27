@@ -36,7 +36,9 @@ pub fn find_claude_session(worktree_path: &Path) -> Result<Option<ClaudeSession>
     let sanitized_path = sanitize_path_for_claude(worktree_path);
     let project_dir = projects_dir.join(&sanitized_path);
 
+    eprintln!("DEBUG: Looking in directory: {}", project_dir.display());
     if !project_dir.exists() {
+        eprintln!("DEBUG: Directory does not exist");
         return Ok(None);
     }
 
@@ -63,9 +65,30 @@ pub fn find_claude_session(worktree_path: &Path) -> Result<Option<ClaudeSession>
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
     });
 
+    eprintln!("DEBUG: Found {} session files", session_files.len());
+
+    // Find the most recent session that has actual content (not empty/broken)
+    for session_file in session_files.iter().rev() {
+        if let Some(session_id) = session_file.path().file_stem().and_then(|s| s.to_str()) {
+            // Validate session ID format (should be a UUID-like string)
+            if !session_id.is_empty() && session_id.len() >= 10 {
+                // Check if the session file has meaningful content (> 1000 bytes indicates a real session)
+                if let Ok(metadata) = session_file.metadata() {
+                    eprintln!("DEBUG: Session {} has size: {} bytes", session_id, metadata.len());
+                    if metadata.len() > 1000 {
+                        eprintln!("DEBUG: Selected session {} with {} bytes", session_id, metadata.len());
+                        return Ok(Some(ClaudeSession {
+                            id: session_id.to_string(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    // If no session with content > 100 bytes, fall back to the most recent regardless of size
     if let Some(latest_session) = session_files.last() {
         if let Some(session_id) = latest_session.path().file_stem().and_then(|s| s.to_str()) {
-            // Validate session ID format (should be a UUID-like string)
             if !session_id.is_empty() && session_id.len() >= 10 {
                 return Ok(Some(ClaudeSession {
                     id: session_id.to_string(),
