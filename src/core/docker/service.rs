@@ -50,13 +50,13 @@ impl DockerService {
             // First try with USER env var
             let user_id = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
             let primary_volume = format!("para-auth-claude-{}", user_id);
-            
+
             // Check if primary volume exists
             let primary_check = Command::new("docker")
                 .args(["volume", "inspect", &primary_volume])
                 .output()
                 .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
-            
+
             let auth_volume = if primary_check.status.success() {
                 Some(primary_volume)
             } else {
@@ -65,7 +65,7 @@ impl DockerService {
                     .args(["volume", "ls", "--format", "{{.Name}}"])
                     .output()
                     .map_err(|e| DockerError::DaemonNotAvailable(e.to_string()))?;
-                
+
                 if volume_list.status.success() {
                     let volumes = String::from_utf8_lossy(&volume_list.stdout);
                     volumes
@@ -76,13 +76,11 @@ impl DockerService {
                     None
                 }
             };
-            
+
             if let Some(volume_name) = auth_volume {
                 // Mount the auth volume
-                docker_cmd_args.extend([
-                    "-v".to_string(),
-                    format!("{}:/root/.config", volume_name),
-                ]);
+                docker_cmd_args
+                    .extend(["-v".to_string(), format!("{}:/root/.config", volume_name)]);
                 println!("🔐 Mounting auth volume: {}", volume_name);
             } else {
                 println!("⚠️  No auth volume found. Run 'para auth' to set up authentication.");

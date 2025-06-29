@@ -52,6 +52,7 @@ interface ParaResumeArgs {
   session?: string;
   prompt?: string;
   file?: string;
+  dangerously_skip_permissions?: boolean;
 }
 
 interface ParaCancelArgs {
@@ -315,6 +316,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             file: {
               type: "string",
               description: "Read additional instructions from specified file"
+            },
+            dangerously_skip_permissions: {
+              type: "boolean",
+              description: "Skip IDE permission warnings (dangerous)"
             }
           },
           required: []
@@ -500,6 +505,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (resumeArgs.file) {
             cmdArgs.push("--file", resumeArgs.file);
+          }
+          if (resumeArgs.dangerously_skip_permissions) {
+            cmdArgs.push("--dangerously-skip-permissions");
           }
           result = await runParaCommand(cmdArgs);
         }
