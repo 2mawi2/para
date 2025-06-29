@@ -85,6 +85,7 @@ mod tests {
             session: None,
             prompt: Some("Continue working on the authentication system".to_string()),
             file: None,
+            dangerously_skip_permissions: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -104,6 +105,7 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(test_file.clone()),
+            dangerously_skip_permissions: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -119,6 +121,7 @@ mod tests {
             session: None,
             prompt: None,
             file: None,
+            dangerously_skip_permissions: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -131,6 +134,7 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(PathBuf::from("/nonexistent/file.txt")),
+            dangerously_skip_permissions: false,
         };
 
         let result = process_resume_context(&args);
@@ -151,6 +155,7 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(test_file),
+            dangerously_skip_permissions: false,
         };
 
         let result = process_resume_context(&args);
@@ -185,6 +190,7 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(empty_file),
+            dangerously_skip_permissions: false,
         };
 
         // Process should succeed but with empty content

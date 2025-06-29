@@ -238,7 +238,7 @@ fn prepare_session_files(worktree_path: &Path, session_name: &str) -> Result<()>
 fn launch_ide_for_session(
     config: &Config,
     path: &Path,
-    _args: &ResumeArgs,
+    args: &ResumeArgs,
     processed_context: Option<&String>,
 ) -> Result<()> {
     let ide_manager = IdeManager::new(config);
@@ -246,7 +246,7 @@ fn launch_ide_for_session(
     // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
-            skip_permissions: false,
+            skip_permissions: args.dangerously_skip_permissions,
             ..Default::default()
         };
 
@@ -291,8 +291,7 @@ fn launch_ide_for_session(
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {
-        let skip_permissions = false; // Default to false for non-Claude IDEs
-        ide_manager.launch(path, skip_permissions)
+        ide_manager.launch(path, args.dangerously_skip_permissions)
     }
 }
 
@@ -343,6 +342,7 @@ mod tests {
             session: Some("test4".to_string()),
             prompt: None,
             file: None,
+            dangerously_skip_permissions: false,
         };
         resume_specific_session(&config, &git_service, "test4", &args).unwrap();
     }
@@ -387,6 +387,7 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: Some("Continue implementing the feature".to_string()),
             file: None,
+            dangerously_skip_permissions: false,
         };
 
         // Execute resume (with echo IDE it won't actually launch anything)
@@ -450,6 +451,7 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: None,
             file: Some(context_file),
+            dangerously_skip_permissions: false,
         };
 
         // Execute resume
@@ -505,6 +507,7 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: None,
             file: None,
+            dangerously_skip_permissions: false,
         };
 
         // Execute resume - should work exactly as before

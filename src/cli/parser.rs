@@ -262,6 +262,13 @@ pub struct ResumeArgs {
     /// Read additional instructions from specified file
     #[arg(long, short)]
     pub file: Option<PathBuf>,
+
+    /// Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)
+    #[arg(
+        long,
+        help = "Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)"
+    )]
+    pub dangerously_skip_permissions: bool,
 }
 
 #[derive(Args, Debug)]
