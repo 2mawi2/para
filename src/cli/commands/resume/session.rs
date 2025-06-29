@@ -22,7 +22,7 @@ pub fn resume_specific_session(
     session_name: &str,
     args: &ResumeArgs,
 ) -> Result<()> {
-    let session_manager = SessionManager::new(config);
+    let mut session_manager = SessionManager::new(config);
 
     // Try to validate and load existing session
     if let Some(mut session_state) = validate_session_exists(&session_manager, session_name)? {
@@ -39,6 +39,13 @@ pub fn resume_specific_session(
 
         // Handle resume context and get processed content
         let processed_context = process_resume_context(args)?;
+        
+        // If session is in Review state and we have a task/prompt, transition back to Active
+        if matches!(session_state.status, SessionStatus::Review) && processed_context.is_some() {
+            session_manager.update_session_status(&session_state.name, SessionStatus::Active)?;
+            println!("🔄 Transitioning session from Review to Active due to new task");
+        }
+        
         if let Some(ref context) = processed_context {
             save_resume_context(&session_state.worktree_path, &session_state.name, context)?;
         }
@@ -135,6 +142,13 @@ pub fn detect_and_resume_session(
             if let Some(ref session) = session_opt {
                 create_claude_local_md(&current_dir, &session.name)?;
 
+                // If session is in Review state and we have a task/prompt, transition back to Active
+                if matches!(session.status, SessionStatus::Review) && processed_context.is_some() {
+                    let mut session_manager = SessionManager::new(config);
+                    session_manager.update_session_status(&session.name, SessionStatus::Active)?;
+                    println!("🔄 Transitioning session from Review to Active due to new task");
+                }
+
                 // Save resume context if provided
                 if let Some(ref context) = processed_context {
                     save_resume_context(&current_dir, &session.name, context)?;
@@ -164,28 +178,33 @@ pub fn list_and_select_session(
     args: &ResumeArgs,
 ) -> Result<()> {
     let sessions = session_manager.list_sessions()?;
-    let active_sessions: Vec<_> = sessions
+    let resumable_sessions: Vec<_> = sessions
         .into_iter()
-        .filter(|s| matches!(s.status, SessionStatus::Active))
+        .filter(|s| matches!(s.status, SessionStatus::Active | SessionStatus::Review))
         .collect();
 
-    if active_sessions.is_empty() {
-        println!("No active sessions found.");
+    if resumable_sessions.is_empty() {
+        println!("No resumable sessions found.");
         return Ok(());
     }
 
-    println!("Active sessions:");
-    for (i, session) in active_sessions.iter().enumerate() {
-        println!("  {}: {} ({})", i + 1, session.name, session.branch);
+    println!("Resumable sessions:");
+    for (i, session) in resumable_sessions.iter().enumerate() {
+        let status_label = match session.status {
+            SessionStatus::Active => "",
+            SessionStatus::Review => " [Review]",
+            _ => "",
+        };
+        println!("  {}: {}{} ({})", i + 1, session.name, status_label, session.branch);
     }
 
     let selection = Select::new()
         .with_prompt("Select session to resume")
-        .items(&active_sessions.iter().map(|s| &s.name).collect::<Vec<_>>())
+        .items(&resumable_sessions.iter().map(|s| &s.name).collect::<Vec<_>>())
         .interact();
 
     if let Ok(index) = selection {
-        let session = &active_sessions[index];
+        let session = &resumable_sessions[index];
 
         if !session.worktree_path.exists() {
             return Err(ParaError::session_not_found(format!(
@@ -200,6 +219,14 @@ pub fn list_and_select_session(
 
         // Process and save resume context if provided
         let processed_context = process_resume_context(args)?;
+        
+        // If session is in Review state and we have a task/prompt, transition back to Active
+        if matches!(session.status, SessionStatus::Review) && processed_context.is_some() {
+            let mut session_manager = SessionManager::new(config);
+            session_manager.update_session_status(&session.name, SessionStatus::Active)?;
+            println!("🔄 Transitioning session from Review to Active due to new task");
+        }
+        
         if let Some(ref context) = processed_context {
             save_resume_context(&session.worktree_path, &session.name, context)?;
         }
@@ -524,4 +551,177 @@ mod tests {
 
     // Test removed - Claude session integration testing moved to integration tests
     // The core functionality is tested through unit tests in ide.rs and claude_session.rs
+
+    #[test]
+    fn test_resume_review_session_with_prompt() {
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session in Review state
+        let session_name = "test-review-session".to_string();
+        let branch_name = "para/test-review-branch".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let mut state = SessionState::new(session_name.clone(), branch_name, worktree_path.clone());
+        state.status = SessionStatus::Review;
+        session_manager.save_state(&state).unwrap();
+
+        // Verify session is in Review state
+        let loaded_state = session_manager.load_state(&session_name).unwrap();
+        assert!(matches!(loaded_state.status, SessionStatus::Review));
+
+        // Resume with prompt
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: Some("Continue with OAuth implementation".to_string()),
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        // Execute resume
+        resume_specific_session(&config, &git_service, &session_name, &args).unwrap();
+
+        // Verify session transitioned back to Active
+        let updated_state = session_manager.load_state(&session_name).unwrap();
+        assert!(matches!(updated_state.status, SessionStatus::Active));
+
+        // Verify context was saved
+        let context_file = worktree_path
+            .join(".para/sessions")
+            .join(&session_name)
+            .join("resume_context.md");
+        assert!(context_file.exists());
+        let saved_content = fs::read_to_string(&context_file).unwrap();
+        assert!(saved_content.contains("Continue with OAuth implementation"));
+    }
+
+    #[test]
+    fn test_resume_review_session_without_prompt_stays_review() {
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        config.directories.subtrees_dir = "subtrees/para".to_string();
+        config.git.branch_prefix = "para".to_string();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session in Review state
+        let session_name = "test-review-no-prompt".to_string();
+        let branch_name = "para/test-review-no-prompt-branch".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let mut state = SessionState::new(session_name.clone(), branch_name, worktree_path.clone());
+        state.status = SessionStatus::Review;
+        session_manager.save_state(&state).unwrap();
+
+        // Resume without prompt
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+        };
+
+        // Execute resume
+        resume_specific_session(&config, &git_service, &session_name, &args).unwrap();
+
+        // Verify session stays in Review state
+        let updated_state = session_manager.load_state(&session_name).unwrap();
+        assert!(matches!(updated_state.status, SessionStatus::Review));
+    }
+
+    #[test]
+    fn test_list_sessions_includes_review_sessions() {
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, _git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        let session_manager = SessionManager::new(&config);
+
+        // Create Active session
+        let active_session = SessionState::new(
+            "active-session".to_string(),
+            "para/active".to_string(),
+            temp_dir.path().join("active"),
+        );
+        session_manager.save_state(&active_session).unwrap();
+
+        // Create Review session
+        let mut review_session = SessionState::new(
+            "review-session".to_string(),
+            "para/review".to_string(),
+            temp_dir.path().join("review"),
+        );
+        review_session.status = SessionStatus::Review;
+        session_manager.save_state(&review_session).unwrap();
+
+        // Create Cancelled session (should be excluded)
+        let mut cancelled_session = SessionState::new(
+            "cancelled-session".to_string(),
+            "para/cancelled".to_string(),
+            temp_dir.path().join("cancelled"),
+        );
+        cancelled_session.status = SessionStatus::Cancelled;
+        session_manager.save_state(&cancelled_session).unwrap();
+
+        // Get resumable sessions
+        let sessions = session_manager.list_sessions().unwrap();
+        let resumable_sessions: Vec<_> = sessions
+            .into_iter()
+            .filter(|s| matches!(s.status, SessionStatus::Active | SessionStatus::Review))
+            .collect();
+
+        // Should have 2 resumable sessions
+        assert_eq!(resumable_sessions.len(), 2);
+        
+        // Verify we have both Active and Review sessions
+        let has_active = resumable_sessions.iter().any(|s| s.name == "active-session");
+        let has_review = resumable_sessions.iter().any(|s| s.name == "review-session");
+        assert!(has_active);
+        assert!(has_review);
+    }
 }

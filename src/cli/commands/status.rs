@@ -54,6 +54,15 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         return Err(ParaError::session_not_found(&session_name));
     }
 
+    // Check if session is in Review state
+    if let Ok(session_state) = session_manager.load_state(&session_name) {
+        if matches!(session_state.status, crate::core::session::SessionStatus::Review) {
+            return Err(ParaError::invalid_args(
+                "Cannot update status for sessions in Review state. Use 'para resume' with a task to reactivate the session."
+            ));
+        }
+    }
+
     // Parse and validate arguments
     let test_status =
         Status::parse_test_status(&tests).map_err(|e| ParaError::invalid_args(e.to_string()))?;
@@ -1254,5 +1263,47 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Not in a para repository"));
+    }
+
+    #[test]
+    fn test_status_update_blocked_for_review_sessions() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a session in Review state
+        let session_manager = SessionManager::new(&config);
+        let mut session_state = crate::core::session::SessionState::new(
+            "review-session".to_string(),
+            "test/review-branch".to_string(),
+            git_temp.path().join("worktree"),
+        );
+        session_state.status = crate::core::session::SessionStatus::Review;
+        session_manager.save_state(&session_state).unwrap();
+
+        // Try to update status for Review session
+        let args = StatusArgs {
+            command: None,
+            task: Some("Trying to update review session".to_string()),
+            tests: Some("passed".to_string()),
+            todos: None,
+            blocked: false,
+            session: Some("review-session".to_string()),
+        };
+
+        let result = execute(config.clone(), args);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot update status for sessions in Review state"));
     }
 }
