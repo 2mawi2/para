@@ -1,0 +1,80 @@
+(version 1)
+
+;; Para Sandboxing Profile - Restrictive Closed
+;; This profile denies everything by default and only allows essential operations
+;; Highest security level - no network, limited file writes
+
+;; Deny everything by default
+(deny default)
+
+;; Allow reading files from anywhere (needed for development)
+(allow file-read*)
+
+;; Allow process execution and forking
+(allow process-exec)
+(allow process-fork)
+
+;; Allow signals to self
+(allow signal (target self))
+
+;; Allow reading system information
+(allow sysctl-read)
+
+;; Allow file writes only to specific directories
+(allow file-write*
+    ;; Para worktree directory (passed as parameter)
+    (subpath (param "TARGET_DIR"))
+    
+    ;; System temporary directories (minimal set for essential operations)
+    (subpath "/tmp")
+    (subpath "/private/tmp")
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")  ;; macOS per-user temp directories
+    
+    ;; User cache directory
+    (subpath (param "CACHE_DIR"))
+    
+    ;; Essential Para directories
+    (subpath (string-append (param "HOME_DIR") "/.para"))
+    
+    ;; Claude configuration (minimal)
+    (literal (string-append (param "HOME_DIR") "/.claude.json"))
+    
+    ;; Standard output streams only
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (literal "/dev/ptmx")
+    
+    ;; Terminal control
+    (regex #"^/dev/ttys[0-9]+")
+    (regex #"^/dev/pty[0-9]+")
+)
+
+;; Allow terminal control operations
+(allow file-ioctl
+    (literal "/dev/tty")
+    (regex #"^/dev/ttys[0-9]+")
+    (regex #"^/dev/pty[0-9]+")
+)
+
+;; Allow minimal IPC for process communication
+(allow ipc-posix-shm-read-data)
+(allow ipc-posix-shm-write-data)
+
+;; Allow essential mach operations
+(allow mach-lookup
+    (global-name "com.apple.system.notification_center")
+    (global-name "com.apple.distributed_notifications")
+)
+
+;; No network access except localhost for debugging
+(allow network-inbound
+    (local ip "localhost:9229")  ;; Node.js debugger
+)
+
+;; File metadata operations (needed for git)
+(allow file-read-metadata)
+(allow file-write-metadata
+    (subpath (param "TARGET_DIR"))
+)

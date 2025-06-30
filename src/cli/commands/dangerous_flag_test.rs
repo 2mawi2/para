@@ -106,6 +106,9 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox: false,
+            no_sandbox: false,
+            sandbox_profile: None,
         };
 
         // Note: dispatch::execute requires Claude Code in wrapper mode

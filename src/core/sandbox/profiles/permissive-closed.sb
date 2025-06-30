@@ -1,7 +1,7 @@
 (version 1)
 
-;; Para Sandboxing Profile - Permissive Open
-;; This profile allows most operations but restricts file writes to specific directories
+;; Para Sandboxing Profile - Permissive Closed
+;; This profile allows most operations but restricts file writes AND network access
 
 ;; Allow all operations by default
 (allow default)
@@ -50,8 +50,15 @@
     (regex #"^/dev/pty[0-9]+")
 )
 
-;; Allow all network operations
-(allow network*)
+;; DENY ALL NETWORK OPERATIONS
+(deny network*)
+
+;; Allow only localhost connections for debuggers and local services
+(allow network*
+    (local ip "localhost:*")
+    (local ip "127.0.0.1:*")
+    (local ip "::1:*")
+)
 
 ;; Allow process operations (needed for subprocess spawning)
 (allow process*)

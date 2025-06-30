@@ -288,6 +288,8 @@ fn launch_ide_for_session(
             session_id: launch_options.claude_session_id.clone(),
             continue_conversation: launch_options.continue_conversation,
             prompt_content: processed_context.cloned(),
+            sandbox_override: launch_options.sandbox_override,
+            sandbox_profile: launch_options.sandbox_profile,
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {

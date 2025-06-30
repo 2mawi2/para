@@ -1,3 +1,5 @@
+pub mod cleanup;
+pub mod config;
 pub mod launcher;
 pub mod profiles;
 
@@ -21,3 +23,6 @@ impl Default for SandboxConfig {
 fn default_profile() -> String {
     "permissive-open".to_string()
 }
+
+#[cfg(test)]
+mod error_tests;

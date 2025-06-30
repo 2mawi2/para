@@ -106,6 +106,28 @@ pub struct StartArgs {
         help = "Disable automatic API key forwarding to Docker containers"
     )]
     pub no_forward_keys: bool,
+
+    /// Enable sandboxing (overrides config)
+    #[arg(
+        long = "sandbox",
+        short = 's',
+        help = "Enable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub sandbox: bool,
+
+    /// Disable sandboxing (overrides config and env)
+    #[arg(
+        long = "no-sandbox",
+        help = "Disable sandboxing for Claude CLI (overrides config and environment)"
+    )]
+    pub no_sandbox: bool,
+
+    /// Sandbox profile to use
+    #[arg(
+        long = "sandbox-profile",
+        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
+    )]
+    pub sandbox_profile: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -187,6 +209,28 @@ pub struct DispatchArgs {
         help = "Disable automatic API key forwarding to Docker containers"
     )]
     pub no_forward_keys: bool,
+
+    /// Enable sandboxing (overrides config)
+    #[arg(
+        long = "sandbox",
+        short = 's',
+        help = "Enable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub sandbox: bool,
+
+    /// Disable sandboxing (overrides config and env)
+    #[arg(
+        long = "no-sandbox",
+        help = "Disable sandboxing for Claude CLI (overrides config and environment)"
+    )]
+    pub no_sandbox: bool,
+
+    /// Sandbox profile to use
+    #[arg(
+        long = "sandbox-profile",
+        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
+    )]
+    pub sandbox_profile: Option<String>,
 }
 
 #[derive(Args, Debug)]
