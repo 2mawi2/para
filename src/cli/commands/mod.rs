@@ -19,4 +19,6 @@ pub mod start;
 pub mod status;
 
 #[cfg(test)]
+mod dangerous_flag_integration_test;
+#[cfg(test)]
 mod dangerous_flag_test;
