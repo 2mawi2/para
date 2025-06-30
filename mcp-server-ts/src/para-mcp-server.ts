@@ -21,6 +21,9 @@ interface ParaStartArgs {
   dangerously_skip_permissions?: boolean;
   container?: boolean;
   docker_args?: string[];
+  sandbox?: boolean;
+  no_sandbox?: boolean;
+  sandbox_profile?: string;
 }
 
 interface ParaFinishArgs {
@@ -36,6 +39,9 @@ interface ParaDispatchArgs {
   dangerously_skip_permissions?: boolean;
   container?: boolean;
   docker_args?: string[];
+  sandbox?: boolean;
+  no_sandbox?: boolean;
+  sandbox_profile?: string;
 }
 
 interface ParaListArgs {
@@ -52,6 +58,9 @@ interface ParaResumeArgs {
   session?: string;
   prompt?: string;
   file?: string;
+  sandbox?: boolean;
+  no_sandbox?: boolean;
+  sandbox_profile?: string;
 }
 
 interface ParaCancelArgs {
@@ -200,6 +209,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "array",
               items: { type: "string" },
               description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
+            },
+            sandbox: {
+              type: "boolean",
+              description: "Enable sandboxing for Claude CLI (overrides config)"
+            },
+            no_sandbox: {
+              type: "boolean",
+              description: "Disable sandboxing for Claude CLI (overrides config)"
+            },
+            sandbox_profile: {
+              type: "string",
+              description: "Sandbox profile to use: permissive (default) or restrictive"
             }
           },
           required: []
@@ -257,6 +278,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "array",
               items: { type: "string" },
               description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
+            },
+            sandbox: {
+              type: "boolean",
+              description: "Enable sandboxing for Claude CLI (overrides config)"
+            },
+            no_sandbox: {
+              type: "boolean",
+              description: "Disable sandboxing for Claude CLI (overrides config)"
+            },
+            sandbox_profile: {
+              type: "string",
+              description: "Sandbox profile to use: permissive (default) or restrictive"
             }
           },
           required: ["session_name"]
@@ -315,6 +348,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             file: {
               type: "string",
               description: "Read additional instructions from specified file"
+            },
+            sandbox: {
+              type: "boolean",
+              description: "Enable sandboxing for Claude CLI (overrides config)"
+            },
+            no_sandbox: {
+              type: "boolean",
+              description: "Disable sandboxing for Claude CLI (overrides config)"
+            },
+            sandbox_profile: {
+              type: "string",
+              description: "Sandbox profile to use: permissive (default) or restrictive"
             }
           },
           required: []
@@ -415,6 +460,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (startArgs.docker_args && startArgs.docker_args.length > 0) {
             cmdArgs.push("--docker-args", ...startArgs.docker_args);
           }
+          if (startArgs.sandbox) {
+            cmdArgs.push("--sandbox");
+          }
+          if (startArgs.no_sandbox) {
+            cmdArgs.push("--no-sandbox");
+          }
+          if (startArgs.sandbox_profile) {
+            cmdArgs.push("--sandbox-profile", startArgs.sandbox_profile);
+          }
           result = await runParaCommand(cmdArgs);
         }
         break;
@@ -454,6 +508,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (dispatchArgs.docker_args && dispatchArgs.docker_args.length > 0) {
             cmdArgs.push("--docker-args", ...dispatchArgs.docker_args);
+          }
+          if (dispatchArgs.sandbox) {
+            cmdArgs.push("--sandbox");
+          }
+          if (dispatchArgs.no_sandbox) {
+            cmdArgs.push("--no-sandbox");
+          }
+          if (dispatchArgs.sandbox_profile) {
+            cmdArgs.push("--sandbox-profile", dispatchArgs.sandbox_profile);
           }
 
           result = await runParaCommand(cmdArgs);
@@ -500,6 +563,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (resumeArgs.file) {
             cmdArgs.push("--file", resumeArgs.file);
+          }
+          if (resumeArgs.sandbox) {
+            cmdArgs.push("--sandbox");
+          }
+          if (resumeArgs.no_sandbox) {
+            cmdArgs.push("--no-sandbox");
+          }
+          if (resumeArgs.sandbox_profile) {
+            cmdArgs.push("--sandbox-profile", resumeArgs.sandbox_profile);
           }
           result = await runParaCommand(cmdArgs);
         }

@@ -22,7 +22,7 @@ pub struct SandboxArgs {
     /// Sandbox profile to use
     #[arg(
         long = "sandbox-profile",
-        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
+        help = "Sandbox profile to use: permissive (default) or restrictive"
     )]
     pub sandbox_profile: Option<String>,
 }

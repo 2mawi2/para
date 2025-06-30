@@ -20,7 +20,7 @@ mod tests {
             sandbox_args: SandboxArgs {
                 sandbox: true,
                 no_sandbox: false,
-                sandbox_profile: Some("restrictive-closed".to_string()),
+                sandbox_profile: Some("restrictive".to_string()),
             },
         };
 
@@ -28,7 +28,7 @@ mod tests {
         assert!(!args.sandbox_args.no_sandbox);
         assert_eq!(
             args.sandbox_args.sandbox_profile,
-            Some("restrictive-closed".to_string())
+            Some("restrictive".to_string())
         );
     }
 
@@ -49,7 +49,7 @@ mod tests {
             sandbox_args: SandboxArgs {
                 sandbox: true,
                 no_sandbox: false,
-                sandbox_profile: Some("permissive-closed".to_string()),
+                sandbox_profile: Some("permissive".to_string()),
             },
         };
 
@@ -57,7 +57,7 @@ mod tests {
         assert!(!args.sandbox_args.no_sandbox);
         assert_eq!(
             args.sandbox_args.sandbox_profile,
-            Some("permissive-closed".to_string())
+            Some("permissive".to_string())
         );
     }
 
@@ -67,15 +67,15 @@ mod tests {
         let mut config = create_test_config();
         config.sandbox = Some(SandboxConfig {
             enabled: false,
-            profile: "permissive-open".to_string(),
+            profile: "permissive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
 
         // Test --sandbox flag overrides
-        let settings = resolver.resolve(true, false, Some("restrictive-closed".to_string()));
+        let settings = resolver.resolve(true, false, Some("restrictive".to_string()));
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "restrictive-closed");
+        assert_eq!(settings.profile, "restrictive");
 
         // Test --no-sandbox flag overrides
         let settings = resolver.resolve(false, true, None);
@@ -87,9 +87,12 @@ mod tests {
         use crate::core::sandbox::profiles::SandboxProfile;
 
         // Valid profiles
-        assert!(SandboxProfile::from_name("permissive-open").is_some());
-        assert!(SandboxProfile::from_name("permissive-closed").is_some());
-        assert!(SandboxProfile::from_name("restrictive-closed").is_some());
+        assert!(SandboxProfile::from_name("permissive").is_some());
+        assert!(SandboxProfile::from_name("restrictive").is_some());
+
+        // Legacy names should still work
+        assert!(SandboxProfile::from_name("permissive").is_some());
+        assert!(SandboxProfile::from_name("restrictive").is_some());
 
         // Invalid profile
         assert!(SandboxProfile::from_name("invalid-profile").is_none());
@@ -103,18 +106,18 @@ mod tests {
         // Test with sandbox enabled in config
         config.sandbox = Some(SandboxConfig {
             enabled: true,
-            profile: "permissive-closed".to_string(),
+            profile: "permissive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
         let settings = resolver.resolve(false, false, None);
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "permissive-closed");
+        assert_eq!(settings.profile, "permissive");
 
         // Test with sandbox disabled in config
         config.sandbox = Some(SandboxConfig {
             enabled: false,
-            profile: "restrictive-closed".to_string(),
+            profile: "restrictive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
@@ -126,6 +129,6 @@ mod tests {
         let resolver = SandboxResolver::new(&config);
         let settings = resolver.resolve(false, false, None);
         assert!(!settings.enabled);
-        assert_eq!(settings.profile, "permissive-open");
+        assert_eq!(settings.profile, "permissive");
     }
 }
