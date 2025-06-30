@@ -10,7 +10,6 @@ pub enum SandboxProfile {
 }
 
 /// Validate profile name contains only safe characters
-#[allow(dead_code)]
 fn validate_profile_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 50  // Reasonable length limit
