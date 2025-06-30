@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::Path;
 
 use super::profiles::extract_profile;
@@ -6,12 +6,23 @@ use super::profiles::extract_profile;
 /// Wraps a command with macOS sandbox-exec if sandboxing is enabled and we're on macOS.
 pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> Result<String> {
     // Only apply sandboxing on macOS
-    if !cfg!(target_os = "macos") {
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Return the command unchanged on non-macOS platforms
         return Ok(command.to_string());
     }
 
-    // Extract the profile to a temporary location
-    let profile_path = extract_profile(profile)?;
+    #[cfg(target_os = "macos")]
+    {
+        // Continue with macOS sandboxing logic below
+    }
+
+    // Validate profile name and extract to a temporary location
+    if profile.is_empty() {
+        return Err(anyhow::anyhow!("Sandbox profile name cannot be empty"));
+    }
+
+    let profile_path = extract_profile(profile).context("Failed to extract sandbox profile")?;
 
     // Get required directories
     let home_dir = directories::UserDirs::new()
@@ -47,16 +58,33 @@ pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> 
 
 /// Check if sandbox-exec is available on the system
 pub fn is_sandbox_available() -> bool {
-    if !cfg!(target_os = "macos") {
-        return false;
+    #[cfg(target_os = "macos")]
+    {
+        // Check if sandbox-exec exists in PATH
+        match std::process::Command::new("which")
+            .arg("sandbox-exec")
+            .output()
+        {
+            Ok(output) => {
+                if output.status.success() {
+                    true
+                } else {
+                    eprintln!("⚠️  sandbox-exec not found in PATH on macOS");
+                    false
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to check for sandbox-exec availability: {}", e);
+                false
+            }
+        }
     }
 
-    // Check if sandbox-exec exists in PATH
-    std::process::Command::new("which")
-        .arg("sandbox-exec")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Sandboxing is only supported on macOS for now
+        false
+    }
 }
 
 #[cfg(test)]

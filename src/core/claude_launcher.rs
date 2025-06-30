@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::core::sandbox::config::SandboxResolver;
 use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
 use crate::utils::{ParaError, Result};
 use std::fs;
@@ -12,6 +13,8 @@ pub struct ClaudeLaunchOptions {
     pub session_id: Option<String>,
     pub continue_conversation: bool,
     pub prompt_content: Option<String>,
+    pub sandbox_override: Option<bool>,
+    pub sandbox_profile: Option<String>,
 }
 
 /// Launch Claude Code with session continuation and optional prompt content
@@ -25,12 +28,16 @@ pub fn launch_claude_with_context(
     fs::create_dir_all(&vscode_dir)
         .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
 
+    // Resolve sandbox settings using the resolver
+    let resolver = SandboxResolver::new(config);
+    let sandbox_settings = resolver.resolve(
+        options.sandbox_override.unwrap_or(false),
+        options.sandbox_override == Some(false),
+        options.sandbox_profile.clone(),
+    );
+
     // Check if sandboxing is enabled and available
-    let should_sandbox = config
-        .sandbox
-        .as_ref()
-        .map(|s| s.enabled && cfg!(target_os = "macos"))
-        .unwrap_or(false);
+    let should_sandbox = sandbox_settings.enabled && cfg!(target_os = "macos");
 
     if should_sandbox && !is_sandbox_available() {
         eprintln!(
@@ -110,15 +117,12 @@ pub fn launch_claude_with_context(
 
     // Apply sandboxing if enabled
     let final_command = if should_sandbox && is_sandbox_available() {
-        let profile = config
-            .sandbox
-            .as_ref()
-            .map(|s| s.profile.as_str())
-            .unwrap_or("permissive-open");
-
-        match wrap_with_sandbox(&claude_task_cmd, session_path, profile) {
+        match wrap_with_sandbox(&claude_task_cmd, session_path, &sandbox_settings.profile) {
             Ok(sandboxed_cmd) => {
-                println!("🔒 Sandboxing enabled for Claude CLI");
+                println!(
+                    "🔒 Sandboxing enabled for Claude CLI (profile: {})",
+                    sandbox_settings.profile
+                );
                 sandboxed_cmd
             }
             Err(e) => {
@@ -218,6 +222,8 @@ mod tests {
             session_id: Some("test-session-123".to_string()),
             continue_conversation: true,
             prompt_content: Some("Test prompt content".to_string()),
+            sandbox_override: Some(true),
+            sandbox_profile: Some("restrictive-closed".to_string()),
         };
 
         assert!(options.skip_permissions);
@@ -226,6 +232,11 @@ mod tests {
         assert_eq!(
             options.prompt_content,
             Some("Test prompt content".to_string())
+        );
+        assert_eq!(options.sandbox_override, Some(true));
+        assert_eq!(
+            options.sandbox_profile,
+            Some("restrictive-closed".to_string())
         );
     }
 
@@ -464,6 +475,8 @@ mod tests {
             session_id: Some("complex-session".to_string()),
             continue_conversation: false, // Should be ignored when session_id is present
             prompt_content: Some("Complex prompt".to_string()),
+            sandbox_override: None,
+            sandbox_profile: None,
         };
 
         let result = launch_claude_with_context(&config, &session_path, options);
@@ -683,6 +696,8 @@ mod tests {
             session_id: Some("test-123".to_string()),
             continue_conversation: false,
             prompt_content: Some("Test prompt".to_string()),
+            sandbox_override: None,
+            sandbox_profile: None,
         };
 
         let result = launch_claude_with_context(&config, &session_path, options);

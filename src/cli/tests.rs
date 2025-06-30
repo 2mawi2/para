@@ -187,6 +187,9 @@ mod cli_tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox: false,
+            no_sandbox: false,
+            sandbox_profile: None,
         };
         assert!(args.validate_impl(true).is_err());
 
@@ -201,6 +204,9 @@ mod cli_tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox: false,
+            no_sandbox: false,
+            sandbox_profile: None,
         };
         assert!(args.validate_impl(true).is_ok());
     }

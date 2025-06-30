@@ -12,6 +12,8 @@ pub struct LaunchOptions {
     pub continue_conversation: bool,
     pub claude_session_id: Option<String>,
     pub prompt: Option<String>,
+    pub sandbox_override: Option<bool>,  // CLI flag override
+    pub sandbox_profile: Option<String>, // CLI profile override
 }
 
 pub struct IdeManager {
@@ -186,21 +188,36 @@ impl IdeManager {
         })?;
 
         let mut ide_command = self.build_ide_wrapper_command_with_options(options);
-        
-        // Apply sandboxing if enabled
-        let should_sandbox = self.sandbox_config.as_ref()
-            .map(|s| s.enabled && cfg!(target_os = "macos"))
-            .unwrap_or(false);
-            
+
+        // Apply sandboxing if enabled (with CLI override support)
+        let temp_config = crate::config::defaults::default_config();
+        let resolver = crate::core::sandbox::config::SandboxResolver::new(&crate::config::Config {
+            ide: temp_config.ide,
+            directories: temp_config.directories,
+            git: temp_config.git,
+            session: temp_config.session,
+            docker: temp_config.docker,
+            setup_script: temp_config.setup_script,
+            sandbox: self.sandbox_config.clone(),
+        });
+
+        let settings = resolver.resolve(
+            options.sandbox_override.unwrap_or(false),
+            options.sandbox_override.map(|v| !v).unwrap_or(false),
+            options.sandbox_profile.clone(),
+        );
+
+        let should_sandbox = settings.enabled && cfg!(target_os = "macos");
+
         if should_sandbox && !is_sandbox_available() {
-            eprintln!("⚠️  Warning: Sandbox is enabled but sandbox-exec is not available on this system");
+            eprintln!(
+                "⚠️  Warning: Sandbox is enabled but sandbox-exec is not available on this system"
+            );
         }
-        
+
         if should_sandbox && is_sandbox_available() {
-            let profile = self.sandbox_config.as_ref()
-                .map(|s| s.profile.as_str())
-                .unwrap_or("permissive-open");
-                
+            let profile = &settings.profile;
+
             match wrap_with_sandbox(&ide_command, path, profile) {
                 Ok(sandboxed_cmd) => {
                     println!("🔒 Sandboxing enabled for Claude CLI");
@@ -212,7 +229,7 @@ impl IdeManager {
                 }
             }
         }
-        
+
         let task_label = format!("Start {}", self.ide_config.name);
         let task_json = self.generate_ide_task_json(&task_label, &ide_command);
 
