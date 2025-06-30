@@ -39,13 +39,13 @@ pub fn resume_specific_session(
 
         // Handle resume context and get processed content
         let processed_context = process_resume_context(args)?;
-        
+
         // If session is in Review state and we have a task/prompt, transition back to Active
         if matches!(session_state.status, SessionStatus::Review) && processed_context.is_some() {
             session_manager.update_session_status(&session_state.name, SessionStatus::Active)?;
             println!("🔄 Transitioning session from Review to Active due to new task");
         }
-        
+
         if let Some(ref context) = processed_context {
             save_resume_context(&session_state.worktree_path, &session_state.name, context)?;
         }
@@ -195,12 +195,23 @@ pub fn list_and_select_session(
             SessionStatus::Review => " [Review]",
             _ => "",
         };
-        println!("  {}: {}{} ({})", i + 1, session.name, status_label, session.branch);
+        println!(
+            "  {}: {}{} ({})",
+            i + 1,
+            session.name,
+            status_label,
+            session.branch
+        );
     }
 
     let selection = Select::new()
         .with_prompt("Select session to resume")
-        .items(&resumable_sessions.iter().map(|s| &s.name).collect::<Vec<_>>())
+        .items(
+            &resumable_sessions
+                .iter()
+                .map(|s| &s.name)
+                .collect::<Vec<_>>(),
+        )
         .interact();
 
     if let Ok(index) = selection {
@@ -219,14 +230,14 @@ pub fn list_and_select_session(
 
         // Process and save resume context if provided
         let processed_context = process_resume_context(args)?;
-        
+
         // If session is in Review state and we have a task/prompt, transition back to Active
         if matches!(session.status, SessionStatus::Review) && processed_context.is_some() {
             let mut session_manager = SessionManager::new(config);
             session_manager.update_session_status(&session.name, SessionStatus::Active)?;
             println!("🔄 Transitioning session from Review to Active due to new task");
         }
-        
+
         if let Some(ref context) = processed_context {
             save_resume_context(&session.worktree_path, &session.name, context)?;
         }
@@ -717,10 +728,14 @@ mod tests {
 
         // Should have 2 resumable sessions
         assert_eq!(resumable_sessions.len(), 2);
-        
+
         // Verify we have both Active and Review sessions
-        let has_active = resumable_sessions.iter().any(|s| s.name == "active-session");
-        let has_review = resumable_sessions.iter().any(|s| s.name == "review-session");
+        let has_active = resumable_sessions
+            .iter()
+            .any(|s| s.name == "active-session");
+        let has_review = resumable_sessions
+            .iter()
+            .any(|s| s.name == "review-session");
         assert!(has_active);
         assert!(has_review);
     }
