@@ -56,7 +56,10 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
 
     // Check if session is in Review state
     if let Ok(session_state) = session_manager.load_state(&session_name) {
-        if matches!(session_state.status, crate::core::session::SessionStatus::Review) {
+        if matches!(
+            session_state.status,
+            crate::core::session::SessionStatus::Review
+        ) {
             return Err(ParaError::invalid_args(
                 "Cannot update status for sessions in Review state. Use 'para resume' with a task to reactivate the session."
             ));

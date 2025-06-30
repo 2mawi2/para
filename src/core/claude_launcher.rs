@@ -140,6 +140,13 @@ fn create_claude_task_json(command: &str) -> String {
             "type": "shell",
             "command": "{}",
             "group": "build",
+            "options": {{
+                "env": {{
+                    "FORCE_COLOR": "1",
+                    "COLORTERM": "truecolor",
+                    "TERM": "xterm-256color"
+                }}
+            }},
             "presentation": {{
                 "echo": true,
                 "reveal": "always",
@@ -202,6 +209,13 @@ mod tests {
         assert!(json.contains(r#""type": "shell""#));
         assert!(json.contains(r#""command": "claude --version""#));
         assert!(json.contains(r#""runOn": "folderOpen""#));
+
+        // Should contain environment variables for color support
+        assert!(json.contains(r#""options""#));
+        assert!(json.contains(r#""env""#));
+        assert!(json.contains(r#""FORCE_COLOR": "1""#));
+        assert!(json.contains(r#""COLORTERM": "truecolor""#));
+        assert!(json.contains(r#""TERM": "xterm-256color""#));
     }
 
     #[test]
@@ -262,6 +276,11 @@ mod tests {
         let tasks_content = fs::read_to_string(tasks_file).unwrap();
         assert!(tasks_content.contains("Start claude"));
         assert!(tasks_content.contains("echo")); // Test config uses echo
+
+        // Verify environment variables are present
+        assert!(tasks_content.contains(r#""FORCE_COLOR": "1""#));
+        assert!(tasks_content.contains(r#""COLORTERM": "truecolor""#));
+        assert!(tasks_content.contains(r#""TERM": "xterm-256color""#));
     }
 
     #[test]
