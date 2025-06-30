@@ -1,76 +1,36 @@
 (version 1)
 
 ;; Para Sandboxing Profile - Permissive Closed
-;; This profile allows most operations but restricts file writes AND network access
+;; Allows most operations but restricts file writes and network access
 
-;; Allow all operations by default
+;; Allow everything by default
 (allow default)
 
-;; Deny all file writes, then selectively allow specific paths
+;; Restrict file writes to specific paths
 (deny file-write*)
-
-;; Allow writes to specific directories
 (allow file-write*
-    ;; Para worktree directory (passed as parameter)
     (subpath (param "TARGET_DIR"))
-    
-    ;; System temporary directories (allow all temp locations for build tools)
+    (subpath (param "TMP_DIR"))
+    (subpath (param "CACHE_DIR"))
     (subpath "/tmp")
     (subpath "/var/tmp")
     (subpath "/private/tmp")
     (subpath "/private/var/tmp")
-    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")  ;; macOS per-user temp directories
-    (subpath (param "TMP_DIR"))
-    
-    ;; User cache directory
-    (subpath (param "CACHE_DIR"))
-    
-    ;; Para-specific directories in user home
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")
     (subpath (string-append (param "HOME_DIR") "/.para"))
-    
-    ;; Rust/Cargo directories for development
     (subpath (string-append (param "HOME_DIR") "/.cargo"))
     (subpath (string-append (param "HOME_DIR") "/.rustup"))
-    
-    ;; Claude-specific directories and files
     (subpath (string-append (param "HOME_DIR") "/.claude"))
-    (subpath (string-append (param "HOME_DIR") "/.config/claude"))
-    (subpath (string-append (param "HOME_DIR") "/Library/Application Support/Claude"))
     (literal (string-append (param "HOME_DIR") "/.claude.json"))
-    
-    ;; Standard output streams
     (literal "/dev/stdout")
     (literal "/dev/stderr")
     (literal "/dev/null")
     (literal "/dev/tty")
     (literal "/dev/ptmx")
-    
-    ;; Allow writes to pseudo-terminals (for interactive sessions)
     (regex #"^/dev/ttys[0-9]+")
     (regex #"^/dev/pty[0-9]+")
 )
 
-;; DENY ALL NETWORK OPERATIONS
-(deny network*)
-
-;; Allow only localhost connections for debuggers and local services
-(allow network*
-    (local ip "localhost:*")
-    (local ip "127.0.0.1:*")
-    (local ip "::1:*")
-)
-
-;; Allow process operations (needed for subprocess spawning)
-(allow process*)
-
-;; Allow signal operations
-(allow signal)
-
-;; Allow IPC operations
-(allow ipc*)
-
-;; Allow mach operations (needed for macOS system calls)
-(allow mach*)
-
-;; Allow system info queries
-(allow sysctl*)
+;; Allow all network access except inbound connections
+(allow network*)
+(deny network-inbound)

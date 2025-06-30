@@ -133,14 +133,13 @@ mod tests {
         assert!(content.contains("(deny file-write*)"));
 
         let content_closed = SandboxProfile::PermissiveClosed.content();
-        assert!(content_closed.contains("(deny network*)"));
-        assert!(content_closed.contains("(allow network*"));
-        assert!(content_closed.contains("localhost"));
+        assert!(content_closed.contains("(allow network*)"));
+        assert!(content_closed.contains("(deny network-inbound)"));
 
         let content_restrictive = SandboxProfile::RestrictiveClosed.content();
-        assert!(content_restrictive.contains("(deny default)"));
-        assert!(content_restrictive.contains("(allow file-read*)"));
-        assert!(content_restrictive.contains("(allow process-exec)"));
+        assert!(content_restrictive.contains("(allow default)"));
+        assert!(content_restrictive.contains("(allow network*)"));
+        assert!(content_restrictive.contains("(deny file-write*)"));
     }
 
     #[test]

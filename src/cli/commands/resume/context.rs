@@ -74,7 +74,7 @@ pub fn save_resume_context(session_path: &Path, session_name: &str, context: &st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::parser::ResumeArgs;
+    use crate::cli::parser::{ResumeArgs, SandboxArgs};
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -85,6 +85,11 @@ mod tests {
             session: None,
             prompt: Some("Continue working on the authentication system".to_string()),
             file: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -104,6 +109,11 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(test_file.clone()),
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -119,6 +129,11 @@ mod tests {
             session: None,
             prompt: None,
             file: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -131,6 +146,11 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(PathBuf::from("/nonexistent/file.txt")),
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = process_resume_context(&args);
@@ -151,6 +171,11 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(test_file),
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = process_resume_context(&args);
@@ -185,6 +210,11 @@ mod tests {
             session: None,
             prompt: None,
             file: Some(empty_file),
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Process should succeed but with empty content

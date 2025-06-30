@@ -1,6 +1,32 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// Common sandbox arguments shared across multiple commands
+#[derive(Args, Debug, Clone)]
+pub struct SandboxArgs {
+    /// Enable sandboxing (overrides config)
+    #[arg(
+        long = "sandbox",
+        short = 's',
+        help = "Enable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub sandbox: bool,
+
+    /// Disable sandboxing (overrides config)
+    #[arg(
+        long = "no-sandbox",
+        help = "Disable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub no_sandbox: bool,
+
+    /// Sandbox profile to use
+    #[arg(
+        long = "sandbox-profile",
+        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
+    )]
+    pub sandbox_profile: Option<String>,
+}
+
 #[derive(Parser)]
 #[command(name = "para")]
 #[command(about = "Parallel IDE Workflow Helper")]
@@ -107,27 +133,9 @@ pub struct StartArgs {
     )]
     pub no_forward_keys: bool,
 
-    /// Enable sandboxing (overrides config)
-    #[arg(
-        long = "sandbox",
-        short = 's',
-        help = "Enable sandboxing for Claude CLI (overrides config)"
-    )]
-    pub sandbox: bool,
-
-    /// Disable sandboxing (overrides config)
-    #[arg(
-        long = "no-sandbox",
-        help = "Disable sandboxing for Claude CLI (overrides config)"
-    )]
-    pub no_sandbox: bool,
-
-    /// Sandbox profile to use
-    #[arg(
-        long = "sandbox-profile",
-        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
-    )]
-    pub sandbox_profile: Option<String>,
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]
@@ -210,27 +218,9 @@ pub struct DispatchArgs {
     )]
     pub no_forward_keys: bool,
 
-    /// Enable sandboxing (overrides config)
-    #[arg(
-        long = "sandbox",
-        short = 's',
-        help = "Enable sandboxing for Claude CLI (overrides config)"
-    )]
-    pub sandbox: bool,
-
-    /// Disable sandboxing (overrides config)
-    #[arg(
-        long = "no-sandbox",
-        help = "Disable sandboxing for Claude CLI (overrides config)"
-    )]
-    pub no_sandbox: bool,
-
-    /// Sandbox profile to use
-    #[arg(
-        long = "sandbox-profile",
-        help = "Sandbox profile to use: permissive-open (default), permissive-closed, restrictive-closed"
-    )]
-    pub sandbox_profile: Option<String>,
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]
@@ -306,6 +296,10 @@ pub struct ResumeArgs {
     /// Read additional instructions from specified file
     #[arg(long, short)]
     pub file: Option<PathBuf>,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]

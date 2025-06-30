@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::{DispatchArgs, StartArgs};
+    use crate::cli::parser::{DispatchArgs, SandboxArgs, StartArgs};
     use crate::core::sandbox::config::SandboxResolver;
     use crate::core::sandbox::SandboxConfig;
     use crate::test_utils::test_helpers::create_test_config;
@@ -17,14 +17,19 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: true,
-            no_sandbox: false,
-            sandbox_profile: Some("restrictive-closed".to_string()),
+            sandbox_args: SandboxArgs {
+                sandbox: true,
+                no_sandbox: false,
+                sandbox_profile: Some("restrictive-closed".to_string()),
+            },
         };
 
-        assert!(args.sandbox);
-        assert!(!args.no_sandbox);
-        assert_eq!(args.sandbox_profile, Some("restrictive-closed".to_string()));
+        assert!(args.sandbox_args.sandbox);
+        assert!(!args.sandbox_args.no_sandbox);
+        assert_eq!(
+            args.sandbox_args.sandbox_profile,
+            Some("restrictive-closed".to_string())
+        );
     }
 
     #[test]
@@ -41,14 +46,19 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: true,
-            no_sandbox: false,
-            sandbox_profile: Some("permissive-closed".to_string()),
+            sandbox_args: SandboxArgs {
+                sandbox: true,
+                no_sandbox: false,
+                sandbox_profile: Some("permissive-closed".to_string()),
+            },
         };
 
-        assert!(args.sandbox);
-        assert!(!args.no_sandbox);
-        assert_eq!(args.sandbox_profile, Some("permissive-closed".to_string()));
+        assert!(args.sandbox_args.sandbox);
+        assert!(!args.sandbox_args.no_sandbox);
+        assert_eq!(
+            args.sandbox_args.sandbox_profile,
+            Some("permissive-closed".to_string())
+        );
     }
 
     #[test]

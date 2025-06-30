@@ -219,14 +219,14 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         let ide_manager = IdeManager::new(&config);
         let launch_options = crate::core::ide::LaunchOptions {
             skip_permissions: args.dangerously_skip_permissions,
-            sandbox_override: if args.no_sandbox {
+            sandbox_override: if args.sandbox_args.no_sandbox {
                 Some(false)
-            } else if args.sandbox {
+            } else if args.sandbox_args.sandbox {
                 Some(true)
             } else {
                 None
             },
-            sandbox_profile: args.sandbox_profile.clone(),
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
             ..Default::default()
         };
         ide_manager.launch_with_options(&session.worktree_path, launch_options)?;
@@ -293,6 +293,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::SandboxArgs;
     use crate::config::{
         Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
@@ -354,9 +355,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -378,9 +381,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
