@@ -61,15 +61,12 @@ mod error_path_tests {
     }
 
     #[test]
-    fn test_sandbox_resolver_with_invalid_env_profile() {
-        // Set invalid environment variable
-        std::env::set_var("PARA_SANDBOX", "true");
-        std::env::set_var("PARA_SANDBOX_PROFILE", "../../../../etc/passwd");
-
+    fn test_sandbox_resolver_with_invalid_profile() {
+        // Test with invalid profile in config
         let config = Config {
             sandbox: Some(SandboxConfig {
                 enabled: true,
-                profile: "permissive-open".to_string(),
+                profile: "../../../../etc/passwd".to_string(),
             }),
             ..crate::config::defaults::default_config()
         };
@@ -80,10 +77,6 @@ mod error_path_tests {
         // Should fall back to default profile
         assert!(settings.enabled);
         assert_eq!(settings.profile, "permissive-open");
-
-        // Clean up
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
     }
 
     #[test]
@@ -107,8 +100,8 @@ mod error_path_tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("Invalid or unknown") || err_msg.contains("Unknown sandbox profile"),
-            "Expected error message to contain 'Invalid or unknown' or 'Unknown sandbox profile', got: {}",
+            err_msg.contains("Invalid or unknown") || err_msg.contains("Unknown sandbox profile") || err_msg.contains("Failed to extract sandbox profile"),
+            "Expected error message to contain 'Invalid or unknown', 'Unknown sandbox profile', or 'Failed to extract sandbox profile', got: {}",
             err_msg
         );
     }

@@ -3,8 +3,7 @@ use crate::config::Config;
 
 /// Determines sandbox configuration based on precedence:
 /// 1. Command-line flags (highest)
-/// 2. Environment variables
-/// 3. Config file (lowest)
+/// 2. Config file (lowest)
 pub struct SandboxResolver {
     config: Option<crate::core::sandbox::SandboxConfig>,
 }
@@ -34,42 +33,27 @@ impl SandboxResolver {
         }
 
         if cli_sandbox {
-            let profile =
-                self.validate_and_get_profile(cli_profile, "CLI argument", &default_profile);
+            let profile = cli_profile
+                .map(|p| self.validate_profile(p, "CLI argument", &default_profile))
+                .unwrap_or(default_profile.clone());
             return SandboxSettings {
                 enabled: true,
                 profile,
             };
         }
 
-        // 2. Check environment variables
-        if let Some(env_sandbox) = Self::get_sandbox_from_env() {
-            let profile = if let Some(cli_prof) = cli_profile {
-                self.validate_profile(cli_prof, "CLI argument", &default_profile)
-            } else if let Some(env_prof) = self.get_profile_from_env() {
-                self.validate_profile(env_prof, "PARA_SANDBOX_PROFILE", &default_profile)
-            } else if let Some(config) = &self.config {
-                self.validate_profile(config.profile.clone(), "config file", &default_profile)
-            } else {
-                default_profile.clone()
-            };
-
-            return SandboxSettings {
-                enabled: env_sandbox,
-                profile,
-            };
-        }
-
-        // 3. Use config file settings (lowest precedence)
+        // 2. Use config file settings
         match &self.config {
             Some(config) => {
-                let profile = if let Some(cli_prof) = cli_profile {
-                    self.validate_profile(cli_prof, "CLI argument", &default_profile)
-                } else if let Some(env_prof) = self.get_profile_from_env() {
-                    self.validate_profile(env_prof, "PARA_SANDBOX_PROFILE", &default_profile)
-                } else {
-                    self.validate_profile(config.profile.clone(), "config file", &default_profile)
-                };
+                let profile = cli_profile
+                    .map(|p| self.validate_profile(p, "CLI argument", &default_profile))
+                    .unwrap_or_else(|| {
+                        self.validate_profile(
+                            config.profile.clone(),
+                            "config file",
+                            &default_profile,
+                        )
+                    });
 
                 SandboxSettings {
                     enabled: config.enabled,
@@ -80,11 +64,6 @@ impl SandboxResolver {
                 enabled: false,
                 profile: cli_profile
                     .map(|p| self.validate_profile(p, "CLI argument", &default_profile))
-                    .or_else(|| {
-                        self.get_profile_from_env().map(|p| {
-                            self.validate_profile(p, "PARA_SANDBOX_PROFILE", &default_profile)
-                        })
-                    })
                     .unwrap_or(default_profile),
             },
         }
@@ -102,37 +81,6 @@ impl SandboxResolver {
                 default.to_string()
             }
         }
-    }
-
-    /// Helper to validate and get profile with fallback logic
-    fn validate_and_get_profile(
-        &self,
-        cli_profile: Option<String>,
-        source: &str,
-        default: &str,
-    ) -> String {
-        cli_profile
-            .map(|p| self.validate_profile(p, source, default))
-            .or_else(|| {
-                self.get_profile_from_env()
-                    .map(|p| self.validate_profile(p, "PARA_SANDBOX_PROFILE", default))
-            })
-            .unwrap_or_else(|| default.to_string())
-    }
-
-    fn get_sandbox_from_env() -> Option<bool> {
-        match std::env::var("PARA_SANDBOX") {
-            Ok(val) => match val.to_lowercase().as_str() {
-                "true" | "1" | "yes" | "on" => Some(true),
-                "false" | "0" | "no" | "off" => Some(false),
-                _ => None,
-            },
-            Err(_) => None,
-        }
-    }
-
-    fn get_profile_from_env(&self) -> Option<String> {
-        std::env::var("PARA_SANDBOX_PROFILE").ok()
     }
 }
 
@@ -176,18 +124,11 @@ mod tests {
     }
 
     #[test]
-    fn test_env_overrides_config() {
-        // Clean up any existing env vars first
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
-        
-        std::env::set_var("PARA_SANDBOX", "true");
-        std::env::set_var("PARA_SANDBOX_PROFILE", "permissive-closed");
-
+    fn test_config_file_settings() {
         let mut config = crate::config::defaults::default_config();
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
-            enabled: false,
-            profile: "permissive-open".to_string(),
+            enabled: true,
+            profile: "permissive-closed".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
@@ -195,9 +136,42 @@ mod tests {
 
         assert!(settings.enabled);
         assert_eq!(settings.profile, "permissive-closed");
+    }
 
-        // Clean up
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
+    #[test]
+    fn test_cli_profile_overrides_config_profile() {
+        let mut config = crate::config::defaults::default_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "permissive-open".to_string(),
+        });
+
+        let resolver = SandboxResolver::new(&config);
+        let settings = resolver.resolve(false, false, Some("restrictive-closed".to_string()));
+
+        assert!(settings.enabled);
+        assert_eq!(settings.profile, "restrictive-closed");
+    }
+
+    #[test]
+    fn test_invalid_profile_falls_back_to_default() {
+        let config = crate::config::defaults::default_config();
+        let resolver = SandboxResolver::new(&config);
+
+        let settings = resolver.resolve(true, false, Some("invalid-profile".to_string()));
+
+        assert!(settings.enabled);
+        assert_eq!(settings.profile, "permissive-open");
+    }
+
+    #[test]
+    fn test_no_config_defaults_to_disabled() {
+        let config = crate::config::defaults::default_config();
+        let resolver = SandboxResolver::new(&config);
+
+        let settings = resolver.resolve(false, false, None);
+
+        assert!(!settings.enabled);
+        assert_eq!(settings.profile, "permissive-open");
     }
 }

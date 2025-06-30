@@ -3,32 +3,34 @@ use std::fs;
 /// Cleanup old sandbox profile files
 pub fn cleanup_old_profiles() -> anyhow::Result<()> {
     let temp_base = std::env::temp_dir();
-    
-    // Look for all para-sandbox-profiles-* directories
+
+    // Look for all para-sandbox-* directories (both old and new naming patterns)
     let entries = fs::read_dir(&temp_base)?;
-    
+
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        
+
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with("para-sandbox-profiles-") && path.is_dir() {
+            // Handle both old format (para-sandbox-profiles-*) and new format (para-sandbox-*)
+            if (name.starts_with("para-sandbox-profiles-") || name.starts_with("para-sandbox-"))
+                && path.is_dir()
+            {
                 cleanup_profile_directory(&path)?;
             }
         }
     }
-    
+
     Ok(())
 }
 
 fn cleanup_profile_directory(temp_dir: &std::path::Path) -> anyhow::Result<()> {
-
     if !temp_dir.exists() {
         return Ok(());
     }
 
     // Get all .sb files in the directory
-    let entries = fs::read_dir(&temp_dir)?;
+    let entries = fs::read_dir(temp_dir)?;
 
     for entry in entries {
         let entry = entry?;
