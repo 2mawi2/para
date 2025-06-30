@@ -238,7 +238,7 @@ fn prepare_session_files(worktree_path: &Path, session_name: &str) -> Result<()>
 fn launch_ide_for_session(
     config: &Config,
     path: &Path,
-    _args: &ResumeArgs,
+    args: &ResumeArgs,
     processed_context: Option<&String>,
 ) -> Result<()> {
     let ide_manager = IdeManager::new(config);
@@ -247,6 +247,14 @@ fn launch_ide_for_session(
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
             skip_permissions: false,
+            sandbox_override: if args.sandbox_args.no_sandbox {
+                Some(false)
+            } else if args.sandbox_args.sandbox {
+                Some(true)
+            } else {
+                None
+            },
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
             ..Default::default()
         };
 
@@ -301,6 +309,7 @@ fn launch_ide_for_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::SandboxArgs;
     use crate::core::session::state::SessionState;
     use crate::test_utils::test_helpers::*;
     use std::fs;
@@ -345,6 +354,11 @@ mod tests {
             session: Some("test4".to_string()),
             prompt: None,
             file: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
         resume_specific_session(&config, &git_service, "test4", &args).unwrap();
     }
@@ -389,6 +403,11 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: Some("Continue implementing the feature".to_string()),
             file: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume (with echo IDE it won't actually launch anything)
@@ -452,6 +471,11 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: None,
             file: Some(context_file),
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume
@@ -507,6 +531,11 @@ mod tests {
             session: Some(session_name.clone()),
             prompt: None,
             file: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume - should work exactly as before

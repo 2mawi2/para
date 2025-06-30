@@ -1,0 +1,26 @@
+Para Sandbox Test: permissive-closed profile
+
+Please execute the following tests and report the results:
+
+1. FILE SYSTEM TEST - Home Directory Write:
+   Try to create a file at ~/sandbox-test-permissive-closed.txt with content "test from sandbox"
+   
+2. FILE SYSTEM TEST - Repository Write:
+   Create a file at ./sandbox-test-repo.txt with content "test write to repo"
+   
+3. NETWORK TEST - Public API:
+   Try to fetch https://api.github.com and report if successful
+   
+4. NETWORK TEST - Localhost:
+   Try to connect to http://localhost:8080 (it's ok if connection refused, we want to see if attempt is blocked)
+   
+5. FILE SYSTEM TEST - Cargo Directory:
+   Try to create a file at ~/.cargo/sandbox-test.txt
+   
+6. PROCESS TEST - Command Execution:
+   Execute 'echo "Hello from sandbox"' and report the output
+
+For each test, clearly report:
+- What you attempted
+- Whether it succeeded or failed
+- Any error messages you received

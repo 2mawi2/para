@@ -360,14 +360,14 @@ fn launch_claude_code(
         } else {
             Some(prompt.to_string())
         },
-        sandbox_override: if args.no_sandbox {
+        sandbox_override: if args.sandbox_args.no_sandbox {
             Some(false)
-        } else if args.sandbox {
+        } else if args.sandbox_args.sandbox {
             Some(true)
         } else {
             None
         },
-        sandbox_profile: args.sandbox_profile.clone(),
+        sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
     };
 
     crate::core::claude_launcher::launch_claude_with_context(config, session_path, options)
@@ -577,6 +577,7 @@ fn read_file_content(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::SandboxArgs;
     use std::fs;
     use tempfile::TempDir;
 
@@ -629,9 +630,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -652,9 +655,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -678,9 +683,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -705,9 +712,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -732,9 +741,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin().unwrap();
@@ -758,9 +769,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -781,9 +794,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args.resolve_prompt_and_session_no_stdin();
@@ -823,9 +838,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // The resolve_prompt_and_session method checks stdin, but when --file is provided
@@ -855,9 +872,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Test the no_stdin method directly to avoid stdin detection issues in tests
@@ -896,9 +915,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // This should work with explicit args regardless of stdin status
@@ -934,9 +955,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args_with_file
@@ -957,9 +980,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = args_explicit.resolve_prompt_and_session_no_stdin().unwrap();
@@ -983,9 +1008,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
-            sandbox: false,
-            no_sandbox: false,
-            sandbox_profile: None,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // The current implementation has a logical flaw:
