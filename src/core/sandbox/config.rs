@@ -22,7 +22,7 @@ impl SandboxResolver {
         cli_no_sandbox: bool,
         cli_profile: Option<String>,
     ) -> SandboxSettings {
-        let default_profile = "permissive-open".to_string();
+        let default_profile = "permissive".to_string();
 
         // 1. Check CLI flags (highest precedence)
         if cli_no_sandbox {
@@ -99,7 +99,7 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
-            profile: "restrictive-closed".to_string(),
+            profile: "restrictive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
@@ -113,14 +113,14 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: false,
-            profile: "permissive-open".to_string(),
+            profile: "permissive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
-        let settings = resolver.resolve(true, false, Some("restrictive-closed".to_string()));
+        let settings = resolver.resolve(true, false, Some("restrictive".to_string()));
 
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "restrictive-closed");
+        assert_eq!(settings.profile, "restrictive");
     }
 
     #[test]
@@ -128,14 +128,14 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
-            profile: "permissive-closed".to_string(),
+            profile: "permissive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
         let settings = resolver.resolve(false, false, None);
 
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "permissive-closed");
+        assert_eq!(settings.profile, "permissive");
     }
 
     #[test]
@@ -143,14 +143,14 @@ mod tests {
         let mut config = crate::config::defaults::default_config();
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
-            profile: "permissive-open".to_string(),
+            profile: "permissive".to_string(),
         });
 
         let resolver = SandboxResolver::new(&config);
-        let settings = resolver.resolve(false, false, Some("restrictive-closed".to_string()));
+        let settings = resolver.resolve(false, false, Some("restrictive".to_string()));
 
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "restrictive-closed");
+        assert_eq!(settings.profile, "restrictive");
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         let settings = resolver.resolve(true, false, Some("invalid-profile".to_string()));
 
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "permissive-open");
+        assert_eq!(settings.profile, "permissive");
     }
 
     #[test]
@@ -172,6 +172,6 @@ mod tests {
         let settings = resolver.resolve(false, false, None);
 
         assert!(!settings.enabled);
-        assert_eq!(settings.profile, "permissive-open");
+        assert_eq!(settings.profile, "permissive");
     }
 }

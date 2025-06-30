@@ -1,0 +1,48 @@
+(version 1)
+
+;; Para Sandboxing Profile - Permissive
+;; Allows everything by default, only restricts file writes
+;; Based on Gemini's permissive security model
+
+;; Allow everything by default
+(allow default)
+
+;; Deny all file writes first
+(deny file-write*)
+
+;; Allow file writes to specific paths only
+(allow file-write*
+    ;; Project directory - primary workspace
+    (subpath (param "TARGET_DIR"))
+    
+    ;; Temporary directories
+    (subpath (param "TMP_DIR"))
+    (subpath "/tmp")
+    (subpath "/private/tmp")
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")  ; macOS temp dirs
+    
+    ;; Cache directory
+    (subpath (param "CACHE_DIR"))
+    
+    ;; Development tools
+    (subpath (string-append (param "HOME_DIR") "/.para"))     ; Para config
+    (subpath (string-append (param "HOME_DIR") "/.cargo"))    ; Rust packages
+    (subpath (string-append (param "HOME_DIR") "/.rustup"))   ; Rust toolchain
+    (subpath (string-append (param "HOME_DIR") "/.cache"))    ; General cache
+    
+    ;; Claude configuration
+    (subpath (string-append (param "HOME_DIR") "/.claude"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json"))
+    
+    ;; Git configuration (for commits)
+    (literal (string-append (param "HOME_DIR") "/.gitconfig"))
+    
+    ;; Standard I/O devices
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (literal "/dev/ptmx")
+    (regex #"^/dev/ttys[0-9]+")
+    (regex #"^/dev/pty[0-9]+")
+)

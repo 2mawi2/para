@@ -4,9 +4,8 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxProfile {
-    PermissiveOpen,
-    PermissiveClosed,
-    RestrictiveClosed,
+    Permissive,
+    Restrictive,
 }
 
 /// Validate profile name contains only safe characters
@@ -25,9 +24,11 @@ impl SandboxProfile {
         }
 
         match s {
-            "permissive-open" => Some(Self::PermissiveOpen),
-            "permissive-closed" => Some(Self::PermissiveClosed),
-            "restrictive-closed" => Some(Self::RestrictiveClosed),
+            "permissive" => Some(Self::Permissive),
+            "restrictive" => Some(Self::Restrictive),
+            // Legacy names for backwards compatibility
+            "permissive-open" => Some(Self::Permissive),
+            "restrictive-closed" => Some(Self::Restrictive),
             _ => {
                 eprintln!("⚠️  Unknown sandbox profile: {}", s);
                 None
@@ -37,17 +38,15 @@ impl SandboxProfile {
 
     pub fn name(&self) -> &'static str {
         match self {
-            Self::PermissiveOpen => "permissive-open",
-            Self::PermissiveClosed => "permissive-closed",
-            Self::RestrictiveClosed => "restrictive-closed",
+            Self::Permissive => "permissive",
+            Self::Restrictive => "restrictive",
         }
     }
 
     pub fn content(&self) -> &'static str {
         match self {
-            Self::PermissiveOpen => include_str!("profiles/permissive-open.sb"),
-            Self::PermissiveClosed => include_str!("profiles/permissive-closed.sb"),
-            Self::RestrictiveClosed => include_str!("profiles/restrictive-closed.sb"),
+            Self::Permissive => include_str!("profiles/permissive.sb"),
+            Self::Restrictive => include_str!("profiles/restrictive.sb"),
         }
     }
 }
@@ -101,50 +100,48 @@ mod tests {
     #[test]
     fn test_profile_from_name() {
         assert_eq!(
-            SandboxProfile::from_name("permissive-open"),
-            Some(SandboxProfile::PermissiveOpen)
+            SandboxProfile::from_name("permissive"),
+            Some(SandboxProfile::Permissive)
         );
         assert_eq!(
-            SandboxProfile::from_name("permissive-closed"),
-            Some(SandboxProfile::PermissiveClosed)
+            SandboxProfile::from_name("restrictive"),
+            Some(SandboxProfile::Restrictive)
+        );
+        // Test legacy names for backwards compatibility
+        assert_eq!(
+            SandboxProfile::from_name("permissive-open"),
+            Some(SandboxProfile::Permissive)
         );
         assert_eq!(
             SandboxProfile::from_name("restrictive-closed"),
-            Some(SandboxProfile::RestrictiveClosed)
+            Some(SandboxProfile::Restrictive)
         );
         assert_eq!(SandboxProfile::from_name("unknown"), None);
     }
 
     #[test]
     fn test_profile_name() {
-        assert_eq!(SandboxProfile::PermissiveOpen.name(), "permissive-open");
-        assert_eq!(SandboxProfile::PermissiveClosed.name(), "permissive-closed");
-        assert_eq!(
-            SandboxProfile::RestrictiveClosed.name(),
-            "restrictive-closed"
-        );
+        assert_eq!(SandboxProfile::Permissive.name(), "permissive");
+        assert_eq!(SandboxProfile::Restrictive.name(), "restrictive");
     }
 
     #[test]
     fn test_profile_content() {
-        let content = SandboxProfile::PermissiveOpen.content();
+        let content = SandboxProfile::Permissive.content();
         assert!(content.contains("(version 1)"));
         assert!(content.contains("(allow default)"));
         assert!(content.contains("(deny file-write*)"));
 
-        let content_closed = SandboxProfile::PermissiveClosed.content();
-        assert!(content_closed.contains("(allow network*)"));
-        assert!(content_closed.contains("(deny network-inbound)"));
-
-        let content_restrictive = SandboxProfile::RestrictiveClosed.content();
-        assert!(content_restrictive.contains("(allow default)"));
+        let content_restrictive = SandboxProfile::Restrictive.content();
+        assert!(content_restrictive.contains("(version 1)"));
+        assert!(content_restrictive.contains("(deny default)"));
+        assert!(content_restrictive.contains("(allow file-read*)"));
         assert!(content_restrictive.contains("(allow network*)"));
-        assert!(content_restrictive.contains("(deny file-write*)"));
     }
 
     #[test]
     fn test_extract_profile() -> Result<()> {
-        let profile_path = extract_profile("permissive-open")?;
+        let profile_path = extract_profile("permissive")?;
         assert!(profile_path.exists());
         assert!(profile_path.extension().unwrap() == "sb");
 
@@ -167,8 +164,10 @@ mod tests {
     #[test]
     fn test_profile_name_validation() {
         // Valid profile names that exist
+        assert!(SandboxProfile::from_name("permissive").is_some());
+        assert!(SandboxProfile::from_name("restrictive").is_some());
+        // Legacy names
         assert!(SandboxProfile::from_name("permissive-open").is_some());
-        assert!(SandboxProfile::from_name("permissive-closed").is_some());
         assert!(SandboxProfile::from_name("restrictive-closed").is_some());
 
         // Valid format but unknown profiles
@@ -206,7 +205,7 @@ mod tests {
     fn test_extracted_profile_permissions() -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
 
-        let profile_path = extract_profile("permissive-open")?;
+        let profile_path = extract_profile("permissive")?;
         let metadata = fs::metadata(&profile_path)?;
         let perms = metadata.permissions();
 
