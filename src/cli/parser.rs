@@ -115,10 +115,10 @@ pub struct StartArgs {
     )]
     pub sandbox: bool,
 
-    /// Disable sandboxing (overrides config and env)
+    /// Disable sandboxing (overrides config)
     #[arg(
         long = "no-sandbox",
-        help = "Disable sandboxing for Claude CLI (overrides config and environment)"
+        help = "Disable sandboxing for Claude CLI (overrides config)"
     )]
     pub no_sandbox: bool,
 
@@ -218,10 +218,10 @@ pub struct DispatchArgs {
     )]
     pub sandbox: bool,
 
-    /// Disable sandboxing (overrides config and env)
+    /// Disable sandboxing (overrides config)
     #[arg(
         long = "no-sandbox",
-        help = "Disable sandboxing for Claude CLI (overrides config and environment)"
+        help = "Disable sandboxing for Claude CLI (overrides config)"
     )]
     pub no_sandbox: bool,
 

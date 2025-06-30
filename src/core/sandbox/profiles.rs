@@ -57,29 +57,13 @@ pub fn extract_profile(profile_name: &str) -> Result<PathBuf> {
     let profile = SandboxProfile::from_name(profile_name)
         .ok_or_else(|| anyhow::anyhow!("Invalid or unknown sandbox profile: {}", profile_name))?;
 
-    // Create a temporary directory for the profile with a unique suffix to avoid conflicts
-    let temp_dir = std::env::temp_dir()
-        .join(format!("para-sandbox-profiles-{}", std::process::id()));
-    
-    // Try to create directory, if it exists with wrong permissions try to fix them
-    if let Err(e) = fs::create_dir_all(&temp_dir) {
-        // If directory exists, try to set permissions and retry
-        if temp_dir.exists() {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Ok(mut perms) = fs::metadata(&temp_dir).map(|m| m.permissions()) {
-                    perms.set_mode(0o755);
-                    let _ = fs::set_permissions(&temp_dir, perms);
-                }
-            }
-            // Try one more time
-            fs::create_dir_all(&temp_dir)
-                .context("Failed to create sandbox profiles directory after permission fix")?;
-        } else {
-            return Err(e).context("Failed to create sandbox profiles directory");
-        }
-    }
+    // Create a unique temporary directory for each extraction to avoid conflicts
+    use uuid::Uuid;
+    let unique_id = Uuid::new_v4();
+    let temp_dir = std::env::temp_dir().join(format!("para-sandbox-{}", unique_id));
+
+    // Create the directory fresh each time
+    fs::create_dir_all(&temp_dir).context("Failed to create sandbox profiles directory")?;
 
     // Use the validated profile name to prevent path injection
     let profile_path = temp_dir.join(format!("{}.sb", profile.name()));

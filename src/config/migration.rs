@@ -165,7 +165,7 @@ mod tests {
 
         // Verify migration happened
         assert!(config.sandbox.is_some());
-        assert_eq!(config.sandbox.as_ref().unwrap().enabled, false);
+        assert!(!config.sandbox.as_ref().unwrap().enabled);
         assert_eq!(config.sandbox.as_ref().unwrap().profile, "permissive-open");
     }
 }

@@ -53,16 +53,12 @@ mod tests {
 
     #[test]
     fn test_sandbox_resolver_cli_precedence() {
-        // CLI flags should override everything
+        // CLI flags should override config
         let mut config = create_test_config();
         config.sandbox = Some(SandboxConfig {
             enabled: false,
             profile: "permissive-open".to_string(),
         });
-
-        // Set env vars (these should be overridden)
-        std::env::set_var("PARA_SANDBOX", "false");
-        std::env::set_var("PARA_SANDBOX_PROFILE", "permissive-closed");
 
         let resolver = SandboxResolver::new(&config);
 
@@ -74,10 +70,6 @@ mod tests {
         // Test --no-sandbox flag overrides
         let settings = resolver.resolve(false, true, None);
         assert!(!settings.enabled);
-
-        // Clean up
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
     }
 
     #[test]
@@ -94,42 +86,36 @@ mod tests {
     }
 
     #[test]
-    fn test_sandbox_environment_variables() {
-        // First clean any existing env vars
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
-        
-        let config = create_test_config();
+    fn test_sandbox_config_based_settings() {
+        // Test config-based sandbox settings
+        let mut config = create_test_config();
+
+        // Test with sandbox enabled in config
+        config.sandbox = Some(SandboxConfig {
+            enabled: true,
+            profile: "permissive-closed".to_string(),
+        });
+
         let resolver = SandboxResolver::new(&config);
-
-        // Test PARA_SANDBOX=true
-        std::env::set_var("PARA_SANDBOX", "true");
-        std::env::set_var("PARA_SANDBOX_PROFILE", "permissive-closed");
-
         let settings = resolver.resolve(false, false, None);
         assert!(settings.enabled);
         assert_eq!(settings.profile, "permissive-closed");
 
-        // Test PARA_SANDBOX=false
-        std::env::set_var("PARA_SANDBOX", "false");
+        // Test with sandbox disabled in config
+        config.sandbox = Some(SandboxConfig {
+            enabled: false,
+            profile: "restrictive-closed".to_string(),
+        });
+
+        let resolver = SandboxResolver::new(&config);
         let settings = resolver.resolve(false, false, None);
         assert!(!settings.enabled);
 
-        // Test various true/false values
-        for val in &["1", "yes", "on", "YES", "On"] {
-            std::env::set_var("PARA_SANDBOX", val);
-            let settings = resolver.resolve(false, false, None);
-            assert!(settings.enabled, "Failed for value: {}", val);
-        }
-
-        for val in &["0", "no", "off", "NO", "Off"] {
-            std::env::set_var("PARA_SANDBOX", val);
-            let settings = resolver.resolve(false, false, None);
-            assert!(!settings.enabled, "Failed for value: {}", val);
-        }
-
-        // Clean up
-        std::env::remove_var("PARA_SANDBOX");
-        std::env::remove_var("PARA_SANDBOX_PROFILE");
+        // Test with no sandbox config (defaults to disabled)
+        config.sandbox = None;
+        let resolver = SandboxResolver::new(&config);
+        let settings = resolver.resolve(false, false, None);
+        assert!(!settings.enabled);
+        assert_eq!(settings.profile, "permissive-open");
     }
 }
