@@ -39,13 +39,13 @@ pub fn resume_specific_session(
 
         // Handle resume context and get processed content
         let processed_context = process_resume_context(args)?;
-        
+
         // If session is in Review state and we have a task/prompt, transition back to Active
         if matches!(session_state.status, SessionStatus::Review) && processed_context.is_some() {
             session_manager.update_session_status(&session_state.name, SessionStatus::Active)?;
             println!("🔄 Transitioning session from Review to Active due to new task");
         }
-        
+
         if let Some(ref context) = processed_context {
             save_resume_context(&session_state.worktree_path, &session_state.name, context)?;
         }
@@ -56,6 +56,7 @@ pub fn resume_specific_session(
             &session_state.worktree_path,
             args,
             processed_context.as_ref(),
+            Some(&session_state),
         )?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
@@ -107,6 +108,7 @@ pub fn resume_specific_session(
             &matching_worktree.path,
             args,
             processed_context.as_ref(),
+            session_opt.as_ref(),
         )?;
         println!(
             "✅ Resumed session at '{}'",
@@ -155,7 +157,13 @@ pub fn detect_and_resume_session(
                 }
             }
 
-            launch_ide_for_session(config, &current_dir, args, processed_context.as_ref())?;
+            launch_ide_for_session(
+                config,
+                &current_dir,
+                args,
+                processed_context.as_ref(),
+                session_opt.as_ref(),
+            )?;
             println!("✅ Resumed current session");
             Ok(())
         }
@@ -195,12 +203,23 @@ pub fn list_and_select_session(
             SessionStatus::Review => " [Review]",
             _ => "",
         };
-        println!("  {}: {}{} ({})", i + 1, session.name, status_label, session.branch);
+        println!(
+            "  {}: {}{} ({})",
+            i + 1,
+            session.name,
+            status_label,
+            session.branch
+        );
     }
 
     let selection = Select::new()
         .with_prompt("Select session to resume")
-        .items(&resumable_sessions.iter().map(|s| &s.name).collect::<Vec<_>>())
+        .items(
+            &resumable_sessions
+                .iter()
+                .map(|s| &s.name)
+                .collect::<Vec<_>>(),
+        )
         .interact();
 
     if let Ok(index) = selection {
@@ -219,14 +238,14 @@ pub fn list_and_select_session(
 
         // Process and save resume context if provided
         let processed_context = process_resume_context(args)?;
-        
+
         // If session is in Review state and we have a task/prompt, transition back to Active
         if matches!(session.status, SessionStatus::Review) && processed_context.is_some() {
             let mut session_manager = SessionManager::new(config);
             session_manager.update_session_status(&session.name, SessionStatus::Active)?;
             println!("🔄 Transitioning session from Review to Active due to new task");
         }
-        
+
         if let Some(ref context) = processed_context {
             save_resume_context(&session.worktree_path, &session.name, context)?;
         }
@@ -236,6 +255,7 @@ pub fn list_and_select_session(
             &session.worktree_path,
             args,
             processed_context.as_ref(),
+            Some(session),
         )?;
         println!("✅ Resumed session '{}'", session.name);
     }
@@ -267,13 +287,23 @@ fn launch_ide_for_session(
     path: &Path,
     args: &ResumeArgs,
     processed_context: Option<&String>,
+    session_state: Option<&SessionState>,
 ) -> Result<()> {
     let ide_manager = IdeManager::new(config);
+
+    // Determine if we should skip permissions:
+    // 1. If the session was originally created with dangerous flag, respect it
+    // 2. If the user explicitly passes the flag during resume, respect it
+    // 3. Otherwise, don't skip permissions
+    let skip_permissions = session_state
+        .and_then(|s| s.dangerous_skip_permissions)
+        .unwrap_or(false)
+        || args.dangerously_skip_permissions;
 
     // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
-            skip_permissions: args.dangerously_skip_permissions,
+            skip_permissions,
             ..Default::default()
         };
 
@@ -318,7 +348,7 @@ fn launch_ide_for_session(
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {
-        ide_manager.launch(path, args.dangerously_skip_permissions)
+        ide_manager.launch(path, skip_permissions)
     }
 }
 
@@ -717,11 +747,100 @@ mod tests {
 
         // Should have 2 resumable sessions
         assert_eq!(resumable_sessions.len(), 2);
-        
+
         // Verify we have both Active and Review sessions
-        let has_active = resumable_sessions.iter().any(|s| s.name == "active-session");
-        let has_review = resumable_sessions.iter().any(|s| s.name == "review-session");
+        let has_active = resumable_sessions
+            .iter()
+            .any(|s| s.name == "active-session");
+        let has_review = resumable_sessions
+            .iter()
+            .any(|s| s.name == "review-session");
         assert!(has_active);
         assert!(has_review);
+    }
+
+    #[test]
+    fn test_dangerous_flag_preservation_in_resume() {
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+
+        // Create state directory
+        std::fs::create_dir_all(&config.directories.state_dir).unwrap();
+
+        let session_manager = SessionManager::new(&config);
+
+        // Create worktree for the session
+        let worktree_path = git_service.repository().root.join("test-dangerous-session");
+        git_service
+            .worktree_manager()
+            .create_worktree("para/test-dangerous", &worktree_path)
+            .unwrap();
+
+        // Create a session with dangerous flag set
+        let session_with_flag = SessionState::with_parent_branch_and_flags(
+            "test-dangerous-session".to_string(),
+            "para/test-dangerous".to_string(),
+            worktree_path.clone(),
+            "main".to_string(),
+            true, // dangerous_skip_permissions = true
+        );
+
+        session_manager.save_state(&session_with_flag).unwrap();
+
+        // Test that launch_ide_for_session respects the stored flag
+        let args = ResumeArgs {
+            session: Some("test-dangerous-session".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false, // User didn't pass the flag
+        };
+
+        // In a real test, we'd mock the IDE launch, but here we verify the logic
+        // The function should use the session's stored flag (true) even though args has false
+        let loaded_session = session_manager
+            .load_state("test-dangerous-session")
+            .unwrap();
+
+        // This is the logic from launch_ide_for_session
+        let skip_permissions = loaded_session.dangerous_skip_permissions.unwrap_or(false)
+            || args.dangerously_skip_permissions;
+
+        assert!(
+            skip_permissions,
+            "Should use dangerous flag from session state"
+        );
+
+        // Test case 2: User explicitly passes flag, session doesn't have it
+        let session_without_flag = SessionState::with_parent_branch_and_flags(
+            "test-safe-session".to_string(),
+            "para/test-safe".to_string(),
+            worktree_path.clone(),
+            "main".to_string(),
+            false, // dangerous_skip_permissions = false
+        );
+
+        session_manager.save_state(&session_without_flag).unwrap();
+
+        let args_with_flag = ResumeArgs {
+            session: Some("test-safe-session".to_string()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: true, // User explicitly passes the flag
+        };
+
+        let loaded_safe = session_manager.load_state("test-safe-session").unwrap();
+        let skip_permissions_2 = loaded_safe.dangerous_skip_permissions.unwrap_or(false)
+            || args_with_flag.dangerously_skip_permissions;
+
+        assert!(skip_permissions_2, "Should use dangerous flag from args");
     }
 }

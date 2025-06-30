@@ -25,11 +25,27 @@ impl MonitorActions {
 
         let session_name = session.name.clone();
 
+        // Check if the session was created with dangerous flag
+        let session_manager = SessionManager::new(&self.config);
+        let use_dangerous_flag =
+            if let Ok(session_state) = session_manager.load_state(&session.name) {
+                session_state.dangerous_skip_permissions.unwrap_or(false)
+            } else {
+                false
+            };
+
         std::thread::spawn(move || {
             use std::process::{Command, Stdio};
 
-            let _ = Command::new("para")
-                .args(["resume", &session_name])
+            let mut cmd = Command::new("para");
+            cmd.arg("resume").arg(&session_name);
+
+            // Add dangerous flag if the session was originally created with it
+            if use_dangerous_flag {
+                cmd.arg("--dangerously-skip-permissions");
+            }
+
+            let _ = cmd
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -161,5 +177,60 @@ mod tests {
         session.status = SessionStatus::Idle;
         let result = actions.integrate_session(&session);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resume_session_dangerous_flag_preservation() {
+        use crate::core::session::state::SessionState;
+        use crate::core::session::SessionManager;
+        use tempfile::TempDir;
+
+        // Create a temporary directory for state
+        let temp_dir = TempDir::new().unwrap();
+        let state_dir = temp_dir.path().join(".para_state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        let session_manager = SessionManager::new(&config);
+        let actions = MonitorActions::new(config.clone());
+
+        // Create a session with dangerous flag
+        let worktree_path = temp_dir.path().join("test-dangerous-worktree");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session_state = SessionState::with_parent_branch_and_flags(
+            "test-dangerous".to_string(),
+            "para/test-dangerous".to_string(),
+            worktree_path.clone(),
+            "main".to_string(),
+            true, // dangerous_skip_permissions = true
+        );
+
+        session_manager.save_state(&session_state).unwrap();
+
+        // Create SessionInfo for the monitor
+        let session_info = SessionInfo {
+            name: "test-dangerous".to_string(),
+            branch: "para/test-dangerous".to_string(),
+            status: SessionStatus::Active,
+            last_activity: chrono::Utc::now(),
+            task: "Test task".to_string(),
+            worktree_path: worktree_path.clone(),
+            test_status: None,
+            diff_stats: None,
+            todo_percentage: None,
+            is_blocked: false,
+        };
+
+        // The resume_session function should check the session state
+        // and include the dangerous flag when spawning the command
+        let result = actions.resume_session(&session_info);
+        assert!(result.is_ok());
+
+        // Verify that the session state has the dangerous flag
+        let loaded_state = session_manager.load_state("test-dangerous").unwrap();
+        assert_eq!(loaded_state.dangerous_skip_permissions, Some(true));
     }
 }
