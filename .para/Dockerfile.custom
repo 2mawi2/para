@@ -1,0 +1,63 @@
+# Para Development Docker Image
+# This image includes all dependencies needed to build and test para
+
+FROM para-claude:latest
+
+# Install system dependencies
+RUN sudo apt-get update && sudo apt-get install -y \
+    # Build essentials
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    # Required for para development
+    curl \
+    ca-certificates \
+    wget \
+    # Useful development tools
+    jq \
+    ripgrep \
+    && sudo rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/home/para/.cargo/bin:${PATH}"
+
+# Install just command runner (prebuilt binary for speed)
+RUN JUST_VERSION="1.40.0" && \
+    ARCH=$(dpkg --print-architecture | sed 's/arm64/aarch64/') && \
+    wget -q "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" && \
+    tar xzf "just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" && \
+    chmod +x just && \
+    sudo mv just /usr/local/bin/ && \
+    rm "just-${JUST_VERSION}-${ARCH}-unknown-linux-musl.tar.gz"
+
+# Install Node.js and npm (if not already present)
+RUN if ! command -v node &> /dev/null; then \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && \
+    sudo apt-get install -y nodejs; \
+    fi
+
+# Install bun (optional, but faster than npm)
+RUN curl -fsSL https://bun.sh/install | bash || true
+ENV PATH="/home/para/.bun/bin:${PATH}"
+
+# Set working directory
+WORKDIR /workspace
+
+# Set up shell to source cargo env
+RUN echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
+
+# Also set up for non-interactive shells
+RUN echo 'export PATH="/home/para/.cargo/bin:$PATH"' >> ~/.profile
+
+# Create a wrapper script to ensure PATH is set
+RUN echo '#!/bin/bash\n\
+export PATH="/home/para/.cargo/bin:$PATH"\n\
+exec "$@"' > /tmp/para-exec && \
+sudo mv /tmp/para-exec /usr/local/bin/para-exec && \
+sudo chmod +x /usr/local/bin/para-exec
+
+# Ensure PATH is set for all users
+RUN echo 'export PATH="/home/para/.cargo/bin:$PATH"' | sudo tee -a /etc/profile.d/rust.sh
+
+CMD ["/bin/bash", "-l"]

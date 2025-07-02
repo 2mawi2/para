@@ -150,10 +150,12 @@ mod tests {
         let project_dir = projects_dir.join(&sanitized_path);
         fs::create_dir_all(&project_dir).unwrap();
 
-        // Create a session file
+        // Create a session file with meaningful content
         let session_id = "12345678-1234-1234-1234-123456789012";
         let session_file = project_dir.join(format!("{}.jsonl", session_id));
-        fs::write(&session_file, "{}").unwrap();
+        // Create content > 1000 bytes to simulate a real session
+        let content = "x".repeat(1001);
+        fs::write(&session_file, content).unwrap();
 
         // Mock home directory
         std::env::set_var("PARA_TEST_HOME", home_dir);

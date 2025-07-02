@@ -11,6 +11,7 @@ pub fn run_config_wizard() -> Result<Config> {
     config.ide = configure_ide_simple()?;
     config.directories = configure_directories_simple(config.directories)?;
     config.session = configure_session_simple(config.session)?;
+    config.sandbox = configure_sandbox_simple()?;
 
     println!("\n📋 Configuration Summary:");
     display_config_summary(&config);
@@ -121,6 +122,33 @@ fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::S
     Ok(config)
 }
 
+fn configure_sandbox_simple() -> Result<Option<crate::core::sandbox::SandboxConfig>> {
+    println!("\n🔒 Sandbox Security (optional)");
+    println!("Sandboxing limits file write access to protect against prompt injection.");
+
+    let enable_sandbox = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enable sandboxing by default?")
+        .default(false)
+        .interact()
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+
+    if !enable_sandbox {
+        return Ok(None);
+    }
+
+    println!("Sandbox enabled. Using standard profile that allows writes to:");
+    println!("  • Project directory");
+    println!("  • Temporary files");
+    println!("  • Claude configuration (~/.claude)");
+    println!("  • Git configuration (~/.gitconfig)");
+    println!("  • Cache directories (~/.cache)");
+
+    Ok(Some(crate::core::sandbox::SandboxConfig {
+        enabled: true,
+        profile: "standard".to_string(),
+    }))
+}
+
 fn display_config_summary(config: &Config) {
     println!("  IDE: {} ({})", config.ide.name, config.ide.command);
     if config.ide.wrapper.enabled {
@@ -139,6 +167,11 @@ fn display_config_summary(config: &Config) {
         println!("  Auto-cleanup: {} days", days);
     } else {
         println!("  Auto-cleanup: disabled");
+    }
+    if let Some(sandbox) = &config.sandbox {
+        println!("  Sandbox: enabled ({})", sandbox.profile);
+    } else {
+        println!("  Sandbox: disabled");
     }
 }
 
@@ -216,6 +249,10 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: Some(crate::core::sandbox::SandboxConfig {
+                enabled: true,
+                profile: "restrictive".to_string(),
+            }),
         };
 
         display_config_summary(&config);
@@ -254,6 +291,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         assert!(
@@ -270,5 +308,20 @@ mod tests {
             assert!(!name.is_empty(), "IDE name should not be empty");
             assert!(!command.is_empty(), "IDE command should not be empty");
         }
+    }
+
+    #[test]
+    fn test_sandbox_config_in_summary() {
+        // Test with sandbox enabled
+        let mut config = default_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "standard".to_string(),
+        });
+        display_config_summary(&config);
+
+        // Test with sandbox disabled
+        config.sandbox = None;
+        display_config_summary(&config);
     }
 }

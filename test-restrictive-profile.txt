@@ -1,0 +1,19 @@
+Test the restrictive sandbox profile to ensure it works correctly on macOS:
+
+1. Verify that Claude CLI launched successfully in sandbox mode
+2. Test file operations:
+   - Try to read files from the project directory (should work)
+   - Try to write a test file to the project directory (should work)
+   - Try to write a test file to /tmp (should work)
+   - Try to write to ~/.cargo/test.txt (should fail)
+   - Try to write to ~/.rustup/test.txt (should fail)
+   - Try to read from ~/.cargo/config (should work - read is allowed)
+3. Test network access by making a simple web request (should work - needed for Claude API)
+4. Report all results with exact error messages when operations are blocked
+5. Use `para finish "Test restrictive sandbox profile"` when done
+
+For each operation, clearly report:
+- What you tried to do
+- Whether it succeeded or failed
+- The exact error message if it failed
+- Whether this matches the expected behavior

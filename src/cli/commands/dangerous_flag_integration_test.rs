@@ -54,6 +54,11 @@ mod integration_tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: true, // Monitor would add this based on session state
+            sandbox_args: crate::cli::parser::SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Verify the args would include the flag

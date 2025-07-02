@@ -51,7 +51,7 @@ pub fn resume_specific_session(
         }
 
         // Launch IDE with prompt if provided
-        launch_ide_for_session(
+        launch_ide_for_session_with_state(
             config,
             &session_state.worktree_path,
             args,
@@ -157,7 +157,7 @@ pub fn detect_and_resume_session(
                 }
             }
 
-            launch_ide_for_session(
+            launch_ide_for_session_with_state(
                 config,
                 &current_dir,
                 args,
@@ -287,6 +287,16 @@ fn launch_ide_for_session(
     path: &Path,
     args: &ResumeArgs,
     processed_context: Option<&String>,
+    _session_state: Option<&SessionState>,
+) -> Result<()> {
+    launch_ide_for_session_with_state(config, path, args, processed_context, None)
+}
+
+fn launch_ide_for_session_with_state(
+    config: &Config,
+    path: &Path,
+    args: &ResumeArgs,
+    processed_context: Option<&String>,
     session_state: Option<&SessionState>,
 ) -> Result<()> {
     let ide_manager = IdeManager::new(config);
@@ -304,6 +314,18 @@ fn launch_ide_for_session(
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
             skip_permissions,
+            sandbox_override: if args.sandbox_args.no_sandbox {
+                Some(false)
+            } else if args.sandbox_args.sandbox {
+                Some(true)
+            } else {
+                // Use stored sandbox settings from session if available
+                session_state.and_then(|s| s.sandbox_enabled)
+            },
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone().or_else(|| {
+                // Use stored sandbox profile from session if available
+                session_state.and_then(|s| s.sandbox_profile.clone())
+            }),
             ..Default::default()
         };
 
@@ -345,6 +367,8 @@ fn launch_ide_for_session(
             session_id: launch_options.claude_session_id.clone(),
             continue_conversation: launch_options.continue_conversation,
             prompt_content: processed_context.cloned(),
+            sandbox_override: launch_options.sandbox_override,
+            sandbox_profile: launch_options.sandbox_profile,
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {
@@ -355,6 +379,7 @@ fn launch_ide_for_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::SandboxArgs;
     use crate::core::session::state::SessionState;
     use crate::test_utils::test_helpers::*;
     use std::fs;
@@ -400,6 +425,11 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
         resume_specific_session(&config, &git_service, "test4", &args).unwrap();
     }
@@ -445,6 +475,11 @@ mod tests {
             prompt: Some("Continue implementing the feature".to_string()),
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume (with echo IDE it won't actually launch anything)
@@ -509,6 +544,11 @@ mod tests {
             prompt: None,
             file: Some(context_file),
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume
@@ -565,6 +605,11 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume - should work exactly as before
@@ -627,6 +672,11 @@ mod tests {
             prompt: Some("Continue with OAuth implementation".to_string()),
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume
@@ -687,6 +737,11 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Execute resume
@@ -802,6 +857,11 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: false, // User didn't pass the flag
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // In a real test, we'd mock the IDE launch, but here we verify the logic
@@ -835,6 +895,11 @@ mod tests {
             prompt: None,
             file: None,
             dangerously_skip_permissions: true, // User explicitly passes the flag
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let loaded_safe = session_manager.load_state("test-safe-session").unwrap();

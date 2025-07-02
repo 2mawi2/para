@@ -1,6 +1,32 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// Common sandbox arguments shared across multiple commands
+#[derive(Args, Debug, Clone)]
+pub struct SandboxArgs {
+    /// Enable sandboxing (overrides config)
+    #[arg(
+        long = "sandbox",
+        short = 's',
+        help = "Enable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub sandbox: bool,
+
+    /// Disable sandboxing (overrides config)
+    #[arg(
+        long = "no-sandbox",
+        help = "Disable sandboxing for Claude CLI (overrides config)"
+    )]
+    pub no_sandbox: bool,
+
+    /// Sandbox profile to use
+    #[arg(
+        long = "sandbox-profile",
+        help = "Sandbox profile to use: permissive (default) or restrictive"
+    )]
+    pub sandbox_profile: Option<String>,
+}
+
 #[derive(Parser)]
 #[command(name = "para")]
 #[command(about = "Parallel IDE Workflow Helper")]
@@ -106,6 +132,10 @@ pub struct StartArgs {
         help = "Disable automatic API key forwarding to Docker containers"
     )]
     pub no_forward_keys: bool,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]
@@ -187,6 +217,10 @@ pub struct DispatchArgs {
         help = "Disable automatic API key forwarding to Docker containers"
     )]
     pub no_forward_keys: bool,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]
@@ -269,6 +303,10 @@ pub struct ResumeArgs {
         help = "Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)"
     )]
     pub dangerously_skip_permissions: bool,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]

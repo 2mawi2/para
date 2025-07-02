@@ -676,6 +676,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 
@@ -708,6 +709,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let service = SessionService::new(config);

@@ -46,6 +46,14 @@ pub struct SessionState {
     // Whether session was created with dangerous_skip_permissions flag
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub dangerous_skip_permissions: Option<bool>,
+
+    // Sandbox settings for the session
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub sandbox_enabled: Option<bool>,
+
+    // Sandbox profile (permissive or restrictive)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub sandbox_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,9 +86,12 @@ impl SessionState {
             parent_branch: None,
             is_docker: None,
             dangerous_skip_permissions: None,
+            sandbox_enabled: None,
+            sandbox_profile: None,
         }
     }
 
+    #[cfg(test)]
     pub fn with_parent_branch_and_flags(
         name: String,
         branch: String,
@@ -105,6 +116,8 @@ impl SessionState {
             } else {
                 None
             },
+            sandbox_enabled: None,
+            sandbox_profile: None,
         }
     }
 
@@ -134,6 +147,40 @@ impl SessionState {
             } else {
                 None
             },
+            sandbox_enabled: None,
+            sandbox_profile: None,
+        }
+    }
+
+    /// Create a new session with all flags including sandbox settings
+    pub fn with_all_flags(
+        name: String,
+        branch: String,
+        worktree_path: PathBuf,
+        parent_branch: String,
+        dangerous_skip_permissions: bool,
+        sandbox_enabled: bool,
+        sandbox_profile: Option<String>,
+    ) -> Self {
+        Self {
+            name,
+            branch,
+            worktree_path,
+            created_at: Utc::now(),
+            status: SessionStatus::Active,
+            task_description: None,
+            last_activity: None,
+            git_stats: None,
+            session_type: SessionType::Worktree,
+            parent_branch: Some(parent_branch),
+            is_docker: None,
+            dangerous_skip_permissions: if dangerous_skip_permissions {
+                Some(true)
+            } else {
+                None
+            },
+            sandbox_enabled: if sandbox_enabled { Some(true) } else { None },
+            sandbox_profile,
         }
     }
 
@@ -235,6 +282,8 @@ mod tests {
             parent_branch: None,
             is_docker: None,
             dangerous_skip_permissions: None,
+            sandbox_enabled: None,
+            sandbox_profile: None,
         };
 
         // Should be able to serialize and deserialize Review status
@@ -423,6 +472,105 @@ mod tests {
         );
         let json = serde_json::to_string(&state_no_flag).unwrap();
         assert!(!json.contains("dangerous_skip_permissions"));
+    }
+
+    #[test]
+    fn test_sandbox_fields() {
+        // Test new() constructor - should have None sandbox fields
+        let state = SessionState::new(
+            "test-session".to_string(),
+            "para/test-session".to_string(),
+            PathBuf::from("/test"),
+        );
+        assert_eq!(state.sandbox_enabled, None);
+        assert_eq!(state.sandbox_profile, None);
+
+        // Test with_all_flags constructor with sandbox enabled
+        let state_with_sandbox = SessionState::with_all_flags(
+            "sandbox-session".to_string(),
+            "para/sandbox-session".to_string(),
+            PathBuf::from("/test"),
+            "main".to_string(),
+            false,
+            true,
+            Some("permissive".to_string()),
+        );
+        assert_eq!(state_with_sandbox.sandbox_enabled, Some(true));
+        assert_eq!(
+            state_with_sandbox.sandbox_profile,
+            Some("permissive".to_string())
+        );
+
+        // Test with_all_flags constructor with sandbox disabled
+        let state_no_sandbox = SessionState::with_all_flags(
+            "no-sandbox-session".to_string(),
+            "para/no-sandbox-session".to_string(),
+            PathBuf::from("/test"),
+            "main".to_string(),
+            false,
+            false,
+            None,
+        );
+        assert_eq!(state_no_sandbox.sandbox_enabled, None);
+        assert_eq!(state_no_sandbox.sandbox_profile, None);
+    }
+
+    #[test]
+    fn test_sandbox_serialization() {
+        // Test serialization with sandbox settings
+        let state = SessionState::with_all_flags(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+            "main".to_string(),
+            false,
+            true,
+            Some("restrictive".to_string()),
+        );
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(json.contains(r#""sandbox_enabled":true"#));
+        assert!(json.contains(r#""sandbox_profile":"restrictive""#));
+
+        // Test serialization without sandbox settings (should not include fields)
+        let state_no_sandbox = SessionState::new(
+            "test".to_string(),
+            "para/test".to_string(),
+            PathBuf::from("/test"),
+        );
+        let json = serde_json::to_string(&state_no_sandbox).unwrap();
+        assert!(!json.contains("sandbox_enabled"));
+        assert!(!json.contains("sandbox_profile"));
+    }
+
+    #[test]
+    fn test_sandbox_deserialization() {
+        // Test deserializing old sessions without sandbox fields
+        let old_json = r#"{
+            "name": "old-session",
+            "branch": "para/old-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree"
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(old_json).unwrap();
+        assert_eq!(deserialized.sandbox_enabled, None);
+        assert_eq!(deserialized.sandbox_profile, None);
+
+        // Test deserializing new sessions with sandbox fields
+        let new_json = r#"{
+            "name": "new-session",
+            "branch": "para/new-session",
+            "worktree_path": "/test",
+            "created_at": "2024-01-01T00:00:00Z",
+            "status": "Active",
+            "session_type": "Worktree",
+            "sandbox_enabled": true,
+            "sandbox_profile": "permissive"
+        }"#;
+        let deserialized: SessionState = serde_json::from_str(new_json).unwrap();
+        assert_eq!(deserialized.sandbox_enabled, Some(true));
+        assert_eq!(deserialized.sandbox_profile, Some("permissive".to_string()));
     }
 
     #[test]

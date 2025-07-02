@@ -2,12 +2,15 @@ use serde::{Deserialize, Serialize};
 
 pub mod defaults;
 pub mod manager;
+pub mod migration;
 pub mod path;
 pub mod validation;
 pub mod wizard;
 
 pub use manager::ConfigManager;
 pub use wizard::{run_config_wizard, run_quick_setup};
+
+use crate::core::sandbox::SandboxConfig;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
@@ -19,6 +22,8 @@ pub struct Config {
     pub docker: Option<DockerConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_script: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<SandboxConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -208,6 +213,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         assert_eq!(config.get_branch_prefix(), "feature");
@@ -318,6 +324,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
         assert!(valid_config.validate().is_ok());
 
@@ -359,6 +366,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
         assert!(config_wrapper_disabled.validate().is_ok());
 
@@ -404,6 +412,7 @@ mod tests {
             session: defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
         let config_json = serde_json::to_string_pretty(&test_config).unwrap();
         std::fs::write(&custom_config_path, config_json).unwrap();
@@ -440,6 +449,7 @@ mod tests {
             session: defaults::default_session_config(),
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         // Test 1: Manually save config and verify it can be loaded

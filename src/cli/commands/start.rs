@@ -2,6 +2,7 @@ use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::StartArgs;
 use crate::config::Config;
 use crate::core::ide::IdeManager;
+use crate::core::sandbox::config::SandboxResolver;
 use crate::core::session::SessionManager;
 use crate::utils::{generate_unique_name, validate_session_name, Result};
 use std::path::{Path, PathBuf};
@@ -200,11 +201,25 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         (true, network_isolation, allowed_domains)
     } else {
-        // Create regular worktree session
-        let session = session_manager.create_session_with_flags(
+        // Resolve sandbox settings using the resolver
+        let resolver = SandboxResolver::new(&config);
+        let sandbox_settings = resolver.resolve(
+            args.sandbox_args.sandbox,
+            args.sandbox_args.no_sandbox,
+            args.sandbox_args.sandbox_profile.clone(),
+        );
+
+        // Create regular worktree session with sandbox settings
+        let session = session_manager.create_session_with_all_flags(
             session_name.clone(),
             None,
             args.dangerously_skip_permissions,
+            sandbox_settings.enabled,
+            if sandbox_settings.enabled {
+                Some(sandbox_settings.profile)
+            } else {
+                None
+            },
         )?;
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
@@ -217,7 +232,19 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         }
 
         let ide_manager = IdeManager::new(&config);
-        ide_manager.launch(&session.worktree_path, args.dangerously_skip_permissions)?;
+        let launch_options = crate::core::ide::LaunchOptions {
+            skip_permissions: args.dangerously_skip_permissions,
+            sandbox_override: if args.sandbox_args.no_sandbox {
+                Some(false)
+            } else if args.sandbox_args.sandbox {
+                Some(true)
+            } else {
+                None
+            },
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
+            ..Default::default()
+        };
+        ide_manager.launch_with_options(&session.worktree_path, launch_options)?;
 
         (false, false, vec![])
     };
@@ -281,6 +308,7 @@ fn determine_session_name(args: &StartArgs, session_manager: &SessionManager) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::parser::SandboxArgs;
     use crate::config::{
         Config, DirectoryConfig, GitConfig, IdeConfig, SessionConfig, WrapperConfig,
     };
@@ -323,6 +351,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 
@@ -341,6 +370,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
@@ -362,6 +396,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         let result = determine_session_name(&args, &session_manager).unwrap();
