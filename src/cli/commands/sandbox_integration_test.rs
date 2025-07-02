@@ -129,6 +129,6 @@ mod tests {
         let resolver = SandboxResolver::new(&config);
         let settings = resolver.resolve(false, false, None);
         assert!(!settings.enabled);
-        assert_eq!(settings.profile, "permissive");
+        assert_eq!(settings.profile, "standard");
     }
 }

@@ -1,8 +1,8 @@
 (version 1)
 
-;; Para Sandboxing Profile - Restrictive
-;; Denies everything by default, then allows specific operations
-;; Based on Gemini's restrictive security model
+;; Para Sandboxing Profile - Standard
+;; Protects against prompt injection by limiting file write access
+;; Based on Gemini's minimal security model
 
 ;; Deny everything by default
 (deny default)
@@ -53,18 +53,23 @@
     ;; Project directory - primary workspace
     (subpath (param "TARGET_DIR"))
     
-    ;; Temporary directories (required for Claude operation)
+    ;; Temporary directories
     (subpath (param "TMP_DIR"))
     (subpath "/tmp")
     (subpath "/private/tmp")
-    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")  ; macOS temp dirs
+    (subpath "/var/folders")  ; macOS temp directory root
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")  ; macOS temp dirs and subdirs
     
     ;; Cache directory
     (subpath (param "CACHE_DIR"))
+    (subpath (string-append (param "HOME_DIR") "/.cache"))
     
-    ;; Claude configuration (required for Claude to function)
+    ;; Claude configuration
     (subpath (string-append (param "HOME_DIR") "/.claude"))
     (literal (string-append (param "HOME_DIR") "/.claude.json"))
+    
+    ;; Git configuration (for commits)
+    (literal (string-append (param "HOME_DIR") "/.gitconfig"))
     
     ;; Standard I/O devices
     (literal "/dev/stdout")
@@ -80,8 +85,10 @@
 (allow file-write-create
     (subpath (param "TARGET_DIR"))
     (subpath (string-append (param "HOME_DIR") "/.claude"))
+    (subpath (string-append (param "HOME_DIR") "/.cache"))
     (subpath (param "TMP_DIR"))
-    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/")
+    (subpath "/var/folders")
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")
 )
 
 ;; Allow network access (required for Claude API)
@@ -94,3 +101,10 @@
 (allow mach-lookup 
     (global-name "com.apple.sysmond")  ; For process listing
 )
+
+;; Allow file attribute operations needed for file creation
+(allow file-write-setugid)
+(allow file-write-mode)
+(allow file-write-owner)
+(allow file-write-times)
+(allow file-write-flags)

@@ -76,7 +76,7 @@ mod error_path_tests {
 
         // Should fall back to default profile
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "permissive");
+        assert_eq!(settings.profile, "standard");
     }
 
     #[test]

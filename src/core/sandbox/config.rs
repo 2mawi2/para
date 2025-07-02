@@ -22,7 +22,7 @@ impl SandboxResolver {
         cli_no_sandbox: bool,
         cli_profile: Option<String>,
     ) -> SandboxSettings {
-        let default_profile = "permissive".to_string();
+        let default_profile = "standard".to_string();
 
         // 1. Check CLI flags (highest precedence)
         if cli_no_sandbox {
@@ -161,7 +161,7 @@ mod tests {
         let settings = resolver.resolve(true, false, Some("invalid-profile".to_string()));
 
         assert!(settings.enabled);
-        assert_eq!(settings.profile, "permissive");
+        assert_eq!(settings.profile, "standard");
     }
 
     #[test]
@@ -172,6 +172,6 @@ mod tests {
         let settings = resolver.resolve(false, false, None);
 
         assert!(!settings.enabled);
-        assert_eq!(settings.profile, "permissive");
+        assert_eq!(settings.profile, "standard");
     }
 }
