@@ -24,3 +24,5 @@ mod dangerous_flag_test;
 mod docker_test;
 #[cfg(test)]
 mod sandbox_integration_test;
+#[cfg(test)]
+mod sandbox_persistence_test;
