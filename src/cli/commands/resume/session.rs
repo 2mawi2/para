@@ -44,11 +44,12 @@ pub fn resume_specific_session(
         }
 
         // Launch IDE with prompt if provided
-        launch_ide_for_session(
+        launch_ide_for_session_with_state(
             config,
             &session_state.worktree_path,
             args,
             processed_context.as_ref(),
+            Some(&session_state),
         )?;
         println!("✅ Resumed session '{}'", session_name);
     } else {
@@ -141,7 +142,13 @@ pub fn detect_and_resume_session(
                 }
             }
 
-            launch_ide_for_session(config, &current_dir, args, processed_context.as_ref())?;
+            launch_ide_for_session_with_state(
+                config,
+                &current_dir,
+                args,
+                processed_context.as_ref(),
+                session_opt.as_ref(),
+            )?;
             println!("✅ Resumed current session");
             Ok(())
         }
@@ -241,20 +248,37 @@ fn launch_ide_for_session(
     args: &ResumeArgs,
     processed_context: Option<&String>,
 ) -> Result<()> {
+    launch_ide_for_session_with_state(config, path, args, processed_context, None)
+}
+
+fn launch_ide_for_session_with_state(
+    config: &Config,
+    path: &Path,
+    args: &ResumeArgs,
+    processed_context: Option<&String>,
+    session_state: Option<&SessionState>,
+) -> Result<()> {
     let ide_manager = IdeManager::new(config);
 
     // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
-            skip_permissions: false,
+            // Use stored dangerous_skip_permissions from session if available
+            skip_permissions: session_state
+                .and_then(|s| s.dangerous_skip_permissions)
+                .unwrap_or(false),
             sandbox_override: if args.sandbox_args.no_sandbox {
                 Some(false)
             } else if args.sandbox_args.sandbox {
                 Some(true)
             } else {
-                None
+                // Use stored sandbox settings from session if available
+                session_state.and_then(|s| s.sandbox_enabled)
             },
-            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone().or_else(|| {
+                // Use stored sandbox profile from session if available
+                session_state.and_then(|s| s.sandbox_profile.clone())
+            }),
             ..Default::default()
         };
 

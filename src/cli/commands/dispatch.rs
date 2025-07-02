@@ -2,6 +2,7 @@ use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::DispatchArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
+use crate::core::sandbox::config::SandboxResolver;
 use crate::core::session::{SessionManager, SessionState};
 use crate::utils::{names::*, ParaError, Result};
 use std::fs;
@@ -246,12 +247,26 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             .create_worktree(&branch_name, &session_path)
             .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
 
-        let mut session_state = SessionState::with_parent_branch_and_flags(
+        // Resolve sandbox settings using the resolver
+        let resolver = SandboxResolver::new(&config);
+        let sandbox_settings = resolver.resolve(
+            args.sandbox_args.sandbox,
+            args.sandbox_args.no_sandbox,
+            args.sandbox_args.sandbox_profile.clone(),
+        );
+
+        let mut session_state = SessionState::with_all_flags(
             session_id.clone(),
             branch_name,
             session_path.clone(),
             parent_branch,
             args.dangerously_skip_permissions,
+            sandbox_settings.enabled,
+            if sandbox_settings.enabled {
+                Some(sandbox_settings.profile)
+            } else {
+                None
+            },
         );
 
         session_state.task_description = Some(prompt.clone());

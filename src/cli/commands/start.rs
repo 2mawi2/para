@@ -2,6 +2,7 @@ use crate::cli::commands::common::create_claude_local_md;
 use crate::cli::parser::StartArgs;
 use crate::config::Config;
 use crate::core::ide::IdeManager;
+use crate::core::sandbox::config::SandboxResolver;
 use crate::core::session::SessionManager;
 use crate::utils::{generate_unique_name, validate_session_name, Result};
 use std::path::{Path, PathBuf};
@@ -200,11 +201,25 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         (true, network_isolation, allowed_domains)
     } else {
-        // Create regular worktree session
-        let session = session_manager.create_session_with_flags(
+        // Resolve sandbox settings using the resolver
+        let resolver = SandboxResolver::new(&config);
+        let sandbox_settings = resolver.resolve(
+            args.sandbox_args.sandbox,
+            args.sandbox_args.no_sandbox,
+            args.sandbox_args.sandbox_profile.clone(),
+        );
+
+        // Create regular worktree session with sandbox settings
+        let session = session_manager.create_session_with_all_flags(
             session_name.clone(),
             None,
             args.dangerously_skip_permissions,
+            sandbox_settings.enabled,
+            if sandbox_settings.enabled {
+                Some(sandbox_settings.profile)
+            } else {
+                None
+            },
         )?;
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
