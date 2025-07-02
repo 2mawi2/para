@@ -52,13 +52,22 @@ impl SessionManager {
         self.create_session_with_type(name, base_branch, None, false)
     }
 
-    pub fn create_session_with_flags(
+    pub fn create_session_with_all_flags(
         &mut self,
         name: String,
         base_branch: Option<String>,
         dangerous_skip_permissions: bool,
+        sandbox_enabled: bool,
+        sandbox_profile: Option<String>,
     ) -> Result<SessionState> {
-        self.create_session_with_type(name, base_branch, None, dangerous_skip_permissions)
+        self.create_session_with_all_options(
+            name,
+            base_branch,
+            None,
+            dangerous_skip_permissions,
+            sandbox_enabled,
+            sandbox_profile,
+        )
     }
 
     /// Create a session with specified type (worktree or container)
@@ -68,6 +77,26 @@ impl SessionManager {
         base_branch: Option<String>,
         session_type: Option<super::state::SessionType>,
         dangerous_skip_permissions: bool,
+    ) -> Result<SessionState> {
+        self.create_session_with_all_options(
+            name,
+            base_branch,
+            session_type,
+            dangerous_skip_permissions,
+            false,
+            None,
+        )
+    }
+
+    /// Create a session with all options including sandbox settings
+    pub fn create_session_with_all_options(
+        &mut self,
+        name: String,
+        base_branch: Option<String>,
+        session_type: Option<super::state::SessionType>,
+        dangerous_skip_permissions: bool,
+        sandbox_enabled: bool,
+        sandbox_profile: Option<String>,
     ) -> Result<SessionState> {
         let git_service = GitService::discover().map_err(|e| {
             ParaError::git_error(format!("Failed to discover git repository: {}", e))
@@ -121,6 +150,7 @@ impl SessionManager {
 
         let session_state = match session_type {
             Some(super::state::SessionType::Container { container_id }) => {
+                // TODO: Add container support for sandbox settings
                 SessionState::new_container_with_parent_branch_and_flags(
                     final_session_name,
                     branch_name,
@@ -130,12 +160,14 @@ impl SessionManager {
                     dangerous_skip_permissions,
                 )
             }
-            _ => SessionState::with_parent_branch_and_flags(
+            _ => SessionState::with_all_flags(
                 final_session_name,
                 branch_name,
                 worktree_path,
                 parent_branch,
                 dangerous_skip_permissions,
+                sandbox_enabled,
+                sandbox_profile,
             ),
         };
 

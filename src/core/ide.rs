@@ -1,4 +1,5 @@
 use crate::config::{Config, IdeConfig};
+use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
 use crate::utils::{ParaError, Result};
 use std::fs;
 use std::path::Path;
@@ -11,16 +12,20 @@ pub struct LaunchOptions {
     pub continue_conversation: bool,
     pub claude_session_id: Option<String>,
     pub prompt: Option<String>,
+    pub sandbox_override: Option<bool>,  // CLI flag override
+    pub sandbox_profile: Option<String>, // CLI profile override
 }
 
 pub struct IdeManager {
-    config: IdeConfig,
+    ide_config: IdeConfig,
+    sandbox_config: Option<crate::core::sandbox::SandboxConfig>,
 }
 
 impl IdeManager {
     pub fn new(config: &Config) -> Self {
         Self {
-            config: config.ide.clone(),
+            ide_config: config.ide.clone(),
+            sandbox_config: config.sandbox.clone(),
         }
     }
 
@@ -34,7 +39,7 @@ impl IdeManager {
 
     pub fn launch_with_options(&self, path: &Path, options: LaunchOptions) -> Result<()> {
         // All IDEs require wrapper mode for cloud-based launching
-        if !self.config.wrapper.enabled {
+        if !self.ide_config.wrapper.enabled {
             return Err(ParaError::ide_error(
                 "All IDEs require wrapper mode for cloud-based launching. Please run 'para config' to enable wrapper mode.\n   Available options: VS Code wrapper or Cursor wrapper".to_string()
             ));
@@ -42,23 +47,23 @@ impl IdeManager {
 
         println!(
             "▶ launching {} inside {} wrapper...",
-            self.config.name, self.config.wrapper.name
+            self.ide_config.name, self.ide_config.wrapper.name
         );
         self.launch_wrapper_with_options(path, options)
     }
 
     fn is_wrapper_test_mode(&self) -> bool {
-        let wrapper_cmd = &self.config.wrapper.command;
+        let wrapper_cmd = &self.ide_config.wrapper.command;
         wrapper_cmd == "true" || wrapper_cmd.starts_with("echo ")
     }
 
     fn launch_wrapper_with_options(&self, path: &Path, options: LaunchOptions) -> Result<()> {
-        match self.config.wrapper.name.as_str() {
+        match self.ide_config.wrapper.name.as_str() {
             "cursor" => self.launch_cursor_wrapper_with_options(path, options),
             "code" => self.launch_vscode_wrapper_with_options(path, options),
             _ => Err(ParaError::ide_error(format!(
                 "Unsupported wrapper IDE: '{}'. Please use 'cursor' or 'code' as wrapper.",
-                self.config.wrapper.name
+                self.ide_config.wrapper.name
             ))),
         }
     }
@@ -74,12 +79,12 @@ impl IdeManager {
             println!("▶ skipping Cursor wrapper launch (test stub)");
             println!(
                 "✅ Cursor wrapper (test stub) opened with {} auto-start",
-                self.config.name
+                self.ide_config.name
             );
             return Ok(());
         }
 
-        let wrapper_cmd = &self.config.wrapper.command;
+        let wrapper_cmd = &self.ide_config.wrapper.command;
 
         if wrapper_cmd.starts_with("echo ") {
             let mut cmd = Command::new("sh");
@@ -99,7 +104,7 @@ impl IdeManager {
 
         println!(
             "▶ launching Cursor wrapper with {} auto-start...",
-            self.config.name
+            self.ide_config.name
         );
         let mut cmd = Command::new(wrapper_cmd);
         cmd.arg(path.to_string_lossy().as_ref());
@@ -113,7 +118,7 @@ impl IdeManager {
             .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {}", e)))?;
         println!(
             "✅ Cursor opened - {} will start automatically",
-            self.config.name
+            self.ide_config.name
         );
 
         Ok(())
@@ -130,12 +135,12 @@ impl IdeManager {
             println!("▶ skipping VS Code wrapper launch (test stub)");
             println!(
                 "✅ VS Code wrapper (test stub) opened with {} auto-start",
-                self.config.name
+                self.ide_config.name
             );
             return Ok(());
         }
 
-        let wrapper_cmd = &self.config.wrapper.command;
+        let wrapper_cmd = &self.ide_config.wrapper.command;
 
         if wrapper_cmd.starts_with("echo ") {
             let mut cmd = Command::new("sh");
@@ -153,7 +158,7 @@ impl IdeManager {
             ));
         }
 
-        let mut cmd = Command::new(&self.config.wrapper.command);
+        let mut cmd = Command::new(&self.ide_config.wrapper.command);
         cmd.arg(path.to_string_lossy().as_ref());
 
         // Detach the IDE process from the parent by redirecting stdio
@@ -163,14 +168,14 @@ impl IdeManager {
 
         println!(
             "▶ launching VS Code wrapper with {} auto-start...",
-            self.config.name
+            self.ide_config.name
         );
         cmd.spawn().map_err(|e| {
             ParaError::ide_error(format!("Failed to launch VS Code wrapper: {}", e))
         })?;
         println!(
             "✅ VS Code opened - {} will start automatically",
-            self.config.name
+            self.ide_config.name
         );
 
         Ok(())
@@ -182,8 +187,50 @@ impl IdeManager {
             ParaError::ide_error(format!("Failed to create .vscode directory: {}", e))
         })?;
 
-        let ide_command = self.build_ide_wrapper_command_with_options(options);
-        let task_label = format!("Start {}", self.config.name);
+        let mut ide_command = self.build_ide_wrapper_command_with_options(options);
+
+        // Apply sandboxing if enabled (with CLI override support)
+        let temp_config = crate::config::defaults::default_config();
+        let resolver = crate::core::sandbox::config::SandboxResolver::new(&crate::config::Config {
+            ide: temp_config.ide,
+            directories: temp_config.directories,
+            git: temp_config.git,
+            session: temp_config.session,
+            docker: temp_config.docker,
+            setup_script: temp_config.setup_script,
+            sandbox: self.sandbox_config.clone(),
+        });
+
+        let settings = resolver.resolve(
+            options.sandbox_override.unwrap_or(false),
+            options.sandbox_override.map(|v| !v).unwrap_or(false),
+            options.sandbox_profile.clone(),
+        );
+
+        let should_sandbox = settings.enabled && cfg!(target_os = "macos");
+
+        if should_sandbox && !is_sandbox_available() {
+            eprintln!(
+                "⚠️  Warning: Sandbox is enabled but sandbox-exec is not available on this system"
+            );
+        }
+
+        if should_sandbox && is_sandbox_available() {
+            let profile = &settings.profile;
+
+            match wrap_with_sandbox(&ide_command, path, profile) {
+                Ok(sandboxed_cmd) => {
+                    println!("🔒 Sandboxing enabled for Claude CLI");
+                    ide_command = sandboxed_cmd;
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Warning: Failed to apply sandbox: {}", e);
+                    eprintln!("   Continuing without sandboxing");
+                }
+            }
+        }
+
+        let task_label = format!("Start {}", self.ide_config.name);
         let task_json = self.generate_ide_task_json(&task_label, &ide_command);
 
         let tasks_file = vscode_dir.join("tasks.json");
@@ -194,9 +241,9 @@ impl IdeManager {
     }
 
     fn build_ide_wrapper_command_with_options(&self, options: &LaunchOptions) -> String {
-        let mut base_cmd = self.config.command.clone();
+        let mut base_cmd = self.ide_config.command.clone();
 
-        if self.config.name.as_str() == "claude" {
+        if self.ide_config.name.as_str() == "claude" {
             if options.skip_permissions {
                 base_cmd.push_str(" --dangerously-skip-permissions");
             }
@@ -289,6 +336,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 
@@ -297,8 +345,8 @@ mod tests {
         let config = create_test_config("test-ide", "echo");
         let manager = IdeManager::new(&config);
 
-        assert_eq!(manager.config.name, "test-ide");
-        assert_eq!(manager.config.command, "echo");
+        assert_eq!(manager.ide_config.name, "test-ide");
+        assert_eq!(manager.ide_config.command, "echo");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::{StartArgs, DispatchArgs};
+    use crate::cli::parser::{DispatchArgs, SandboxArgs, StartArgs};
 
     #[test]
     fn test_start_args_docker_image() {
@@ -11,10 +11,16 @@ mod tests {
             container: true,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
             docker_image: Some("custom:latest".to_string()),
             no_forward_keys: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
-        
+
         assert_eq!(args.docker_image, Some("custom:latest".to_string()));
         assert!(!args.no_forward_keys);
     }
@@ -30,14 +36,20 @@ mod tests {
             container: true,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
             docker_image: Some("python:3.11".to_string()),
             no_forward_keys: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
-        
+
         assert_eq!(args.docker_image, Some("python:3.11".to_string()));
         assert!(!args.no_forward_keys);
     }
-    
+
     #[test]
     fn test_no_forward_keys_flag() {
         // Test the no_forward_keys flag
@@ -47,12 +59,18 @@ mod tests {
             container: true,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
             docker_image: Some("untrusted:latest".to_string()),
             no_forward_keys: true,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
-        
+
         assert!(args.no_forward_keys);
-        
+
         let dispatch_args = DispatchArgs {
             name_or_prompt: Some("secure task".to_string()),
             prompt: None,
@@ -61,10 +79,16 @@ mod tests {
             container: true,
             allow_domains: None,
             docker_args: vec![],
+            setup_script: None,
             docker_image: Some("public:latest".to_string()),
             no_forward_keys: true,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
-        
+
         assert!(dispatch_args.no_forward_keys);
     }
 }

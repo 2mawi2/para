@@ -42,7 +42,7 @@ fn validate_resume_args(args: &ResumeArgs) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::ResumeArgs;
+    use crate::cli::parser::{ResumeArgs, SandboxArgs};
     use std::path::PathBuf;
 
     #[test]
@@ -53,6 +53,11 @@ mod tests {
             prompt: Some("test".to_string()),
             file: None,
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
         assert!(args.validate().is_ok());
 
@@ -61,6 +66,11 @@ mod tests {
             prompt: None,
             file: Some(PathBuf::from("test.md")),
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
         assert!(args.validate().is_ok());
 
@@ -70,6 +80,11 @@ mod tests {
             prompt: Some("test".to_string()),
             file: Some(PathBuf::from("test.md")),
             dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
         assert!(args.validate().is_err());
         assert!(args

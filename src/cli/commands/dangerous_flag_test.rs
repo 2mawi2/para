@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::DispatchArgs;
+    use crate::cli::parser::{DispatchArgs, SandboxArgs};
     use crate::core::session::{SessionManager, SessionStatus};
     use crate::test_utils::test_helpers::create_test_config;
     use tempfile::TempDir;
@@ -106,6 +106,11 @@ mod tests {
             setup_script: None,
             docker_image: None,
             no_forward_keys: false,
+            sandbox_args: SandboxArgs {
+                sandbox: false,
+                no_sandbox: false,
+                sandbox_profile: None,
+            },
         };
 
         // Note: dispatch::execute requires Claude Code in wrapper mode

@@ -22,3 +22,9 @@ pub mod status;
 mod dangerous_flag_integration_test;
 #[cfg(test)]
 mod dangerous_flag_test;
+#[cfg(test)]
+mod docker_test;
+#[cfg(test)]
+mod sandbox_integration_test;
+#[cfg(test)]
+mod sandbox_persistence_test;

@@ -33,9 +33,12 @@ impl ConfigManager {
     }
 
     pub fn load_from_file(path: &Path) -> Result<Config> {
-        let content = fs::read_to_string(path)?;
-        let mut config: Config = serde_json::from_str(&content)?;
+        // Use the migration system to load config
+        let config = super::migration::load_config_with_migration(path)
+            .map_err(|e| super::ConfigError::Validation(format!("Migration failed: {}", e)))?;
 
+        // Still handle wrapper mode migration if needed
+        let mut config = config;
         if !config.ide.wrapper.enabled {
             eprintln!("🔄 Migrating configuration to use wrapper mode...");
             config = Self::migrate_to_wrapper_mode(config);
@@ -144,6 +147,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         }
     }
 
@@ -309,6 +313,7 @@ mod tests {
             },
             docker: None,
             setup_script: None,
+            sandbox: None,
         };
 
         let json = serde_json::to_string_pretty(&claude_config).unwrap();
