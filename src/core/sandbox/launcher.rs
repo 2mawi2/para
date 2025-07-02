@@ -36,6 +36,18 @@ pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> 
 
     let temp_dir = std::env::temp_dir();
 
+    // Remove trailing slashes from paths to ensure consistent matching
+    let temp_dir_str = temp_dir.to_string_lossy().trim_end_matches('/').to_string();
+    let home_dir_str = home_dir.to_string_lossy().trim_end_matches('/').to_string();
+    let cache_dir_str = cache_dir
+        .to_string_lossy()
+        .trim_end_matches('/')
+        .to_string();
+    let worktree_path_str = worktree_path
+        .to_string_lossy()
+        .trim_end_matches('/')
+        .to_string();
+
     // Build the sandbox-exec command with parameters
     let sandbox_cmd = format!(
         "sandbox-exec \
@@ -45,10 +57,10 @@ pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> 
          -D 'CACHE_DIR={}' \
          -f '{}' \
          sh -c '{}'",
-        worktree_path.display(),
-        temp_dir.display(),
-        home_dir.display(),
-        cache_dir.display(),
+        worktree_path_str,
+        temp_dir_str,
+        home_dir_str,
+        cache_dir_str,
         profile_path.display(),
         command.replace('\'', "'\\''") // Escape single quotes in the command
     );
