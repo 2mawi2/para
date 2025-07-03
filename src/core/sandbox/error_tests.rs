@@ -30,6 +30,7 @@ mod error_path_tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_profile_extraction_with_empty_name() {
         let result = profiles::extract_profile("");
         assert!(result.is_err());
@@ -37,6 +38,7 @@ mod error_path_tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_profile_extraction_cleanup_on_error() {
         // Try to extract invalid profile
         let result = profiles::extract_profile("../../etc/passwd");
