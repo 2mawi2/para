@@ -317,6 +317,16 @@ mod tests {
         // This test verifies the pool queries actual Docker state
         let pool = ContainerPool::new(3);
 
+        // First check if Docker is available
+        let docker_check = Command::new("docker")
+            .args(["info"])
+            .output();
+        
+        if docker_check.is_err() || !docker_check.unwrap().status.success() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
         // Get actual container count from Docker
         let active_count = pool.active_containers();
         println!("Current active para containers: {active_count}");
