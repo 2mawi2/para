@@ -5,6 +5,7 @@ pub mod cache;
 pub mod coordinator;
 pub mod event_handler;
 pub mod renderer;
+pub mod rendering;
 pub mod service;
 pub mod state;
 pub mod state_manager;
