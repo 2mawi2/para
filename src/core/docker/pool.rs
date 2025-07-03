@@ -318,10 +318,8 @@ mod tests {
         let pool = ContainerPool::new(3);
 
         // First check if Docker is available
-        let docker_check = Command::new("docker")
-            .args(["info"])
-            .output();
-        
+        let docker_check = Command::new("docker").args(["info"]).output();
+
         if docker_check.is_err() || !docker_check.unwrap().status.success() {
             println!("Skipping test - Docker not available");
             return;
