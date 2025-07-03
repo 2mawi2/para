@@ -17,7 +17,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     validate_claude_code_ide(&config)?;
 
     let git_service = GitService::discover()
-        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
+        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
     let repo_root = git_service.repository().root.clone();
 
     let session_manager = SessionManager::new(&config);
@@ -47,13 +47,13 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     if !subtrees_path.exists() {
         fs::create_dir_all(&subtrees_path).map_err(|e| {
-            ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
+            ParaError::fs_error(format!("Failed to create subtrees directory: {e}"))
         })?;
     }
 
     git_service
         .create_worktree(&branch_name, &session_path)
-        .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
+        .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {e}")))?;
 
     let mut session_state =
         SessionState::new(session_id.clone(), branch_name, session_path.clone());
@@ -62,9 +62,9 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     session_manager.save_state(&session_state)?;
 
     let state_dir = Path::new(&config.directories.state_dir);
-    let task_file = state_dir.join(format!("{}.task", session_id));
+    let task_file = state_dir.join(format!("{session_id}.task"));
     fs::write(&task_file, &prompt)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {e}")))?;
 
     create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
@@ -82,10 +82,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 }
 
 fn validate_claude_code_ide(config: &Config) -> Result<()> {
-    if (config.ide.command.to_lowercase() == "claude"
-        || config.ide.command.to_lowercase() == "claude-code")
-        && config.is_wrapper_enabled()
-    {
+    if is_claude_code_command(&config.ide.command) && config.is_wrapper_enabled() {
         return Ok(());
     }
 
@@ -93,6 +90,11 @@ fn validate_claude_code_ide(config: &Config) -> Result<()> {
         "Dispatch command requires Claude Code in wrapper mode. Current IDE: '{}' with command: '{}', wrapper enabled: {}. Run 'para config' to configure Claude Code with wrapper mode.",
         config.ide.name, config.ide.command, config.is_wrapper_enabled()
     )))
+}
+
+fn is_claude_code_command(command: &str) -> bool {
+    let command_lower = command.to_lowercase();
+    command_lower == "claude" || command_lower == "claude-code"
 }
 
 fn launch_claude_code(
@@ -104,7 +106,7 @@ fn launch_claude_code(
     let temp_prompt_file = session_path.join(".claude_prompt_temp");
     if !prompt.is_empty() {
         fs::write(&temp_prompt_file, prompt)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write temp prompt file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to write temp prompt file: {e}")))?;
     }
 
     launch_claude_in_ide(config, session_path, &temp_prompt_file, skip_permissions)
@@ -118,7 +120,7 @@ fn launch_claude_in_ide(
 ) -> Result<()> {
     let vscode_dir = session_path.join(".vscode");
     fs::create_dir_all(&vscode_dir)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {e}")))?;
 
     let mut base_cmd = config.ide.command.clone();
     if skip_permissions {
@@ -139,7 +141,7 @@ fn launch_claude_in_ide(
     let tasks_json = create_claude_task_json(&claude_task_cmd);
     let tasks_file = vscode_dir.join("tasks.json");
     fs::write(&tasks_file, tasks_json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {e}")))?;
 
     let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
 
@@ -148,21 +150,21 @@ fn launch_claude_in_ide(
         .join(".para_state");
 
     fs::create_dir_all(&state_dir)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {e}")))?;
 
     let session_id = session_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("unknown");
 
-    let launch_file = state_dir.join(format!("{}.launch", session_id));
+    let launch_file = state_dir.join(format!("{session_id}.launch"));
 
     let launch_content = format!(
         "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
         config.ide.wrapper.name
     );
     fs::write(&launch_file, launch_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {e}")))?;
 
     let mut cmd = Command::new(ide_command);
     cmd.current_dir(session_path);
@@ -175,12 +177,11 @@ fn launch_claude_in_ide(
 
     match cmd.spawn() {
         Ok(_) => {
-            println!("Opened {} workspace", ide_name);
+            println!("Opened {ide_name} workspace");
         }
         Err(e) => {
             return Err(ParaError::ide_error(format!(
-                "Failed to launch {}: {}. Check that '{}' is installed and accessible.",
-                ide_name, e, ide_command
+                "Failed to launch {ide_name}: {e}. Check that '{ide_command}' is installed and accessible."
             )));
         }
     }
@@ -230,85 +231,95 @@ impl DispatchArgs {
         // 2. Explicit arguments
         // 3. Stdin input (lowest priority)
 
-        // If we have a --file argument, use it directly without checking stdin
-        // This prevents blocking in non-terminal environments like MCP
+        // Priority 1: File flag - use directly without checking stdin
         if self.file.is_some() {
             return self.resolve_prompt_and_session_no_stdin();
         }
 
-        // If we have explicit arguments, use them instead of checking stdin
-        // This fixes the MCP issue where stdin is not a terminal but we have valid args
-        if self.name_or_prompt.is_some() || self.prompt.is_some() {
+        // Priority 2: Explicit arguments - use instead of checking stdin
+        if self.has_explicit_arguments() {
             return self.resolve_prompt_and_session_no_stdin();
         }
 
-        // Only check stdin if we don't have file flag or explicit arguments
-        if !io::stdin().is_terminal() {
-            let mut buffer = String::new();
-            io::stdin().read_to_string(&mut buffer).map_err(|e| {
-                ParaError::file_operation(format!("Failed to read from stdin: {}", e))
-            })?;
-
-            if buffer.trim().is_empty() {
-                return Err(ParaError::invalid_args("Piped input is empty"));
-            }
-
-            // When using stdin, the first positional argument (if any) is the session name
-            return Ok((self.name_or_prompt.clone(), buffer));
+        // Priority 3: Stdin input - only if no file flag or explicit arguments
+        if self.should_read_from_stdin() {
+            return self.resolve_from_stdin();
         }
 
-        // No file, no explicit args, no stdin input - fall back to no_stdin method
-        // which will return appropriate error
+        // No valid input source - return error
         self.resolve_prompt_and_session_no_stdin()
     }
 
+    fn has_explicit_arguments(&self) -> bool {
+        self.name_or_prompt.is_some() || self.prompt.is_some()
+    }
+
+    fn should_read_from_stdin(&self) -> bool {
+        !io::stdin().is_terminal()
+    }
+
+    fn resolve_from_stdin(&self) -> Result<(Option<String>, String)> {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .map_err(|e| ParaError::file_operation(format!("Failed to read from stdin: {e}")))?;
+
+        if buffer.trim().is_empty() {
+            return Err(ParaError::invalid_args("Piped input is empty"));
+        }
+
+        // When using stdin, the first positional argument (if any) is the session name
+        Ok((self.name_or_prompt.clone(), buffer))
+    }
+
     fn resolve_prompt_and_session_no_stdin(&self) -> Result<(Option<String>, String)> {
-        match (&self.name_or_prompt, &self.prompt, &self.file) {
-            (_, _, Some(file_path)) => {
-                let prompt = read_file_content(file_path)?;
-                if prompt.trim().is_empty() {
-                    return Err(ParaError::file_not_found(format!(
-                        "file is empty: {}",
-                        file_path.display()
-                    )));
-                }
-                Ok((self.name_or_prompt.clone(), prompt))
-            }
+        // Priority 1: File flag - highest priority
+        if let Some(file_path) = &self.file {
+            return self.resolve_from_file(file_path);
+        }
 
-            (Some(arg), None, None) => {
-                if is_likely_file_path(arg) {
-                    let prompt = read_file_content(Path::new(arg))?;
-                    if prompt.trim().is_empty() {
-                        return Err(ParaError::file_not_found(format!("file is empty: {}", arg)));
-                    }
-                    Ok((None, prompt))
-                } else {
-                    Ok((None, arg.clone()))
-                }
+        // Priority 2: Explicit arguments
+        match (&self.name_or_prompt, &self.prompt) {
+            (Some(arg), None) => self.resolve_single_argument(arg),
+            (Some(session), Some(prompt_or_file)) => {
+                self.resolve_session_and_prompt(session, prompt_or_file)
             }
-
-            (Some(session), Some(prompt_or_file), None) => {
-                if is_likely_file_path(prompt_or_file) {
-                    let prompt = read_file_content(Path::new(prompt_or_file))?;
-                    if prompt.trim().is_empty() {
-                        return Err(ParaError::file_not_found(format!(
-                            "file is empty: {}",
-                            prompt_or_file
-                        )));
-                    }
-                    Ok((Some(session.clone()), prompt))
-                } else {
-                    Ok((Some(session.clone()), prompt_or_file.clone()))
-                }
-            }
-
-            (None, None, None) => Err(ParaError::invalid_args(
+            (None, None) => Err(ParaError::invalid_args(
                 "dispatch requires a prompt text or file path",
             )),
-
             _ => Err(ParaError::invalid_args(
                 "Invalid argument combination for dispatch",
             )),
+        }
+    }
+
+    fn resolve_from_file(&self, file_path: &Path) -> Result<(Option<String>, String)> {
+        let prompt = read_file_content(file_path)?;
+        validate_non_empty_content(&prompt, &file_path.display().to_string())?;
+        Ok((self.name_or_prompt.clone(), prompt))
+    }
+
+    fn resolve_single_argument(&self, arg: &str) -> Result<(Option<String>, String)> {
+        if is_likely_file_path(arg) {
+            let prompt = read_file_content(Path::new(arg))?;
+            validate_non_empty_content(&prompt, arg)?;
+            Ok((None, prompt))
+        } else {
+            Ok((None, arg.to_string()))
+        }
+    }
+
+    fn resolve_session_and_prompt(
+        &self,
+        session: &str,
+        prompt_or_file: &str,
+    ) -> Result<(Option<String>, String)> {
+        if is_likely_file_path(prompt_or_file) {
+            let prompt = read_file_content(Path::new(prompt_or_file))?;
+            validate_non_empty_content(&prompt, prompt_or_file)?;
+            Ok((Some(session.to_string()), prompt))
+        } else {
+            Ok((Some(session.to_string()), prompt_or_file.to_string()))
         }
     }
 }
@@ -322,36 +333,55 @@ fn is_likely_file_path(input: &str) -> bool {
         return true;
     }
 
-    if input.starts_with("http://")
-        || input.starts_with("https://")
-        || input.starts_with("ftp://")
-        || input.starts_with("ftps://")
-        || input.starts_with("ssh://")
-        || input.starts_with("git://")
-        || input.starts_with("file://")
-    {
+    if is_url_pattern(input) {
         return false;
     }
 
     if input.contains('/') {
-        if (input.contains(" http://")
-            || input.contains(" https://")
-            || input.contains(" ftp://")
-            || input.contains(" ssh://"))
-            && input.contains(' ')
-        {
+        if contains_url_in_text(input) {
             return false;
         }
         return true;
     }
 
-    input.ends_with(".txt")
-        || input.ends_with(".md")
-        || input.ends_with(".rst")
-        || input.ends_with(".org")
-        || input.ends_with(".prompt")
-        || input.ends_with(".tmpl")
-        || input.ends_with(".template")
+    has_supported_file_extension(input)
+}
+
+fn is_url_pattern(input: &str) -> bool {
+    let url_prefixes = [
+        "http://", "https://", "ftp://", "ftps://", "ssh://", "git://", "file://",
+    ];
+
+    url_prefixes.iter().any(|prefix| input.starts_with(prefix))
+}
+
+fn contains_url_in_text(input: &str) -> bool {
+    let url_patterns = [" http://", " https://", " ftp://", " ssh://"];
+
+    input.contains(' ') && url_patterns.iter().any(|pattern| input.contains(pattern))
+}
+
+fn has_supported_file_extension(input: &str) -> bool {
+    let supported_extensions = [
+        ".txt",
+        ".md",
+        ".rst",
+        ".org",
+        ".prompt",
+        ".tmpl",
+        ".template",
+    ];
+
+    supported_extensions.iter().any(|ext| input.ends_with(ext))
+}
+
+fn validate_non_empty_content(content: &str, source: &str) -> Result<()> {
+    if content.trim().is_empty() {
+        return Err(ParaError::file_not_found(format!(
+            "file is empty: {source}"
+        )));
+    }
+    Ok(())
 }
 
 fn read_file_content(path: &Path) -> Result<String> {
@@ -359,7 +389,7 @@ fn read_file_content(path: &Path) -> Result<String> {
         path.to_path_buf()
     } else {
         std::env::current_dir()
-            .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {}", e)))?
+            .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {e}")))?
             .join(path)
     };
 
