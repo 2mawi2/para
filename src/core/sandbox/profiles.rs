@@ -1,10 +1,12 @@
 //! Sandbox profiles for macOS sandboxing
 //! This module is primarily used on macOS for sandbox-exec functionality
+//! Profile validation is performed on all platforms for consistency
 
-#![cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
-
+#[cfg(target_os = "macos")]
 use anyhow::{Context, Result};
+#[cfg(target_os = "macos")]
 use std::fs;
+#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,7 @@ impl SandboxProfile {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub fn content(&self) -> &'static str {
         match self {
             Self::Standard => include_str!("profiles/standard.sb"),
@@ -56,6 +59,7 @@ impl SandboxProfile {
     }
 }
 
+#[cfg(target_os = "macos")]
 pub fn extract_profile(profile_name: &str) -> Result<PathBuf> {
     // Validate profile name first (this includes format validation)
     let profile = SandboxProfile::from_name(profile_name)
