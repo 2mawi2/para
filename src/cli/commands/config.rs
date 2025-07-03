@@ -17,14 +17,14 @@ pub fn execute(args: ConfigArgs) -> Result<()> {
 
 fn execute_setup() -> Result<()> {
     config::run_config_wizard()
-        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {e}")))?;
     println!("✅ Configuration wizard completed successfully");
     Ok(())
 }
 
 fn execute_auto() -> Result<()> {
     config::run_quick_setup()
-        .map_err(|e| ParaError::config_error(format!("Auto-configuration failed: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Auto-configuration failed: {e}")))?;
     println!("✅ Auto-configuration completed successfully");
     Ok(())
 }
@@ -36,22 +36,21 @@ fn execute_show() -> Result<()> {
             Ok(())
         }
         Err(e) => Err(ParaError::config_error(format!(
-            "Failed to load configuration: {}",
-            e
+            "Failed to load configuration: {e}"
         ))),
     }
 }
 
 fn execute_edit() -> Result<()> {
     let config_path = ConfigManager::get_config_path()
-        .map_err(|e| ParaError::config_error(format!("Failed to get config path: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to get config path: {e}")))?;
 
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
 
     let status = Command::new(&editor)
         .arg(&config_path)
         .status()
-        .map_err(|e| ParaError::config_error(format!("Failed to launch editor: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to launch editor: {e}")))?;
 
     if !status.success() {
         return Err(ParaError::config_error(format!(
@@ -85,7 +84,7 @@ fn execute_reset() -> Result<()> {
         )
         .default(false)
         .interact()
-        .map_err(|e| ParaError::config_error(format!("Failed to read input: {}", e)))?
+        .map_err(|e| ParaError::config_error(format!("Failed to read input: {e}")))?
     {
         println!("❌ Configuration reset cancelled");
         return Ok(());
@@ -93,7 +92,7 @@ fn execute_reset() -> Result<()> {
 
     let default_config = crate::config::defaults::default_config();
     ConfigManager::save(&default_config).map_err(|e| {
-        ParaError::config_error(format!("Failed to save default configuration: {}", e))
+        ParaError::config_error(format!("Failed to save default configuration: {e}"))
     })?;
 
     println!("✅ Configuration reset to defaults successfully");
@@ -102,7 +101,7 @@ fn execute_reset() -> Result<()> {
 
 fn execute_default() -> Result<()> {
     config::run_config_wizard()
-        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Configuration wizard failed: {e}")))?;
     println!("✅ Configuration wizard completed successfully");
     Ok(())
 }
@@ -110,27 +109,27 @@ fn execute_default() -> Result<()> {
 fn execute_set(path: &str, value: &str) -> Result<()> {
     let config_path = std::path::PathBuf::from(
         ConfigManager::get_config_path()
-            .map_err(|e| ParaError::config_error(format!("Failed to get config path: {}", e)))?,
+            .map_err(|e| ParaError::config_error(format!("Failed to get config path: {e}")))?,
     );
 
     // Load existing config as JSON value for manipulation
     let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| ParaError::config_error(format!("Failed to read config file: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to read config file: {e}")))?;
 
     let mut json_value: serde_json::Value = serde_json::from_str(&config_content)
-        .map_err(|e| ParaError::config_error(format!("Invalid JSON in config file: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Invalid JSON in config file: {e}")))?;
 
     // Parse the path and set the value
     set_json_value(&mut json_value, path, value)?;
 
     // Write back to file
     let updated_json = serde_json::to_string_pretty(&json_value)
-        .map_err(|e| ParaError::config_error(format!("Failed to serialize config: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to serialize config: {e}")))?;
 
     std::fs::write(&config_path, updated_json)
-        .map_err(|e| ParaError::config_error(format!("Failed to write config file: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to write config file: {e}")))?;
 
-    println!("✅ Configuration updated: {} = {}", path, value);
+    println!("✅ Configuration updated: {path} = {value}");
     Ok(())
 }
 
@@ -147,18 +146,16 @@ fn set_json_value(json_value: &mut serde_json::Value, path: &str, value: &str) -
         current = current
             .as_object_mut()
             .ok_or_else(|| {
-                ParaError::config_error(format!("Path component '{}' is not an object", part))
+                ParaError::config_error(format!("Path component '{part}' is not an object"))
             })?
             .get_mut(*part)
-            .ok_or_else(|| {
-                ParaError::config_error(format!("Path component '{}' not found", part))
-            })?;
+            .ok_or_else(|| ParaError::config_error(format!("Path component '{part}' not found")))?;
     }
 
     // Set the final value
     let final_key = path_parts[path_parts.len() - 1];
     let current_obj = current.as_object_mut().ok_or_else(|| {
-        ParaError::config_error(format!("Parent of '{}' is not an object", final_key))
+        ParaError::config_error(format!("Parent of '{final_key}' is not an object"))
     })?;
 
     // Convert value based on simple heuristics

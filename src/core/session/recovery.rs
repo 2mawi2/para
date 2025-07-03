@@ -163,7 +163,7 @@ impl<'a> SessionRecovery<'a> {
         if self.session_manager.session_exists(session_name) {
             validation
                 .conflicts
-                .push(format!("Session '{}' already exists", session_name));
+                .push(format!("Session '{session_name}' already exists"));
         }
 
         let target_worktree_path = self.get_target_worktree_path(session_name);
@@ -177,8 +177,7 @@ impl<'a> SessionRecovery<'a> {
         let branch_manager = self.git_service.branch_manager();
         if branch_manager.branch_exists(session_name)? {
             validation.warnings.push(format!(
-                "Branch '{}' already exists, will create unique name",
-                session_name
+                "Branch '{session_name}' already exists, will create unique name"
             ));
         }
 

@@ -124,7 +124,7 @@ pub fn display_verbose_sessions(sessions: &[SessionInfo]) -> Result<()> {
             }
         );
         if let Some(container_status) = &session.container_status {
-            println!("  Container: {}", container_status);
+            println!("  Container: {container_status}");
         }
 
         if session.status != SessionStatus::Archived {
@@ -180,7 +180,7 @@ mod tests {
         SessionInfo {
             session_id: session_id.to_string(),
             branch: branch.to_string(),
-            worktree_path: PathBuf::from(format!("/path/to/{}", session_id)),
+            worktree_path: PathBuf::from(format!("/path/to/{session_id}")),
             base_branch: "main".to_string(),
             merge_mode: "squash".to_string(),
             status,

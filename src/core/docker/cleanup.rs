@@ -54,7 +54,7 @@ impl ContainerCleaner {
         thread::spawn(move || {
             let cleaner = ContainerCleaner::new(config);
             if let Err(e) = cleaner.cleanup_orphaned_containers() {
-                eprintln!("Background container cleanup error: {}", e);
+                eprintln!("Background container cleanup error: {e}");
             }
         });
 

@@ -35,7 +35,7 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         None => {
             // Try to detect session from current directory
             let current_dir = std::env::current_dir().map_err(|e| {
-                ParaError::fs_error(format!("Failed to get current directory: {}", e))
+                ParaError::fs_error(format!("Failed to get current directory: {e}"))
             })?;
 
             match session_manager.find_session_by_path(&current_dir)? {
@@ -105,7 +105,7 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     } else {
         // Otherwise, resolve it relative to the main repo root
         let repo_root = get_main_repository_root()
-            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+            .map_err(|e| ParaError::git_error(format!("Not in a para repository: {e}")))?;
         repo_root.join(&config.directories.state_dir)
     };
 
@@ -113,7 +113,7 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
         .save(&state_dir)
         .map_err(|e| ParaError::config_error(e.to_string()))?;
 
-    println!("Status updated for session '{}'", session_name);
+    println!("Status updated for session '{session_name}'");
 
     Ok(())
 }
@@ -149,7 +149,7 @@ impl StatusDisplayHandler {
         } else {
             // Otherwise, resolve it relative to the main repo root
             let repo_root = get_main_repository_root()
-                .map_err(|e| ParaError::git_error(format!("Not in a para repository: {}", e)))?;
+                .map_err(|e| ParaError::git_error(format!("Not in a para repository: {e}")))?;
             Ok(repo_root.join(&config.directories.state_dir))
         }
     }
@@ -224,7 +224,7 @@ impl StatusDisplayHandler {
             }
             None => {
                 if !json {
-                    println!("No status found for session '{}'", session_name);
+                    println!("No status found for session '{session_name}'");
                 }
             }
         }
@@ -261,8 +261,8 @@ impl StatusDisplayHandler {
 
     fn output_json<T: serde::Serialize>(&self, data: &T) -> Result<()> {
         let json_str = serde_json::to_string_pretty(data)
-            .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {}", e)))?;
-        println!("{}", json_str);
+            .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {e}")))?;
+        println!("{json_str}");
         Ok(())
     }
 }
@@ -281,17 +281,17 @@ fn display_status(status: &Status) {
     println!("Task: {}", status.current_task);
     println!("Tests: {}", status.test_status);
     if let Some(diff_stats) = &status.diff_stats {
-        println!("Changes: {}", diff_stats);
+        println!("Changes: {diff_stats}");
     }
 
     if let Some(todos) = status.format_todos() {
-        println!("Progress: {}", todos);
+        println!("Progress: {todos}");
     }
 
     if status.is_blocked {
         println!("Status: BLOCKED");
         if let Some(reason) = &status.blocked_reason {
-            println!("Reason: {}", reason);
+            println!("Reason: {reason}");
         }
     }
 
@@ -348,12 +348,12 @@ fn show_summary(config: Config, json: bool) -> Result<()> {
     let stale_threshold_hours = 24;
 
     let summary = Status::generate_summary(&state_dir, stale_threshold_hours)
-        .map_err(|e| ParaError::file_operation(format!("Failed to generate summary: {}", e)))?;
+        .map_err(|e| ParaError::file_operation(format!("Failed to generate summary: {e}")))?;
 
     if json {
         let json_output = serde_json::to_string_pretty(&summary)
-            .map_err(|e| ParaError::config_error(format!("Failed to serialize summary: {}", e)))?;
-        println!("{}", json_output);
+            .map_err(|e| ParaError::config_error(format!("Failed to serialize summary: {e}")))?;
+        println!("{json_output}");
     } else {
         println!("📊 Para Status Summary");
         println!("====================\n");
@@ -370,7 +370,7 @@ fn show_summary(config: Config, json: bool) -> Result<()> {
         println!("  ❓ Unknown: {}", summary.test_summary.unknown);
 
         if let Some(progress) = summary.overall_progress {
-            println!("\nOverall Progress: {}%", progress);
+            println!("\nOverall Progress: {progress}%");
         }
     }
 
@@ -389,15 +389,11 @@ fn cleanup_status(config: Config, dry_run: bool) -> Result<()> {
 
     if dry_run {
         // Just show what would be cleaned
-        let statuses = Status::load_all(&state_dir).map_err(|e| {
-            ParaError::file_operation(format!("Failed to load status files: {}", e))
-        })?;
+        let statuses = Status::load_all(&state_dir)
+            .map_err(|e| ParaError::file_operation(format!("Failed to load status files: {e}")))?;
 
         let mut stale_count = 0;
-        println!(
-            "🔍 Stale status files (older than {} hours):",
-            stale_threshold_hours
-        );
+        println!("🔍 Stale status files (older than {stale_threshold_hours} hours):");
 
         for status in statuses {
             if status.is_stale(stale_threshold_hours) {
@@ -413,15 +409,12 @@ fn cleanup_status(config: Config, dry_run: bool) -> Result<()> {
         if stale_count == 0 {
             println!("  No stale status files found.");
         } else {
-            println!(
-                "\nTotal: {} stale status files would be removed",
-                stale_count
-            );
+            println!("\nTotal: {stale_count} stale status files would be removed");
         }
     } else {
         // Actually clean up
         let cleaned = Status::cleanup_stale(&state_dir, stale_threshold_hours).map_err(|e| {
-            ParaError::file_operation(format!("Failed to cleanup status files: {}", e))
+            ParaError::file_operation(format!("Failed to cleanup status files: {e}"))
         })?;
 
         if cleaned.is_empty() {
@@ -429,7 +422,7 @@ fn cleanup_status(config: Config, dry_run: bool) -> Result<()> {
         } else {
             println!("🧹 Cleaned up {} stale status files:", cleaned.len());
             for session in &cleaned {
-                println!("  ✅ Removed {}.status.json", session);
+                println!("  ✅ Removed {session}.status.json");
             }
         }
     }
@@ -658,17 +651,17 @@ mod tests {
 
         // Create multiple sessions with statuses
         for i in 1..=3 {
-            let session_name = format!("session-{}", i);
+            let session_name = format!("session-{i}");
             let session_state = crate::core::session::SessionState::new(
                 session_name.clone(),
-                format!("test/branch-{}", i),
-                git_temp.path().join(format!("worktree-{}", i)),
+                format!("test/branch-{i}"),
+                git_temp.path().join(format!("worktree-{i}")),
             );
             session_manager.save_state(&session_state).unwrap();
 
             let status = Status::new(
                 session_name,
-                format!("Working on feature {}", i),
+                format!("Working on feature {i}"),
                 crate::core::status::TestStatus::Unknown,
             );
             status.save(&state_dir).unwrap();
@@ -1078,17 +1071,17 @@ mod tests {
 
         // Create multiple sessions with statuses
         for i in 1..=2 {
-            let session_name = format!("json-session-{}", i);
+            let session_name = format!("json-session-{i}");
             let session_state = crate::core::session::SessionState::new(
                 session_name.clone(),
-                format!("test/branch-{}", i),
-                git_temp.path().join(format!("worktree-{}", i)),
+                format!("test/branch-{i}"),
+                git_temp.path().join(format!("worktree-{i}")),
             );
             session_manager.save_state(&session_state).unwrap();
 
             let status = Status::new(
                 session_name,
-                format!("JSON test task {}", i),
+                format!("JSON test task {i}"),
                 crate::core::status::TestStatus::Passed,
             );
             status.save(&state_dir).unwrap();

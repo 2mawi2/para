@@ -101,8 +101,7 @@ mod error_path_tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Invalid or unknown") || err_msg.contains("Unknown sandbox profile") || err_msg.contains("Failed to extract sandbox profile"),
-            "Expected error message to contain 'Invalid or unknown', 'Unknown sandbox profile', or 'Failed to extract sandbox profile', got: {}",
-            err_msg
+            "Expected error message to contain 'Invalid or unknown', 'Unknown sandbox profile', or 'Failed to extract sandbox profile', got: {err_msg}"
         );
     }
 
@@ -239,8 +238,7 @@ mod error_path_tests {
         for name in special_chars {
             assert!(
                 profiles::SandboxProfile::from_name(name).is_none(),
-                "Should reject profile name with special char: {}",
-                name
+                "Should reject profile name with special char: {name}"
             );
         }
     }

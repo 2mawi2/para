@@ -33,7 +33,7 @@ impl<'a> WorktreeManager<'a> {
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                ParaError::git_operation(format!("Failed to create parent directory: {}", e))
+                ParaError::git_operation(format!("Failed to create parent directory: {e}"))
             })?;
         }
 
@@ -44,7 +44,7 @@ impl<'a> WorktreeManager<'a> {
             &[
                 "rev-parse",
                 "--verify",
-                &format!("refs/heads/{}", branch_name),
+                &format!("refs/heads/{branch_name}"),
             ],
         )
         .is_ok();
@@ -86,7 +86,7 @@ impl<'a> WorktreeManager<'a> {
 
         if path.exists() {
             std::fs::remove_dir_all(path).map_err(|e| {
-                ParaError::git_operation(format!("Failed to remove worktree directory: {}", e))
+                ParaError::git_operation(format!("Failed to remove worktree directory: {e}"))
             })?;
         }
 
@@ -103,10 +103,7 @@ impl<'a> WorktreeManager<'a> {
 
         if path.exists() {
             std::fs::remove_dir_all(path).map_err(|e| {
-                ParaError::git_operation(format!(
-                    "Failed to force remove worktree directory: {}",
-                    e
-                ))
+                ParaError::git_operation(format!("Failed to force remove worktree directory: {e}"))
             })?;
         }
 
@@ -166,7 +163,7 @@ impl WorktreePorcelainParser {
 
         let path_str = line
             .strip_prefix("worktree ")
-            .ok_or_else(|| ParaError::git_operation(format!("Invalid worktree line: {}", line)))?;
+            .ok_or_else(|| ParaError::git_operation(format!("Invalid worktree line: {line}")))?;
 
         self.current_worktree = Some(WorktreeInfo {
             path: PathBuf::from(path_str),
@@ -397,8 +394,7 @@ mod tests {
             let result = manager.validate_branch_name(invalid_name);
             assert!(
                 result.is_err(),
-                "Should reject invalid branch name: {}",
-                invalid_name
+                "Should reject invalid branch name: {invalid_name}"
             );
         }
     }

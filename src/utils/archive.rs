@@ -14,7 +14,7 @@ impl ArchiveBranchParser {
         branch_name: &str,
         branch_prefix: &str,
     ) -> Result<Option<ArchiveBranchInfo>> {
-        let archive_prefix = format!("{}/archived/", branch_prefix);
+        let archive_prefix = format!("{branch_prefix}/archived/");
 
         if !branch_name.starts_with(&archive_prefix) {
             return Ok(None);
@@ -26,8 +26,7 @@ impl ArchiveBranchParser {
         if parts.len() != 2 {
             return Err(ParaError::InvalidArgs {
                 message: format!(
-                    "Invalid archived branch format: '{}'. Expected format: '{}/archived/{{timestamp}}/{{session_name}}'",
-                    branch_name, branch_prefix
+                    "Invalid archived branch format: '{branch_name}'. Expected format: '{branch_prefix}/archived/{{timestamp}}/{{session_name}}'"
                 ),
             });
         }
@@ -37,13 +36,13 @@ impl ArchiveBranchParser {
 
         if timestamp.is_empty() {
             return Err(ParaError::InvalidArgs {
-                message: format!("Empty timestamp in archived branch: '{}'", branch_name),
+                message: format!("Empty timestamp in archived branch: '{branch_name}'"),
             });
         }
 
         if session_name.is_empty() {
             return Err(ParaError::InvalidArgs {
-                message: format!("Empty session name in archived branch: '{}'", branch_name),
+                message: format!("Empty session name in archived branch: '{branch_name}'"),
             });
         }
 
@@ -215,7 +214,7 @@ mod tests {
         ];
 
         for timestamp in test_cases {
-            let branch_name = format!("para/archived/{}/my-session", timestamp);
+            let branch_name = format!("para/archived/{timestamp}/my-session");
             let branch_prefix = "para";
 
             let result = ArchiveBranchParser::parse_archive_branch(&branch_name, branch_prefix)
@@ -260,7 +259,7 @@ mod tests {
             full_branch_name: "para/archived/20240301-120000/my-session".to_string(),
         };
 
-        let debug_str = format!("{:?}", info);
+        let debug_str = format!("{info:?}");
         assert!(debug_str.contains("timestamp"));
         assert!(debug_str.contains("session_name"));
         assert!(debug_str.contains("full_branch_name"));

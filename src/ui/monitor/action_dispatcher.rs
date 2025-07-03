@@ -55,7 +55,7 @@ impl ActionDispatcher {
                     state.register_button_click(ButtonClick::Resume(index));
 
                     if let Err(e) = self.actions.resume_session(session) {
-                        state.show_error(format!("Failed to resume session: {}", e));
+                        state.show_error(format!("Failed to resume session: {e}"));
                     } else {
                         state.show_feedback(format!("Opening session: {}", session.name));
                     }
@@ -70,13 +70,13 @@ impl ActionDispatcher {
                     match ClipboardContext::new() {
                         Ok(mut ctx) => {
                             if let Err(e) = ctx.set_contents(session.name.clone()) {
-                                state.show_error(format!("Failed to copy to clipboard: {}", e));
+                                state.show_error(format!("Failed to copy to clipboard: {e}"));
                             } else {
                                 state.show_feedback(format!("Copied: {}", session.name));
                             }
                         }
                         Err(e) => {
-                            state.show_error(format!("Clipboard not available: {}", e));
+                            state.show_error(format!("Clipboard not available: {e}"));
                         }
                     }
                 }

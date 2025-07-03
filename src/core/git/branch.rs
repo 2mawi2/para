@@ -44,7 +44,7 @@ impl<'a> BranchManager<'a> {
     pub fn branch_exists(&self, name: &str) -> Result<bool> {
         let result = execute_git_command(
             self.repo,
-            &["rev-parse", "--verify", &format!("refs/heads/{}", name)],
+            &["rev-parse", "--verify", &format!("refs/heads/{name}")],
         );
         Ok(result.is_ok())
     }
@@ -67,8 +67,7 @@ impl<'a> BranchManager<'a> {
 
         if !self.branch_exists(branch)? {
             return Err(ParaError::git_operation(format!(
-                "Branch '{}' does not exist",
-                branch
+                "Branch '{branch}' does not exist"
             )));
         }
 
@@ -79,7 +78,7 @@ impl<'a> BranchManager<'a> {
 
     pub fn move_to_archive(&self, branch: &str, prefix: &str) -> Result<String> {
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-        let archived_name = format!("{}/archived/{}/{}", prefix, timestamp, branch);
+        let archived_name = format!("{prefix}/archived/{timestamp}/{branch}");
         self.archive_branch_with_name(branch, &archived_name)
     }
 
@@ -90,7 +89,7 @@ impl<'a> BranchManager<'a> {
         prefix: &str,
     ) -> Result<String> {
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-        let archived_name = format!("{}/archived/{}/{}", prefix, timestamp, session_name);
+        let archived_name = format!("{prefix}/archived/{timestamp}/{session_name}");
         self.archive_branch_with_name(branch, &archived_name)
     }
 
@@ -99,16 +98,14 @@ impl<'a> BranchManager<'a> {
 
         if !self.branch_exists(archived_branch)? {
             return Err(ParaError::git_operation(format!(
-                "Archived branch '{}' does not exist",
-                archived_branch
+                "Archived branch '{archived_branch}' does not exist"
             )));
         }
 
-        let archive_prefix = format!("{}/archived/", prefix);
+        let archive_prefix = format!("{prefix}/archived/");
         if !archived_branch.starts_with(&archive_prefix) {
             return Err(ParaError::git_operation(format!(
-                "Branch '{}' is not an archived branch with prefix '{}'",
-                archived_branch, prefix
+                "Branch '{archived_branch}' is not an archived branch with prefix '{prefix}'"
             )));
         }
 
@@ -137,7 +134,7 @@ impl<'a> BranchManager<'a> {
 
     pub fn list_archived_branches(&self, prefix: &str) -> Result<Vec<String>> {
         let all_branches = self.list_branches()?;
-        let archive_prefix = format!("{}/archived/", prefix);
+        let archive_prefix = format!("{prefix}/archived/");
 
         Ok(all_branches
             .into_iter()
@@ -158,7 +155,7 @@ impl<'a> BranchManager<'a> {
         }
 
         for i in 1..1000 {
-            let candidate = format!("{}-{}", base_name, i);
+            let candidate = format!("{base_name}-{i}");
             if !self.branch_exists(&candidate)? {
                 return Ok(candidate);
             }
@@ -348,8 +345,7 @@ mod tests {
         for invalid_name in invalid_names {
             assert!(
                 manager.validate_branch_name(invalid_name).is_err(),
-                "Should reject invalid branch name: {}",
-                invalid_name
+                "Should reject invalid branch name: {invalid_name}"
             );
         }
     }

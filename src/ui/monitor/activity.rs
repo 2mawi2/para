@@ -364,8 +364,7 @@ mod tests {
 
         assert!(
             diff < 2,
-            "Expected activity from most recent file change (README), diff was {} seconds",
-            diff
+            "Expected activity from most recent file change (README), diff was {diff} seconds"
         );
     }
 

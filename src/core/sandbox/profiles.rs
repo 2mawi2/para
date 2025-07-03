@@ -23,7 +23,7 @@ impl SandboxProfile {
     pub fn from_name(s: &str) -> Option<Self> {
         // Validate profile name format (alphanumeric and hyphen only)
         if !validate_profile_name(s) {
-            eprintln!("⚠️  Invalid profile name format: {}", s);
+            eprintln!("⚠️  Invalid profile name format: {s}");
             return None;
         }
 
@@ -37,7 +37,7 @@ impl SandboxProfile {
             "development" => Some(Self::Standard),
             "isolated" => Some(Self::Standard),
             _ => {
-                eprintln!("⚠️  Unknown sandbox profile: {}", s);
+                eprintln!("⚠️  Unknown sandbox profile: {s}");
                 None
             }
         }
@@ -64,7 +64,7 @@ pub fn extract_profile(profile_name: &str) -> Result<PathBuf> {
     // Create a unique temporary directory for each extraction to avoid conflicts
     use uuid::Uuid;
     let unique_id = Uuid::new_v4();
-    let temp_dir = std::env::temp_dir().join(format!("para-sandbox-{}", unique_id));
+    let temp_dir = std::env::temp_dir().join(format!("para-sandbox-{unique_id}"));
 
     // Create the directory fresh each time
     fs::create_dir_all(&temp_dir).context("Failed to create sandbox profiles directory")?;
@@ -200,7 +200,7 @@ mod tests {
 
         for name in invalid_names {
             let result = extract_profile(name);
-            assert!(result.is_err(), "Should reject invalid name: {}", name);
+            assert!(result.is_err(), "Should reject invalid name: {name}");
         }
     }
 

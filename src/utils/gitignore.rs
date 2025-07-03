@@ -53,9 +53,9 @@ impl GitignoreManager {
             // Append to existing gitignore
             let existing_content = fs::read_to_string(gitignore_path)?;
             let new_content = if existing_content.ends_with('\n') {
-                format!("{}{}\n", existing_content, entry)
+                format!("{existing_content}{entry}\n")
             } else {
-                format!("{}\n{}\n", existing_content, entry)
+                format!("{existing_content}\n{entry}\n")
             };
 
             fs::write(gitignore_path, new_content).map_err(|e| {
@@ -67,7 +67,7 @@ impl GitignoreManager {
             })?;
         } else {
             // Create new gitignore
-            fs::write(gitignore_path, format!("{}\n", entry)).map_err(|e| {
+            fs::write(gitignore_path, format!("{entry}\n")).map_err(|e| {
                 ParaError::fs_error(format!(
                     "Failed to create .gitignore at {}: {}",
                     gitignore_path.display(),
@@ -127,7 +127,7 @@ impl GitignoreManager {
             let new_content = if existing_content.ends_with('\n') {
                 format!("{}{}", existing_content, para_entry.trim_start())
             } else {
-                format!("{}{}", existing_content, para_entry)
+                format!("{existing_content}{para_entry}")
             };
 
             fs::write(gitignore_path, new_content).map_err(|e| {
@@ -411,8 +411,7 @@ mod tests {
             assert!(
                 error_msg.contains("Failed to update .gitignore")
                     || error_msg.contains("Failed to create .gitignore"),
-                "Error message was: {}",
-                error_msg
+                "Error message was: {error_msg}"
             );
         }
 

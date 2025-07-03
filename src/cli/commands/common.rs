@@ -22,7 +22,7 @@ pub fn create_claude_local_md(session_path: &Path, session_name: &str) -> Result
 
     // Write the file (overwrite if exists)
     fs::write(&claude_local_path, content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write CLAUDE.local.md: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write CLAUDE.local.md: {e}")))?;
 
     Ok(())
 }

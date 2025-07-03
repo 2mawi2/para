@@ -78,8 +78,7 @@ fn handle_inactive_session_recovery(
         }
         Ok(validation) => handle_recoverable_session(validation, session_name),
         Err(_) => Err(ParaError::session_not_found(format!(
-            "No session found for '{}'",
-            session_name
+            "No session found for '{session_name}'"
         ))),
     }
 }
@@ -88,17 +87,14 @@ fn handle_conflicted_recovery(
     validation: crate::core::session::recovery::RecoveryValidation,
     session_name: &str,
 ) -> Result<Option<RecoveryOptions>> {
-    println!(
-        "❌ Cannot recover session '{}' due to conflicts:",
-        session_name
-    );
+    println!("❌ Cannot recover session '{session_name}' due to conflicts:");
     for conflict in &validation.conflicts {
-        println!("  • {}", conflict);
+        println!("  • {conflict}");
     }
     if !validation.warnings.is_empty() {
         println!("Warnings:");
         for warning in &validation.warnings {
-            println!("  ⚠ {}", warning);
+            println!("  ⚠ {warning}");
         }
     }
 
@@ -122,14 +118,14 @@ fn handle_recoverable_session(
     session_name: &str,
 ) -> Result<Option<RecoveryOptions>> {
     if !validation.warnings.is_empty() {
-        println!("⚠ Warnings for session '{}':", session_name);
+        println!("⚠ Warnings for session '{session_name}':");
         for warning in &validation.warnings {
-            println!("  • {}", warning);
+            println!("  • {warning}");
         }
     }
 
     if !Confirm::new()
-        .with_prompt(format!("Recover session '{}'?", session_name))
+        .with_prompt(format!("Recover session '{session_name}'?"))
         .default(true)
         .interact()
         .unwrap_or(false)
@@ -216,7 +212,7 @@ fn list_recoverable_sessions(
                 display_recovery_result(&result);
             }
             Err(e) => {
-                eprintln!("❌ Failed to recover session: {}", e);
+                eprintln!("❌ Failed to recover session: {e}");
 
                 if Confirm::new()
                     .with_prompt("Try force recovery?")
@@ -339,7 +335,7 @@ mod tests {
         // Test recovery using the core service - should recreate worktree
         let session_recovery = SessionRecovery::new(&config, &git_service, &session_manager);
         let result = session_recovery.recover_active_session(session_name);
-        assert!(result.is_ok(), "Recovery should succeed: {:?}", result);
+        assert!(result.is_ok(), "Recovery should succeed: {result:?}");
         assert!(
             worktree_path.exists(),
             "Worktree should have been recreated"

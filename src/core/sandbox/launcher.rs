@@ -82,7 +82,7 @@ pub fn is_sandbox_available() -> bool {
                 }
             }
             Err(e) => {
-                eprintln!("⚠️  Failed to check for sandbox-exec availability: {}", e);
+                eprintln!("⚠️  Failed to check for sandbox-exec availability: {e}");
                 false
             }
         }

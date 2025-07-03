@@ -35,7 +35,7 @@ pub fn process_resume_context(args: &ResumeArgs) -> Result<Option<String>> {
 
             // Read file contents
             let content = fs::read_to_string(&resolved_path)
-                .map_err(|e| ParaError::fs_error(format!("Failed to read file: {}", e)))?;
+                .map_err(|e| ParaError::fs_error(format!("Failed to read file: {e}")))?;
 
             if content.trim().is_empty() {
                 println!("⚠️  Warning: File is empty");
@@ -65,7 +65,7 @@ pub fn save_resume_context(session_path: &Path, session_name: &str, context: &st
         file,
         "This file contains additional context provided when resuming the session.\n"
     )?;
-    writeln!(file, "{}", context)?;
+    writeln!(file, "{context}")?;
 
     println!("📝 Resume context saved to: {}", context_file.display());
     Ok(())

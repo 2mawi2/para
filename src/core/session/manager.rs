@@ -98,9 +98,8 @@ impl SessionManager {
         sandbox_enabled: bool,
         sandbox_profile: Option<String>,
     ) -> Result<SessionState> {
-        let git_service = GitService::discover().map_err(|e| {
-            ParaError::git_error(format!("Failed to discover git repository: {}", e))
-        })?;
+        let git_service = GitService::discover()
+            .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
 
         let repository_root = git_service.repository().root.clone();
 
@@ -131,7 +130,7 @@ impl SessionManager {
 
         if !subtrees_path.exists() {
             fs::create_dir_all(&subtrees_path).map_err(|e| {
-                ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
+                ParaError::fs_error(format!("Failed to create subtrees directory: {e}"))
             })?;
 
             if let Some(para_dir) = self.get_para_directory_from_subtrees(&subtrees_path) {
@@ -179,7 +178,7 @@ impl SessionManager {
     pub fn load_state(&self, session_name: &str) -> Result<SessionState> {
         self.ensure_state_dir_exists()?;
 
-        let state_file = self.state_dir.join(format!("{}.state", session_name));
+        let state_file = self.state_dir.join(format!("{session_name}.state"));
         if !state_file.exists() {
             return Err(ParaError::session_not_found(session_name));
         }
@@ -229,7 +228,7 @@ impl SessionManager {
 
     pub fn delete_state(&self, session_name: &str) -> Result<()> {
         // Delete the main state file
-        let state_file = self.state_dir.join(format!("{}.state", session_name));
+        let state_file = self.state_dir.join(format!("{session_name}.state"));
         if state_file.exists() {
             fs::remove_file(&state_file).map_err(|e| {
                 ParaError::file_operation(format!(
@@ -241,7 +240,7 @@ impl SessionManager {
         }
 
         // Delete the status file
-        let status_file = self.state_dir.join(format!("{}.status.json", session_name));
+        let status_file = self.state_dir.join(format!("{session_name}.status.json"));
         if status_file.exists() {
             fs::remove_file(&status_file).map_err(|e| {
                 ParaError::file_operation(format!(
@@ -279,7 +278,7 @@ impl SessionManager {
         let entries = match fs::read_dir(&self.state_dir) {
             Ok(entries) => entries,
             Err(e) => {
-                crate::utils::debug_log(&format!("Failed to read state directory: {}", e));
+                crate::utils::debug_log(&format!("Failed to read state directory: {e}"));
                 return Ok(Vec::new());
             }
         };
@@ -290,7 +289,7 @@ impl SessionManager {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    crate::utils::debug_log(&format!("Failed to read directory entry: {}", e));
+                    crate::utils::debug_log(&format!("Failed to read directory entry: {e}"));
                     continue;
                 }
             };
@@ -321,12 +320,12 @@ impl SessionManager {
             return Ok(None);
         };
 
-        crate::utils::debug_log(&format!("Loading session: {}", session_name));
+        crate::utils::debug_log(&format!("Loading session: {session_name}"));
 
         match self.load_state(&session_name) {
             Ok(state) => Ok(Some(state)),
             Err(e) => {
-                crate::utils::debug_log(&format!("Failed to load session {}: {}", session_name, e));
+                crate::utils::debug_log(&format!("Failed to load session {session_name}: {e}"));
                 Ok(None)
             }
         }
@@ -403,7 +402,7 @@ impl SessionManager {
     }
 
     pub fn session_exists(&self, session_name: &str) -> bool {
-        let state_file = self.state_dir.join(format!("{}.state", session_name));
+        let state_file = self.state_dir.join(format!("{session_name}.state"));
         state_file.exists()
     }
 
@@ -413,7 +412,7 @@ impl SessionManager {
         }
 
         let timestamp = crate::utils::names::generate_timestamp();
-        let unique_name = format!("{}_{}", requested_name, timestamp);
+        let unique_name = format!("{requested_name}_{timestamp}");
 
         if self.session_exists(&unique_name) {
             return Err(ParaError::session_exists(&unique_name));
@@ -500,7 +499,7 @@ impl SessionManager {
         // Create the Docker container and update session with container ID
         docker_manager
             .create_container_session(&mut session_state, docker_args)
-            .map_err(|e| ParaError::docker_error(format!("Failed to create container: {}", e)))?;
+            .map_err(|e| ParaError::docker_error(format!("Failed to create container: {e}")))?;
 
         // Save the updated session state with container ID
         self.save_state(&session_state)?;
@@ -521,21 +520,21 @@ impl SessionManager {
                 vec![], // allowed_domains doesn't matter for cleanup
             );
             if let Err(e) = docker_manager.stop_container(&session.name) {
-                eprintln!("Warning: Failed to stop Docker container: {}", e);
+                eprintln!("Warning: Failed to stop Docker container: {e}");
             }
         }
 
         // Remove the session state file
-        let state_file = self.state_dir.join(format!("{}.state", session_name));
+        let state_file = self.state_dir.join(format!("{session_name}.state"));
         if state_file.exists() {
             fs::remove_file(&state_file)
-                .map_err(|e| ParaError::fs_error(format!("Failed to remove state file: {}", e)))?;
+                .map_err(|e| ParaError::fs_error(format!("Failed to remove state file: {e}")))?;
         }
 
         // Clean up the worktree if requested or if it's a Docker session
         if (force || session.is_container()) && session.worktree_path.exists() {
             fs::remove_dir_all(&session.worktree_path)
-                .map_err(|e| ParaError::fs_error(format!("Failed to remove worktree: {}", e)))?;
+                .map_err(|e| ParaError::fs_error(format!("Failed to remove worktree: {e}")))?;
         }
 
         Ok(())

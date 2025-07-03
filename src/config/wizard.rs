@@ -20,7 +20,7 @@ pub fn run_config_wizard() -> Result<Config> {
         .with_prompt("Save this configuration?")
         .default(true)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?
     {
         super::ConfigManager::save(&config)?;
         println!("✅ Configuration saved successfully!");
@@ -59,7 +59,7 @@ fn configure_wrapper_mode_simple() -> Result<super::WrapperConfig> {
         .items(&wrapper_options)
         .default(0)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
 
     let (wrapper_name, wrapper_command) = match wrapper_selection {
         0 => ("code".to_string(), "code".to_string()),
@@ -83,13 +83,13 @@ fn configure_directories_simple(
         .with_prompt("Subtrees directory")
         .default(config.subtrees_dir)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
 
     config.state_dir = Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("State directory")
         .default(config.state_dir)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
 
     Ok(config)
 }
@@ -101,7 +101,7 @@ fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::S
         .with_prompt("Preserve worktrees after finishing sessions?")
         .default(config.preserve_on_finish)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
 
     if let Some(days) = config.auto_cleanup_days {
         let cleanup_days = Input::<u32>::with_theme(&ColorfulTheme::default())
@@ -115,7 +115,7 @@ fn configure_session_simple(mut config: super::SessionConfig) -> Result<super::S
                 }
             })
             .interact()
-            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+            .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
         config.auto_cleanup_days = Some(cleanup_days);
     }
 
@@ -130,7 +130,7 @@ fn configure_sandbox_simple() -> Result<Option<crate::core::sandbox::SandboxConf
         .with_prompt("Enable sandboxing by default?")
         .default(false)
         .interact()
-        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ConfigError::Validation(format!("Failed to read input: {e}")))?;
 
     if !enable_sandbox {
         return Ok(None);
@@ -164,7 +164,7 @@ fn display_config_summary(config: &Config) {
     println!("  Auto-commit: {}", config.git.auto_commit);
     println!("  Preserve sessions: {}", config.session.preserve_on_finish);
     if let Some(days) = config.session.auto_cleanup_days {
-        println!("  Auto-cleanup: {} days", days);
+        println!("  Auto-cleanup: {days} days");
     } else {
         println!("  Auto-cleanup: disabled");
     }

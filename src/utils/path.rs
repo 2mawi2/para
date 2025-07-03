@@ -86,7 +86,7 @@ pub fn safe_resolve_path_with_timeout(path: &Path, timeout: Duration) -> PathBuf
 /// Debug logging helper
 pub fn debug_log(message: &str) {
     if std::env::var("PARA_DEBUG").is_ok() {
-        eprintln!("[PARA_DEBUG] {}", message);
+        eprintln!("[PARA_DEBUG] {message}");
     }
 }
 

@@ -90,7 +90,7 @@ impl SignalFileWatcher {
 
         let thread_handle = thread::spawn(move || {
             if let Err(e) = watcher.run() {
-                eprintln!("Signal file watcher error: {}", e);
+                eprintln!("Signal file watcher error: {e}");
             }
         });
 
@@ -176,13 +176,13 @@ impl SignalFileWatcher {
         // Stop the container
         let docker_manager = DockerManager::new(self.config.clone(), false, vec![]);
         if let Err(e) = docker_manager.stop_container(&self.session_name) {
-            eprintln!("Warning: Failed to stop container: {}", e);
+            eprintln!("Warning: Failed to stop container: {e}");
         }
 
         match result {
             crate::core::git::FinishResult::Success { final_branch } => {
                 println!("✓ Container session finished successfully");
-                println!("  Feature branch: {}", final_branch);
+                println!("  Feature branch: {final_branch}");
                 println!("  Commit message: {}", signal.commit_message);
             }
         }
@@ -214,7 +214,7 @@ impl SignalFileWatcher {
         // Stop the container
         let docker_manager = DockerManager::new(self.config.clone(), false, vec![]);
         if let Err(e) = docker_manager.stop_container(&self.session_name) {
-            eprintln!("Warning: Failed to stop container: {}", e);
+            eprintln!("Warning: Failed to stop container: {e}");
         }
 
         println!("✓ Container session cancelled");
@@ -282,7 +282,7 @@ impl SignalFileWatcher {
 
         status
             .save(&state_dir)
-            .map_err(|e| ParaError::fs_error(format!("Failed to save container status: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to save container status: {e}")))?;
 
         Ok(())
     }

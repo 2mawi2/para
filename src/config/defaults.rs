@@ -133,6 +133,6 @@ mod tests {
     #[test]
     fn test_ide_detection() {
         let available = get_available_ides();
-        println!("Available IDEs: {:?}", available);
+        println!("Available IDEs: {available:?}");
     }
 }

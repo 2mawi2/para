@@ -94,10 +94,7 @@ impl DockerManager {
                 )));
             } else {
                 // Try to pull the custom image
-                println!(
-                    "🐳 Image '{}' not found locally. Attempting to pull...",
-                    image
-                );
+                println!("🐳 Image '{image}' not found locally. Attempting to pull...");
 
                 let pull_output = Command::new("docker")
                     .args(["pull", &image])
@@ -119,7 +116,7 @@ impl DockerManager {
                     )));
                 }
 
-                println!("✅ Successfully pulled image: {}", image);
+                println!("✅ Successfully pulled image: {image}");
             }
         }
 
@@ -148,7 +145,7 @@ impl DockerManager {
         let docker_image = self.get_docker_image()?;
 
         // Create the container with CLI parameters (authentication is now baked into the image)
-        println!("🏗️  Creating container with image: {}", docker_image);
+        println!("🏗️  Creating container with image: {docker_image}");
 
         // Get the configured API keys to forward
         let env_keys = self.config.get_forward_env_keys();
@@ -182,7 +179,7 @@ impl DockerManager {
             container_id: Some(container_id.clone()),
         };
 
-        println!("✅ Container ready: {}", container_id);
+        println!("✅ Container ready: {container_id}");
         Ok(())
     }
 
@@ -284,19 +281,19 @@ impl DockerManager {
 
         let host_path = self.validate_host_path(&session.worktree_path)?;
 
-        let git_source = format!("{}/.git", host_path);
+        let git_source = format!("{host_path}/.git");
         let copy_result = Command::new("docker")
             .args([
                 "cp",
                 &git_source,
-                &format!("{}:{}", container_id, workspace_path),
+                &format!("{container_id}:{workspace_path}"),
             ])
             .output()
             .map_err(|e| DockerError::Other(anyhow::anyhow!("Failed to copy .git: {}", e)))?;
 
         if !copy_result.status.success() {
             let stderr = String::from_utf8_lossy(&copy_result.stderr);
-            eprintln!("Warning: .git copy failed (non-fatal): {}", stderr);
+            eprintln!("Warning: .git copy failed (non-fatal): {stderr}");
         }
 
         let safe_copy_cmd = self.build_safe_copy_command(&workspace_path, &host_path)?;
@@ -309,10 +306,7 @@ impl DockerManager {
 
         if !source_copy_result.status.success() {
             let stderr = String::from_utf8_lossy(&source_copy_result.stderr);
-            eprintln!(
-                "Warning: Source file copy had issues (non-fatal): {}",
-                stderr
-            );
+            eprintln!("Warning: Source file copy had issues (non-fatal): {stderr}");
         }
 
         Ok(())
@@ -359,7 +353,7 @@ impl DockerManager {
             )));
         }
 
-        let safe_path = format!("/workspace/{}", session_name);
+        let safe_path = format!("/workspace/{session_name}");
 
         if !safe_path.starts_with("/workspace/") {
             return Err(DockerError::Other(anyhow::anyhow!(
@@ -376,7 +370,7 @@ impl DockerManager {
 
         let dangerous_paths = ["/", "/bin", "/usr", "/etc", "/var", "/tmp", "/home"];
         for dangerous in &dangerous_paths {
-            if host_path == *dangerous || host_path.starts_with(&format!("{}/", dangerous)) {
+            if host_path == *dangerous || host_path.starts_with(&format!("{dangerous}/")) {
                 return Err(DockerError::Other(anyhow::anyhow!(
                     "Refusing to operate on system directory: {}",
                     host_path
@@ -427,10 +421,7 @@ impl DockerManager {
         }
 
         let safe_cmd = format!(
-            "set -euo pipefail; cd '{}' && find '{}' -maxdepth 3 -type f -name '*.rs' -o -name '*.toml' -o -name '*.md' -o -name '*.json' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' | head -1000 | xargs -I {{}} cp '{{}}' '{}/' 2>/dev/null || true",
-            workspace_path,
-            host_path,
-            workspace_path
+            "set -euo pipefail; cd '{workspace_path}' && find '{host_path}' -maxdepth 3 -type f -name '*.rs' -o -name '*.toml' -o -name '*.md' -o -name '*.json' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' | head -1000 | xargs -I {{}} cp '{{}}' '{workspace_path}/' 2>/dev/null || true"
         );
 
         Ok(safe_cmd)

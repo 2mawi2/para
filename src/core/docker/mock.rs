@@ -46,7 +46,7 @@ impl MockDockerClient {
 
         let volume = MockVolume {
             name: name.to_string(),
-            mount_point: format!("/var/lib/docker/volumes/{}", name),
+            mount_point: format!("/var/lib/docker/volumes/{name}"),
             exists: true,
         };
 
@@ -63,7 +63,7 @@ impl MockDockerClient {
         let mut volumes = self.volumes.lock().unwrap();
 
         if !volumes.contains_key(name) {
-            return Err(format!("Volume '{}' not found", name));
+            return Err(format!("Volume '{name}' not found"));
         }
 
         // Check if volume is in use by any container
@@ -90,7 +90,7 @@ impl MockDockerClient {
         let mut containers = self.containers.lock().unwrap();
 
         if containers.contains_key(name) {
-            return Err(format!("Container '{}' already exists", name));
+            return Err(format!("Container '{name}' already exists"));
         }
 
         // Verify volumes exist
@@ -106,8 +106,7 @@ impl MockDockerClient {
         for container_name in &volumes_from {
             if !containers.contains_key(container_name) {
                 return Err(format!(
-                    "Container '{}' to inherit volumes from does not exist",
-                    container_name
+                    "Container '{container_name}' to inherit volumes from does not exist"
                 ));
             }
         }
@@ -137,7 +136,7 @@ impl MockDockerClient {
                 container.running = true;
                 Ok(())
             }
-            None => Err(format!("Container '{}' not found", name)),
+            None => Err(format!("Container '{name}' not found")),
         }
     }
 
@@ -149,7 +148,7 @@ impl MockDockerClient {
                 container.running = false;
                 Ok(())
             }
-            None => Err(format!("Container '{}' not found", name)),
+            None => Err(format!("Container '{name}' not found")),
         }
     }
 
@@ -157,12 +156,12 @@ impl MockDockerClient {
         let mut containers = self.containers.lock().unwrap();
 
         if !containers.contains_key(name) {
-            return Err(format!("Container '{}' not found", name));
+            return Err(format!("Container '{name}' not found"));
         }
 
         let container = &containers[name];
         if container.running {
-            return Err(format!("Container '{}' is running", name));
+            return Err(format!("Container '{name}' is running"));
         }
 
         containers.remove(name);

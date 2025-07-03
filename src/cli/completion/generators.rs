@@ -16,16 +16,15 @@ impl ShellCompletionGenerator {
             Shell::Fish => generate(shells::Fish, &mut cmd, "para", &mut buf),
         }
 
-        String::from_utf8(buf).map_err(|e| {
-            ParaError::invalid_args(format!("UTF-8 error generating completion: {}", e))
-        })
+        String::from_utf8(buf)
+            .map_err(|e| ParaError::invalid_args(format!("UTF-8 error generating completion: {e}")))
     }
 
     pub fn generate_enhanced_completion(shell: Shell) -> Result<String> {
         let basic = Self::generate_basic_completion(shell.clone())?;
         let dynamic = Self::generate_dynamic_completion(shell)?;
 
-        Ok(format!("{}\n\n{}", basic, dynamic))
+        Ok(format!("{basic}\n\n{dynamic}"))
     }
 
     fn generate_dynamic_completion(shell: Shell) -> Result<String> {

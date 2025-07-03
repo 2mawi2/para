@@ -89,7 +89,7 @@ pub fn generate_friendly_name() -> String {
     let noun = NOUNS
         .choose(&mut rng)
         .expect("NOUNS array should never be empty");
-    format!("{}_{}", adjective, noun)
+    format!("{adjective}_{noun}")
 }
 
 pub fn generate_timestamp() -> String {
@@ -98,7 +98,7 @@ pub fn generate_timestamp() -> String {
 }
 
 pub fn generate_friendly_branch_name(prefix: &str, session_name: &str) -> String {
-    format!("{}/{}", prefix, session_name)
+    format!("{prefix}/{session_name}")
 }
 
 pub fn generate_unique_name(existing_names: &[String]) -> String {
@@ -121,7 +121,7 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
     // If we can't find a unique name, try with small random suffixes
     for suffix in 1..100 {
         let name = generate_friendly_name();
-        let candidate = format!("{}_{}", name, suffix);
+        let candidate = format!("{name}_{suffix}");
         if !existing_names.contains(&candidate) {
             return candidate;
         }
@@ -130,7 +130,7 @@ pub fn generate_unique_name(existing_names: &[String]) -> String {
     // Final fallback: use timestamp suffix
     let name = generate_friendly_name();
     let timestamp = generate_timestamp();
-    format!("{}_{}", name, timestamp)
+    format!("{name}_{timestamp}")
 }
 
 pub fn validate_session_name(name: &str) -> Result<()> {
@@ -149,7 +149,7 @@ pub fn validate_session_name(name: &str) -> Result<()> {
     }
 
     let valid_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
-        .map_err(|e| ParaError::config_error(format!("Invalid regex: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Invalid regex: {e}")))?;
 
     if name.len() == 1 {
         if let Some(first_char) = name.chars().next() {
@@ -277,7 +277,7 @@ mod tests {
 
         // Generate a bunch of existing names
         for i in 0..10 {
-            existing.push(format!("test_name_{}", i));
+            existing.push(format!("test_name_{i}"));
         }
 
         // Add a specific collision to test

@@ -392,8 +392,8 @@ mod tests {
         for i in 0..10 {
             let service_clone = Arc::clone(&service);
             let handle = thread::spawn(move || {
-                let task_name = format!("task-{}", i);
-                let task_content = format!("Task content {}", i);
+                let task_name = format!("task-{i}");
+                let task_content = format!("Task content {i}");
 
                 // Write to cache
                 {
@@ -418,7 +418,7 @@ mod tests {
         // Verify all entries are in cache
         let cache = service.task_cache.lock().unwrap();
         for i in 0..10 {
-            let task_name = format!("task-{}", i);
+            let task_name = format!("task-{i}");
             assert!(cache.contains_key(&task_name));
         }
     }

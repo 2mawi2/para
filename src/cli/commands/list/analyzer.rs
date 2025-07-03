@@ -229,7 +229,7 @@ pub fn extract_session_id_from_archived_branch(
     branch_name: &str,
     branch_prefix: &str,
 ) -> Option<String> {
-    let archive_prefix = format!("{}/archived/", branch_prefix);
+    let archive_prefix = format!("{branch_prefix}/archived/");
     if let Some(stripped) = branch_name.strip_prefix(&archive_prefix) {
         if let Some(session_part) = stripped.split('/').next_back() {
             return Some(session_part.to_string());

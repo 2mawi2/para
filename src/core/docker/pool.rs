@@ -193,7 +193,7 @@ impl ContainerPool {
             )));
         }
 
-        println!("🗑️  Safely destroyed para container: {}", container_id);
+        println!("🗑️  Safely destroyed para container: {container_id}");
         Ok(())
     }
 
@@ -309,10 +309,7 @@ mod tests {
         assert_eq!(pool.max_size(), 5);
         // active_containers() now queries Docker, so the count depends on actual Docker state
         let active = pool.active_containers();
-        println!(
-            "Pool created with max_size: 5, current active containers: {}",
-            active
-        );
+        println!("Pool created with max_size: 5, current active containers: {active}");
     }
 
     #[test]
@@ -322,7 +319,7 @@ mod tests {
 
         // Get actual container count from Docker
         let active_count = pool.active_containers();
-        println!("Current active para containers: {}", active_count);
+        println!("Current active para containers: {active_count}");
 
         // Check capacity - should succeed unless we have 3+ real containers running
         match pool.check_capacity() {
@@ -390,7 +387,7 @@ mod tests {
             }
             Err(e) => {
                 // If Docker is not available, that's ok for unit tests
-                println!("Docker not available for test: {}", e);
+                println!("Docker not available for test: {e}");
             }
         }
     }
@@ -424,7 +421,7 @@ mod tests {
                 // Test capacity check with real state
                 match pool.check_capacity() {
                     Ok(_) => println!("Pool has capacity for new containers"),
-                    Err(e) => println!("Pool is full: {}", e),
+                    Err(e) => println!("Pool is full: {e}"),
                 }
             }
             _ => {

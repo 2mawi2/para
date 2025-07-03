@@ -64,7 +64,7 @@ fn cleanup_profile_directory(temp_dir: &std::path::Path) -> anyhow::Result<()> {
 #[allow(dead_code)]
 pub fn cleanup_on_startup() {
     if let Err(e) = cleanup_old_profiles() {
-        eprintln!("Failed to clean up old sandbox profiles: {}", e);
+        eprintln!("Failed to clean up old sandbox profiles: {e}");
     }
 }
 

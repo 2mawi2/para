@@ -211,7 +211,7 @@ mod tests {
         let initial_branch = git_service.repository().get_current_branch().unwrap();
 
         for i in 1..=3 {
-            let session_name = format!("session-{}", i);
+            let session_name = format!("session-{i}");
             branch_manager
                 .create_branch(&session_name, &initial_branch)
                 .unwrap();
@@ -249,7 +249,7 @@ mod tests {
 
         // Create 5 archived sessions
         for i in 1..=5 {
-            let session_name = format!("limit-test-{}", i);
+            let session_name = format!("limit-test-{i}");
             branch_manager
                 .create_branch(&session_name, &initial_branch)
                 .unwrap();
@@ -375,7 +375,7 @@ mod tests {
 
         // Create multiple sessions - some old, some recent, some over limit
         for i in 1..=10 {
-            let session_name = format!("test-session-{}", i);
+            let session_name = format!("test-session-{i}");
             branch_manager
                 .create_branch(&session_name, &initial_branch)
                 .unwrap();

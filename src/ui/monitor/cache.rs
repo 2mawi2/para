@@ -149,7 +149,7 @@ mod tests {
     fn test_cache_multiple_paths() {
         let cache = ActivityCache::new(5);
         let paths: Vec<PathBuf> = (0..5)
-            .map(|i| PathBuf::from(format!("/test/path{}", i)))
+            .map(|i| PathBuf::from(format!("/test/path{i}")))
             .collect();
         let base_time = Utc::now();
 

@@ -26,7 +26,7 @@ impl DockerIdeIntegration {
         if let Some(prompt) = initial_prompt {
             let prompt_file = session_dir.join(".initial-prompt");
             fs::write(&prompt_file, prompt).map_err(|e| {
-                ParaError::docker_error(format!("Failed to save initial prompt: {}", e))
+                ParaError::docker_error(format!("Failed to save initial prompt: {e}"))
             })?;
         }
 
@@ -36,10 +36,7 @@ impl DockerIdeIntegration {
         // Construct vscode-remote URI for direct container connection
         let container_name = format!("para-{}", container_session.session_name);
         let container_hex = Self::hex_encode_string(&container_name);
-        let remote_uri = format!(
-            "vscode-remote://attached-container+{}/workspace",
-            container_hex
-        );
+        let remote_uri = format!("vscode-remote://attached-container+{container_hex}/workspace");
 
         // Determine IDE command (VS Code only for MVP)
         let ide_command = if config.ide.wrapper.enabled {
@@ -66,11 +63,8 @@ impl DockerIdeIntegration {
 
         match cmd.spawn() {
             Ok(_) => {
-                println!(
-                    "🚀 Launching VS Code connected to container: {}",
-                    container_name
-                );
-                println!("   Container: {}", container_name);
+                println!("🚀 Launching VS Code connected to container: {container_name}");
+                println!("   Container: {container_name}");
                 println!("   Workspace: /workspace");
                 if initial_prompt.is_some() {
                     println!();
@@ -82,8 +76,7 @@ impl DockerIdeIntegration {
                 Ok(())
             }
             Err(e) => Err(ParaError::docker_error(format!(
-                "Failed to launch VS Code with container: {}",
-                e
+                "Failed to launch VS Code with container: {e}"
             ))),
         }
     }
@@ -96,7 +89,7 @@ impl DockerIdeIntegration {
     ) -> Result<()> {
         let vscode_dir = session_dir.join(".vscode");
         fs::create_dir_all(&vscode_dir).map_err(|e| {
-            ParaError::docker_error(format!("Failed to create .vscode directory: {}", e))
+            ParaError::docker_error(format!("Failed to create .vscode directory: {e}"))
         })?;
 
         // Now that we have Claude installed in the container, we can run it directly
@@ -130,19 +123,18 @@ impl DockerIdeIntegration {
         });
 
         let tasks_file = vscode_dir.join("tasks.json");
-        let tasks_json = serde_json::to_string_pretty(&tasks_config).map_err(|e| {
-            ParaError::docker_error(format!("Failed to serialize tasks.json: {}", e))
-        })?;
+        let tasks_json = serde_json::to_string_pretty(&tasks_config)
+            .map_err(|e| ParaError::docker_error(format!("Failed to serialize tasks.json: {e}")))?;
 
         fs::write(&tasks_file, tasks_json)
-            .map_err(|e| ParaError::docker_error(format!("Failed to write tasks.json: {}", e)))?;
+            .map_err(|e| ParaError::docker_error(format!("Failed to write tasks.json: {e}")))?;
 
         Ok(())
     }
 
     /// Hex encode a string for vscode-remote URI
     fn hex_encode_string(s: &str) -> String {
-        s.bytes().map(|b| format!("{:02x}", b)).collect::<String>()
+        s.bytes().map(|b| format!("{b:02x}")).collect::<String>()
     }
 }
 

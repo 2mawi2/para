@@ -109,7 +109,7 @@ fn run_worktree_setup_script(
     cmd.env("PARA_SESSION", session_name);
 
     let status = cmd.status().map_err(|e| {
-        crate::utils::ParaError::ide_error(format!("Failed to execute setup script: {}", e))
+        crate::utils::ParaError::ide_error(format!("Failed to execute setup script: {e}"))
     })?;
 
     if !status.success() {
@@ -127,7 +127,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
     args.validate()?;
 
     let git_service = crate::core::git::GitService::discover().map_err(|e| {
-        crate::utils::ParaError::git_error(format!("Failed to discover git repository: {}", e))
+        crate::utils::ParaError::git_error(format!("Failed to discover git repository: {e}"))
     })?;
     let repo_root = git_service.repository().root.clone();
 
@@ -176,8 +176,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 .run_setup_script(&session.name, &setup_script)
                 .map_err(|e| {
                     crate::utils::ParaError::docker_error(format!(
-                        "Failed to run setup script: {}",
-                        e
+                        "Failed to run setup script: {e}"
                     ))
                 })?;
         }
@@ -186,7 +185,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         docker_manager
             .launch_container_ide(&session, None, args.dangerously_skip_permissions)
             .map_err(|e| {
-                crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {}", e))
+                crate::utils::ParaError::docker_error(format!("Failed to launch IDE: {e}"))
             })?;
 
         // Register container session with daemon for signal monitoring
@@ -195,7 +194,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             &session.worktree_path,
             &config,
         ) {
-            eprintln!("Warning: Failed to register with daemon: {}", e);
+            eprintln!("Warning: Failed to register with daemon: {e}");
             // Continue anyway - daemon might not be running
         }
 
@@ -255,15 +254,15 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         .find(|s| s.name == session_name)
         .ok_or_else(|| crate::utils::ParaError::session_not_found(&session_name))?;
 
-    println!("✅ Session '{}' started successfully", session_name);
+    println!("✅ Session '{session_name}' started successfully");
     if is_container {
-        println!("   Container: para-{}", session_name);
+        println!("   Container: para-{session_name}");
 
         // Show the actual Docker image being used
         if let Some(ref custom_image) = args.docker_image {
-            println!("   Image: {} (custom)", custom_image);
+            println!("   Image: {custom_image} (custom)");
         } else if let Some(config_image) = config.get_docker_image() {
-            println!("   Image: {} (from config)", config_image);
+            println!("   Image: {config_image} (from config)");
         } else {
             println!("   Image: para-authenticated:latest (default)");
         }

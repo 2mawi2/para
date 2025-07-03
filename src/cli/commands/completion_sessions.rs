@@ -40,7 +40,7 @@ mod tests {
 
         let result = execute();
         if let Err(e) = &result {
-            eprintln!("Error in execute(): {}", e);
+            eprintln!("Error in execute(): {e}");
         }
         assert!(result.is_ok());
     }

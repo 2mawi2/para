@@ -152,7 +152,7 @@ mod tests {
 
         // Create a session file with meaningful content
         let session_id = "12345678-1234-1234-1234-123456789012";
-        let session_file = project_dir.join(format!("{}.jsonl", session_id));
+        let session_file = project_dir.join(format!("{session_id}.jsonl"));
         // Create content > 1000 bytes to simulate a real session
         let content = "x".repeat(1001);
         fs::write(&session_file, content).unwrap();

@@ -26,8 +26,7 @@ impl PlatformManager for GenericPlatform {
             panic!(
                 "CRITICAL: close_ide_window called from test environment! \
                  This indicates a test isolation failure. \
-                 Session: {}, IDE: {}",
-                session_id, ide_name
+                 Session: {session_id}, IDE: {ide_name}"
             );
         }
 

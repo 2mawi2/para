@@ -45,7 +45,7 @@ impl DaemonServer {
 
         // Create Unix socket
         let listener = UnixListener::bind(&socket_path)?;
-        println!("Para daemon started (PID: {})", pid);
+        println!("Para daemon started (PID: {pid})");
 
         // Handle incoming connections
         for stream in listener.incoming() {
@@ -54,11 +54,11 @@ impl DaemonServer {
                     let watchers = self.watchers.clone();
                     thread::spawn(move || {
                         if let Err(e) = handle_client(stream, watchers) {
-                            eprintln!("Error handling client: {}", e);
+                            eprintln!("Error handling client: {e}");
                         }
                     });
                 }
-                Err(e) => eprintln!("Error accepting connection: {}", e),
+                Err(e) => eprintln!("Error accepting connection: {e}"),
             }
         }
 
@@ -176,7 +176,7 @@ fn unregister_watcher(
 
     if let Some((_, handle)) = watchers_guard.remove(session_name) {
         handle.stop()?;
-        println!("Unregistered watcher for session: {}", session_name);
+        println!("Unregistered watcher for session: {session_name}");
         Ok(())
     } else {
         Err(anyhow::anyhow!("Session not found: {}", session_name))

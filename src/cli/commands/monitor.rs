@@ -93,5 +93,5 @@ impl App {
 pub fn execute(config: crate::config::Config, _args: MonitorArgs) -> Result<()> {
     let mut app = App::new(config);
     app.run()
-        .map_err(|e| crate::utils::ParaError::ide_error(format!("Monitor UI error: {}", e)))
+        .map_err(|e| crate::utils::ParaError::ide_error(format!("Monitor UI error: {e}")))
 }
