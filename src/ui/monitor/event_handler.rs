@@ -42,6 +42,20 @@ pub enum SystemAction {
     Quit,
 }
 
+/// Represents mouse click coordinates
+#[derive(Debug, Clone)]
+struct ClickInfo {
+    x: u16,
+    y: u16,
+}
+
+/// Represents relative coordinates within a table
+#[derive(Debug, Clone)]
+struct TableCoords {
+    relative_x: u16,
+    relative_y: u16,
+}
+
 /// Handles input events and translates them to UI actions
 #[derive(Default)]
 pub struct EventHandler;
@@ -204,58 +218,80 @@ impl EventHandler {
         state: &MonitorAppState,
         sessions: &[SessionInfo],
     ) -> Option<UiAction> {
-        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
-            // Check if we have a stored table area
-            if let Some(table_area) = state.table_area {
-                let mouse_x = mouse.column;
-                let mouse_y = mouse.row;
+        let click_info = self.extract_left_click(&mouse)?;
+        let table_area = state.table_area?;
+        let coords = self.validate_click_in_table(&click_info, &table_area)?;
+        let row_index = self.calculate_table_row_index(&coords)?;
 
-                // Check if the click is within the table area
-                if mouse_x >= table_area.x
-                    && mouse_x < table_area.x + table_area.width
-                    && mouse_y >= table_area.y
-                    && mouse_y < table_area.y + table_area.height
-                {
-                    // Calculate which row was clicked
-                    // The table has a header row, so subtract 1 for the header
-                    // and account for the table's top position
-                    let relative_y = mouse_y - table_area.y;
-
-                    // Skip if clicking on the header row (row 0) or the border (row 1)
-                    if relative_y > 1 {
-                        // Subtract 2 for header and border to get the data row index
-                        let table_index = (relative_y - 2) as usize;
-
-                        // Check if the clicked row is within the session list bounds
-                        if table_index < sessions.len() {
-                            // Check if clicking in the actions column (first 9 characters)
-                            let relative_x = mouse_x - table_area.x;
-                            if relative_x < 9 {
-                                // Actions column clicked
-                                // Button layout: "[▶] [📋]" (positions 0-8)
-                                // [▶] = positions 0-2
-                                // space = position 3
-                                // [📋] = positions 4-7
-                                if relative_x < 3 {
-                                    // Resume button clicked
-                                    return Some(UiAction::Session(SessionAction::Resume(
-                                        table_index,
-                                    )));
-                                } else if (4..8).contains(&relative_x) {
-                                    // Copy button clicked
-                                    return Some(UiAction::Session(SessionAction::Copy(
-                                        table_index,
-                                    )));
-                                }
-                            }
-                            // If clicking elsewhere on the row, just select it (no additional action beyond selection)
-                            // Selection will be handled by the caller
-                        }
-                    }
-                }
-            }
+        if row_index >= sessions.len() {
+            return None;
         }
-        None
+
+        self.detect_button_click(&coords, row_index)
+    }
+
+    fn extract_left_click(&self, mouse: &MouseEvent) -> Option<ClickInfo> {
+        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
+            Some(ClickInfo {
+                x: mouse.column,
+                y: mouse.row,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn validate_click_in_table(
+        &self,
+        click: &ClickInfo,
+        table_area: &ratatui::layout::Rect,
+    ) -> Option<TableCoords> {
+        if click.x >= table_area.x
+            && click.x < table_area.x + table_area.width
+            && click.y >= table_area.y
+            && click.y < table_area.y + table_area.height
+        {
+            Some(TableCoords {
+                relative_x: click.x - table_area.x,
+                relative_y: click.y - table_area.y,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn calculate_table_row_index(&self, coords: &TableCoords) -> Option<usize> {
+        // Skip if clicking on the header row (row 0) or the border (row 1)
+        if coords.relative_y > 1 {
+            // Subtract 2 for header and border to get the data row index
+            Some((coords.relative_y - 2) as usize)
+        } else {
+            None
+        }
+    }
+
+    fn detect_button_click(&self, coords: &TableCoords, row_index: usize) -> Option<UiAction> {
+        // Check if clicking in the actions column (first 9 characters)
+        if coords.relative_x < 9 {
+            // Actions column clicked
+            // Button layout: "[▶] [📋]" (positions 0-8)
+            // [▶] = positions 0-2
+            // space = position 3
+            // [📋] = positions 4-7
+            if coords.relative_x < 3 {
+                // Resume button clicked
+                Some(UiAction::Session(SessionAction::Resume(row_index)))
+            } else if (4..8).contains(&coords.relative_x) {
+                // Copy button clicked
+                Some(UiAction::Session(SessionAction::Copy(row_index)))
+            } else {
+                None
+            }
+        } else {
+            // If clicking elsewhere on the row, just select it (no additional action beyond selection)
+            // Selection will be handled by the caller
+            None
+        }
     }
 }
 
