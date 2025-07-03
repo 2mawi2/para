@@ -15,50 +15,8 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec, execSync } from "child_process";
-
-interface ParaStartArgs {
-  session_name?: string;
-  dangerously_skip_permissions?: boolean;
-}
-
-interface ParaFinishArgs {
-  commit_message: string;
-  session?: string;
-  branch?: string;
-}
-
-interface ParaDispatchArgs {
-  session_name: string;
-  task_description?: string;
-  file?: string;
-  dangerously_skip_permissions?: boolean;
-}
-
-interface ParaListArgs {
-  verbose?: boolean;
-  archived?: boolean;
-  quiet?: boolean;
-}
-
-interface ParaRecoverArgs {
-  session_name?: string;
-}
-
-interface ParaResumeArgs {
-  session?: string;
-  prompt?: string;
-  file?: string;
-}
-
-interface ParaCancelArgs {
-  session_name?: string;
-  force?: boolean;
-}
-
-interface ParaStatusShowArgs {
-  session?: string;
-  json?: boolean;
-}
+import { toolHandlers } from "./handlers/index.js";
+import { resourceHandlers } from "./handlers/resource-handlers.js";
 
 // Dynamic discovery needed to support homebrew, dev builds, and system installations
 function findParaBinary(): string {
@@ -347,138 +305,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    let result: string;
-
-    switch (name) {
-      case "para_start":
-        {
-          const startArgs = args as ParaStartArgs;
-          const cmdArgs = ["start"];
-          if (startArgs.session_name) {
-            cmdArgs.push(startArgs.session_name);
-          }
-          if (startArgs.dangerously_skip_permissions) {
-            cmdArgs.push("--dangerously-skip-permissions");
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_finish":
-        {
-          const finishArgs = args as unknown as ParaFinishArgs;
-          const cmdArgs = ["finish"];
-          cmdArgs.push(finishArgs.commit_message);
-          if (finishArgs.session) {
-            cmdArgs.push(finishArgs.session);
-          }
-          if (finishArgs.branch) {
-            cmdArgs.push("--branch", finishArgs.branch);
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_dispatch":
-        {
-          const dispatchArgs = args as unknown as ParaDispatchArgs;
-          const cmdArgs = ["dispatch"];
-          cmdArgs.push(dispatchArgs.session_name);
-
-          if (dispatchArgs.file) {
-            cmdArgs.push("--file", dispatchArgs.file);
-          } else if (dispatchArgs.task_description) {
-            cmdArgs.push(dispatchArgs.task_description);
-          }
-
-          if (dispatchArgs.dangerously_skip_permissions) {
-            cmdArgs.push("--dangerously-skip-permissions");
-          }
-
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_list":
-        {
-          const listArgs = args as ParaListArgs;
-          const cmdArgs = ["list"];
-          if (listArgs.verbose) {
-            cmdArgs.push("--verbose");
-          }
-          if (listArgs.archived) {
-            cmdArgs.push("--archived");
-          }
-          if (listArgs.quiet) {
-            cmdArgs.push("--quiet");
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_recover":
-        {
-          const recoverArgs = args as ParaRecoverArgs;
-          const cmdArgs = ["recover"];
-          if (recoverArgs.session_name) {
-            cmdArgs.push(recoverArgs.session_name);
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_resume":
-        {
-          const resumeArgs = args as ParaResumeArgs;
-          const cmdArgs = ["resume"];
-          if (resumeArgs.session) {
-            cmdArgs.push(resumeArgs.session);
-          }
-          if (resumeArgs.prompt) {
-            cmdArgs.push("--prompt", resumeArgs.prompt);
-          }
-          if (resumeArgs.file) {
-            cmdArgs.push("--file", resumeArgs.file);
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_config_show":
-        result = await runParaCommand(["config", "show"]);
-        break;
-
-      case "para_cancel":
-        {
-          const cancelArgs = args as ParaCancelArgs;
-          const cmdArgs = ["cancel"];
-          if (cancelArgs.session_name) {
-            cmdArgs.push(cancelArgs.session_name);
-          }
-          if (cancelArgs.force) {
-            cmdArgs.push("--force");
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      case "para_status_show":
-        {
-          const statusArgs = args as ParaStatusShowArgs;
-          const cmdArgs = ["status", "show"];
-          if (statusArgs.session) {
-            cmdArgs.push(statusArgs.session);
-          }
-          if (statusArgs.json) {
-            cmdArgs.push("--json");
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
-
-      default:
-        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+    const handler = toolHandlers[name];
+    if (!handler) {
+      throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
+
+    const result = await handler(args, runParaCommand);
 
     return {
       content: [
@@ -517,20 +349,12 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
 
   try {
-    let content: string;
-
-    switch (uri) {
-      case "para://current-session":
-        content = await runParaCommand(["list", "--current"]);
-        break;
-
-      case "para://config":
-        content = await runParaCommand(["config", "show"]);
-        break;
-
-      default:
-        throw new McpError(ErrorCode.InvalidRequest, `Unknown resource: ${uri}`);
+    const handler = resourceHandlers[uri];
+    if (!handler) {
+      throw new McpError(ErrorCode.InvalidRequest, `Unknown resource: ${uri}`);
     }
+
+    const content = await handler(runParaCommand);
 
     return {
       contents: [
