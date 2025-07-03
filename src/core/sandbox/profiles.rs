@@ -134,6 +134,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_profile_name() {
         assert_eq!(SandboxProfile::Standard.name(), "standard");
     }
