@@ -1,3 +1,8 @@
+//! Sandbox profiles for macOS sandboxing
+//! This module is primarily used on macOS for sandbox-exec functionality
+
+#![cfg_attr(not(target_os = "macos"), allow(dead_code, unused_imports))]
+
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
