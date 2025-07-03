@@ -205,9 +205,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         {
             docker_manager
                 .run_setup_script(&session.name, &setup_script)
-                .map_err(|e| {
-                    ParaError::docker_error(format!("Failed to run setup script: {e}"))
-                })?;
+                .map_err(|e| ParaError::docker_error(format!("Failed to run setup script: {e}")))?;
         }
 
         // Launch IDE connected to container with initial prompt
