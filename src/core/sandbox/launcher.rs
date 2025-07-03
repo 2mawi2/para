@@ -17,7 +17,7 @@ pub fn wrap_with_sandbox(command: &str, _worktree_path: &Path, _profile: &str) -
                 "Invalid or unknown sandbox profile: {_profile}"
             ));
         }
-        return Ok(command.to_string());
+        Ok(command.to_string())
     }
 
     #[cfg(target_os = "macos")]

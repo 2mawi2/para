@@ -138,6 +138,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_profile_content() {
         let content = SandboxProfile::Standard.content();
         assert!(content.contains("(version 1)"));
@@ -148,18 +149,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_extract_profile() -> Result<()> {
         let profile_path = extract_profile("standard")?;
         assert!(profile_path.exists());
         assert!(profile_path.extension().unwrap() == "sb");
 
-        let content = fs::read_to_string(&profile_path)?;
+        let content = std::fs::read_to_string(&profile_path)?;
         assert!(content.contains("(version 1)"));
 
         Ok(())
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_extract_unknown_profile() {
         let result = extract_profile("unknown-profile");
         assert!(result.is_err());
@@ -192,6 +195,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_profile_extraction_with_invalid_names() {
         // Test various invalid profile names
         let invalid_names = vec![
@@ -209,12 +213,12 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
+    #[cfg(all(unix, target_os = "macos"))]
     fn test_extracted_profile_permissions() -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
 
         let profile_path = extract_profile("standard")?;
-        let metadata = fs::metadata(&profile_path)?;
+        let metadata = std::fs::metadata(&profile_path)?;
         let perms = metadata.permissions();
 
         // Check that file is read-only (0o444)
