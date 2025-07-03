@@ -46,8 +46,7 @@ fn execute_setup(force: bool) -> Result<()> {
         }
         Err(e) => {
             return Err(ParaError::docker_error(format!(
-                "Failed to check Docker image: {}",
-                e
+                "Failed to check Docker image: {e}"
             )));
         }
         _ => {}
@@ -55,7 +54,7 @@ fn execute_setup(force: bool) -> Result<()> {
 
     // Create and run the automated authentication flow
     let user_id = std::process::id().to_string();
-    let auth_container = format!("para-auth-{}", user_id);
+    let auth_container = format!("para-auth-{user_id}");
 
     // Remove any existing auth container
     let _ = Command::new("docker")
@@ -78,7 +77,7 @@ fn execute_setup(force: bool) -> Result<()> {
             "infinity",
         ])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to start container: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to start container: {e}")))?;
 
     if !output.status.success() {
         return Err(ParaError::docker_error(format!(
@@ -98,7 +97,7 @@ fn execute_setup(force: bool) -> Result<()> {
     let _status = Command::new("docker")
         .args(["exec", "-it", &auth_container, "claude"])
         .status()
-        .map_err(|e| ParaError::docker_error(format!("Failed to run claude: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to run claude: {e}")))?;
 
     // Check if credentials were created by looking in the volume
     let check_output = Command::new("docker")
@@ -110,7 +109,7 @@ fn execute_setup(force: bool) -> Result<()> {
             "/home/para/.claude/.credentials.json",
         ])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to check credentials: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to check credentials: {e}")))?;
 
     if !check_output.status.success() {
         // Cleanup
@@ -128,7 +127,7 @@ fn execute_setup(force: bool) -> Result<()> {
     let commit_output = Command::new("docker")
         .args(["commit", &auth_container, "para-authenticated:latest"])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to create image: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to create image: {e}")))?;
 
     if !commit_output.status.success() {
         let _ = Command::new("docker")
@@ -164,7 +163,7 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
             "-q",
         ])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to list containers: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to list containers: {e}")))?;
 
     let container_ids = String::from_utf8_lossy(&ps_output.stdout);
     let containers_to_remove: Vec<&str> = container_ids
@@ -198,7 +197,7 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
     let volume_output = Command::new("docker")
         .args(["volume", "ls", "-q"])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to list volumes: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to list volumes: {e}")))?;
 
     let volumes = String::from_utf8_lossy(&volume_output.stdout);
     for volume in volumes.lines() {
@@ -214,7 +213,7 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
 
     println!("Found {} items to clean:", items_to_clean.len());
     for (desc, name) in &items_to_clean {
-        println!("  - {}: {}", desc, name);
+        println!("  - {desc}: {name}");
     }
 
     if dry_run {
@@ -224,14 +223,14 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
             .with_prompt("Remove these items?")
             .default(false)
             .interact()
-            .map_err(|e| ParaError::docker_error(format!("Failed to read input: {}", e)))?;
+            .map_err(|e| ParaError::docker_error(format!("Failed to read input: {e}")))?;
 
         if confirm {
             // Remove the authenticated image (force to handle any issues)
             let output = Command::new("docker")
                 .args(["rmi", "-f", "para-authenticated:latest"])
                 .output()
-                .map_err(|e| ParaError::docker_error(format!("Failed to remove image: {}", e)))?;
+                .map_err(|e| ParaError::docker_error(format!("Failed to remove image: {e}")))?;
 
             if !output.status.success() {
                 eprintln!(
@@ -320,7 +319,7 @@ fn execute_status(verbose: bool) -> Result<()> {
             println!("   Run 'para auth setup' to see setup instructions");
         }
         Err(e) => {
-            println!("❌ Failed to check authentication status: {}", e);
+            println!("❌ Failed to check authentication status: {e}");
         }
     }
 
@@ -343,7 +342,7 @@ fn execute_reauth() -> Result<()> {
             "-q",
         ])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to list containers: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to list containers: {e}")))?;
 
     let container_ids = String::from_utf8_lossy(&ps_output.stdout);
     for container_id in container_ids.lines().filter(|line| !line.is_empty()) {
@@ -373,7 +372,7 @@ fn check_authenticated_image() -> Result<bool> {
     let output = Command::new("docker")
         .args(["image", "inspect", "para-authenticated:latest"])
         .output()
-        .map_err(|e| ParaError::docker_error(format!("Failed to check Docker image: {}", e)))?;
+        .map_err(|e| ParaError::docker_error(format!("Failed to check Docker image: {e}")))?;
 
     Ok(output.status.success())
 }

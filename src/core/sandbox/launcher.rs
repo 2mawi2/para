@@ -4,7 +4,7 @@ use std::path::Path;
 use super::profiles::extract_profile;
 
 /// Wraps a command with macOS sandbox-exec if sandboxing is enabled and we're on macOS.
-pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> Result<String> {
+pub fn wrap_with_sandbox(command: &str, _worktree_path: &Path, _profile: &str) -> Result<String> {
     // Only apply sandboxing on macOS
     #[cfg(not(target_os = "macos"))]
     {
@@ -14,58 +14,57 @@ pub fn wrap_with_sandbox(command: &str, worktree_path: &Path, profile: &str) -> 
 
     #[cfg(target_os = "macos")]
     {
-        // Continue with macOS sandboxing logic below
+        // Validate profile name and extract to a temporary location
+        if _profile.is_empty() {
+            return Err(anyhow::anyhow!("Sandbox profile name cannot be empty"));
+        }
+
+        let profile_path =
+            extract_profile(_profile).context("Failed to extract sandbox profile")?;
+
+        // Get required directories
+        let home_dir = directories::UserDirs::new()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine user directories"))?
+            .home_dir()
+            .to_path_buf();
+
+        let cache_dir = directories::ProjectDirs::from("", "", "para")
+            .map(|dirs| dirs.cache_dir().to_path_buf())
+            .unwrap_or_else(|| home_dir.join("Library/Caches"));
+
+        let temp_dir = std::env::temp_dir();
+
+        // Remove trailing slashes from paths to ensure consistent matching
+        let temp_dir_str = temp_dir.to_string_lossy().trim_end_matches('/').to_string();
+        let home_dir_str = home_dir.to_string_lossy().trim_end_matches('/').to_string();
+        let cache_dir_str = cache_dir
+            .to_string_lossy()
+            .trim_end_matches('/')
+            .to_string();
+        let worktree_path_str = _worktree_path
+            .to_string_lossy()
+            .trim_end_matches('/')
+            .to_string();
+
+        // Build the sandbox-exec command with parameters
+        let sandbox_cmd = format!(
+            "sandbox-exec \
+             -D 'TARGET_DIR={}' \
+             -D 'TMP_DIR={}' \
+             -D 'HOME_DIR={}' \
+             -D 'CACHE_DIR={}' \
+             -f '{}' \
+             sh -c '{}'",
+            worktree_path_str,
+            temp_dir_str,
+            home_dir_str,
+            cache_dir_str,
+            profile_path.display(),
+            command.replace('\'', "'\\''") // Escape single quotes in the command
+        );
+
+        Ok(sandbox_cmd)
     }
-
-    // Validate profile name and extract to a temporary location
-    if profile.is_empty() {
-        return Err(anyhow::anyhow!("Sandbox profile name cannot be empty"));
-    }
-
-    let profile_path = extract_profile(profile).context("Failed to extract sandbox profile")?;
-
-    // Get required directories
-    let home_dir = directories::UserDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine user directories"))?
-        .home_dir()
-        .to_path_buf();
-
-    let cache_dir = directories::ProjectDirs::from("", "", "para")
-        .map(|dirs| dirs.cache_dir().to_path_buf())
-        .unwrap_or_else(|| home_dir.join("Library/Caches"));
-
-    let temp_dir = std::env::temp_dir();
-
-    // Remove trailing slashes from paths to ensure consistent matching
-    let temp_dir_str = temp_dir.to_string_lossy().trim_end_matches('/').to_string();
-    let home_dir_str = home_dir.to_string_lossy().trim_end_matches('/').to_string();
-    let cache_dir_str = cache_dir
-        .to_string_lossy()
-        .trim_end_matches('/')
-        .to_string();
-    let worktree_path_str = worktree_path
-        .to_string_lossy()
-        .trim_end_matches('/')
-        .to_string();
-
-    // Build the sandbox-exec command with parameters
-    let sandbox_cmd = format!(
-        "sandbox-exec \
-         -D 'TARGET_DIR={}' \
-         -D 'TMP_DIR={}' \
-         -D 'HOME_DIR={}' \
-         -D 'CACHE_DIR={}' \
-         -f '{}' \
-         sh -c '{}'",
-        worktree_path_str,
-        temp_dir_str,
-        home_dir_str,
-        cache_dir_str,
-        profile_path.display(),
-        command.replace('\'', "'\\''") // Escape single quotes in the command
-    );
-
-    Ok(sandbox_cmd)
 }
 
 /// Check if sandbox-exec is available on the system
