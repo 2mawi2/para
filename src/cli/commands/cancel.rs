@@ -82,9 +82,8 @@ fn detect_session_name(
         return Ok(session_name.clone());
     }
 
-    let current_dir = env::current_dir().map_err(|e| {
-        ParaError::file_operation(format!("Failed to get current directory: {e}"))
-    })?;
+    let current_dir = env::current_dir()
+        .map_err(|e| ParaError::file_operation(format!("Failed to get current directory: {e}")))?;
 
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
