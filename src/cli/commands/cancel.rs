@@ -28,8 +28,7 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
         confirm_cancel_with_changes(&session_name)?;
     } else if has_uncommitted && args.force {
         eprintln!(
-            "WARNING: Force canceling session '{}' with uncommitted changes. Your work will be archived.",
-            session_name
+            "WARNING: Force canceling session '{session_name}' with uncommitted changes. Your work will be archived."
         );
     }
 
@@ -55,7 +54,7 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     if config.is_real_ide_environment() {
         let platform = get_platform_manager();
         if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
-            eprintln!("Warning: Failed to close IDE window: {}", e);
+            eprintln!("Warning: Failed to close IDE window: {e}");
         }
     }
 

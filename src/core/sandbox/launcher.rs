@@ -1,19 +1,16 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
-
-use super::profiles::extract_profile;
 
 /// Wraps a command with macOS sandbox-exec if sandboxing is enabled and we're on macOS.
 pub fn wrap_with_sandbox(command: &str, _worktree_path: &Path, _profile: &str) -> Result<String> {
-    // Only apply sandboxing on macOS
     #[cfg(not(target_os = "macos"))]
-    {
-        // Return the command unchanged on non-macOS platforms
-        return Ok(command.to_string());
-    }
+    return Ok(command.to_string());
 
     #[cfg(target_os = "macos")]
     {
+        use super::profiles::extract_profile;
+        use anyhow::Context;
+
         // Validate profile name and extract to a temporary location
         if _profile.is_empty() {
             return Err(anyhow::anyhow!("Sandbox profile name cannot be empty"));
