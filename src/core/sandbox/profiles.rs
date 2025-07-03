@@ -45,6 +45,7 @@ impl SandboxProfile {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub fn name(&self) -> &'static str {
         match self {
             Self::Standard => "standard",
