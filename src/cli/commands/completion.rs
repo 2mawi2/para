@@ -31,7 +31,7 @@ pub fn execute(args: CompletionArgs) -> Result<()> {
     if std::env::var("PARA_COMPLETION_SCRIPT").is_ok() {
         // Just output the raw script for piping/redirecting
         let completion_script = ShellCompletionGenerator::generate_enhanced_completion(shell)?;
-        println!("{}", completion_script);
+        println!("{completion_script}");
         return Ok(());
     }
 
@@ -45,7 +45,7 @@ pub fn execute(args: CompletionArgs) -> Result<()> {
     }
 
     // Default user-friendly behavior
-    println!("Para shell completions for {:?}", shell);
+    println!("Para shell completions for {shell:?}");
     println!();
     println!("For automatic setup, run:");
     println!("   para init");
@@ -71,7 +71,7 @@ pub fn execute(args: CompletionArgs) -> Result<()> {
     }
     println!();
     println!("For detailed options, run:");
-    println!("   PARA_COMPLETION_HELP=1 para completion {:?}", shell);
+    println!("   PARA_COMPLETION_HELP=1 para completion {shell:?}");
 
     Ok(())
 }
@@ -232,7 +232,7 @@ mod tests {
             };
 
             let result = execute(args);
-            assert!(result.is_ok(), "Failed for shell: {}", shell);
+            assert!(result.is_ok(), "Failed for shell: {shell}");
 
             // Restore original value
             match original {

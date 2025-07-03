@@ -19,7 +19,7 @@ impl<'a> GitCommandExecutor<'a> {
             .current_dir(self.worktree_path)
             .args(args)
             .output()
-            .map_err(|e| ParaError::git_operation(format!("Git command failed: {}", e)))?;
+            .map_err(|e| ParaError::git_operation(format!("Git command failed: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -44,10 +44,7 @@ impl<'a> GitCommandExecutor<'a> {
             Ok(_) => Err(ParaError::git_operation(
                 "Not in a git repository".to_string(),
             )),
-            Err(e) => Err(ParaError::git_operation(format!(
-                "Git command failed: {}",
-                e
-            ))),
+            Err(e) => Err(ParaError::git_operation(format!("Git command failed: {e}"))),
         }
     }
 }
@@ -66,9 +63,7 @@ fn validate_worktree_path(path: &Path) -> Result<()> {
 fn validate_branch_exists(executor: &GitCommandExecutor, branch: &str) -> Result<()> {
     executor
         .execute(&["rev-parse", "--verify", branch])
-        .map_err(|_| {
-            ParaError::git_operation(format!("Base branch '{}' does not exist", branch))
-        })?;
+        .map_err(|_| ParaError::git_operation(format!("Base branch '{branch}' does not exist")))?;
     Ok(())
 }
 
@@ -285,7 +280,7 @@ mod tests {
 
         // Now append to create unstaged changes
         let content = std::fs::read_to_string(&new_file).unwrap();
-        std::fs::write(&new_file, format!("{}Line 4\n", content)).unwrap();
+        std::fs::write(&new_file, format!("{content}Line 4\n")).unwrap();
 
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
         // We committed a file with 3 lines and added 1 more line as unstaged
@@ -469,7 +464,7 @@ mod tests {
             .output()
             .unwrap();
         let diff_output = String::from_utf8_lossy(&output.stdout);
-        println!("Direct git diff output: '{}'", diff_output);
+        println!("Direct git diff output: '{diff_output}'");
 
         // Calculate stats using our function
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
@@ -598,7 +593,7 @@ mod tests {
             .output()
             .unwrap();
         let git_diff = String::from_utf8_lossy(&git_diff_output.stdout);
-        println!("Git diff from merge base: '{}'", git_diff);
+        println!("Git diff from merge base: '{git_diff}'");
 
         // Calculate stats
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();

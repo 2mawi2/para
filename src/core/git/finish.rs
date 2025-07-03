@@ -49,8 +49,7 @@ impl<'a> FinishManager<'a> {
                 let unique_suggestion =
                     branch_manager.generate_unique_branch_name(&final_branch)?;
                 return Err(crate::utils::ParaError::git_operation(format!(
-                    "Branch '{}' already exists. Try using a different name like '{}'",
-                    final_branch, unique_suggestion
+                    "Branch '{final_branch}' already exists. Try using a different name like '{unique_suggestion}'"
                 )));
             }
 

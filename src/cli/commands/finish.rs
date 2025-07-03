@@ -70,7 +70,7 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
                 vec![], // allowed_domains
             );
             if let Err(e) = docker_manager.destroy_session_container(session) {
-                eprintln!("Warning: Failed to destroy container: {}", e);
+                eprintln!("Warning: Failed to destroy container: {e}");
             }
         }
     }
@@ -105,7 +105,7 @@ fn handle_finish_success(final_branch: String, ctx: &mut FinishContext) -> Resul
     }
 
     println!("✓ Session finished successfully");
-    println!("  Feature branch: {}", final_branch);
+    println!("  Feature branch: {final_branch}");
     println!("  Commit message: {}", ctx.args.message);
 
     Ok(())
@@ -117,10 +117,10 @@ fn initialize_finish_environment(
     args.validate()?;
 
     let git_service = GitService::discover()
-        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
+        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
 
     let current_dir = env::current_dir()
-        .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {e}")))?;
 
     let session_env = git_service.validate_session_environment(&current_dir)?;
 
@@ -185,7 +185,7 @@ fn perform_pre_finish_operations(
     config: &Config,
     git_service: &GitService,
 ) -> Result<()> {
-    println!("Finishing session: {}", feature_branch);
+    println!("Finishing session: {feature_branch}");
     let session_id = session_info
         .as_ref()
         .map(|s| s.name.clone())
@@ -207,16 +207,13 @@ fn perform_pre_finish_operations(
         };
 
         if let Err(e) = platform.close_ide_window(&session_id, ide_to_close) {
-            eprintln!("Warning: Failed to close IDE window: {}", e);
+            eprintln!("Warning: Failed to close IDE window: {e}");
         }
     }
 
     if !is_container_session && config.should_auto_stage() {
         if let Err(e) = git_service.stage_all_changes() {
-            eprintln!(
-                "Warning: Auto-staging failed: {}. Please stage changes manually.",
-                e
-            );
+            eprintln!("Warning: Auto-staging failed: {e}. Please stage changes manually.");
             return Err(e);
         }
     }
@@ -335,7 +332,7 @@ fn update_final_status(session_state: &SessionState, config: &Config) -> Result<
 
     // Load existing status or create new one
     let status = match Status::load(&state_dir, &session_state.name)
-        .map_err(|e| ParaError::config_error(format!("Failed to load status: {}", e)))?
+        .map_err(|e| ParaError::config_error(format!("Failed to load status: {e}")))?
     {
         Some(mut existing_status) => {
             // Update existing status to show 100% completion
@@ -369,7 +366,7 @@ fn update_final_status(session_state: &SessionState, config: &Config) -> Result<
     // Save the updated status
     status
         .save(&state_dir)
-        .map_err(|e| ParaError::config_error(format!("Failed to save status: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to save status: {e}")))?;
 
     Ok(())
 }
@@ -431,7 +428,7 @@ mod tests {
             .expect("Failed to validate main repo");
         match main_env {
             SessionEnvironment::MainRepository => {}
-            _ => panic!("Expected MainRepository environment, got: {:?}", main_env),
+            _ => panic!("Expected MainRepository environment, got: {main_env:?}"),
         }
 
         let worktree_path = git_temp.path().join("test-worktree");
@@ -446,7 +443,7 @@ mod tests {
             SessionEnvironment::Worktree { branch, .. } => {
                 assert_eq!(branch, "test-branch");
             }
-            _ => panic!("Expected Worktree environment, got: {:?}", worktree_env),
+            _ => panic!("Expected Worktree environment, got: {worktree_env:?}"),
         }
     }
 

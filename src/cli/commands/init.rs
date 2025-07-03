@@ -19,7 +19,7 @@ pub fn execute() -> Result<()> {
     let shell = detect_shell()?;
     let config_path = get_shell_config_path(&shell)?;
 
-    println!("Detected shell: {:?}", shell);
+    println!("Detected shell: {shell:?}");
     println!("Config file: {}", config_path.display());
 
     if is_completion_installed(&config_path)? {
@@ -70,7 +70,7 @@ fn detect_shell() -> Result<Shell> {
         .with_prompt("Please select your shell")
         .items(&shells)
         .interact()
-        .map_err(|e| ParaError::config_error(format!("Failed to get shell selection: {}", e)))?;
+        .map_err(|e| ParaError::config_error(format!("Failed to get shell selection: {e}")))?;
 
     match selection {
         0 => Ok(Shell::Bash),
@@ -106,7 +106,7 @@ fn get_shell_config_path(shell: &Shell) -> Result<PathBuf> {
     if shell == &Shell::Fish {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent).map_err(|e| {
-                ParaError::fs_error(format!("Failed to create fish config directory: {}", e))
+                ParaError::fs_error(format!("Failed to create fish config directory: {e}"))
             })?;
         }
     }
@@ -120,7 +120,7 @@ fn is_completion_installed(config_path: &Path) -> Result<bool> {
     }
 
     let content = fs::read_to_string(config_path)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read shell config file: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to read shell config file: {e}")))?;
 
     Ok(content.contains(">>> para completion initialize >>>"))
 }
@@ -140,7 +140,7 @@ fn create_backup(config_path: &Path) -> Result<PathBuf> {
     let backup_path = config_path.parent().unwrap().join(backup_name);
 
     fs::copy(config_path, &backup_path)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create backup: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to create backup: {e}")))?;
 
     Ok(backup_path)
 }
@@ -169,15 +169,15 @@ fn install_completion(config_path: &Path, shell: &Shell) -> Result<()> {
 
     if config_path.exists() {
         let mut content = fs::read_to_string(config_path)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read shell config: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to read shell config: {e}")))?;
 
         content.push_str(&completion_block);
 
         fs::write(config_path, content)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write shell config: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to write shell config: {e}")))?;
     } else {
         fs::write(config_path, &completion_block)
-            .map_err(|e| ParaError::fs_error(format!("Failed to create shell config: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to create shell config: {e}")))?;
     }
 
     Ok(())

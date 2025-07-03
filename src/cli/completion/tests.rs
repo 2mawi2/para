@@ -133,7 +133,7 @@ mod completion_command_tests {
             };
 
             let result = completion::execute(args);
-            assert!(result.is_ok(), "Shell {} should be supported", shell_name);
+            assert!(result.is_ok(), "Shell {shell_name} should be supported");
         }
     }
 }

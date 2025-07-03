@@ -341,7 +341,7 @@ impl SessionCleaner {
         if !plan.stale_status_files.is_empty() {
             println!("Stale Status Files ({}):", plan.stale_status_files.len());
             for session in &plan.stale_status_files {
-                println!("  📊 {}.status.json", session);
+                println!("  📊 {session}.status.json");
             }
             println!();
         }
@@ -352,7 +352,7 @@ impl SessionCleaner {
                 plan.orphaned_containers.len()
             );
             for container in &plan.orphaned_containers {
-                println!("  🐳 {}", container);
+                println!("  🐳 {container}");
             }
             println!();
         }
@@ -447,10 +447,9 @@ impl SessionCleaner {
         for archive_branch in plan.old_archives {
             match self.git_service.delete_branch(&archive_branch, true) {
                 Ok(_) => results.old_archives_removed += 1,
-                Err(e) => results.errors.push(format!(
-                    "Failed to remove archive {}: {}",
-                    archive_branch, e
-                )),
+                Err(e) => results
+                    .errors
+                    .push(format!("Failed to remove archive {archive_branch}: {e}")),
             }
         }
 
@@ -487,15 +486,13 @@ impl SessionCleaner {
                     Ok(output) => {
                         let error = String::from_utf8_lossy(&output.stderr);
                         results.errors.push(format!(
-                            "Failed to remove container {}: {}",
-                            container_name, error
+                            "Failed to remove container {container_name}: {error}"
                         ));
                     }
                     Err(e) => {
-                        results.errors.push(format!(
-                            "Failed to remove container {}: {}",
-                            container_name, e
-                        ));
+                        results
+                            .errors
+                            .push(format!("Failed to remove container {container_name}: {e}"));
                     }
                 }
             }
@@ -546,7 +543,7 @@ impl SessionCleaner {
         if !results.errors.is_empty() {
             println!("\n⚠️  Some items couldn't be cleaned:");
             for error in &results.errors {
-                println!("  • {}", error);
+                println!("  • {error}");
             }
         }
 

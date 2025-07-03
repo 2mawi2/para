@@ -126,9 +126,7 @@ on run argv
     end tell
   end tell
 end run
-        "#,
-        app_name = app_name,
-        search_fragment = search_fragment
+        "#
     )
 }
 
@@ -140,8 +138,7 @@ impl PlatformManager for MacOSPlatform {
             panic!(
                 "CRITICAL: close_ide_window called from test environment! \
                  This indicates a test isolation failure. \
-                 Session: {}, IDE: {}",
-                session_id, ide_name
+                 Session: {session_id}, IDE: {ide_name}"
             );
         }
 
@@ -168,7 +165,7 @@ impl MacOSPlatform {
         let state_dir = std::env::current_dir()
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
             .join(".para_state");
-        let launch_file = state_dir.join(format!("{}.launch", session_id));
+        let launch_file = state_dir.join(format!("{session_id}.launch"));
 
         let actual_ide = if launch_file.exists() {
             // Try to read the actual IDE used from launch file
@@ -190,8 +187,7 @@ impl MacOSPlatform {
             "cursor" => Ok(Box::new(CursorHandler)),
             "code" | "vscode" => Ok(Box::new(VSCodeHandler)),
             _ => Err(crate::utils::ParaError::ide_error(format!(
-                "Unsupported IDE: {}",
-                ide_name
+                "Unsupported IDE: {ide_name}"
             ))),
         }
     }

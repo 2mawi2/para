@@ -12,7 +12,7 @@ use super::strategies::{
 pub fn find_mcp_server() -> Result<McpServerConfig> {
     // Check if we're running from homebrew - if so, only use homebrew strategy
     let current_exe = std::env::current_exe()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {}", e)))?;
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get current executable: {e}")))?;
     let exe_path = current_exe.to_string_lossy();
     let is_homebrew = exe_path.contains("/homebrew/") || exe_path.contains("/usr/local/bin/");
 
@@ -46,7 +46,7 @@ pub fn find_mcp_server() -> Result<McpServerConfig> {
     Err(ParaError::invalid_args(
         format!(
             "No para MCP server found. Claude Code won't be able to connect to Para tools.\n\
-            Tried strategies: {}\n\n\
+            Tried strategies: {strategies_tried}\n\n\
             📋 Install options (choose one):\n\n\
             🔧 For development in this repo:\n  \
             cd mcp-server-ts && npm install && npm run build\n\n\
@@ -57,8 +57,7 @@ pub fn find_mcp_server() -> Result<McpServerConfig> {
             ⚡ Quick check:\n  \
             Run 'which para-mcp-server' to see if it's in your PATH\n  \
             Check 'node mcp-server-ts/build/para-mcp-server.js --help' for TypeScript server\n\n\
-            💡 After installing, run 'para mcp init --claude-code' again to update the configuration.",
-            strategies_tried
+            💡 After installing, run 'para mcp init --claude-code' again to update the configuration."
         )
     ))
 }
@@ -79,7 +78,7 @@ pub fn create_mcp_json() -> Result<bool> {
     // Load existing .mcp.json or create new one
     let mut mcp_config = if mcp_path.exists() {
         let content = fs::read_to_string(mcp_path)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read .mcp.json: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to read .mcp.json: {e}")))?;
 
         if content.trim().is_empty() {
             // File exists but is empty, create new config
@@ -87,9 +86,8 @@ pub fn create_mcp_json() -> Result<bool> {
                 "mcpServers": {}
             })
         } else {
-            serde_json::from_str(&content).map_err(|e| {
-                ParaError::invalid_config(format!("Invalid .mcp.json format: {}", e))
-            })?
+            serde_json::from_str(&content)
+                .map_err(|e| ParaError::invalid_config(format!("Invalid .mcp.json format: {e}")))?
         }
     } else {
         // File doesn't exist, create new config
@@ -113,10 +111,10 @@ pub fn create_mcp_json() -> Result<bool> {
 
     // Write the updated config with proper formatting
     let formatted_config = serde_json::to_string_pretty(&mcp_config)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize .mcp.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize .mcp.json: {e}")))?;
 
     fs::write(mcp_path, formatted_config)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write .mcp.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write .mcp.json: {e}")))?;
     Ok(true)
 }
 
@@ -134,7 +132,7 @@ pub fn prompt_for_ide() -> Result<&'static str> {
         .items(&choices)
         .default(0)
         .interact()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get user input: {}", e)))?;
+        .map_err(|e| ParaError::invalid_args(format!("Failed to get user input: {e}")))?;
 
     match selection {
         0 => Ok("claude-code"),
@@ -163,7 +161,7 @@ pub fn configure_claude_code() -> Result<()> {
                 }
                 Err(e) => {
                     println!("❌ MCP server setup incomplete:");
-                    println!("   {}", e);
+                    println!("   {e}");
                     return Err(e);
                 }
             }

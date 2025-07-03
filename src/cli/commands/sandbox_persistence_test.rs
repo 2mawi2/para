@@ -14,7 +14,7 @@ mod tests {
 
         let session = crate::core::session::state::SessionState::with_all_flags(
             session_name.clone(),
-            format!("para/{}", session_name),
+            format!("para/{session_name}"),
             worktree_path,
             "main".to_string(),
             false,
@@ -132,7 +132,7 @@ mod tests {
 
         let session = crate::core::session::state::SessionState::with_all_flags(
             session_name.clone(),
-            format!("para/{}", session_name),
+            format!("para/{session_name}"),
             worktree_path,
             "main".to_string(),
             false,
@@ -169,7 +169,7 @@ mod tests {
 
         let session = crate::core::session::state::SessionState::with_all_flags(
             session_name.clone(),
-            format!("para/{}", session_name),
+            format!("para/{session_name}"),
             worktree_path,
             "main".to_string(),
             false,
@@ -212,7 +212,7 @@ mod tests {
 
         let session = crate::core::session::state::SessionState::with_all_flags(
             session_name.clone(),
-            format!("para/{}", session_name),
+            format!("para/{session_name}"),
             worktree_path,
             "main".to_string(),
             true, // dangerous_skip_permissions enabled

@@ -75,8 +75,7 @@ impl SandboxResolver {
             Some(_) => profile,
             None => {
                 eprintln!(
-                    "⚠️  Invalid sandbox profile '{}' from {}, using default '{}'",
-                    profile, source, default
+                    "⚠️  Invalid sandbox profile '{profile}' from {source}, using default '{default}'"
                 );
                 default.to_string()
             }

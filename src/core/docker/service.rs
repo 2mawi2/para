@@ -49,7 +49,7 @@ impl DockerService {
             // Try to find the auth volume - it might use different user IDs on different systems
             // First try with USER env var
             let user_id = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-            let primary_volume = format!("para-auth-claude-{}", user_id);
+            let primary_volume = format!("para-auth-claude-{user_id}");
 
             // Check if primary volume exists
             let primary_check = Command::new("docker")
@@ -79,9 +79,8 @@ impl DockerService {
 
             if let Some(volume_name) = auth_volume {
                 // Mount the auth volume
-                docker_cmd_args
-                    .extend(["-v".to_string(), format!("{}:/root/.config", volume_name)]);
-                println!("🔐 Mounting auth volume: {}", volume_name);
+                docker_cmd_args.extend(["-v".to_string(), format!("{volume_name}:/root/.config")]);
+                println!("🔐 Mounting auth volume: {volume_name}");
             } else {
                 println!("⚠️  No auth volume found. Run 'para auth' to set up authentication.");
             }
@@ -132,12 +131,12 @@ impl DockerService {
             let mut forwarded_count = 0;
             for key in options.env_keys {
                 if let Ok(value) = std::env::var(key) {
-                    docker_cmd_args.extend(["-e".to_string(), format!("{}={}", key, value)]);
+                    docker_cmd_args.extend(["-e".to_string(), format!("{key}={value}")]);
                     forwarded_count += 1;
                 }
             }
             if forwarded_count > 0 {
-                println!("🔑 Forwarding {} API keys to container", forwarded_count);
+                println!("🔑 Forwarding {forwarded_count} API keys to container");
             }
         }
 
@@ -175,7 +174,7 @@ impl DockerService {
 
     /// Start a container
     pub fn start_container(&self, session_name: &str) -> DockerResult<()> {
-        let container_name = format!("para-{}", session_name);
+        let container_name = format!("para-{session_name}");
 
         let output = Command::new("docker")
             .args(["start", &container_name])
@@ -206,7 +205,7 @@ impl DockerService {
         // Verify network isolation state matches expectations
         if let Err(e) = self.verify_network_isolation(session_name, expected_network_isolation) {
             // Stop the container if verification fails
-            let container_name = format!("para-{}", session_name);
+            let container_name = format!("para-{session_name}");
             let _ = Command::new("docker")
                 .args(["stop", &container_name])
                 .output();
@@ -222,7 +221,7 @@ impl DockerService {
         let output = Command::new("docker")
             .args(["version"])
             .output()
-            .map_err(|e| DockerError::DaemonNotAvailable(format!("Docker not found: {}", e)))?;
+            .map_err(|e| DockerError::DaemonNotAvailable(format!("Docker not found: {e}")))?;
 
         if !output.status.success() {
             return Err(DockerError::DaemonNotAvailable(
@@ -239,7 +238,7 @@ impl DockerService {
         session_name: &str,
         expected_enabled: bool,
     ) -> DockerResult<()> {
-        let container_name = format!("para-{}", session_name);
+        let container_name = format!("para-{session_name}");
 
         // First check environment variable
         let env_output = Command::new("docker")
@@ -260,8 +259,7 @@ impl DockerService {
 
             if actual_enabled != expected_enabled {
                 return Err(DockerError::NetworkIsolationFailed(format!(
-                    "Network isolation mismatch: expected {}, but container has {}",
-                    expected_enabled, actual_enabled
+                    "Network isolation mismatch: expected {expected_enabled}, but container has {actual_enabled}"
                 )));
             }
 
@@ -299,7 +297,7 @@ impl DockerService {
 
     /// Run a setup script inside a container
     pub fn run_setup_script(&self, session_name: &str, script_path: &Path) -> DockerResult<()> {
-        let container_name = format!("para-{}", session_name);
+        let container_name = format!("para-{session_name}");
 
         // Read the script content
         let script_content = std::fs::read_to_string(script_path).map_err(|e| {
@@ -313,7 +311,7 @@ impl DockerService {
         let mut write_cmd = Command::new("docker");
         write_cmd
             .args(["exec", &container_name, "sh", "-c"])
-            .arg(format!("cat > {}", temp_script_path))
+            .arg(format!("cat > {temp_script_path}"))
             .stdin(std::process::Stdio::piped());
 
         let mut write_process = write_cmd.spawn().map_err(|e| {
@@ -360,7 +358,7 @@ impl DockerService {
                 "-e",
                 "PARA_WORKSPACE=/workspace",
                 "-e",
-                &format!("PARA_SESSION={}", session_name),
+                &format!("PARA_SESSION={session_name}"),
                 "-w",
                 "/workspace",
                 &container_name,
@@ -398,7 +396,7 @@ impl DockerService {
 
     /// Stop a running container
     pub fn stop_container(&self, session_name: &str) -> DockerResult<()> {
-        let container_name = format!("para-{}", session_name);
+        let container_name = format!("para-{session_name}");
 
         // Check if container exists
         let check_output = Command::new("docker")
@@ -408,10 +406,10 @@ impl DockerService {
                 "--format",
                 "{{.Names}}",
                 "--filter",
-                &format!("name={}", container_name),
+                &format!("name={container_name}"),
             ])
             .output()
-            .map_err(|e| DockerError::CommandFailed(format!("Failed to check container: {}", e)))?;
+            .map_err(|e| DockerError::CommandFailed(format!("Failed to check container: {e}")))?;
 
         let container_list = String::from_utf8_lossy(&check_output.stdout);
         if !container_list.contains(&container_name) {
@@ -423,15 +421,14 @@ impl DockerService {
         let stop_output = Command::new("docker")
             .args(["stop", &container_name])
             .output()
-            .map_err(|e| DockerError::CommandFailed(format!("Failed to stop container: {}", e)))?;
+            .map_err(|e| DockerError::CommandFailed(format!("Failed to stop container: {e}")))?;
 
         if !stop_output.status.success() {
             let stderr = String::from_utf8_lossy(&stop_output.stderr);
             // If container is already stopped, that's fine
             if !stderr.contains("is not running") {
                 return Err(DockerError::CommandFailed(format!(
-                    "Failed to stop container '{}': {}",
-                    container_name, stderr
+                    "Failed to stop container '{container_name}': {stderr}"
                 )));
             }
         }
@@ -440,15 +437,12 @@ impl DockerService {
         let rm_output = Command::new("docker")
             .args(["rm", &container_name])
             .output()
-            .map_err(|e| {
-                DockerError::CommandFailed(format!("Failed to remove container: {}", e))
-            })?;
+            .map_err(|e| DockerError::CommandFailed(format!("Failed to remove container: {e}")))?;
 
         if !rm_output.status.success() {
             let stderr = String::from_utf8_lossy(&rm_output.stderr);
             return Err(DockerError::CommandFailed(format!(
-                "Failed to remove container '{}': {}",
-                container_name, stderr
+                "Failed to remove container '{container_name}': {stderr}"
             )));
         }
 
@@ -523,7 +517,7 @@ mod tests {
         ];
 
         for (session_name, expected_container) in test_cases {
-            let container_name = format!("para-{}", session_name);
+            let container_name = format!("para-{session_name}");
             assert_eq!(container_name, expected_container);
         }
     }
@@ -569,7 +563,7 @@ mod tests {
         // Test that the correct environment variables are set
         let session_name = "test-session";
         let expected_workspace = "PARA_WORKSPACE=/workspace";
-        let expected_session = format!("PARA_SESSION={}", session_name);
+        let expected_session = format!("PARA_SESSION={session_name}");
 
         assert_eq!(expected_workspace, "PARA_WORKSPACE=/workspace");
         assert_eq!(expected_session, "PARA_SESSION=test-session");

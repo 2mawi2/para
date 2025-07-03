@@ -32,7 +32,7 @@ pub fn transform_claude_tasks_file(path: &Path) -> Result<()> {
 
 fn detect_task_configuration(tasks_file: &Path) -> Result<TaskConfiguration> {
     let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {e}")))?;
 
     let has_prompt_file = content.contains(".claude_prompt_temp")
         || (content.contains("$(cat") && content.contains("rm "));
@@ -87,10 +87,10 @@ fn apply_remove_prompt_file_transformation(
     has_skip_permissions: bool,
 ) -> Result<()> {
     let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {e}")))?;
 
     let mut json: Value = serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {e}")))?;
 
     let new_command = if has_skip_permissions {
         "claude --dangerously-skip-permissions -c"
@@ -112,28 +112,28 @@ fn apply_remove_prompt_file_transformation(
     }
 
     let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {e}")))?;
 
     fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {e}")))
 }
 
 /// Loads and parses a tasks.json file
 fn load_tasks_json(tasks_file: &Path) -> Result<Value> {
     let content = fs::read_to_string(tasks_file)
-        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to read tasks.json: {e}")))?;
 
     serde_json::from_str(&content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {}", e)))
+        .map_err(|e| ParaError::fs_error(format!("Failed to parse tasks.json: {e}")))
 }
 
 /// Saves a JSON value to a tasks.json file with pretty formatting
 fn save_tasks_json(tasks_file: &Path, json: Value) -> Result<()> {
     let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to serialize tasks.json: {e}")))?;
 
     fs::write(tasks_file, updated_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {}", e)))
+        .map_err(|e| ParaError::fs_error(format!("Failed to update tasks.json: {e}")))
 }
 
 /// Checks if a command needs the continue flag added

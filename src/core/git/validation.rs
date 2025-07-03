@@ -34,11 +34,10 @@ impl GitValidator {
 
         for pattern in invalid_patterns {
             let regex = Regex::new(pattern)
-                .map_err(|e| ParaError::git_operation(format!("Regex error: {}", e)))?;
+                .map_err(|e| ParaError::git_operation(format!("Regex error: {e}")))?;
             if regex.is_match(name) {
                 return Err(ParaError::git_operation(format!(
-                    "Invalid branch name '{}': contains invalid characters or patterns",
-                    name
+                    "Invalid branch name '{name}': contains invalid characters or patterns"
                 )));
             }
         }
@@ -101,8 +100,7 @@ mod tests {
         for invalid_name in invalid_names {
             assert!(
                 GitValidator::validate_branch_name(invalid_name).is_err(),
-                "Should reject invalid branch name: {}",
-                invalid_name
+                "Should reject invalid branch name: {invalid_name}"
             );
         }
     }

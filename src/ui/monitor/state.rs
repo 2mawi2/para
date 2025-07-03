@@ -473,9 +473,9 @@ mod tests {
         assert_ne!(click1, click6);
 
         // Test Debug trait
-        assert!(format!("{:?}", click1).contains("Resume"));
-        assert!(format!("{:?}", click4).contains("Copy"));
-        assert!(format!("{:?}", click5).contains("Finish"));
-        assert!(format!("{:?}", click6).contains("Cancel"));
+        assert!(format!("{click1:?}").contains("Resume"));
+        assert!(format!("{click4:?}").contains("Copy"));
+        assert!(format!("{click5:?}").contains("Finish"));
+        assert!(format!("{click6:?}").contains("Cancel"));
     }
 }

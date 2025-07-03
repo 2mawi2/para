@@ -45,7 +45,7 @@ fn start_daemon() -> Result<()> {
             // Run the daemon server
             let server = DaemonServer::new();
             if let Err(e) = server.run() {
-                eprintln!("Daemon error: {}", e);
+                eprintln!("Daemon error: {e}");
                 std::process::exit(1);
             }
 
@@ -132,10 +132,7 @@ fn send_daemon_command(command: &DaemonCommand) -> Result<DaemonResponse> {
 
     // Parse response
     let response: DaemonResponse = serde_json::from_str(response.trim()).map_err(|e| {
-        crate::utils::ParaError::worktree_operation(format!(
-            "Failed to parse daemon response: {}",
-            e
-        ))
+        crate::utils::ParaError::worktree_operation(format!("Failed to parse daemon response: {e}"))
     })?;
     Ok(response)
 }

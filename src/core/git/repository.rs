@@ -11,7 +11,7 @@ pub struct GitRepository {
 impl GitRepository {
     pub fn discover() -> Result<Self> {
         let current_dir = std::env::current_dir().map_err(|e| {
-            ParaError::git_operation(format!("Failed to get current directory: {}", e))
+            ParaError::git_operation(format!("Failed to get current directory: {e}"))
         })?;
 
         Self::discover_from(&current_dir)
@@ -22,7 +22,7 @@ impl GitRepository {
             .current_dir(path)
             .args(["rev-parse", "--show-toplevel"])
             .output()
-            .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {}", e)))?;
+            .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -57,7 +57,7 @@ impl GitRepository {
             .current_dir(&self.root)
             .args(["status", "--porcelain"])
             .output()
-            .map_err(|e| ParaError::git_operation(format!("Failed to check git status: {}", e)))?;
+            .map_err(|e| ParaError::git_operation(format!("Failed to check git status: {e}")))?;
 
         if !output.status.success() {
             return Err(ParaError::git_operation(
@@ -146,8 +146,7 @@ impl GitRepository {
                     • Remove unwanted nested repositories manually\n\
                     • Add them to .gitignore if they should be ignored\n\n\
                     Note: Para doesn't support worktrees with nested git repositories.\n\
-                    Original error: {}",
-                    error_str
+                    Original error: {error_str}"
                 ))
             } else {
                 e
@@ -169,7 +168,7 @@ impl GitRepository {
             .current_dir(repo_root)
             .args(["rev-parse", "--git-dir"])
             .output()
-            .map_err(|e| ParaError::git_operation(format!("Failed to get git dir: {}", e)))?;
+            .map_err(|e| ParaError::git_operation(format!("Failed to get git dir: {e}")))?;
 
         if !output.status.success() {
             return Err(ParaError::git_operation(
@@ -193,7 +192,7 @@ pub fn execute_git_command(repo: &GitRepository, args: &[&str]) -> Result<String
         .current_dir(&repo.root)
         .args(args)
         .output()
-        .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {}", e)))?;
+        .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -213,7 +212,7 @@ pub fn execute_git_command_with_status(repo: &GitRepository, args: &[&str]) -> R
         .current_dir(&repo.root)
         .args(args)
         .status()
-        .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {}", e)))?;
+        .map_err(|e| ParaError::git_operation(format!("Failed to execute git: {e}")))?;
 
     if !status.success() {
         return Err(ParaError::git_operation(format!(
@@ -324,15 +323,14 @@ mod tests {
         assert!(result.is_err());
 
         let error_message = result.unwrap_err().to_string();
-        eprintln!("Error message: {}", error_message);
+        eprintln!("Error message: {error_message}");
 
         // Check for either the git error or our custom message
         assert!(
             error_message.contains("nested git repositories")
                 || error_message.contains("embedded repository")
                 || error_message.contains("Git command failed"),
-            "Expected error about nested repositories, got: {}",
-            error_message
+            "Expected error about nested repositories, got: {error_message}"
         );
 
         // Clean up the nested repo

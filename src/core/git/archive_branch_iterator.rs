@@ -108,7 +108,7 @@ mod tests {
 
         // Create some archived branches
         for i in 1..=3 {
-            let session_name = format!("test-session-{}", i);
+            let session_name = format!("test-session-{i}");
             branch_manager
                 .create_branch(&session_name, &initial_branch)
                 .unwrap();
@@ -164,9 +164,9 @@ mod tests {
         let initial_branch = git_service.repository().get_current_branch().unwrap();
         let archive_prefix = config.get_branch_prefix();
         let archive_branches = [
-            format!("{}/archived/20240101-120000/test1", archive_prefix),
-            format!("{}/archived/20240102-120000/test2", archive_prefix),
-            format!("{}/archived/20240103-120000/test3", archive_prefix),
+            format!("{archive_prefix}/archived/20240101-120000/test1"),
+            format!("{archive_prefix}/archived/20240102-120000/test2"),
+            format!("{archive_prefix}/archived/20240103-120000/test3"),
         ];
 
         for branch in &archive_branches {

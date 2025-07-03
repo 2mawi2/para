@@ -83,9 +83,9 @@ pub enum ConfigError {
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::Io(e) => write!(f, "IO error: {}", e),
-            ConfigError::Json(e) => write!(f, "JSON error: {}", e),
-            ConfigError::Validation(msg) => write!(f, "Validation error: {}", msg),
+            ConfigError::Io(e) => write!(f, "IO error: {e}"),
+            ConfigError::Json(e) => write!(f, "JSON error: {e}"),
+            ConfigError::Validation(msg) => write!(f, "Validation error: {msg}"),
         }
     }
 }

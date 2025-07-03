@@ -104,7 +104,7 @@ impl Status {
     }
 
     pub fn status_file_path(state_dir: &Path, session_name: &str) -> PathBuf {
-        state_dir.join(format!("{}.status.json", session_name))
+        state_dir.join(format!("{session_name}.status.json"))
     }
 
     pub fn save(&self, state_dir: &Path) -> Result<()> {
@@ -112,18 +112,18 @@ impl Status {
 
         if let Some(parent) = status_file.parent() {
             fs::create_dir_all(parent).map_err(|e| {
-                ParaError::fs_error(format!("Failed to create state directory: {}", e))
+                ParaError::fs_error(format!("Failed to create state directory: {e}"))
             })?;
         }
 
         let json = serde_json::to_string_pretty(self)
-            .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {}", e)))?;
+            .map_err(|e| ParaError::config_error(format!("Failed to serialize status: {e}")))?;
 
         // Write to a temporary file first, then rename atomically
         // Use a unique temp file name to avoid conflicts in concurrent writes
         use rand::Rng;
         let random_id: u32 = rand::thread_rng().gen();
-        let temp_file = status_file.with_extension(format!("tmp.{}", random_id));
+        let temp_file = status_file.with_extension(format!("tmp.{random_id}"));
 
         // Use file locking to prevent race conditions
         let mut file = OpenOptions::new()
@@ -131,27 +131,27 @@ impl Status {
             .write(true)
             .truncate(true)
             .open(&temp_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to open temp status file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to open temp status file: {e}")))?;
 
         // Lock the file exclusively for writing
         file.lock_exclusive()
-            .map_err(|e| ParaError::fs_error(format!("Failed to lock status file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to lock status file: {e}")))?;
 
         // Write the content
         use std::io::Write;
         file.write_all(json.as_bytes())
-            .map_err(|e| ParaError::fs_error(format!("Failed to write status file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to write status file: {e}")))?;
 
         // Sync to disk
         file.sync_all()
-            .map_err(|e| ParaError::fs_error(format!("Failed to sync status file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to sync status file: {e}")))?;
 
         // Explicitly drop to release lock before rename
         drop(file);
 
         // Rename atomically
         fs::rename(temp_file, status_file)
-            .map_err(|e| ParaError::fs_error(format!("Failed to rename status file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to rename status file: {e}")))?;
 
         Ok(())
     }
@@ -173,7 +173,7 @@ impl Status {
             Ok(mut file) => {
                 // Lock the file for shared reading
                 FileExt::lock_shared(&file).map_err(|e| {
-                    ParaError::fs_error(format!("Failed to lock status file for reading: {}", e))
+                    ParaError::fs_error(format!("Failed to lock status file for reading: {e}"))
                 })?;
 
                 // Read the content
@@ -191,19 +191,16 @@ impl Status {
                                     Ok(None)
                                 } else {
                                     Err(ParaError::config_error(format!(
-                                        "Failed to parse status file: {}",
-                                        e
+                                        "Failed to parse status file: {e}"
                                     ))
                                     .into())
                                 }
                             }
                         }
                     }
-                    Err(e) => Err(ParaError::fs_error(format!(
-                        "Failed to read status file: {}",
-                        e
-                    ))
-                    .into()),
+                    Err(e) => {
+                        Err(ParaError::fs_error(format!("Failed to read status file: {e}")).into())
+                    }
                 }
             }
             Err(e) => {
@@ -212,7 +209,7 @@ impl Status {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     Ok(None)
                 } else {
-                    Err(ParaError::fs_error(format!("Failed to open status file: {}", e)).into())
+                    Err(ParaError::fs_error(format!("Failed to open status file: {e}")).into())
                 }
             }
         }
@@ -309,7 +306,7 @@ impl Status {
         match (self.todos_completed, self.todos_total) {
             (Some(completed), Some(total)) => {
                 let percentage = self.todo_percentage().unwrap_or(0);
-                Some(format!("{}% ({}/{})", percentage, completed, total))
+                Some(format!("{percentage}% ({completed}/{total})"))
             }
             _ => None,
         }
@@ -331,11 +328,10 @@ impl Status {
         }
 
         for entry in fs::read_dir(state_dir)
-            .map_err(|e| ParaError::fs_error(format!("Failed to read state directory: {}", e)))?
+            .map_err(|e| ParaError::fs_error(format!("Failed to read state directory: {e}")))?
         {
-            let entry = entry.map_err(|e| {
-                ParaError::fs_error(format!("Failed to read directory entry: {}", e))
-            })?;
+            let entry = entry
+                .map_err(|e| ParaError::fs_error(format!("Failed to read directory entry: {e}")))?;
 
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
@@ -362,7 +358,7 @@ impl Status {
                 let status_file = Self::status_file_path(state_dir, &status.session_name);
                 if status_file.exists() {
                     fs::remove_file(&status_file).map_err(|e| {
-                        ParaError::fs_error(format!("Failed to remove stale status file: {}", e))
+                        ParaError::fs_error(format!("Failed to remove stale status file: {e}"))
                     })?;
                     cleaned.push(status.session_name);
                 }
@@ -656,7 +652,7 @@ mod tests {
         let handle = thread::spawn(move || {
             for i in 0..5 {
                 let mut s = status_clone.clone();
-                s.current_task = format!("Task from thread {}", i);
+                s.current_task = format!("Task from thread {i}");
                 s.save(&state_dir_clone).unwrap();
                 thread::sleep(Duration::from_millis(10));
             }
@@ -665,7 +661,7 @@ mod tests {
         // Main thread writes
         for i in 0..5 {
             let mut s = status.clone();
-            s.current_task = format!("Task from main {}", i);
+            s.current_task = format!("Task from main {i}");
             s.save(state_dir).unwrap();
             thread::sleep(Duration::from_millis(10));
         }

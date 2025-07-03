@@ -23,27 +23,28 @@ pub fn execute_command_with_config(
     cli: Cli,
     test_config: Option<crate::config::Config>,
 ) -> Result<()> {
-    let config =
-        match cli.command {
-            Some(Commands::Config(_))
-            | Some(Commands::Completion(_))
-            | Some(Commands::Init)
-            | Some(Commands::Auth(_))
-            | Some(Commands::CompletionSessions)
-            | Some(Commands::CompletionBranches) => None,
-            Some(Commands::Monitor(_)) | None => match test_config {
-                Some(cfg) => Some(cfg),
-                None => Some(ConfigManager::load_or_create().map_err(|e| {
-                    ParaError::config_error(format!("Failed to load config: {}", e))
-                })?),
-            },
-            _ => match test_config {
-                Some(cfg) => Some(cfg),
-                None => Some(ConfigManager::load_or_create().map_err(|e| {
-                    ParaError::config_error(format!("Failed to load config: {}", e))
-                })?),
-            },
-        };
+    let config = match cli.command {
+        Some(Commands::Config(_))
+        | Some(Commands::Completion(_))
+        | Some(Commands::Init)
+        | Some(Commands::Auth(_))
+        | Some(Commands::CompletionSessions)
+        | Some(Commands::CompletionBranches) => None,
+        Some(Commands::Monitor(_)) | None => match test_config {
+            Some(cfg) => Some(cfg),
+            None => Some(
+                ConfigManager::load_or_create()
+                    .map_err(|e| ParaError::config_error(format!("Failed to load config: {e}")))?,
+            ),
+        },
+        _ => match test_config {
+            Some(cfg) => Some(cfg),
+            None => Some(
+                ConfigManager::load_or_create()
+                    .map_err(|e| ParaError::config_error(format!("Failed to load config: {e}")))?,
+            ),
+        },
+    };
 
     // Ensure daemon is running for any command that might need it
     // Skip daemon check for commands that don't need it
@@ -62,7 +63,7 @@ pub fn execute_command_with_config(
         // Try to ensure daemon is running, but don't fail if it doesn't work
         // The daemon is a best-effort service for container support
         if let Err(e) = crate::core::daemon::client::ensure_daemon_running() {
-            crate::utils::debug_log(&format!("Daemon auto-start failed: {}", e));
+            crate::utils::debug_log(&format!("Daemon auto-start failed: {e}"));
         }
     }
 

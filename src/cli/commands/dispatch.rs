@@ -219,7 +219,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             &session.worktree_path,
             &config,
         ) {
-            eprintln!("Warning: Failed to register with daemon: {}", e);
+            eprintln!("Warning: Failed to register with daemon: {e}");
             // Continue anyway - daemon might not be running
         }
 
@@ -317,9 +317,9 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Show the actual Docker image being used
         if let Some(ref custom_image) = args.docker_image {
-            println!("   Image: {} (custom)", custom_image);
+            println!("   Image: {custom_image} (custom)");
         } else if let Some(config_image) = config.get_docker_image() {
-            println!("   Image: {} (from config)", config_image);
+            println!("   Image: {config_image} (from config)");
         } else {
             println!("   Image: para-authenticated:latest (default)");
         }
@@ -392,21 +392,21 @@ fn create_launch_metadata(config: &Config, session_path: &Path) -> Result<()> {
         .join(".para_state");
 
     fs::create_dir_all(&state_dir)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {e}")))?;
 
     let session_id = session_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("unknown");
 
-    let launch_file = state_dir.join(format!("{}.launch", session_id));
+    let launch_file = state_dir.join(format!("{session_id}.launch"));
 
     let launch_content = format!(
         "LAUNCH_METHOD=wrapper\nWRAPPER_IDE={}\n",
         config.ide.wrapper.name
     );
     fs::write(&launch_file, launch_content)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write launch file: {e}")))?;
 
     Ok(())
 }
@@ -434,7 +434,7 @@ impl DispatchArgs {
         if !io::stdin().is_terminal() {
             let mut buffer = String::new();
             io::stdin().read_to_string(&mut buffer).map_err(|e| {
-                ParaError::file_operation(format!("Failed to read from stdin: {}", e))
+                ParaError::file_operation(format!("Failed to read from stdin: {e}"))
             })?;
 
             if buffer.trim().is_empty() {
@@ -467,7 +467,7 @@ impl DispatchArgs {
                 if is_likely_file_path(arg) {
                     let prompt = read_file_content(Path::new(arg))?;
                     if prompt.trim().is_empty() {
-                        return Err(ParaError::file_not_found(format!("file is empty: {}", arg)));
+                        return Err(ParaError::file_not_found(format!("file is empty: {arg}")));
                     }
                     Ok((None, prompt))
                 } else {
@@ -480,8 +480,7 @@ impl DispatchArgs {
                     let prompt = read_file_content(Path::new(prompt_or_file))?;
                     if prompt.trim().is_empty() {
                         return Err(ParaError::file_not_found(format!(
-                            "file is empty: {}",
-                            prompt_or_file
+                            "file is empty: {prompt_or_file}"
                         )));
                     }
                     Ok((Some(session.clone()), prompt))
@@ -547,7 +546,7 @@ fn read_file_content(path: &Path) -> Result<String> {
         path.to_path_buf()
     } else {
         std::env::current_dir()
-            .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {}", e)))?
+            .map_err(|e| ParaError::fs_error(format!("Failed to get current directory: {e}")))?
             .join(path)
     };
 
@@ -1306,13 +1305,12 @@ mod tests {
 
         for session_name in session_names {
             let result = create_claude_local_md(&session_path, session_name);
-            assert!(result.is_ok(), "Failed for session name: {}", session_name);
+            assert!(result.is_ok(), "Failed for session name: {session_name}");
 
             let content = std::fs::read_to_string(session_path.join("CLAUDE.local.md")).unwrap();
             assert!(
                 content.contains(session_name),
-                "Session name not found in content for: {}",
-                session_name
+                "Session name not found in content for: {session_name}"
             );
         }
     }

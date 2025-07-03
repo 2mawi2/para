@@ -35,7 +35,7 @@ impl ConfigManager {
     pub fn load_from_file(path: &Path) -> Result<Config> {
         // Use the migration system to load config
         let config = super::migration::load_config_with_migration(path)
-            .map_err(|e| super::ConfigError::Validation(format!("Migration failed: {}", e)))?;
+            .map_err(|e| super::ConfigError::Validation(format!("Migration failed: {e}")))?;
 
         // Still handle wrapper mode migration if needed
         let mut config = config;

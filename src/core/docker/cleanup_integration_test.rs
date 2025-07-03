@@ -51,7 +51,7 @@ mod integration_tests {
                 "ps",
                 "-a",
                 "--filter",
-                &format!("name={}", test_container_name),
+                &format!("name={test_container_name}"),
                 "--format",
                 "{{.Names}}",
             ])
@@ -71,7 +71,7 @@ mod integration_tests {
                 "ps",
                 "-a",
                 "--filter",
-                &format!("name={}", test_container_name),
+                &format!("name={test_container_name}"),
                 "--format",
                 "{{.Names}}",
             ])
@@ -103,7 +103,7 @@ mod integration_tests {
 
         // Create a test container
         let session_name = "test-active-session";
-        let test_container_name = format!("para-{}", session_name);
+        let test_container_name = format!("para-{session_name}");
 
         // Remove any existing test container
         Command::new("docker")
@@ -125,7 +125,7 @@ mod integration_tests {
             .expect("Failed to create test container");
 
         // Create a state file for this session
-        let state_file = temp_dir.path().join(format!("{}.state", session_name));
+        let state_file = temp_dir.path().join(format!("{session_name}.state"));
         std::fs::write(&state_file, "{}").unwrap();
 
         // Run cleanup
@@ -138,7 +138,7 @@ mod integration_tests {
                 "ps",
                 "-a",
                 "--filter",
-                &format!("name={}", test_container_name),
+                &format!("name={test_container_name}"),
                 "--format",
                 "{{.Names}}",
             ])

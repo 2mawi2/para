@@ -58,7 +58,7 @@ pub fn resume_specific_session(
             processed_context.as_ref(),
             Some(&session_state),
         )?;
-        println!("✅ Resumed session '{}'", session_name);
+        println!("✅ Resumed session '{session_name}'");
     } else {
         // Fallback: maybe the state file was timestamped (e.g. test4_20250611-XYZ)
         if let Some(candidate) = session_manager
@@ -130,7 +130,7 @@ pub fn detect_and_resume_session(
 
     match git_service.validate_session_environment(&current_dir)? {
         SessionEnvironment::Worktree { branch, .. } => {
-            println!("Current directory is a worktree for branch: {}", branch);
+            println!("Current directory is a worktree for branch: {branch}");
 
             // Process resume context once
             let processed_context = process_resume_context(args)?;
@@ -356,7 +356,7 @@ fn launch_ide_for_session_with_state(
                 transform_claude_tasks_file(path)?;
             }
             Err(e) => {
-                println!("⚠️  Error finding Claude session: {}", e);
+                println!("⚠️  Error finding Claude session: {e}");
                 launch_options.continue_conversation = true;
             }
         }

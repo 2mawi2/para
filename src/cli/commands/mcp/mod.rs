@@ -56,7 +56,7 @@ fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
     match add_to_gitignore(".mcp.json") {
         Ok(true) => println!("Added .mcp.json to .gitignore (contains user-specific paths)"),
         Ok(false) => println!("✓ .mcp.json already in .gitignore"),
-        Err(e) => println!("⚠️  Could not update .gitignore: {}", e),
+        Err(e) => println!("⚠️  Could not update .gitignore: {e}"),
     }
     println!();
 

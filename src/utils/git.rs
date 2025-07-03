@@ -24,18 +24,17 @@ pub fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
 
     let output = cmd
         .output()
-        .map_err(|e| ParaError::git_error(format!("Failed to run git command: {}", e)))?;
+        .map_err(|e| ParaError::git_error(format!("Failed to run git command: {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(ParaError::git_error(format!(
-            "Git command failed: {}",
-            stderr
+            "Git command failed: {stderr}"
         )));
     }
 
     let git_common_dir = String::from_utf8(output.stdout)
-        .map_err(|e| ParaError::git_error(format!("Invalid git output: {}", e)))?
+        .map_err(|e| ParaError::git_error(format!("Invalid git output: {e}")))?
         .trim()
         .to_string();
 
@@ -54,9 +53,7 @@ pub fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
         } else {
             // When no path is provided, resolve relative to current directory
             std::env::current_dir()
-                .map_err(|e| {
-                    ParaError::git_error(format!("Failed to get current directory: {}", e))
-                })?
+                .map_err(|e| ParaError::git_error(format!("Failed to get current directory: {e}")))?
                 .join(git_common_dir)
         }
     };
@@ -78,7 +75,7 @@ pub fn get_main_repository_root_from(path: Option<&Path>) -> Result<PathBuf> {
     // Canonicalize the path to resolve symlinks and normalize the path
     repo_root
         .canonicalize()
-        .map_err(|e| ParaError::git_error(format!("Failed to canonicalize repository root: {}", e)))
+        .map_err(|e| ParaError::git_error(format!("Failed to canonicalize repository root: {e}")))
 }
 
 #[cfg(test)]
@@ -130,7 +127,7 @@ mod tests {
         let result = get_main_repository_root_from(Some(temp_dir.path()));
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
-        println!("Error message: {}", error_msg);
+        println!("Error message: {error_msg}");
         assert!(
             error_msg.contains("Not in a git repository")
                 || error_msg.contains("Git command failed")

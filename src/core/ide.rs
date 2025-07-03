@@ -91,7 +91,7 @@ impl IdeManager {
             cmd.arg("-c")
                 .arg(format!("{} \"{}\"", wrapper_cmd, path.display()));
             cmd.output().map_err(|e| {
-                ParaError::ide_error(format!("Failed to run wrapper test stub: {}", e))
+                ParaError::ide_error(format!("Failed to run wrapper test stub: {e}"))
             })?;
             return Ok(());
         }
@@ -115,7 +115,7 @@ impl IdeManager {
         cmd.stderr(std::process::Stdio::null());
 
         cmd.spawn()
-            .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {}", e)))?;
+            .map_err(|e| ParaError::ide_error(format!("Failed to launch Cursor wrapper: {e}")))?;
         println!(
             "✅ Cursor opened - {} will start automatically",
             self.ide_config.name
@@ -147,7 +147,7 @@ impl IdeManager {
             cmd.arg("-c")
                 .arg(format!("{} \"{}\"", wrapper_cmd, path.display()));
             cmd.output().map_err(|e| {
-                ParaError::ide_error(format!("Failed to run wrapper test stub: {}", e))
+                ParaError::ide_error(format!("Failed to run wrapper test stub: {e}"))
             })?;
             return Ok(());
         }
@@ -170,9 +170,8 @@ impl IdeManager {
             "▶ launching VS Code wrapper with {} auto-start...",
             self.ide_config.name
         );
-        cmd.spawn().map_err(|e| {
-            ParaError::ide_error(format!("Failed to launch VS Code wrapper: {}", e))
-        })?;
+        cmd.spawn()
+            .map_err(|e| ParaError::ide_error(format!("Failed to launch VS Code wrapper: {e}")))?;
         println!(
             "✅ VS Code opened - {} will start automatically",
             self.ide_config.name
@@ -184,7 +183,7 @@ impl IdeManager {
     fn write_autorun_task_with_options(&self, path: &Path, options: &LaunchOptions) -> Result<()> {
         let vscode_dir = path.join(".vscode");
         fs::create_dir_all(&vscode_dir).map_err(|e| {
-            ParaError::ide_error(format!("Failed to create .vscode directory: {}", e))
+            ParaError::ide_error(format!("Failed to create .vscode directory: {e}"))
         })?;
 
         let mut ide_command = self.build_ide_wrapper_command_with_options(options);
@@ -224,7 +223,7 @@ impl IdeManager {
                     ide_command = sandboxed_cmd;
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Warning: Failed to apply sandbox: {}", e);
+                    eprintln!("⚠️  Warning: Failed to apply sandbox: {e}");
                     eprintln!("   Continuing without sandboxing");
                 }
             }
@@ -235,7 +234,7 @@ impl IdeManager {
 
         let tasks_file = vscode_dir.join("tasks.json");
         fs::write(&tasks_file, task_json)
-            .map_err(|e| ParaError::ide_error(format!("Failed to write tasks.json: {}", e)))?;
+            .map_err(|e| ParaError::ide_error(format!("Failed to write tasks.json: {e}")))?;
 
         Ok(())
     }
@@ -251,13 +250,13 @@ impl IdeManager {
             // Handle session continuation with proper quoting
             if let Some(ref session_id) = options.claude_session_id {
                 if !session_id.is_empty() {
-                    base_cmd.push_str(&format!(" -r \"{}\"", session_id));
+                    base_cmd.push_str(&format!(" -r \"{session_id}\""));
 
                     // Add prompt if provided
                     if let Some(ref prompt) = options.prompt {
                         // Escape quotes in prompt and add it
                         let escaped_prompt = prompt.replace('"', "\\\"");
-                        base_cmd.push_str(&format!(" \"{}\"", escaped_prompt));
+                        base_cmd.push_str(&format!(" \"{escaped_prompt}\""));
                     }
                 } else {
                     // Empty session ID, fall back to -c
@@ -280,9 +279,9 @@ impl IdeManager {
     "version": "2.0.0",
     "tasks": [
         {{
-            "label": "{}",
+            "label": "{label}",
             "type": "shell",
-            "command": "{}",
+            "command": "{escaped_command}",
             "group": "build",
             "presentation": {{
                 "echo": true,
@@ -297,8 +296,7 @@ impl IdeManager {
             }}
         }}
     ]
-}}"#,
-            label, escaped_command
+}}"#
         )
     }
 }

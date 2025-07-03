@@ -39,7 +39,7 @@ fn create_progress_bar(percentage: u8) -> String {
         bar.push('░');
     }
     bar.push(' ');
-    bar.push_str(&format!("{}%", percentage));
+    bar.push_str(&format!("{percentage}%"));
 
     bar
 }
@@ -66,9 +66,9 @@ fn create_dialog_style() -> Style {
 fn create_control_buttons_line<'a>(confirm_text: &'a str, cancel_text: &'a str) -> Line<'a> {
     Line::from(vec![
         Span::styled("[Enter]", Style::default().fg(COLOR_GREEN)),
-        Span::raw(format!(" {} • ", confirm_text)),
+        Span::raw(format!(" {confirm_text} • ")),
         Span::styled("[Esc]", Style::default().fg(COLOR_RED)),
-        Span::raw(format!(" {}", cancel_text)),
+        Span::raw(format!(" {cancel_text}")),
     ])
 }
 
@@ -505,9 +505,9 @@ impl MonitorRenderer {
             };
 
         let session_info = if is_current_session {
-            format!("{} • {} • (CURRENT) • ", selected_session, selected_branch)
+            format!("{selected_session} • {selected_branch} • (CURRENT) • ")
         } else {
-            format!("{} • {} • ", selected_session, selected_branch)
+            format!("{selected_session} • {selected_branch} • ")
         };
         let controls = vec![Line::from(vec![
             Span::styled(session_info, Style::default().fg(COLOR_LIGHT_GRAY)),
@@ -616,7 +616,7 @@ impl MonitorRenderer {
             } else {
                 "• "
             };
-            let toast_text = format!("{}{}", icon, message);
+            let toast_text = format!("{icon}{message}");
 
             // Calculate dimensions
             let feedback_width = (toast_text.len() as u16).min(40) + 2; // More compact

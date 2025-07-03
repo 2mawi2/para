@@ -26,7 +26,7 @@ pub fn launch_claude_with_context(
 ) -> Result<()> {
     let vscode_dir = session_path.join(".vscode");
     fs::create_dir_all(&vscode_dir)
-        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to create .vscode directory: {e}")))?;
 
     // Resolve sandbox settings using the resolver
     let resolver = SandboxResolver::new(config);
@@ -56,7 +56,7 @@ pub fn launch_claude_with_context(
     if let Some(ref content) = options.prompt_content {
         if !content.is_empty() {
             fs::write(&temp_prompt_file, content).map_err(|e| {
-                ParaError::fs_error(format!("Failed to write temp prompt file: {}", e))
+                ParaError::fs_error(format!("Failed to write temp prompt file: {e}"))
             })?;
         }
     }
@@ -74,7 +74,7 @@ pub fn launch_claude_with_context(
                     temp_prompt_file.display()
                 )
             } else {
-                format!("{} -r \"{}\"", base_cmd, session_id)
+                format!("{base_cmd} -r \"{session_id}\"")
             }
         } else {
             // Empty session ID, fall back to -c
@@ -86,7 +86,7 @@ pub fn launch_claude_with_context(
                     temp_prompt_file.display()
                 )
             } else {
-                format!("{} -c", base_cmd)
+                format!("{base_cmd} -c")
             }
         }
     } else if options.continue_conversation {
@@ -99,7 +99,7 @@ pub fn launch_claude_with_context(
                 temp_prompt_file.display()
             )
         } else {
-            format!("{} -c", base_cmd)
+            format!("{base_cmd} -c")
         }
     } else {
         // New session with optional prompt
@@ -126,7 +126,7 @@ pub fn launch_claude_with_context(
                 sandboxed_cmd
             }
             Err(e) => {
-                eprintln!("⚠️  Warning: Failed to apply sandbox: {}", e);
+                eprintln!("⚠️  Warning: Failed to apply sandbox: {e}");
                 eprintln!("   Continuing without sandboxing");
                 claude_task_cmd
             }
@@ -139,7 +139,7 @@ pub fn launch_claude_with_context(
     let tasks_json = create_claude_task_json(&final_command);
     let tasks_file = vscode_dir.join("tasks.json");
     fs::write(&tasks_file, tasks_json)
-        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {}", e)))?;
+        .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {e}")))?;
 
     // Launch IDE wrapper
     let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
@@ -161,8 +161,7 @@ pub fn launch_claude_with_context(
         }
         Err(e) => {
             return Err(ParaError::ide_error(format!(
-                "Failed to launch {}: {}. Check that '{}' is installed and accessible.",
-                ide_name, e, ide_command
+                "Failed to launch {ide_name}: {e}. Check that '{ide_command}' is installed and accessible."
             )));
         }
     }

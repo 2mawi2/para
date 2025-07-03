@@ -104,8 +104,7 @@ fn start_daemon_if_needed() -> Result<()> {
             } else {
                 // Version mismatch - stop old daemon
                 eprintln!(
-                    "Para daemon version mismatch (daemon: {}, current: {}). Restarting...",
-                    daemon_version, current_version
+                    "Para daemon version mismatch (daemon: {daemon_version}, current: {current_version}). Restarting..."
                 );
                 let _ = send_command(&DaemonCommand::Shutdown);
                 std::thread::sleep(Duration::from_millis(500));

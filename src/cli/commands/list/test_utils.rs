@@ -53,8 +53,7 @@ pub mod test_helpers {
         let state_file = state_dir.join(format!("{}.state", params.session_id));
         let json_content = serde_json::to_string_pretty(&session_state).map_err(|e| {
             crate::utils::ParaError::invalid_config(format!(
-                "Failed to serialize session state: {}",
-                e
+                "Failed to serialize session state: {e}"
             ))
         })?;
         fs::write(state_file, json_content)?;
