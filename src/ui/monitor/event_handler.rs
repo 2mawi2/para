@@ -204,58 +204,90 @@ impl EventHandler {
         state: &MonitorAppState,
         sessions: &[SessionInfo],
     ) -> Option<UiAction> {
-        if let MouseEventKind::Down(crossterm::event::MouseButton::Left) = mouse.kind {
-            // Check if we have a stored table area
-            if let Some(table_area) = state.table_area {
-                let mouse_x = mouse.column;
-                let mouse_y = mouse.row;
+        // Only handle left clicks
+        if !matches!(
+            mouse.kind,
+            MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        ) {
+            return None;
+        }
 
-                // Check if the click is within the table area
-                if mouse_x >= table_area.x
-                    && mouse_x < table_area.x + table_area.width
-                    && mouse_y >= table_area.y
-                    && mouse_y < table_area.y + table_area.height
-                {
-                    // Calculate which row was clicked
-                    // The table has a header row, so subtract 1 for the header
-                    // and account for the table's top position
-                    let relative_y = mouse_y - table_area.y;
+        // Check if we have a stored table area
+        let table_area = state.table_area?;
 
-                    // Skip if clicking on the header row (row 0) or the border (row 1)
-                    if relative_y > 1 {
-                        // Subtract 2 for header and border to get the data row index
-                        let table_index = (relative_y - 2) as usize;
+        // Check if the click is within the table area
+        if !self.is_click_in_table_area(mouse, table_area) {
+            return None;
+        }
 
-                        // Check if the clicked row is within the session list bounds
-                        if table_index < sessions.len() {
-                            // Check if clicking in the actions column (first 9 characters)
-                            let relative_x = mouse_x - table_area.x;
-                            if relative_x < 9 {
-                                // Actions column clicked
-                                // Button layout: "[▶] [📋]" (positions 0-8)
-                                // [▶] = positions 0-2
-                                // space = position 3
-                                // [📋] = positions 4-7
-                                if relative_x < 3 {
-                                    // Resume button clicked
-                                    return Some(UiAction::Session(SessionAction::Resume(
-                                        table_index,
-                                    )));
-                                } else if (4..8).contains(&relative_x) {
-                                    // Copy button clicked
-                                    return Some(UiAction::Session(SessionAction::Copy(
-                                        table_index,
-                                    )));
-                                }
-                            }
-                            // If clicking elsewhere on the row, just select it (no additional action beyond selection)
-                            // Selection will be handled by the caller
-                        }
-                    }
-                }
+        // Calculate table position (row index and relative x)
+        let (table_index, relative_x) = self.calculate_table_position(mouse, table_area)?;
+
+        // Check if the clicked row is within the session list bounds
+        if table_index >= sessions.len() {
+            return None;
+        }
+
+        // Check if clicking in the actions column (first 9 characters)
+        if relative_x < 9 {
+            // Try to detect button action
+            if let Some(action) = self.detect_button_action(relative_x, table_index) {
+                return Some(UiAction::Session(action));
             }
         }
+
+        // If clicking elsewhere on the row, just select it (no additional action beyond selection)
+        // Selection will be handled by the caller
         None
+    }
+
+    /// Check if a mouse click is within the table area
+    fn is_click_in_table_area(&self, mouse: MouseEvent, table_area: ratatui::layout::Rect) -> bool {
+        let mouse_x = mouse.column;
+        let mouse_y = mouse.row;
+
+        mouse_x >= table_area.x
+            && mouse_x < table_area.x + table_area.width
+            && mouse_y >= table_area.y
+            && mouse_y < table_area.y + table_area.height
+    }
+
+    /// Calculate the table position (row index and relative x) from a mouse event
+    /// Returns None if the click is on header or border rows
+    fn calculate_table_position(
+        &self,
+        mouse: MouseEvent,
+        table_area: ratatui::layout::Rect,
+    ) -> Option<(usize, u16)> {
+        let relative_y = mouse.row - table_area.y;
+        let relative_x = mouse.column - table_area.x;
+
+        // Skip if clicking on the header row (row 0) or the border (row 1)
+        if relative_y > 1 {
+            // Subtract 2 for header and border to get the data row index
+            let table_index = (relative_y - 2) as usize;
+            Some((table_index, relative_x))
+        } else {
+            None
+        }
+    }
+
+    /// Detect which button action should be performed based on relative x position
+    /// Returns None if the click is not on a button
+    fn detect_button_action(&self, relative_x: u16, session_index: usize) -> Option<SessionAction> {
+        // Actions column: "[▶] [📋]" (positions 0-8)
+        // [▶] = positions 0-2
+        // space = position 3
+        // [📋] = positions 4-7
+        if relative_x < 3 {
+            // Resume button clicked
+            Some(SessionAction::Resume(session_index))
+        } else if (4..8).contains(&relative_x) {
+            // Copy button clicked
+            Some(SessionAction::Copy(session_index))
+        } else {
+            None
+        }
     }
 }
 
@@ -528,6 +560,161 @@ mod tests {
         assert_eq!(
             event_handler.handle_key_event(stale_toggle, &state, &empty_sessions),
             Some(UiAction::Navigation(NavigationAction::ToggleStale))
+        );
+    }
+
+    #[test]
+    fn test_is_click_in_table_area() {
+        let event_handler = EventHandler::new();
+        let table_area = Rect {
+            x: 1,
+            y: 4,
+            width: 100,
+            height: 20,
+        };
+
+        // Test click inside table area
+        let inside_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 50, // Within table area (1-101)
+            row: 10,    // Within table area (4-24)
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(event_handler.is_click_in_table_area(inside_click, table_area));
+
+        // Test click outside table area - left edge
+        let outside_left = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0, // Outside table area
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(!event_handler.is_click_in_table_area(outside_left, table_area));
+
+        // Test click outside table area - right edge
+        let outside_right = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 101, // Outside table area
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(!event_handler.is_click_in_table_area(outside_right, table_area));
+
+        // Test click outside table area - above
+        let outside_above = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 50,
+            row: 3, // Outside table area
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(!event_handler.is_click_in_table_area(outside_above, table_area));
+
+        // Test click outside table area - below
+        let outside_below = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 50,
+            row: 24, // Outside table area
+            modifiers: KeyModifiers::NONE,
+        };
+        assert!(!event_handler.is_click_in_table_area(outside_below, table_area));
+    }
+
+    #[test]
+    fn test_calculate_table_position() {
+        let event_handler = EventHandler::new();
+        let table_area = Rect {
+            x: 1,
+            y: 4,
+            width: 100,
+            height: 20,
+        };
+
+        // Test valid position calculation
+        let valid_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6, // Relative position 5 from table start
+            row: 7,    // Relative position 3 from table start, minus 2 for header = row 1
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(
+            event_handler.calculate_table_position(valid_click, table_area),
+            Some((1, 5)) // (row_index, relative_x)
+        );
+
+        // Test click on header row (should return None)
+        let header_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6,
+            row: 4, // Header row
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(
+            event_handler.calculate_table_position(header_click, table_area),
+            None
+        );
+
+        // Test click on border row (should return None)
+        let border_click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6,
+            row: 5, // Border row
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(
+            event_handler.calculate_table_position(border_click, table_area),
+            None
+        );
+    }
+
+    #[test]
+    fn test_detect_button_action() {
+        let event_handler = EventHandler::new();
+
+        // Test resume button (positions 0-2)
+        assert_eq!(
+            event_handler.detect_button_action(0, 0),
+            Some(SessionAction::Resume(0))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(1, 0),
+            Some(SessionAction::Resume(0))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(2, 0),
+            Some(SessionAction::Resume(0))
+        );
+
+        // Test copy button (positions 4-7)
+        assert_eq!(
+            event_handler.detect_button_action(4, 0),
+            Some(SessionAction::Copy(0))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(5, 0),
+            Some(SessionAction::Copy(0))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(6, 0),
+            Some(SessionAction::Copy(0))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(7, 0),
+            Some(SessionAction::Copy(0))
+        );
+
+        // Test positions outside button areas
+        assert_eq!(event_handler.detect_button_action(3, 0), None); // Space between buttons
+        assert_eq!(event_handler.detect_button_action(8, 0), None); // Beyond buttons
+        assert_eq!(event_handler.detect_button_action(9, 0), None); // Beyond buttons
+
+        // Test with different session index
+        assert_eq!(
+            event_handler.detect_button_action(0, 1),
+            Some(SessionAction::Resume(1))
+        );
+        assert_eq!(
+            event_handler.detect_button_action(5, 2),
+            Some(SessionAction::Copy(2))
         );
     }
 }
