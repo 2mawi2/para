@@ -175,6 +175,60 @@ Para stores configuration files in platform-specific locations:
 
 Para uses JSON format and is automatically created on first run.
 
+## Sandbox Security (macOS)
+
+Para supports sandboxing for Claude CLI sessions on macOS, providing protection against prompt injection attacks by limiting file write access.
+
+### Configuring Sandbox
+
+**Enable by default (recommended for AI development):**
+```bash
+para config set sandbox.enabled true
+```
+
+**Check current settings:**
+```bash
+para config show | grep -A 2 sandbox
+```
+
+### Sandbox Profile
+
+Para uses a single standard profile that protects against malicious file writes while allowing Claude to function normally:
+
+**Allowed write locations:**
+- Project directory (current repo)
+- Temporary files (/tmp, /var/folders)
+- Claude configuration (~/.claude)
+- Git configuration (~/.gitconfig)
+- Cache directories (~/.cache)
+
+**Blocked write locations:**
+- Home directory (except allowed paths)
+- System directories
+- SSH keys (~/.ssh)
+- Shell configurations (~/.bashrc, ~/.zshrc)
+- Other sensitive locations
+
+**Always allowed:**
+- Full read access to all files
+- Network access for Claude API
+- Process execution
+
+### Per-Session Control
+
+Override default settings for specific sessions:
+```bash
+# Force sandbox on
+para start my-session --sandbox
+para dispatch my-task --sandbox
+
+# Force sandbox off (use with caution)
+para start my-session --no-sandbox
+
+# Sessions remember their sandbox settings when resumed
+para resume my-session  # Uses original sandbox settings
+```
+
 ## Example Workflows
 
 ### Regular Parallel Development
