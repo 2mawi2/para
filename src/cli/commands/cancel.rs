@@ -45,8 +45,7 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
     if let Ok((old_removed, limit_removed)) = archive_manager.auto_cleanup() {
         if old_removed > 0 || limit_removed > 0 {
             eprintln!(
-                "Archive cleanup: removed {} old archives, {} for limit",
-                old_removed, limit_removed
+                "Archive cleanup: removed {old_removed} old archives, {limit_removed} for limit"
             );
         }
     }
@@ -66,7 +65,7 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
         "To recover this session later, use: para recover {}",
         session_state.name
     );
-    println!("The archived branch is: {}", archived_branch);
+    println!("The archived branch is: {archived_branch}");
 
     Ok(())
 }
@@ -84,7 +83,7 @@ fn detect_session_name(
     }
 
     let current_dir = env::current_dir().map_err(|e| {
-        ParaError::file_operation(format!("Failed to get current directory: {}", e))
+        ParaError::file_operation(format!("Failed to get current directory: {e}"))
     })?;
 
     match git_service.validate_session_environment(&current_dir)? {
@@ -97,8 +96,7 @@ fn detect_session_name(
                 return Ok(session.name);
             }
             Err(ParaError::session_not_found(format!(
-                "No session found for current worktree (branch: {})",
-                branch
+                "No session found for current worktree (branch: {branch})"
             )))
         }
         SessionEnvironment::MainRepository => Err(ParaError::invalid_args(
@@ -119,17 +117,16 @@ fn confirm_cancel_with_changes(session_name: &str) -> Result<()> {
     }
 
     print!(
-        "Session '{}' has uncommitted changes. Are you sure you want to cancel? This will archive the session but preserve your work. [y/N]: ",
-        session_name
+        "Session '{session_name}' has uncommitted changes. Are you sure you want to cancel? This will archive the session but preserve your work. [y/N]: "
     );
     io::stdout()
         .flush()
-        .map_err(|e| ParaError::file_operation(format!("Failed to flush stdout: {}", e)))?;
+        .map_err(|e| ParaError::file_operation(format!("Failed to flush stdout: {e}")))?;
 
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        .map_err(|e| ParaError::file_operation(format!("Failed to read input: {}", e)))?;
+        .map_err(|e| ParaError::file_operation(format!("Failed to read input: {e}")))?;
 
     let response = input.trim().to_lowercase();
     if response != "y" && response != "yes" {

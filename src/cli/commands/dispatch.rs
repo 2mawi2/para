@@ -112,7 +112,7 @@ fn run_worktree_setup_script(
 
     let status = cmd
         .status()
-        .map_err(|e| ParaError::ide_error(format!("Failed to execute setup script: {}", e)))?;
+        .map_err(|e| ParaError::ide_error(format!("Failed to execute setup script: {e}")))?;
 
     if !status.success() {
         return Err(ParaError::ide_error(format!(
@@ -133,7 +133,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     validate_claude_code_ide(&config)?;
 
     let git_service = GitService::discover()
-        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {}", e)))?;
+        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
     let repo_root = git_service.repository().root.clone();
 
     let session_manager = SessionManager::new(&config);
@@ -192,9 +192,9 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Write task file
         let state_dir = session_manager.state_dir();
-        let task_file = state_dir.join(format!("{}.task", session_id));
+        let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {e}")))?;
 
         // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
@@ -206,14 +206,14 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             docker_manager
                 .run_setup_script(&session.name, &setup_script)
                 .map_err(|e| {
-                    ParaError::docker_error(format!("Failed to run setup script: {}", e))
+                    ParaError::docker_error(format!("Failed to run setup script: {e}"))
                 })?;
         }
 
         // Launch IDE connected to container with initial prompt
         docker_manager
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
-            .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {}", e)))?;
+            .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {e}")))?;
 
         // Register container session with daemon for signal monitoring
         if let Err(e) = crate::core::daemon::client::register_container_session(
@@ -233,7 +233,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         if !subtrees_path.exists() {
             fs::create_dir_all(&subtrees_path).map_err(|e| {
-                ParaError::fs_error(format!("Failed to create subtrees directory: {}", e))
+                ParaError::fs_error(format!("Failed to create subtrees directory: {e}"))
             })?;
         }
 
@@ -245,7 +245,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         git_service
             .create_worktree(&branch_name, &session_path)
-            .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {}", e)))?;
+            .map_err(|e| ParaError::git_error(format!("Failed to create worktree: {e}")))?;
 
         // Resolve sandbox settings using the resolver
         let resolver = SandboxResolver::new(&config);
@@ -274,9 +274,9 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Write task file
         let state_dir = session_manager.state_dir();
-        let task_file = state_dir.join(format!("{}.task", session_id));
+        let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
-            .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {}", e)))?;
+            .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {e}")))?;
 
         create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 

@@ -101,7 +101,7 @@ impl SessionCleaner {
         for branch_info in all_branches {
             if branch_info.name.starts_with(&prefix) && !branch_info.name.contains("/archived/") {
                 let session_id = branch_info.name.strip_prefix(&prefix).unwrap_or("");
-                let state_file = state_dir.join(format!("{}.state", session_id));
+                let state_file = state_dir.join(format!("{session_id}.state"));
 
                 if !state_file.exists() {
                     stale_branches.push(branch_info.name);
@@ -178,7 +178,7 @@ impl SessionCleaner {
         let mut related_files = Vec::new();
 
         for suffix in &[".prompt", ".launch", ".status.json"] {
-            let related_file = state_dir.join(format!("{}{}", session_id, suffix));
+            let related_file = state_dir.join(format!("{session_id}{suffix}"));
             if related_file.exists() {
                 related_files.push(related_file);
             }
@@ -202,7 +202,7 @@ impl SessionCleaner {
         // Find stale status files without removing them
         let mut stale_sessions = Vec::new();
         for status in Status::load_all(&state_dir).map_err(|e| {
-            crate::utils::ParaError::file_operation(format!("Failed to load status files: {}", e))
+            crate::utils::ParaError::file_operation(format!("Failed to load status files: {e}"))
         })? {
             if status.is_stale(stale_threshold_hours) {
                 stale_sessions.push(status.session_name);
@@ -253,8 +253,7 @@ impl SessionCleaner {
             .map(|s| s.to_string())
             .ok_or_else(|| {
                 crate::utils::ParaError::invalid_args(format!(
-                    "Invalid archived branch format: {}",
-                    branch
+                    "Invalid archived branch format: {branch}"
                 ))
             })
     }
@@ -262,8 +261,7 @@ impl SessionCleaner {
     fn parse_archive_timestamp(&self, timestamp: &str) -> Result<chrono::NaiveDateTime> {
         chrono::NaiveDateTime::parse_from_str(timestamp, "%Y%m%d-%H%M%S").map_err(|e| {
             crate::utils::ParaError::invalid_args(format!(
-                "Invalid timestamp format '{}': {}",
-                timestamp, e
+                "Invalid timestamp format '{timestamp}': {e}"
             ))
         })
     }
@@ -297,7 +295,7 @@ impl SessionCleaner {
             {
                 // Check if session exists
                 let state_file = PathBuf::from(&self.config.directories.state_dir)
-                    .join(format!("{}.state", session_name));
+                    .join(format!("{session_name}.state"));
 
                 if !state_file.exists() {
                     orphaned.push(container_name.to_string());
@@ -315,7 +313,7 @@ impl SessionCleaner {
         if !plan.stale_branches.is_empty() {
             println!("Stale Branches ({}):", plan.stale_branches.len());
             for branch in &plan.stale_branches {
-                println!("  🌿 {}", branch);
+                println!("  🌿 {branch}");
             }
             println!();
         }
@@ -333,9 +331,9 @@ impl SessionCleaner {
 
         if !plan.old_archives.is_empty() {
             let days = self.config.session.auto_cleanup_days.unwrap_or(30);
-            println!("Old Archives (older than {} days):", days);
+            println!("Old Archives (older than {days} days):");
             for archive in &plan.old_archives {
-                println!("  📦 {}", archive);
+                println!("  📦 {archive}");
             }
             println!();
         }
@@ -429,7 +427,7 @@ impl SessionCleaner {
                 Ok(_) => results.stale_branches_removed += 1,
                 Err(e) => results
                     .errors
-                    .push(format!("Failed to remove branch {}: {}", branch, e)),
+                    .push(format!("Failed to remove branch {branch}: {e}")),
             }
         }
 
