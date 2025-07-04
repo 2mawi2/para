@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::{DispatchArgs, SandboxArgs, StartArgs};
+    use crate::cli::parser::{SandboxArgs, UnifiedStartArgs};
 
     #[test]
-    fn test_start_args_docker_image() {
-        // Test that StartArgs accepts docker_image
-        let args = StartArgs {
-            name: Some("test".to_string()),
+    fn test_unified_start_docker_image_new_session() {
+        // Test that UnifiedStartArgs accepts docker_image for new sessions
+        let args = UnifiedStartArgs {
+            name_or_session: Some("test".to_string()),
+            prompt: None,
+            file: None,
             dangerously_skip_permissions: false,
             container: true,
             allow_domains: None,
@@ -26,11 +28,11 @@ mod tests {
     }
 
     #[test]
-    fn test_dispatch_args_docker_image() {
-        // Test that DispatchArgs accepts docker_image
-        let args = DispatchArgs {
-            name_or_prompt: Some("test prompt".to_string()),
-            prompt: None,
+    fn test_unified_start_docker_image_with_agent() {
+        // Test that UnifiedStartArgs accepts docker_image for agent sessions (old dispatch equivalent)
+        let args = UnifiedStartArgs {
+            name_or_session: Some("test-session".to_string()),
+            prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,
             container: true,
@@ -52,9 +54,11 @@ mod tests {
 
     #[test]
     fn test_no_forward_keys_flag() {
-        // Test the no_forward_keys flag
-        let args = StartArgs {
-            name: Some("secure".to_string()),
+        // Test the no_forward_keys flag for new session
+        let args = UnifiedStartArgs {
+            name_or_session: Some("secure".to_string()),
+            prompt: None,
+            file: None,
             dangerously_skip_permissions: false,
             container: true,
             allow_domains: None,
@@ -71,9 +75,10 @@ mod tests {
 
         assert!(args.no_forward_keys);
 
-        let dispatch_args = DispatchArgs {
-            name_or_prompt: Some("secure task".to_string()),
-            prompt: None,
+        // Test no_forward_keys flag for agent session (old dispatch equivalent)
+        let agent_args = UnifiedStartArgs {
+            name_or_session: Some("secure-task".to_string()),
+            prompt: Some("secure task".to_string()),
             file: None,
             dangerously_skip_permissions: false,
             container: true,
@@ -89,6 +94,6 @@ mod tests {
             },
         };
 
-        assert!(dispatch_args.no_forward_keys);
+        assert!(agent_args.no_forward_keys);
     }
 }

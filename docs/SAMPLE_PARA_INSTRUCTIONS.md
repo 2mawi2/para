@@ -12,13 +12,13 @@ Para enables parallel development using Git worktrees. Each task runs in an isol
 #### Starting Work
 ```bash
 # For simple tasks (short, natural language only)
-para dispatch "task-name" "Implement user login page"
+para start "Implement user login page"
 
 # For complex tasks or special characters (RECOMMENDED)
-para dispatch "task-name" --file tasks/TASK_1_feature.md
+para start --file tasks/TASK_1_feature.md
 
 # Skip IDE permissions (for automation)
-para dispatch "task-name" --file tasks/TASK_1_feature.md -d
+para start --file tasks/TASK_1_feature.md -d
 ```
 
 **Important**: Prefer task files over inline descriptions when:
@@ -146,16 +146,16 @@ Do not run any para commands on completion.
    echo "Implement backend..." > tasks/TASK_3_backend.md
    ```
 
-2. **Dispatch sequential task**:
+2. **Start sequential task**:
    ```bash
-   para dispatch api-spec --file tasks/TASK_1_api_spec.md -d
+   para start --file tasks/TASK_1_api_spec.md -d
    # Wait for completion
    ```
 
-3. **Dispatch parallel tasks**:
+3. **Start parallel tasks**:
    ```bash
-   para dispatch frontend --file tasks/TASK_2_frontend.md -d
-   para dispatch backend --file tasks/TASK_3_backend.md -d
+   para start --file tasks/TASK_2_frontend.md -d
+   para start --file tasks/TASK_3_backend.md -d
    ```
 
 4. **Agents work independently** and run:

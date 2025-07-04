@@ -48,7 +48,7 @@ just fmt-ts           # Format TypeScript code
 ```
 src/
 ├── cli/              # Command-line interface, argument parsing, and command implementations
-│   └── commands/     # Individual command implementations (start, finish, dispatch, etc.)
+│   └── commands/     # Individual command implementations (start, finish, resume, etc.)
 │       ├── mcp/      # MCP server management (init, strategies for finding servers)
 │       ├── list/     # Session listing with formatters and analyzers
 │       └── resume/   # Session resumption with context and task transformation
@@ -93,7 +93,7 @@ mcp-server-ts/        # Model Context Protocol server implementation
 - **Context-Aware**: Auto-detects current session from working directory
 - **Auto-Staging**: Automatically stages all changes during finish operations
 - **Recovery System**: Session snapshots for later recovery with `para recover`
-- **File Input Support**: `para dispatch --file prompt.txt` for complex prompts from files
+- **File Input Support**: `para start --file prompt.txt` for complex prompts from files
 - **IDE Wrapper Mode**: Claude Code can run inside VS Code/Cursor terminals
 - **Interactive Monitor**: Real-time session monitoring with `para monitor` command
 - **Status Tracking**: Update and view session status for AI agents with `para status`
@@ -112,16 +112,29 @@ mcp-server-ts/        # Model Context Protocol server implementation
 ## Available Commands
 
 ### Core Commands
-- `para start [name]` - Create new parallel session
+- `para start` - **UNIFIED COMMAND**: Create or resume para sessions
+  - No args: Create new interactive session
+  - With name only: Resume if exists, else create new
+  - With prompt: Create new session with AI agent
+  - With file: Read prompt/context from file
+  - Examples:
+    - `para start` - New interactive session
+    - `para start feature-x` - Resume or create session
+    - `para start "implement auth"` - New AI agent session
+    - `para start feature-x "add tests"` - Resume with context
+    - `para start --file tasks/auth.md` - From file
 - `para finish "message" [--branch name]` - Complete session with commit
 - `para list` - Show all active sessions
 - `para cancel [session] [--force]` - Discard session
 - `para clean` - Remove all sessions
-- `para resume [session] [--prompt "text"] [--file context.md]` - Resume with context
 - `para recover [session]` - Recover cancelled session
 - `para monitor` - Interactive TUI for monitoring sessions
 - `para status` - Update/view session status (for AI agents)
-- `para dispatch [name] "prompt" [--file prompt.txt]` - AI-powered session creation
+
+### Command Changes
+- `para dispatch` - **REMOVED** - Use: `para start [name] "prompt"` for AI-assisted sessions
+- `para start` - Now handles both interactive and AI-assisted session creation
+- `para resume` - **Separate command** for continuing existing sessions
 
 ### MCP Commands
 - `para mcp init` - Set up MCP integration in current repo

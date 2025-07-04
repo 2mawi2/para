@@ -9,11 +9,10 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 ## MCP vs CLI Tools
 
 ### MCP Tools (for Orchestrator)
-- **para_dispatch** - Primary tool for launching agents
+- **para_start** - Primary tool for launching agents (replaces old para_dispatch)
 - **para_finish** - Complete sessions with optional auto-integration
 - **para_list** - Check status
-- **para_start** - Manual sessions with user
-- **para_finish** - Rarely used
+- **para_resume** - Continue existing sessions with additional context
 - **para_cancel** - Cleanup abandoned work (supports force parameter to skip confirmation)
 
 ### CLI Commands (for Dispatched Agents)
@@ -48,10 +47,10 @@ Parallel:
 - Different layers using same interface
 ```
 
-### 4. Dispatch and Integration
+### 4. Agent Creation and Integration
 ```bash
-# Orchestrator dispatches agents
-para_dispatch(session_name="api-spec", file="tasks/TASK_1_api_spec.md")
+# Orchestrator creates agent sessions
+para_start(name_or_session="api-spec", file="tasks/TASK_1_api_spec.md")
 
 # Agent completes and creates branch for review
 para finish "Add API specification" --branch feature/api-v1
@@ -84,7 +83,7 @@ When done: para finish "Add user authentication" --branch feature/auth-system
 
 The MCP tools include comprehensive documentation in their descriptions. Key points:
 
-1. **para_dispatch** explains:
+1. **para_start** explains:
    - Parallelization strategy
    - Task complexity guidelines
    - Workflow options

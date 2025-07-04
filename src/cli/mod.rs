@@ -71,6 +71,7 @@ pub fn execute_command_with_config(
     if let Some(ref config) = config {
         match &cli.command {
             Some(Commands::Start(_))
+            | Some(Commands::Resume(_))
             | Some(Commands::List(_))
             | Some(Commands::Status(_))
             | Some(Commands::Finish(_)) => {
@@ -85,11 +86,7 @@ pub fn execute_command_with_config(
     match cli.command {
         Some(Commands::Start(args)) => {
             args.validate()?;
-            commands::start::execute(config.unwrap(), args)
-        }
-        Some(Commands::Dispatch(args)) => {
-            args.validate()?;
-            commands::dispatch::execute(config.unwrap(), args)
+            commands::unified_start::execute(config.unwrap(), args)
         }
         Some(Commands::Finish(args)) => {
             args.validate()?;

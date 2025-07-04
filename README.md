@@ -80,19 +80,19 @@ para mcp init
 # (Note: .mcp.json contains user-specific paths, so add it to .gitignore)
 
 # Now Claude Code has Para tools available:
-# - para_start, para_finish, para_dispatch, para_list, etc.
+# - para_start, para_finish, para_resume, para_list, etc.
 # - Use Para tools directly from Claude Code interface
 ```
 
 ### AI-Powered Development
 ```bash
-para dispatch "prompt"                    # Create session with AI prompt
-para dispatch name "prompt"               # Named session with AI prompt
-para dispatch --file prompt.txt          # Create session with prompt from file
-para dispatch -f ./auth.prompt            # Create session with prompt from file (short form)
+para start "prompt"                       # Create session with AI prompt
+para start name "prompt"                  # Named session with AI prompt
+para start --file prompt.txt             # Create session with prompt from file
+para start -f ./auth.prompt               # Create session with prompt from file (short form)
 
 # Skip permission warnings in trusted environments (CI, scripts)
-para dispatch --dangerously-skip-permissions "prompt"
+para start --dangerously-skip-permissions "prompt"
 para start --dangerously-skip-permissions name
 ```
 
@@ -121,11 +121,11 @@ para finish "Fix bug" --branch existing-feature
 - Cannot end with `/`
 - Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
-The `dispatch` command creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+The `start` command with prompts creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
 
-**MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management without needing the dispatch command.
+**MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management.
 
-**Note:** Dispatch command only works with Claude Code. Use `para config` to switch IDEs if needed.
+**Note:** AI-assisted sessions (start with prompts) only work with Claude Code. Use `para config` to switch IDEs if needed.
 
 ## How It Works
 
@@ -220,7 +220,7 @@ Override default settings for specific sessions:
 ```bash
 # Force sandbox on
 para start my-session --sandbox
-para dispatch my-task --sandbox
+para start my-task "implement feature" --sandbox
 
 # Force sandbox off (use with caution)
 para start my-session --no-sandbox
@@ -261,16 +261,16 @@ echo ".mcp.json" >> .gitignore
 # - para_start: Create new sessions  
 # - para_finish: Complete sessions with commits
 # - para_list: View active sessions
-# - para_dispatch: AI-assisted session creation
+# - para_resume: Resume existing sessions
 ```
 
 ### Traditional AI Development
 ```bash
-# Create AI session with prompt (requires para dispatch)
-para dispatch "Implement user authentication with best security practices"
+# Create AI session with prompt
+para start "Implement user authentication with best security practices"
 
 # Or use a prompt file for complex prompts
-para dispatch --file auth-requirements.prompt
+para start --file auth-requirements.prompt
 
 # Claude Code opens with your prompt for AI-assisted development
 
@@ -420,7 +420,7 @@ The completion system provides intelligent suggestions:
 - `para finish --branch <TAB>` → Shows git branches
 
 **📄 File & Task Completion:**
-- `para dispatch --file <TAB>` → Prioritizes TASK_*.md files and .md files
+- `para start --file <TAB>` → Prioritizes TASK_*.md files and .md files
 - Smart file filtering for task-based workflows
 
 **⚙️ Configuration:**
@@ -437,7 +437,7 @@ If you installed para via Homebrew, completions are automatically available! The
 
 ## Security Notes
 
-The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start` and `dispatch` commands.
+The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start` and `resume` commands.
 
 **⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
 

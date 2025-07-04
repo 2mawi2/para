@@ -1,15 +1,17 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::{DispatchArgs, SandboxArgs, StartArgs};
+    use crate::cli::parser::{SandboxArgs, UnifiedStartArgs};
     use crate::core::sandbox::config::SandboxResolver;
     use crate::core::sandbox::SandboxConfig;
     use crate::test_utils::test_helpers::create_test_config;
 
     #[test]
-    fn test_sandbox_cli_flags_start_command() {
-        // Test that StartArgs accepts all sandbox flags
-        let args = StartArgs {
-            name: Some("test".to_string()),
+    fn test_sandbox_cli_flags_new_session() {
+        // Test that UnifiedStartArgs accepts all sandbox flags for new sessions
+        let args = UnifiedStartArgs {
+            name_or_session: Some("test".to_string()),
+            prompt: None,
+            file: None,
             dangerously_skip_permissions: false,
             container: false,
             allow_domains: None,
@@ -33,11 +35,11 @@ mod tests {
     }
 
     #[test]
-    fn test_sandbox_cli_flags_dispatch_command() {
-        // Test that DispatchArgs accepts all sandbox flags
-        let args = DispatchArgs {
-            name_or_prompt: Some("test prompt".to_string()),
-            prompt: None,
+    fn test_sandbox_cli_flags_agent_session() {
+        // Test that UnifiedStartArgs accepts all sandbox flags for agent sessions (old dispatch equivalent)
+        let args = UnifiedStartArgs {
+            name_or_session: Some("test-agent".to_string()),
+            prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,
             container: false,
