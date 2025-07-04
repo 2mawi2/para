@@ -126,9 +126,10 @@ Once MCP integration is set up, Claude Code gains access to these Para tools:
 - **`para_list`** - List all active sessions with status and branch information
 
 ### Advanced Operations
-- **`para_dispatch`** - AI-assisted session creation with prompts
-  - `session_name` (required): Name for the new session
-  - `task_description` (required): Task description for the AI agent
+- **`para_resume`** - Resume existing sessions with optional additional context
+  - `session` (optional): Session name to resume (auto-detects if not provided)
+  - `prompt` (optional): Additional instructions for the resumed session
+  - `file` (optional): Read additional context from file
 
 - **`para_recover`** - Recover and resume previous sessions
   - `session_name` (required): Name of the session to recover
@@ -151,10 +152,10 @@ Para's MCP integration enables Claude Code instances to act as **orchestrators**
 
 ### Orchestration Workflow
 ```bash
-# As orchestrator, dispatch multiple agents for parallel work
-para_dispatch("api-endpoints", "Implement REST API with authentication")
-para_dispatch("frontend-ui", "Create responsive user interface components")  
-para_dispatch("database-schema", "Design and implement database schema")
+# As orchestrator, create multiple AI agents for parallel work
+para_start("api-endpoints", "Implement REST API with authentication")
+para_start("frontend-ui", "Create responsive user interface components")  
+para_start("database-schema", "Design and implement database schema")
 
 # Monitor agent progress
 para_list()  # Shows: api-endpoints (Active), frontend-ui (Active), database-schema (Active)
@@ -172,17 +173,17 @@ para_start("feature-auth")  # Creates isolated worktree for development
 para_finish("Implement user authentication")  # REQUIRED to complete
 ```
 
-**Parallel Agent Dispatch:**
+**Parallel Agent Creation:**
 ```
-para_dispatch("agent1", "Task: Implement API endpoints. Must call para_finish() when done.")
-para_dispatch("agent2", "Task: Create UI components. Must call para_finish() when done.")
-para_dispatch("agent3", "Task: Database schema. Must call para_finish() when done.")
+para_start("agent1", "Task: Implement API endpoints. Must call para_finish() when done.")
+para_start("agent2", "Task: Create UI components. Must call para_finish() when done.")
+para_start("agent3", "Task: Database schema. Must call para_finish() when done.")
 ```
 
 **Task File Integration:**
 ```
 # Create task file: TASK_1_API.md with complete requirements
-para_dispatch("api-agent", "See TASK_1_API.md for requirements", {"file": "TASK_1_API.md"})
+para_start("api-agent", "See TASK_1_API.md for requirements", {"file": "TASK_1_API.md"})
 ```
 
 **Orchestrator Monitoring:**
@@ -272,9 +273,9 @@ echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocol_version":"2024-
 ### Parallel Development with AI Agents
 ```bash
 # Create task files for agents
-para dispatch agent1 --file TASK_1_API.md -d
-para dispatch agent2 --file TASK_2_UI.md -d  
-para dispatch agent3 --file TASK_3_DB.md -d
+para start agent1 --file TASK_1_API.md -d
+para start agent2 --file TASK_2_UI.md -d  
+para start agent3 --file TASK_3_DB.md -d
 
 # Agents can use MCP tools to:
 # - Check their session status
@@ -291,13 +292,13 @@ para://available-sessions -> All session info for coordination
 para://config -> Para configuration for context
 ```
 
-## Benefits Over Traditional Dispatch
+## Benefits Over Command Line Usage
 
-| Traditional `para dispatch` | MCP Integration |
+| Traditional CLI Usage | MCP Integration |
 |----------------------------|-----------------|
 | Requires command-line usage | Native Claude Code tools |
 | Manual session management | Integrated workflow |
-| Limited to dispatch command | Full Para toolset |
+| Limited to CLI commands | Full Para toolset |
 | Requires IDE switching | Seamless integration |
 
 ## Team Collaboration

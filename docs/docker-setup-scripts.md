@@ -22,8 +22,8 @@ Specify a setup script directly when starting a session:
 # With start command
 para start --container --setup-script scripts/dev-setup.sh
 
-# With dispatch command
-para dispatch --container --setup-script scripts/init-env.sh "implement feature X"
+# With AI-assisted start command
+para start --container --setup-script scripts/init-env.sh "implement feature X"
 ```
 
 ### 2. Default Script Location

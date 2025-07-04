@@ -36,8 +36,8 @@ Based on Anthropic's reference implementation using:
 para start --container my-session
 # ⚠️  Network isolation: OFF (use --allow-domains to enable)
 
-# Dispatch with container (no network isolation by default)
-para dispatch --container "implement user authentication"
+# Start AI-assisted session with container (no network isolation by default)
+para start --container "implement user authentication"
 # ⚠️  Network isolation: OFF (use --allow-domains to enable)
 ```
 
@@ -50,8 +50,8 @@ para start --container --allow-domains "" my-session
 # Enable with additional custom domains
 para start --container --allow-domains "api.example.com,cdn.example.com" my-session
 
-# Dispatch with network isolation enabled
-para dispatch --container --allow-domains "" "implement user authentication"
+# Start AI-assisted session with network isolation enabled
+para start --container --allow-domains "" "implement user authentication"
 ```
 
 ### Custom Allowed Domains
@@ -60,8 +60,8 @@ para dispatch --container --allow-domains "" "implement user authentication"
 # Add specific domains for your use case
 para start --container --allow-domains "api.stripe.com,api.sendgrid.com" payment-feature
 
-# Multiple domains in dispatch
-para dispatch --container --allow-domains "custom-api.com,internal-service.com" "implement feature"
+# Multiple domains in AI-assisted session
+para start --container --allow-domains "custom-api.com,internal-service.com" "implement feature"
 ```
 
 ### Explicitly Disabling Network Isolation
@@ -167,7 +167,7 @@ If you see firewall verification errors:
 para start --container --allow-domains "localhost:3000,dev.mycompany.com"
 
 # For specific APIs
-para dispatch --container --allow-domains "api.stripe.com,api.sendgrid.com" "implement payments"
+para start --container --allow-domains "api.stripe.com,api.sendgrid.com" "implement payments"
 ```
 
 ### Debugging Network Issues
@@ -237,7 +237,7 @@ para start --container secure-development
 
 ```bash
 # Working with external APIs
-para dispatch --container \
+para start --container \
   --allow-domains "api.stripe.com,api.sendgrid.com" \
   "Implement payment processing with Stripe and email notifications with SendGrid"
 ```

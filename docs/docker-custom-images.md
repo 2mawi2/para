@@ -18,11 +18,11 @@ Para supports using custom Docker images for container sessions, allowing you to
 # Start a session with a custom Docker image
 para start --container --docker-image node:18-alpine my-node-session
 
-# Dispatch with a custom image
-para dispatch --container --docker-image python:3.11 "implement data processing"
+# Create AI session with a custom image
+para start --container --docker-image python:3.11 "implement data processing"
 
 # Use a private registry image
-para dispatch --container --docker-image mycompany/dev-env:latest "implement feature"
+para start --container --docker-image mycompany/dev-env:latest "implement feature"
 ```
 
 ### Configuring Default Images
@@ -91,8 +91,8 @@ For enhanced security, you can disable API key forwarding:
 # Start without forwarding any API keys
 para start --container --docker-image untrusted:latest --no-forward-keys
 
-# Dispatch without API keys
-para dispatch --container --docker-image public:latest --no-forward-keys "task"
+# Create AI session without API keys
+para start --container --docker-image public:latest --no-forward-keys "task"
 ```
 
 ### Configuring Forwarded Keys
@@ -172,13 +172,13 @@ para start --container --docker-image registry.mycompany.com/dev:latest
 
 ```bash
 # Python development
-para dispatch --container --docker-image python:3.11-slim "implement ML model"
+para start --container --docker-image python:3.11-slim "implement ML model"
 
 # Node.js development
-para dispatch --container --docker-image node:18-alpine "create REST API"
+para start --container --docker-image node:18-alpine "create REST API"
 
 # Go development
-para dispatch --container --docker-image golang:1.21 "build CLI tool"
+para start --container --docker-image golang:1.21 "build CLI tool"
 ```
 
 ### 2. Full Development Environments

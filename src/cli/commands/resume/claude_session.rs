@@ -125,12 +125,19 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let worktree_path = temp_dir.path().join("worktree");
 
-        // Mock home directory without .claude
+        // Save original value and set test value
+        let original_home = std::env::var("PARA_TEST_HOME").ok();
         std::env::set_var("PARA_TEST_HOME", temp_dir.path());
+
         let result = find_claude_session(&worktree_path).unwrap();
 
         // Clean up test environment
         std::env::remove_var("PARA_TEST_HOME");
+
+        // Restore original PARA_TEST_HOME if it existed
+        if let Some(original) = original_home {
+            std::env::set_var("PARA_TEST_HOME", original);
+        }
 
         assert!(result.is_none());
     }
@@ -157,14 +164,32 @@ mod tests {
         let content = "x".repeat(1001);
         fs::write(&session_file, content).unwrap();
 
-        // Mock home directory
+        // Use thread-local environment variable isolation
+        let original_home = std::env::var("PARA_TEST_HOME").ok();
+
+        // Set the test environment variable with isolation
         std::env::set_var("PARA_TEST_HOME", home_dir);
+
+        // Verify environment variable is set correctly before testing
+        assert_eq!(
+            std::env::var("PARA_TEST_HOME").unwrap(),
+            home_dir.to_string_lossy()
+        );
+
         let result = find_claude_session(worktree_path).unwrap();
 
-        // Clean up test environment
+        // Clean up test environment immediately after use
         std::env::remove_var("PARA_TEST_HOME");
 
-        assert!(result.is_some());
+        // Restore original PARA_TEST_HOME if it existed
+        if let Some(original) = original_home {
+            std::env::set_var("PARA_TEST_HOME", original);
+        }
+
+        assert!(
+            result.is_some(),
+            "find_claude_session should find the session file we created"
+        );
         let session = result.unwrap();
         assert_eq!(session.id, session_id);
     }
