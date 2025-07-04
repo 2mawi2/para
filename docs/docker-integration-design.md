@@ -300,8 +300,8 @@ para docker cleanup
 # Create session with Docker container
 para start <name> --docker [--image <image>]
 
-# Dispatch with Docker
-para dispatch <name> "prompt" --docker
+# AI-assisted session with Docker
+para start "prompt" --docker
 
 # Monitor shows container status
 para monitor  # Now includes container health

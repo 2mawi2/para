@@ -17,6 +17,7 @@ pub mod recover;
 pub mod resume;
 pub mod start;
 pub mod status;
+pub mod unified_start;
 
 #[cfg(test)]
 mod dangerous_flag_integration_test;

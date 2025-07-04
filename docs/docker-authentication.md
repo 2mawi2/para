@@ -26,8 +26,8 @@ Once the authenticated image is built, Para will automatically use it for all co
 # Start a new session with Docker container
 para start my-feature --container
 
-# Dispatch a task with container
-para dispatch "implement feature X" --container
+# Start an AI-assisted session with container
+para start "implement feature X" --container
 ```
 
 ## How It Works

@@ -82,7 +82,7 @@ Each module in `lib/` has a specific responsibility:
 
 - **para-config.sh**: Environment setup and configuration loading
 - **para-utils.sh**: Common utilities, validation, and helper functions
-- **para-commands.sh**: Command handlers including dispatch with file input support
+- **para-commands.sh**: Command handlers including start with file input support
 - **para-git.sh**: All Git operations including worktree and finish management
 - **para-session.sh**: Session lifecycle, state management, and detection
 - **para-ide.sh**: IDE integration with extensible interface

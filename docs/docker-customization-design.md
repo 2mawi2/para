@@ -195,7 +195,7 @@ para start --container --docker-profile nodejs-dev
 
 ### Complex Example
 ```bash
-para dispatch --container \
+para start --container \
   --docker-image custom-image:v2 \
   --env-file .env.production \
   -e "DEBUG=true" \
