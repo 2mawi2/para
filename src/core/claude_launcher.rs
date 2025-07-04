@@ -3,8 +3,10 @@ use crate::core::sandbox::config::SandboxResolver;
 use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
 use crate::utils::{ParaError, Result};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 /// Options for launching Claude with different continuation modes
 #[derive(Debug, Default)]
@@ -158,6 +160,9 @@ pub fn launch_claude_with_context(
                 "✅ VS Code opened - {} will start automatically",
                 config.ide.name
             );
+
+            // Spawn a background cleanup task for the tasks.json file
+            spawn_tasks_cleanup(tasks_file);
         }
         Err(e) => {
             return Err(ParaError::ide_error(format!(
@@ -203,6 +208,21 @@ fn create_claude_task_json(command: &str) -> String {
 }}"#,
         command.replace('"', "\\\"")
     )
+}
+
+/// Spawn a background thread to clean up the tasks.json file after VS Code has had time to read it
+fn spawn_tasks_cleanup(tasks_file: PathBuf) {
+    thread::spawn(move || {
+        // Wait for VS Code to read and execute the task
+        // 5 seconds should be enough time for VS Code to start and read the file
+        thread::sleep(Duration::from_secs(5));
+
+        // Attempt to remove the tasks.json file
+        if let Err(e) = fs::remove_file(&tasks_file) {
+            // Don't propagate errors - this is best-effort cleanup
+            eprintln!("Warning: Failed to clean up tasks.json: {e}");
+        }
+    });
 }
 
 #[cfg(test)]
@@ -733,5 +753,45 @@ mod tests {
             assert!(tasks_content.contains("-r"));
             assert!(tasks_content.contains("test-123"));
         }
+    }
+
+    #[test]
+    fn test_tasks_cleanup_removes_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let vscode_dir = temp_dir.path().join(".vscode");
+        fs::create_dir_all(&vscode_dir).unwrap();
+
+        let tasks_file = vscode_dir.join("tasks.json");
+        fs::write(&tasks_file, "test content").unwrap();
+
+        // Verify file exists
+        assert!(tasks_file.exists());
+
+        // Spawn cleanup
+        spawn_tasks_cleanup(tasks_file.clone());
+
+        // Wait for cleanup to complete (slightly longer than the cleanup delay)
+        thread::sleep(Duration::from_secs(6));
+
+        // Verify file was removed
+        assert!(!tasks_file.exists());
+    }
+
+    #[test]
+    fn test_tasks_cleanup_handles_missing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let tasks_file = temp_dir.path().join(".vscode/tasks.json");
+
+        // File doesn't exist
+        assert!(!tasks_file.exists());
+
+        // Spawn cleanup - should not panic
+        spawn_tasks_cleanup(tasks_file.clone());
+
+        // Wait for cleanup to complete
+        thread::sleep(Duration::from_secs(6));
+
+        // Should complete without errors
+        assert!(!tasks_file.exists());
     }
 }
