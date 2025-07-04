@@ -1,4 +1,6 @@
-use crate::cli::commands::common::create_claude_local_md;
+use crate::cli::commands::common::{
+    create_claude_local_md, get_setup_script_path, run_worktree_setup_script,
+};
 use crate::cli::parser::DispatchArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService};
@@ -8,122 +10,6 @@ use crate::utils::{names::*, ParaError, Result};
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
-
-/// Determine which setup script to use based on priority order
-fn get_setup_script_path(
-    cli_arg: &Option<PathBuf>,
-    repo_root: &Path,
-    config: &Config,
-    is_docker: bool,
-) -> Option<PathBuf> {
-    // 1. CLI argument has highest priority
-    if let Some(path) = cli_arg {
-        if path.exists() {
-            return Some(path.clone());
-        } else {
-            eprintln!("Warning: Setup script '{}' not found", path.display());
-            return None;
-        }
-    }
-
-    // 2. Check for environment-specific default scripts
-    if is_docker {
-        let docker_script = repo_root.join(".para/setup-docker.sh");
-        if docker_script.exists() {
-            return Some(docker_script);
-        }
-    } else {
-        let worktree_script = repo_root.join(".para/setup-worktree.sh");
-        if worktree_script.exists() {
-            return Some(worktree_script);
-        }
-    }
-
-    // 3. Check for generic default .para/setup.sh
-    let default_script = repo_root.join(".para/setup.sh");
-    if default_script.exists() {
-        return Some(default_script);
-    }
-
-    // 4. Check config for setup script path
-    // For Docker, check docker.setup_script first, then fall back to general setup_script
-    if is_docker {
-        if let Some(docker_config) = &config.docker {
-            if let Some(script_path) = &docker_config.setup_script {
-                let config_script = if Path::new(script_path).is_absolute() {
-                    PathBuf::from(script_path)
-                } else {
-                    repo_root.join(script_path)
-                };
-                if config_script.exists() {
-                    return Some(config_script);
-                } else {
-                    eprintln!(
-                        "Warning: Docker config setup script '{}' not found",
-                        config_script.display()
-                    );
-                }
-            }
-        }
-    }
-
-    // Check general setup_script in config
-    if let Some(script_path) = &config.setup_script {
-        let config_script = if Path::new(script_path).is_absolute() {
-            PathBuf::from(script_path)
-        } else {
-            repo_root.join(script_path)
-        };
-        if config_script.exists() {
-            return Some(config_script);
-        } else {
-            eprintln!(
-                "Warning: Config setup script '{}' not found",
-                config_script.display()
-            );
-        }
-    }
-
-    None
-}
-
-/// Run a setup script for a regular worktree session
-fn run_worktree_setup_script(
-    script_path: &Path,
-    session_name: &str,
-    worktree_path: &Path,
-) -> Result<()> {
-    use std::process::Command;
-
-    println!("🔧 Running setup script: {}", script_path.display());
-
-    // Security warning
-    eprintln!("⚠️  Warning: Setup scripts run with your full user permissions!");
-    eprintln!("   Only run scripts from trusted sources.");
-    eprintln!("   Script: {}", script_path.display());
-
-    let mut cmd = Command::new("bash");
-    cmd.arg(script_path);
-    cmd.current_dir(worktree_path);
-
-    // Set environment variables
-    cmd.env("PARA_WORKSPACE", worktree_path);
-    cmd.env("PARA_SESSION", session_name);
-
-    let status = cmd
-        .status()
-        .map_err(|e| ParaError::ide_error(format!("Failed to execute setup script: {e}")))?;
-
-    if !status.success() {
-        return Err(ParaError::ide_error(format!(
-            "Setup script failed with exit code: {}",
-            status.code().unwrap_or(-1)
-        )));
-    }
-
-    println!("✅ Setup script completed successfully");
-    Ok(())
-}
 
 pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
     args.validate()?;
@@ -162,7 +48,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     // Track whether we're using Docker and network isolation settings
     let (is_container, network_isolation, _allowed_domains) = if args.container {
-        // Create Docker container session
         let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
             // Enable network isolation when --allow-domains is used
             let additional_domains: Vec<String> = domains
@@ -190,16 +75,13 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        // Write task file
         let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {e}")))?;
 
-        // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, true)
         {
@@ -208,7 +90,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
                 .map_err(|e| ParaError::docker_error(format!("Failed to run setup script: {e}")))?;
         }
 
-        // Launch IDE connected to container with initial prompt
         docker_manager
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {e}")))?;
@@ -270,7 +151,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         session_state.task_description = Some(prompt.clone());
         session_manager.save_state(&session_state)?;
 
-        // Write task file
         let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
@@ -278,7 +158,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, false)
         {
