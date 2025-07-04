@@ -5,7 +5,7 @@ pub mod config;
 pub mod strategies;
 pub mod utils;
 
-use config::{configure_claude_code, create_mcp_json, prompt_for_ide};
+use config::{check_claude_code_availability, create_mcp_json};
 use utils::add_to_gitignore;
 
 #[derive(Args)]
@@ -21,19 +21,7 @@ pub enum McpSubcommand {
 }
 
 #[derive(Args)]
-pub struct McpInitArgs {
-    /// Setup for Claude Code (adds user config)
-    #[arg(long, conflicts_with_all = ["cursor", "vscode"])]
-    pub claude_code: bool,
-
-    /// Setup for Cursor (project config only)
-    #[arg(long, conflicts_with_all = ["claude_code", "vscode"])]
-    pub cursor: bool,
-
-    /// Setup for VS Code with Roo Code (project config only)
-    #[arg(long, conflicts_with_all = ["claude_code", "cursor"])]
-    pub vscode: bool,
-}
+pub struct McpInitArgs {}
 
 pub fn handle_mcp_command(cmd: McpCommand) -> Result<()> {
     match cmd.command {
@@ -41,55 +29,36 @@ pub fn handle_mcp_command(cmd: McpCommand) -> Result<()> {
     }
 }
 
-fn handle_mcp_init(args: McpInitArgs) -> Result<()> {
+fn handle_mcp_init(_args: McpInitArgs) -> Result<()> {
     println!("🔧 Setting up Para MCP integration...");
 
     // Always create .mcp.json first
     let created = create_mcp_json()?;
     if created {
-        println!("Created .mcp.json");
+        println!("✓ Created .mcp.json with Para MCP server configuration");
     } else {
-        println!("✓ .mcp.json already exists");
+        println!("✓ .mcp.json already exists with Para configuration");
     }
 
     // Automatically add .mcp.json to .gitignore if it's not already there
     match add_to_gitignore(".mcp.json") {
-        Ok(true) => println!("Added .mcp.json to .gitignore (contains user-specific paths)"),
+        Ok(true) => println!("✓ Added .mcp.json to .gitignore (contains user-specific paths)"),
         Ok(false) => println!("✓ .mcp.json already in .gitignore"),
         Err(e) => println!("⚠️  Could not update .gitignore: {e}"),
     }
     println!();
 
-    // Determine IDE choice
-    let ide = if args.claude_code {
-        "claude-code"
-    } else if args.cursor {
-        "cursor"
-    } else if args.vscode {
-        "vscode"
-    } else {
-        // Interactive mode
-        prompt_for_ide()?
-    };
-
-    // Configure IDE-specific setup
-    match ide {
-        "claude-code" => configure_claude_code()?,
-        "cursor" => {
-            println!("✅ Cursor configured via .mcp.json");
-        }
-        "vscode" => {
-            println!("✅ VS Code configured via .mcp.json");
-        }
-        "skip" => {
-            println!("ℹ️  Skipped IDE-specific setup");
-        }
-        _ => {} // Should not happen
-    }
+    // Check Claude Code availability (informational only)
+    check_claude_code_availability();
 
     println!();
-    println!("🎉 Para MCP integration complete!");
-    println!("💡 Restart your IDE to see Para tools");
+    println!("🎉 Para MCP server configured!");
+    println!("   The .mcp.json file has been created with Para server settings.");
+    println!("   This enables Para tools in IDEs that support MCP.");
+    println!();
+    println!("💡 To use Para tools:");
+    println!("   - In Claude Code: Tools will appear automatically after restart");
+    println!("   - In other IDEs: Check their MCP documentation");
 
     Ok(())
 }
@@ -161,8 +130,8 @@ mod tests {
     }
 
     #[test]
-    fn test_mcp_init_args_conflicts() {
-        // This test ensures our clap conflicts work correctly
+    fn test_mcp_init_args_parse() {
+        // Test that McpInitArgs can be parsed without any flags
         use clap::Parser;
 
         #[derive(Parser)]
@@ -171,15 +140,8 @@ mod tests {
             mcp: McpInitArgs,
         }
 
-        // Valid single flags should work
-        assert!(TestArgs::try_parse_from(["test", "--claude-code"]).is_ok());
-        assert!(TestArgs::try_parse_from(["test", "--cursor"]).is_ok());
-        assert!(TestArgs::try_parse_from(["test", "--vscode"]).is_ok());
-
-        // Conflicting flags should fail
-        assert!(TestArgs::try_parse_from(["test", "--claude-code", "--cursor"]).is_err());
-        assert!(TestArgs::try_parse_from(["test", "--cursor", "--vscode"]).is_err());
-        assert!(TestArgs::try_parse_from(["test", "--claude-code", "--vscode"]).is_err());
+        // Should parse with no flags
+        assert!(TestArgs::try_parse_from(["test"]).is_ok());
     }
 
     #[test]
