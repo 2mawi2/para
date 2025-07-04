@@ -74,7 +74,7 @@ Para integrates seamlessly with Claude Code through MCP (Model Context Protocol)
 
 ```bash
 # One-time setup (navigate to any repo where you want Para tools)
-para mcp init --claude-code
+para mcp init
 
 # This creates .mcp.json with the correct paths for your system
 # (Note: .mcp.json contains user-specific paths, so add it to .gitignore)
