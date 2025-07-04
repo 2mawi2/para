@@ -182,7 +182,6 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
-/// Remove containers using the authenticated image
 fn remove_authenticated_containers(dry_run: bool) -> Result<()> {
     let container_ids = list_authenticated_containers()?;
 
@@ -201,7 +200,6 @@ fn remove_authenticated_containers(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
-/// List containers using the authenticated image
 fn list_authenticated_containers() -> Result<Vec<String>> {
     let ps_output = Command::new("docker")
         .args([
@@ -224,7 +222,6 @@ fn list_authenticated_containers() -> Result<Vec<String>> {
     Ok(containers)
 }
 
-/// Collect all items that need to be cleaned up
 fn collect_cleanup_items() -> Result<Vec<(&'static str, String)>> {
     let mut items_to_clean: Vec<(&'static str, String)> = Vec::new();
 
@@ -245,7 +242,6 @@ fn collect_cleanup_items() -> Result<Vec<(&'static str, String)>> {
     Ok(items_to_clean)
 }
 
-/// Find Docker volumes that contain authentication data
 fn find_auth_volumes() -> Result<Vec<String>> {
     let volume_output = Command::new("docker")
         .args(["volume", "ls", "-q"])
@@ -262,7 +258,6 @@ fn find_auth_volumes() -> Result<Vec<String>> {
     Ok(auth_volumes)
 }
 
-/// Ask user for confirmation to proceed with cleanup
 fn confirm_cleanup() -> Result<bool> {
     let confirm = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Remove these items?")
@@ -273,7 +268,6 @@ fn confirm_cleanup() -> Result<bool> {
     Ok(confirm)
 }
 
-/// Perform the actual cleanup operations
 fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
     // Remove the authenticated image (force to handle any issues)
     let output = Command::new("docker")
@@ -291,6 +285,7 @@ fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
     // Remove auth volumes
     for (desc, name) in items_to_clean {
         if desc == &"Docker auth volume" {
+            // Ignore volume removal errors to avoid cleanup interruption
             let _ = Command::new("docker").args(["volume", "rm", name]).output();
         }
     }
@@ -298,12 +293,10 @@ fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
     Ok(())
 }
 
-/// Report that no items were found to clean
 fn report_no_items_to_clean() {
     println!("✅ No authentication artifacts found to clean up");
 }
 
-/// Report what items were found for cleanup
 fn report_cleanup_targets(items_to_clean: &[(&str, String)]) {
     println!("Found {} items to clean:", items_to_clean.len());
     for (desc, name) in items_to_clean {
@@ -311,18 +304,15 @@ fn report_cleanup_targets(items_to_clean: &[(&str, String)]) {
     }
 }
 
-/// Report that this is a dry run
 fn report_dry_run_mode() {
     println!("\n(Dry run - no changes made)");
 }
 
-/// Report successful cleanup
 fn report_cleanup_success() {
     println!("\n✅ Cleanup completed successfully");
     println!("\nYou can now run 'para auth setup' to re-authenticate");
 }
 
-/// Report that cleanup was cancelled
 fn report_cleanup_cancelled() {
     println!("\nCleanup cancelled");
 }
@@ -423,6 +413,7 @@ fn execute_reauth() -> Result<()> {
     }
 
     // Remove the authenticated image
+    // Ignore image removal errors during cleanup to proceed with setup
     let _ = Command::new("docker")
         .args(["rmi", "-f", "para-authenticated:latest"])
         .output();
@@ -438,7 +429,6 @@ fn execute_default() -> Result<()> {
     execute_setup(false)
 }
 
-/// Check if authenticated Docker image exists
 fn check_authenticated_image() -> Result<bool> {
     let output = Command::new("docker")
         .args(["image", "inspect", "para-authenticated:latest"])
