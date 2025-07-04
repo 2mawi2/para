@@ -153,7 +153,56 @@ fn execute_setup(force: bool) -> Result<()> {
 fn execute_cleanup(dry_run: bool) -> Result<()> {
     println!("🧹 Cleaning up Docker authentication artifacts\n");
 
-    // First, stop and remove any containers using the authenticated image
+    // Remove containers using the authenticated image
+    remove_authenticated_containers(dry_run)?;
+
+    // Collect items to clean
+    let items_to_clean = collect_cleanup_items()?;
+
+    if items_to_clean.is_empty() {
+        report_no_items_to_clean();
+        return Ok(());
+    }
+
+    // Report what was found
+    report_cleanup_targets(&items_to_clean);
+
+    if dry_run {
+        report_dry_run_mode();
+    } else {
+        // Get user confirmation and perform cleanup
+        if confirm_cleanup()? {
+            perform_cleanup_operations(&items_to_clean)?;
+            report_cleanup_success();
+        } else {
+            report_cleanup_cancelled();
+        }
+    }
+
+    Ok(())
+}
+
+/// Remove containers using the authenticated image
+fn remove_authenticated_containers(dry_run: bool) -> Result<()> {
+    let container_ids = list_authenticated_containers()?;
+
+    if !container_ids.is_empty() && !dry_run {
+        println!(
+            "Stopping {} containers using authenticated image...",
+            container_ids.len()
+        );
+        for container_id in &container_ids {
+            let _ = Command::new("docker")
+                .args(["rm", "-f", container_id])
+                .output();
+        }
+    }
+
+    Ok(())
+}
+
+/// List containers using the authenticated image
+fn list_authenticated_containers() -> Result<Vec<String>> {
     let ps_output = Command::new("docker")
         .args([
             "ps",
@@ -166,24 +215,18 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
         .map_err(|e| ParaError::docker_error(format!("Failed to list containers: {e}")))?;
 
     let container_ids = String::from_utf8_lossy(&ps_output.stdout);
-    let containers_to_remove: Vec<&str> = container_ids
+    let containers: Vec<String> = container_ids
         .lines()
         .filter(|line| !line.is_empty())
+        .map(|line| line.to_string())
         .collect();
 
-    if !containers_to_remove.is_empty() && !dry_run {
-        println!(
-            "Stopping {} containers using authenticated image...",
-            containers_to_remove.len()
-        );
-        for container_id in &containers_to_remove {
-            let _ = Command::new("docker")
-                .args(["rm", "-f", container_id])
-                .output();
-        }
-    }
+    Ok(containers)
+}
 
-    let mut items_to_clean: Vec<(&str, String)> = Vec::new();
+/// Collect all items that need to be cleaned up
+fn collect_cleanup_items() -> Result<Vec<(&'static str, String)>> {
+    let mut items_to_clean: Vec<(&'static str, String)> = Vec::new();
 
     // Check if authenticated image exists
     if check_authenticated_image()? {
@@ -194,66 +237,94 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
     }
 
     // Check for auth volumes
+    let auth_volumes = find_auth_volumes()?;
+    for volume in auth_volumes {
+        items_to_clean.push(("Docker auth volume", volume));
+    }
+
+    Ok(items_to_clean)
+}
+
+/// Find Docker volumes that contain authentication data
+fn find_auth_volumes() -> Result<Vec<String>> {
     let volume_output = Command::new("docker")
         .args(["volume", "ls", "-q"])
         .output()
         .map_err(|e| ParaError::docker_error(format!("Failed to list volumes: {e}")))?;
 
     let volumes = String::from_utf8_lossy(&volume_output.stdout);
-    for volume in volumes.lines() {
-        if volume.starts_with("para-auth-claude-") {
-            items_to_clean.push(("Docker auth volume", volume.to_string()));
-        }
+    let auth_volumes: Vec<String> = volumes
+        .lines()
+        .filter(|volume| volume.starts_with("para-auth-claude-"))
+        .map(|volume| volume.to_string())
+        .collect();
+
+    Ok(auth_volumes)
+}
+
+/// Ask user for confirmation to proceed with cleanup
+fn confirm_cleanup() -> Result<bool> {
+    let confirm = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Remove these items?")
+        .default(false)
+        .interact()
+        .map_err(|e| ParaError::docker_error(format!("Failed to read input: {e}")))?;
+
+    Ok(confirm)
+}
+
+/// Perform the actual cleanup operations
+fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
+    // Remove the authenticated image (force to handle any issues)
+    let output = Command::new("docker")
+        .args(["rmi", "-f", "para-authenticated:latest"])
+        .output()
+        .map_err(|e| ParaError::docker_error(format!("Failed to remove image: {e}")))?;
+
+    if !output.status.success() {
+        eprintln!(
+            "Warning: Failed to remove authenticated image: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
-    if items_to_clean.is_empty() {
-        println!("✅ No authentication artifacts found to clean up");
-        return Ok(());
-    }
-
-    println!("Found {} items to clean:", items_to_clean.len());
-    for (desc, name) in &items_to_clean {
-        println!("  - {desc}: {name}");
-    }
-
-    if dry_run {
-        println!("\n(Dry run - no changes made)");
-    } else {
-        let confirm = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Remove these items?")
-            .default(false)
-            .interact()
-            .map_err(|e| ParaError::docker_error(format!("Failed to read input: {e}")))?;
-
-        if confirm {
-            // Remove the authenticated image (force to handle any issues)
-            let output = Command::new("docker")
-                .args(["rmi", "-f", "para-authenticated:latest"])
-                .output()
-                .map_err(|e| ParaError::docker_error(format!("Failed to remove image: {e}")))?;
-
-            if !output.status.success() {
-                eprintln!(
-                    "Warning: Failed to remove authenticated image: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
-
-            // Remove auth volumes
-            for (desc, name) in &items_to_clean {
-                if desc == &"Docker auth volume" {
-                    let _ = Command::new("docker").args(["volume", "rm", name]).output();
-                }
-            }
-
-            println!("\n✅ Cleanup completed successfully");
-            println!("\nYou can now run 'para auth setup' to re-authenticate");
-        } else {
-            println!("\nCleanup cancelled");
+    // Remove auth volumes
+    for (desc, name) in items_to_clean {
+        if desc == &"Docker auth volume" {
+            let _ = Command::new("docker").args(["volume", "rm", name]).output();
         }
     }
 
     Ok(())
+}
+
+/// Report that no items were found to clean
+fn report_no_items_to_clean() {
+    println!("✅ No authentication artifacts found to clean up");
+}
+
+/// Report what items were found for cleanup
+fn report_cleanup_targets(items_to_clean: &[(&str, String)]) {
+    println!("Found {} items to clean:", items_to_clean.len());
+    for (desc, name) in items_to_clean {
+        println!("  - {desc}: {name}");
+    }
+}
+
+/// Report that this is a dry run
+fn report_dry_run_mode() {
+    println!("\n(Dry run - no changes made)");
+}
+
+/// Report successful cleanup
+fn report_cleanup_success() {
+    println!("\n✅ Cleanup completed successfully");
+    println!("\nYou can now run 'para auth setup' to re-authenticate");
+}
+
+/// Report that cleanup was cancelled
+fn report_cleanup_cancelled() {
+    println!("\nCleanup cancelled");
 }
 
 fn execute_status(verbose: bool) -> Result<()> {
@@ -375,4 +446,251 @@ fn check_authenticated_image() -> Result<bool> {
         .map_err(|e| ParaError::docker_error(format!("Failed to check Docker image: {e}")))?;
 
     Ok(output.status.success())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    // Test if Docker is available for integration tests
+    fn is_docker_available() -> bool {
+        Command::new("docker")
+            .args(["info"])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn test_execute_cleanup_dry_run_no_items() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test dry run with no items to clean
+        let result = execute_cleanup(true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_cleanup_dry_run_with_items() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // This test depends on having Docker available
+        // In a real scenario, we would set up test containers/images
+        // For now, just verify the function doesn't crash
+        let result = execute_cleanup(true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[ignore] // Integration test that requires Docker setup
+    fn test_execute_cleanup_integration_with_test_image() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // This would be a full integration test
+        // For now, just verify the function signature works
+        let result = execute_cleanup(true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_check_authenticated_image_docker_not_available() {
+        // Test behavior when Docker is not available
+        // We can't easily mock this without refactoring, so this is a placeholder
+        // In real scenarios, we'd expect this to return an error
+        if !is_docker_available() {
+            // If Docker is not available, we expect the function to handle it gracefully
+            let result = check_authenticated_image();
+            // Should return an error when Docker is not available
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_check_authenticated_image_docker_available() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test with Docker available
+        let result = check_authenticated_image();
+        assert!(result.is_ok());
+        // The result could be true or false depending on whether the image exists
+    }
+
+    // Tests for the refactored functions
+
+    #[test]
+    fn test_container_id_parsing() {
+        // Test parsing container IDs from docker ps output
+        let sample_output = "abc123\ndef456\n\n";
+        let container_ids: Vec<&str> = sample_output
+            .lines()
+            .filter(|line| !line.is_empty())
+            .collect();
+
+        assert_eq!(container_ids.len(), 2);
+        assert_eq!(container_ids[0], "abc123");
+        assert_eq!(container_ids[1], "def456");
+    }
+
+    #[test]
+    fn test_volume_filtering() {
+        // Test filtering volumes that start with para-auth-claude-
+        let sample_volumes = [
+            "para-auth-claude-123",
+            "para-auth-claude-456",
+            "other-volume",
+            "para-auth-claude-test",
+        ];
+
+        let filtered: Vec<&str> = sample_volumes
+            .iter()
+            .filter(|v| v.starts_with("para-auth-claude-"))
+            .copied()
+            .collect();
+
+        assert_eq!(filtered.len(), 3);
+        assert!(filtered.contains(&"para-auth-claude-123"));
+        assert!(filtered.contains(&"para-auth-claude-456"));
+        assert!(filtered.contains(&"para-auth-claude-test"));
+        assert!(!filtered.contains(&"other-volume"));
+    }
+
+    #[test]
+    fn test_collect_cleanup_items_docker_available() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test collecting cleanup items
+        let result = collect_cleanup_items();
+        assert!(result.is_ok());
+
+        let items = result.unwrap();
+        // Items could be empty or non-empty depending on system state
+        // Just verify the function works without panicking
+        println!("Found {} cleanup items", items.len());
+    }
+
+    #[test]
+    fn test_list_authenticated_containers_docker_available() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test listing authenticated containers
+        let result = list_authenticated_containers();
+        assert!(result.is_ok());
+
+        let containers = result.unwrap();
+        // Containers list could be empty or non-empty
+        // Just verify the function works without panicking
+        println!("Found {} authenticated containers", containers.len());
+    }
+
+    #[test]
+    fn test_find_auth_volumes_docker_available() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test finding auth volumes
+        let result = find_auth_volumes();
+        assert!(result.is_ok());
+
+        let volumes = result.unwrap();
+        // Volumes list could be empty or non-empty
+        // Just verify the function works without panicking
+        println!("Found {} auth volumes", volumes.len());
+    }
+
+    #[test]
+    fn test_remove_authenticated_containers_dry_run() {
+        if !is_docker_available() {
+            println!("Skipping test - Docker not available");
+            return;
+        }
+
+        // Test dry run mode - should not remove anything
+        let result = remove_authenticated_containers(true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reporting_functions() {
+        // Test all the reporting functions don't panic
+        report_no_items_to_clean();
+
+        let test_items = vec![
+            (
+                "Docker authenticated image",
+                "para-authenticated:latest".to_string(),
+            ),
+            ("Docker auth volume", "para-auth-claude-test".to_string()),
+        ];
+        report_cleanup_targets(&test_items);
+
+        report_dry_run_mode();
+        report_cleanup_success();
+        report_cleanup_cancelled();
+    }
+
+    #[test]
+    fn test_cleanup_item_structure() {
+        // Test the structure of cleanup items
+        let mut items: Vec<(&'static str, String)> = Vec::new();
+
+        // Test empty items
+        assert!(items.is_empty());
+
+        // Test with items
+        items.push((
+            "Docker authenticated image",
+            "para-authenticated:latest".to_string(),
+        ));
+        items.push(("Docker auth volume", "para-auth-claude-test".to_string()));
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].0, "Docker authenticated image");
+        assert_eq!(items[1].0, "Docker auth volume");
+        assert_eq!(items[0].1, "para-authenticated:latest");
+        assert_eq!(items[1].1, "para-auth-claude-test");
+    }
+
+    // Tests for error handling scenarios
+    #[test]
+    fn test_error_handling_scenarios() {
+        // Test that the functions handle various error conditions gracefully
+        // When Docker is not available, the functions should return errors appropriately
+
+        if !is_docker_available() {
+            // Test that functions return errors when Docker is not available
+            let container_result = list_authenticated_containers();
+            assert!(container_result.is_err());
+
+            let volume_result = find_auth_volumes();
+            assert!(volume_result.is_err());
+
+            let items_result = collect_cleanup_items();
+            // This might succeed or fail depending on check_authenticated_image behavior
+            println!(
+                "Collect cleanup items result when Docker unavailable: {:?}",
+                items_result.is_ok()
+            );
+        }
+    }
 }
