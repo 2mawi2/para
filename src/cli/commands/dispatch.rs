@@ -75,7 +75,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        // Write task file
         let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
@@ -83,7 +82,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, true)
         {
@@ -92,7 +90,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
                 .map_err(|e| ParaError::docker_error(format!("Failed to run setup script: {e}")))?;
         }
 
-        // Launch IDE connected to container with initial prompt
         docker_manager
             .launch_container_ide(&session, Some(&prompt), args.dangerously_skip_permissions)
             .map_err(|e| ParaError::docker_error(format!("Failed to launch IDE: {e}")))?;
@@ -154,7 +151,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         session_state.task_description = Some(prompt.clone());
         session_manager.save_state(&session_state)?;
 
-        // Write task file
         let state_dir = session_manager.state_dir();
         let task_file = state_dir.join(format!("{session_id}.task"));
         fs::write(&task_file, &prompt)
@@ -162,7 +158,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         create_claude_local_md(&session_state.worktree_path, &session_state.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, false)
         {

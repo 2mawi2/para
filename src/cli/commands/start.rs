@@ -22,7 +22,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
     // Track whether we're using Docker and network isolation settings
     let (is_container, network_isolation, _allowed_domains) = if args.container {
-        // Create Docker container session
         let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
             // Enable network isolation when --allow-domains is used
             let additional_domains: Vec<String> = domains
@@ -52,7 +51,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, true)
         {
@@ -65,7 +63,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
                 })?;
         }
 
-        // Launch IDE connected to container
         docker_manager
             .launch_container_ide(&session, None, args.dangerously_skip_permissions)
             .map_err(|e| {
@@ -106,7 +103,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
 
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
-        // Run setup script if specified
         if let Some(setup_script) =
             get_setup_script_path(&args.setup_script, &repo_root, &config, false)
         {
