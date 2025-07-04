@@ -148,10 +148,7 @@ pub fn launch_claude_with_context(
     // This handles the case where VS Code might recreate the file after our cleanup
     let gitignore_manager = GitignoreManager::new(session_path.to_str().unwrap_or("."));
 
-    // First try to add a comment if gitignore doesn't exist or doesn't have our entry
-    let _ = gitignore_manager
-        .add_entry("# Para: Ignore VS Code tasks file used for Claude auto-launch");
-
+    // Add the entry to gitignore (the manager will handle comments appropriately)
     if let Err(e) = gitignore_manager.add_entry(".vscode/tasks.json") {
         // Log warning but don't fail - this is a best-effort operation
         eprintln!("Warning: Failed to add .vscode/tasks.json to gitignore: {e}");
@@ -396,10 +393,6 @@ mod tests {
         assert!(
             gitignore_content.contains(".vscode/tasks.json"),
             "Gitignore should contain .vscode/tasks.json entry"
-        );
-        assert!(
-            gitignore_content.contains("# Para: Ignore VS Code tasks file"),
-            "Gitignore should contain explanatory comment"
         );
     }
 
@@ -876,10 +869,6 @@ mod tests {
         assert!(
             gitignore_content.contains(".vscode/tasks.json"),
             "Should add .vscode/tasks.json entry"
-        );
-        assert!(
-            gitignore_content.contains("# Para: Ignore VS Code tasks file"),
-            "Should add explanatory comment"
         );
     }
 
