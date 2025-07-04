@@ -10,7 +10,7 @@ This plan details migrating Para's Docker container workflows to GitHub Actions 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   User runs     │    │   Para creates   │    │  Claude Code    │
-│ para dispatch   │───▶│ Docker container │───▶│  runs inside    │
+│   para start    │───▶│ Docker container │───▶│  runs inside    │
 │                 │    │ with OAuth auth  │    │   container     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │

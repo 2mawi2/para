@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::parser::{DispatchArgs, SandboxArgs};
+    use crate::cli::parser::{SandboxArgs, UnifiedStartArgs};
     use crate::core::session::{SessionManager, SessionStatus};
     use crate::test_utils::test_helpers::create_test_config;
     use tempfile::TempDir;
@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dispatch_with_dangerous_flag() {
+    fn test_unified_start_with_dangerous_flag() {
         let temp_dir = TempDir::new().unwrap();
 
         let mut config = create_test_config();
@@ -94,9 +94,9 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        // Dispatch with dangerous flag
-        let _dispatch_args = DispatchArgs {
-            name_or_prompt: Some("test-dispatch".to_string()),
+        // Unified start with dangerous flag (equivalent to old dispatch)
+        let _start_args = UnifiedStartArgs {
+            name_or_session: Some("test-start".to_string()),
             prompt: Some("Test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: true,
@@ -113,22 +113,22 @@ mod tests {
             },
         };
 
-        // Note: dispatch::execute requires Claude Code in wrapper mode
-        // For this test, we'll directly create the session as dispatch would
+        // Note: unified_start::execute requires Claude Code in wrapper mode
+        // For this test, we'll directly create the session as unified start would
         let session_manager = SessionManager::new(&config);
 
-        // Simulate what dispatch does - create session with dangerous flag
+        // Simulate what unified start does - create session with dangerous flag
         let session = crate::core::session::state::SessionState::with_parent_branch_and_flags(
-            "test-dispatch".to_string(),
-            "para/test-dispatch".to_string(),
-            temp_dir.path().join("test-dispatch"),
+            "test-start".to_string(),
+            "para/test-start".to_string(),
+            temp_dir.path().join("test-start"),
             "main".to_string(),
             true,
         );
         session_manager.save_state(&session).unwrap();
 
         // Verify session was created with dangerous flag
-        let loaded = session_manager.load_state("test-dispatch").unwrap();
+        let loaded = session_manager.load_state("test-start").unwrap();
         assert_eq!(loaded.dangerous_skip_permissions, Some(true));
     }
 

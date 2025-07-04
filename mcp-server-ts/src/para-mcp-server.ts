@@ -17,13 +17,19 @@ import {
 import { exec, execSync } from "child_process";
 
 interface ParaStartArgs {
-  session_name?: string;
+  name_or_session?: string;
+  prompt?: string;
+  file?: string;
   dangerously_skip_permissions?: boolean;
   container?: boolean;
   docker_args?: string[];
   sandbox?: boolean;
   no_sandbox?: boolean;
   sandbox_profile?: string;
+  docker_image?: string;
+  allow_domains?: string;
+  no_forward_keys?: boolean;
+  setup_script?: string;
 }
 
 interface ParaFinishArgs {
@@ -32,26 +38,10 @@ interface ParaFinishArgs {
   branch?: string;
 }
 
-interface ParaDispatchArgs {
-  session_name: string;
-  task_description?: string;
-  file?: string;
-  dangerously_skip_permissions?: boolean;
-  container?: boolean;
-  docker_args?: string[];
-  sandbox?: boolean;
-  no_sandbox?: boolean;
-  sandbox_profile?: string;
-}
-
 interface ParaListArgs {
   verbose?: boolean;
   archived?: boolean;
   quiet?: boolean;
-}
-
-interface ParaRecoverArgs {
-  session_name?: string;
 }
 
 interface ParaResumeArgs {
@@ -62,6 +52,10 @@ interface ParaResumeArgs {
   sandbox?: boolean;
   no_sandbox?: boolean;
   sandbox_profile?: string;
+}
+
+interface ParaRecoverArgs {
+  session_name?: string;
 }
 
 interface ParaCancelArgs {
@@ -190,13 +184,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "para_start",
-        description: "Start manual development session in isolated Git worktree. For complex tasks where YOU (orchestrator) work WITH the user, not for dispatching agents. Creates .para/worktrees/session-name directory. Use when user needs direct involvement or task is too complex for agents.",
+        description: "Create new para sessions (interactive or AI-assisted). Combines functionality of old start and dispatch commands.\n\nUSAGE PATTERNS:\n1. NEW INTERACTIVE: para_start() or para_start(name_or_session: 'feature-x')\n2. NEW WITH AGENT: para_start(prompt: 'implement feature X')\n3. NEW WITH NAME + AGENT: para_start(name_or_session: 'feature-x', prompt: 'implement auth')\n4. FROM FILE: para_start(file: 'tasks/auth.md')\n\nNOTE: For resuming existing sessions, use para_resume instead for clearer intent.\n\nThe command intelligently determines your intent:\n- No args → new interactive session\n- Name only → create new session with that name\n- Prompt only → new session with AI agent\n- Name + prompt → new named session with AI agent",
         inputSchema: {
           type: "object",
           properties: {
-            session_name: {
+            name_or_session: {
               type: "string",
-              description: "Name for the new session (optional, generates friendly name if not provided)"
+              description: "Session name (for new) or existing session to resume"
+            },
+            prompt: {
+              type: "string",
+              description: "Task description or additional context (triggers AI agent mode)"
+            },
+            file: {
+              type: "string",
+              description: "Read prompt/context from file (e.g., tasks/auth.md)"
             },
             dangerously_skip_permissions: {
               type: "boolean",
@@ -209,19 +211,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             docker_args: {
               type: "array",
               items: { type: "string" },
-              description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
+              description: "Additional Docker arguments"
             },
             sandbox: {
               type: "boolean",
-              description: "Enable sandboxing for Claude CLI (overrides config)"
+              description: "Enable sandboxing (overrides config)"
             },
             no_sandbox: {
               type: "boolean",
-              description: "Disable sandboxing for Claude CLI (overrides config)"
+              description: "Disable sandboxing (overrides config)"
             },
             sandbox_profile: {
               type: "string",
-              description: "Sandbox profile to use: permissive (default) or restrictive"
+              description: "Sandbox profile: permissive (default) or restrictive"
+            },
+            docker_image: {
+              type: "string",
+              description: "Custom Docker image (e.g., 'ubuntu:22.04')"
+            },
+            allow_domains: {
+              type: "string",
+              description: "Enable network isolation with allowed domains (comma-separated)"
+            },
+            no_forward_keys: {
+              type: "boolean",
+              description: "Disable automatic API key forwarding to Docker containers"
+            },
+            setup_script: {
+              type: "string",
+              description: "Path to setup script to run after session creation"
             }
           },
           required: []
@@ -250,50 +268,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: "para_dispatch",
-        description: "PRIMARY TOOL: Dispatch AI agents for parallel development. Each agent works in isolated Git worktree.\n\nPARALLELIZATION:\n- SEQUENTIAL: API spec first → then implementations\n- PARALLEL: Frontend + Backend (using same API)\n- AVOID: Same files = conflicts\n\nTASK FORMAT:\n- PREFER FILE: Use task files for complex prompts or special characters\n- INLINE ONLY: Simple, short natural language tasks without special symbols\n- DEFAULT: Create .md file in 'tasks/' directory (recommended)\n\nTASK WRITING:\n- Keep simple, avoid overengineering\n- State WHAT not HOW\n- Let agents choose implementation\n- End with: 'When done: para finish \"<msg>\"'\n- CUSTOM BRANCHES: Add '--branch custom-name' for specific branch names\n\nWORKFLOW:\n1. Create tasks/TASK_1_feature.md files\n2. Dispatch agents (they'll finish work automatically)\n3. Continue with user on next tasks\n4. Conflicts? Review branches manually with user\n\nEXAMPLE TASK:\n```\nImplement user authentication with email/password.\nStore users in database.\nReturn JWT tokens.\n\nWhen done: para finish \"Add user authentication\" --branch feature/auth-system\n```",
+        name: "para_resume",
+        description: "Resume an existing para session with optional additional context. Focused command for continuing work on existing sessions.\n\nUSAGE:\n- para_resume() → Resume session in current directory\n- para_resume(session: 'auth-feature') → Resume specific session\n- para_resume(session: 'auth', prompt: 'add password reset') → Resume with new instructions\n- para_resume(session: 'api', file: 'new-requirements.txt') → Resume with file context\n\nUse this when you specifically want to continue existing work, or when para_start's smart detection doesn't match your intent.",
         inputSchema: {
           type: "object",
           properties: {
-            session_name: {
+            session: {
               type: "string",
-              description: "Unique name for this agent/session (e.g., 'auth-api', 'frontend-ui')"
+              description: "Session ID to resume (optional, auto-detects from current directory if not provided)"
             },
-            task_description: {
+            prompt: {
               type: "string",
-              description: "Inline task description for SIMPLE tasks only. Use for short, natural language prompts without special characters. Must end with workflow instruction: 'When complete, run: para finish \"<commit msg>\"'"
+              description: "Additional prompt or instructions for the resumed session"
             },
             file: {
               type: "string",
-              description: "Path to task file (e.g., tasks/TASK_1_auth.md). Default directory: tasks/"
+              description: "Read additional instructions from specified file"
             },
             dangerously_skip_permissions: {
               type: "boolean",
-              description: "Skip IDE permission warnings (dangerous)"
-            },
-            container: {
-              type: "boolean",
-              description: "Run session in Docker container"
-            },
-            docker_args: {
-              type: "array",
-              items: { type: "string" },
-              description: "Additional Docker arguments (e.g., ['-d'] for detached mode)"
+              description: "Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)"
             },
             sandbox: {
               type: "boolean",
-              description: "Enable sandboxing for Claude CLI (overrides config)"
+              description: "Enable sandboxing (overrides config)"
             },
             no_sandbox: {
               type: "boolean",
-              description: "Disable sandboxing for Claude CLI (overrides config)"
+              description: "Disable sandboxing (overrides config)"
             },
             sandbox_profile: {
               type: "string",
-              description: "Sandbox profile to use: permissive (default) or restrictive"
+              description: "Sandbox profile: permissive (default) or restrictive"
             }
           },
-          required: ["session_name"]
+          required: []
         }
       },
       {
@@ -327,44 +336,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             session_name: {
               type: "string",
               description: "Name of the session to recover (optional, shows list if not provided)"
-            }
-          },
-          required: []
-        }
-      },
-      {
-        name: "para_resume",
-        description: "Resume an existing active session with optional additional context or instructions. Opens the session's worktree in your IDE.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            session: {
-              type: "string",
-              description: "Session ID to resume (optional, shows list if not provided)"
-            },
-            prompt: {
-              type: "string",
-              description: "Additional prompt or instructions for the resumed session"
-            },
-            file: {
-              type: "string",
-              description: "Read additional instructions from specified file"
-            },
-            dangerously_skip_permissions: {
-              type: "boolean",
-              description: "Skip IDE permission warnings (dangerous)"
-            },
-            sandbox: {
-              type: "boolean",
-              description: "Enable sandboxing for Claude CLI (overrides config)"
-            },
-            no_sandbox: {
-              type: "boolean",
-              description: "Disable sandboxing for Claude CLI (overrides config)"
-            },
-            sandbox_profile: {
-              type: "string",
-              description: "Sandbox profile to use: permissive (default) or restrictive"
             }
           },
           required: []
@@ -453,8 +424,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         {
           const startArgs = args as ParaStartArgs;
           const cmdArgs = ["start"];
-          if (startArgs.session_name) {
-            cmdArgs.push(startArgs.session_name);
+          
+          // Handle unified start arguments
+          if (startArgs.name_or_session) {
+            cmdArgs.push(startArgs.name_or_session);
+          }
+          if (startArgs.prompt) {
+            cmdArgs.push(startArgs.prompt);
+          }
+          if (startArgs.file) {
+            cmdArgs.push("--file", startArgs.file);
           }
           if (startArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
@@ -473,6 +452,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (startArgs.sandbox_profile) {
             cmdArgs.push("--sandbox-profile", startArgs.sandbox_profile);
+          }
+          if (startArgs.docker_image) {
+            cmdArgs.push("--docker-image", startArgs.docker_image);
+          }
+          if (startArgs.allow_domains) {
+            cmdArgs.push("--allow-domains", startArgs.allow_domains);
+          }
+          if (startArgs.no_forward_keys) {
+            cmdArgs.push("--no-forward-keys");
+          }
+          if (startArgs.setup_script) {
+            cmdArgs.push("--setup-script", startArgs.setup_script);
           }
           result = await runParaCommand(cmdArgs);
         }
@@ -493,37 +484,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         break;
 
-      case "para_dispatch":
+      case "para_resume":
         {
-          const dispatchArgs = args as unknown as ParaDispatchArgs;
-          const cmdArgs = ["dispatch"];
-          cmdArgs.push(dispatchArgs.session_name);
-
-          if (dispatchArgs.file) {
-            cmdArgs.push("--file", dispatchArgs.file);
-          } else if (dispatchArgs.task_description) {
-            cmdArgs.push(dispatchArgs.task_description);
+          const resumeArgs = args as ParaResumeArgs;
+          const cmdArgs = ["resume"];
+          
+          if (resumeArgs.session) {
+            cmdArgs.push(resumeArgs.session);
           }
-
-          if (dispatchArgs.dangerously_skip_permissions) {
+          if (resumeArgs.prompt) {
+            cmdArgs.push("--prompt", resumeArgs.prompt);
+          }
+          if (resumeArgs.file) {
+            cmdArgs.push("--file", resumeArgs.file);
+          }
+          if (resumeArgs.dangerously_skip_permissions) {
             cmdArgs.push("--dangerously-skip-permissions");
           }
-          if (dispatchArgs.container) {
-            cmdArgs.push("--container");
-          }
-          if (dispatchArgs.docker_args && dispatchArgs.docker_args.length > 0) {
-            cmdArgs.push("--docker-args", ...dispatchArgs.docker_args);
-          }
-          if (dispatchArgs.sandbox) {
+          if (resumeArgs.sandbox) {
             cmdArgs.push("--sandbox");
           }
-          if (dispatchArgs.no_sandbox) {
+          if (resumeArgs.no_sandbox) {
             cmdArgs.push("--no-sandbox");
           }
-          if (dispatchArgs.sandbox_profile) {
-            cmdArgs.push("--sandbox-profile", dispatchArgs.sandbox_profile);
+          if (resumeArgs.sandbox_profile) {
+            cmdArgs.push("--sandbox-profile", resumeArgs.sandbox_profile);
           }
-
           result = await runParaCommand(cmdArgs);
         }
         break;
@@ -556,34 +542,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         break;
 
-      case "para_resume":
-        {
-          const resumeArgs = args as ParaResumeArgs;
-          const cmdArgs = ["resume"];
-          if (resumeArgs.session) {
-            cmdArgs.push(resumeArgs.session);
-          }
-          if (resumeArgs.prompt) {
-            cmdArgs.push("--prompt", resumeArgs.prompt);
-          }
-          if (resumeArgs.file) {
-            cmdArgs.push("--file", resumeArgs.file);
-          }
-          if (resumeArgs.dangerously_skip_permissions) {
-            cmdArgs.push("--dangerously-skip-permissions");
-          }
-          if (resumeArgs.sandbox) {
-            cmdArgs.push("--sandbox");
-          }
-          if (resumeArgs.no_sandbox) {
-            cmdArgs.push("--no-sandbox");
-          }
-          if (resumeArgs.sandbox_profile) {
-            cmdArgs.push("--sandbox-profile", resumeArgs.sandbox_profile);
-          }
-          result = await runParaCommand(cmdArgs);
-        }
-        break;
 
       case "para_config_show":
         result = await runParaCommand(["config", "show"]);

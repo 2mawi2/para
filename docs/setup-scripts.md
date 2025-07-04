@@ -204,16 +204,16 @@ fi
 
 Para displays the script path before execution as a security reminder.
 
-## Usage with Dispatch
+## Usage with AI-Assisted Sessions
 
-Setup scripts also work with `para dispatch`:
+Setup scripts also work with AI-assisted `para start`:
 
 ```bash
 # With explicit script
-para dispatch --setup-script scripts/ai-setup.sh "implement new feature"
+para start --setup-script scripts/ai-setup.sh "implement new feature"
 
 # Auto-detect .para/setup.sh
-para dispatch "fix bug in authentication"
+para start "fix bug in authentication"
 ```
 
 ## Docker Container Support

@@ -11,10 +11,10 @@ stateDiagram-v2
     [*] --> Idle: para ready
     
     Idle --> Starting: para start <session-name>
-    Idle --> Dispatching: para dispatch <prompt>
+    Idle --> Starting: para start <prompt>
     
     Starting --> Active: worktree + branch created
-    Dispatching --> Active: session auto-created
+    Starting --> Active: session auto-created
     Active --> Working: IDE opened
     
     Working --> Finishing: para finish <message>
@@ -39,7 +39,7 @@ flowchart TD
     A[User Input] --> B{Command Type}
     
     B --> C[para start]
-    B --> D[para dispatch]
+    B --> D[para start <prompt>]
     B --> F[para finish]
     B --> G[para cancel]
     B --> H[para recover]
@@ -108,7 +108,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A[User has complex requirements] --> B[Create prompt file]
-    B --> C[para dispatch --file requirements.txt]
+    B --> C[para start --file requirements.txt]
     C --> D[Para reads file content]
     D --> E[Create session with file as prompt]
     E --> F[IDE opens with full context]

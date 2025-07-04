@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::cli::parser::ResumeArgs;
+    use crate::cli::parser::UnifiedStartArgs;
     use crate::core::session::state::SessionState;
     use crate::core::session::{SessionManager, SessionStatus};
     use crate::test_utils::test_helpers::*;
@@ -47,13 +47,19 @@ mod integration_tests {
         assert_eq!(loaded.dangerous_skip_permissions, Some(true));
         assert_eq!(loaded.status, SessionStatus::Active);
 
-        // Step 3: Simulate monitor resume (which would call resume with the flag)
+        // Step 3: Simulate monitor resume (which would call unified start with the session)
         // In the real monitor, this happens via spawned command
-        let monitor_resume_args = ResumeArgs {
-            session: Some("dangerous-session".to_string()),
+        let monitor_resume_args = UnifiedStartArgs {
+            name_or_session: Some("dangerous-session".to_string()),
             prompt: None,
             file: None,
             dangerously_skip_permissions: true, // Monitor would add this based on session state
+            container: false,
+            docker_args: vec![],
+            allow_domains: None,
+            setup_script: None,
+            docker_image: None,
+            no_forward_keys: false,
             sandbox_args: crate::cli::parser::SandboxArgs {
                 sandbox: false,
                 no_sandbox: false,

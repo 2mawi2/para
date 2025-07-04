@@ -41,10 +41,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create session with optional name
-    Start(StartArgs),
-    /// Start Claude Code session with prompt (supports stdin piping)
-    Dispatch(DispatchArgs),
+    /// Create new para sessions (interactive or AI-assisted)
+    Start(UnifiedStartArgs),
     /// Complete session and create feature branch for review
     Finish(FinishArgs),
     /// Cancel session (moves to archive)
@@ -83,6 +81,7 @@ pub enum Commands {
     Daemon(DaemonArgs),
 }
 
+/// Internal args struct for delegation to start command (not exposed in CLI)
 #[derive(Args, Debug)]
 pub struct StartArgs {
     /// Session name (optional, generates friendly name if not provided)
@@ -138,30 +137,8 @@ pub struct StartArgs {
     pub sandbox_args: SandboxArgs,
 }
 
+/// Internal args struct for delegation to dispatch command (not exposed in CLI)
 #[derive(Args, Debug)]
-#[command(after_help = "EXAMPLES:
-    # Basic usage with inline prompt
-    para dispatch \"implement user authentication\"
-    
-    # With custom session name
-    para dispatch auth-feature \"implement user authentication\"
-    
-    # From file
-    para dispatch --file prompt.txt
-    para dispatch auth-feature --file requirements.md
-    
-    # Using stdin piping
-    echo \"test prompt\" | para dispatch
-    cat requirements.txt | para dispatch my-feature
-    jq '.description' task.json | para dispatch
-    
-    # With Docker container
-    para dispatch --container \"implement user authentication\"
-    para dispatch --container auth-feature --file requirements.md
-    
-    # With custom Docker image
-    para dispatch --container --docker-image node:18 \"implement Node.js feature\"
-    para dispatch --container --docker-image mycompany/dev:latest --no-forward-keys \"secure task\"")]
 pub struct DispatchArgs {
     /// Session name or prompt text
     pub name_or_prompt: Option<String>,
@@ -217,6 +194,43 @@ pub struct DispatchArgs {
         help = "Disable automatic API key forwarding to Docker containers"
     )]
     pub no_forward_keys: bool,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
+}
+
+#[derive(Args, Debug)]
+#[command(after_help = "EXAMPLES:
+    # Resume session from current directory (auto-detect)
+    para resume
+    
+    # Resume specific session
+    para resume my-feature
+    
+    # Resume with additional instructions
+    para resume my-feature --prompt \"add error handling\"
+    
+    # Resume with instructions from file
+    para resume my-feature --file new-requirements.txt")]
+pub struct ResumeArgs {
+    /// Session ID to resume (optional, auto-detects from current directory if not provided)
+    pub session: Option<String>,
+
+    /// Additional prompt or instructions for the resumed session
+    #[arg(long, short)]
+    pub prompt: Option<String>,
+
+    /// Read additional instructions from specified file
+    #[arg(long, short)]
+    pub file: Option<PathBuf>,
+
+    /// Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)
+    #[arg(
+        long,
+        help = "Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)"
+    )]
+    pub dangerously_skip_permissions: bool,
 
     /// Sandbox configuration
     #[command(flatten)]
@@ -282,31 +296,6 @@ pub struct ListArgs {
     /// Quiet output (minimal formatting for completion)
     #[arg(long, short = 'q', help = "Quiet output for completion")]
     pub quiet: bool,
-}
-
-#[derive(Args, Debug)]
-pub struct ResumeArgs {
-    /// Session ID to resume (optional, shows list if not provided)
-    pub session: Option<String>,
-
-    /// Additional prompt or instructions for the resumed session
-    #[arg(long, short)]
-    pub prompt: Option<String>,
-
-    /// Read additional instructions from specified file
-    #[arg(long, short)]
-    pub file: Option<PathBuf>,
-
-    /// Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)
-    #[arg(
-        long,
-        help = "Skip IDE permission warnings (DANGEROUS: Only use for automated scripts)"
-    )]
-    pub dangerously_skip_permissions: bool,
-
-    /// Sandbox configuration
-    #[command(flatten)]
-    pub sandbox_args: SandboxArgs,
 }
 
 #[derive(Args, Debug)]
@@ -376,6 +365,81 @@ pub struct StatusArgs {
     pub session: Option<String>,
 }
 
+/// Start command arguments (creates new sessions, interactive or AI-assisted)
+#[derive(Args, Debug)]
+#[command(after_help = "EXAMPLES:
+    # Start new interactive session
+    para start
+    para start feature-xyz
+    
+    # Start new session with AI agent (dispatch functionality)
+    para start \"implement user authentication\"
+    para start feature-xyz \"implement authentication\"
+    
+    # Use task file
+    para start --file tasks/auth.md
+    para start feature-xyz --file context.md
+    
+    # Docker container sessions
+    para start --container \"implement feature\"
+    para start --container --allow-domains github.com,api.example.com")]
+pub struct UnifiedStartArgs {
+    /// Session name, existing session, or prompt text
+    pub name_or_session: Option<String>,
+
+    /// Additional prompt text (when first arg is session name)
+    pub prompt: Option<String>,
+
+    /// Read prompt/context from file
+    #[arg(long, short = 'f', help = "Read prompt or context from specified file")]
+    pub file: Option<PathBuf>,
+
+    /// Skip IDE permission warnings (dangerous)
+    #[arg(long, short = 'd', help = "Skip IDE permission warnings (dangerous)")]
+    pub dangerously_skip_permissions: bool,
+
+    /// Run session in Docker container
+    #[arg(long, short = 'c', help = "Run session in Docker container")]
+    pub container: bool,
+
+    /// Enable network isolation and allow access to specified domains
+    #[arg(
+        long,
+        help = "Enable network isolation and allow access to specified domains (comma-separated)"
+    )]
+    pub allow_domains: Option<String>,
+
+    /// Additional Docker arguments to pass through
+    #[arg(
+        long = "docker-args",
+        allow_hyphen_values = true,
+        help = "Additional Docker arguments to pass through"
+    )]
+    pub docker_args: Vec<String>,
+
+    /// Path to setup script to run after session creation
+    #[arg(
+        long = "setup-script",
+        help = "Path to setup script to run after session creation"
+    )]
+    pub setup_script: Option<PathBuf>,
+
+    /// Custom Docker image to use
+    #[arg(long, help = "Custom Docker image to use (e.g., 'ubuntu:22.04')")]
+    pub docker_image: Option<String>,
+
+    /// Disable API key forwarding to container
+    #[arg(
+        long,
+        help = "Disable automatic API key forwarding to Docker containers"
+    )]
+    pub no_forward_keys: bool,
+
+    /// Sandbox configuration
+    #[command(flatten)]
+    pub sandbox_args: SandboxArgs,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum StatusCommands {
     /// Show status of one or all sessions
@@ -439,49 +503,6 @@ pub enum Shell {
     Fish,
 }
 
-impl StartArgs {
-    pub fn validate(&self) -> crate::utils::Result<()> {
-        if let Some(ref name) = self.name {
-            validate_session_name(name)?;
-        }
-        Ok(())
-    }
-}
-
-impl DispatchArgs {
-    pub fn validate(&self) -> crate::utils::Result<()> {
-        use std::io::IsTerminal;
-
-        // Allow no arguments if stdin is piped
-        if !std::io::stdin().is_terminal() {
-            return Ok(());
-        }
-
-        self.validate_args()
-    }
-
-    fn validate_args(&self) -> crate::utils::Result<()> {
-        match (&self.name_or_prompt, &self.prompt, &self.file) {
-            (None, None, None) => Err(crate::utils::ParaError::invalid_args(
-                "dispatch requires a prompt text or file path",
-            )),
-            _ => Ok(()),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn validate_impl(&self, skip_stdin_check: bool) -> crate::utils::Result<()> {
-        use std::io::IsTerminal;
-
-        // Allow no arguments if stdin is piped (unless skipped for testing)
-        if !skip_stdin_check && !std::io::stdin().is_terminal() {
-            return Ok(());
-        }
-
-        self.validate_args()
-    }
-}
-
 impl FinishArgs {
     pub fn validate(&self) -> crate::utils::Result<()> {
         if self.message.trim().is_empty() {
@@ -494,17 +515,6 @@ impl FinishArgs {
             validate_branch_name(branch)?;
         }
 
-        Ok(())
-    }
-}
-
-impl ResumeArgs {
-    pub fn validate(&self) -> crate::utils::Result<()> {
-        if self.prompt.is_some() && self.file.is_some() {
-            return Err(crate::utils::ParaError::invalid_args(
-                "Cannot specify both --prompt and --file. Please use only one.",
-            ));
-        }
         Ok(())
     }
 }
@@ -570,4 +580,114 @@ pub enum DaemonCommands {
     Stop,
     /// Check daemon status
     Status,
+}
+
+impl UnifiedStartArgs {
+    /// Validate the unified start arguments
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        // Can't specify both --prompt and --file
+        if self.prompt.is_some() && self.file.is_some() {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot specify both --prompt and --file",
+            ));
+        }
+
+        // Validate sandbox args
+        if self.sandbox_args.sandbox && self.sandbox_args.no_sandbox {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot specify both --sandbox and --no-sandbox",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Convert to StartArgs for delegating to existing start command
+    pub fn to_start_args(&self, name: Option<String>) -> StartArgs {
+        StartArgs {
+            name,
+            dangerously_skip_permissions: self.dangerously_skip_permissions,
+            container: self.container,
+            allow_domains: self.allow_domains.clone(),
+            docker_args: self.docker_args.clone(),
+            setup_script: self.setup_script.clone(),
+            docker_image: self.docker_image.clone(),
+            no_forward_keys: self.no_forward_keys,
+            sandbox_args: self.sandbox_args.clone(),
+        }
+    }
+
+    /// Convert to DispatchArgs for delegating to existing dispatch command
+    pub fn to_dispatch_args(&self, name: Option<String>, prompt: Option<String>) -> DispatchArgs {
+        let has_name = name.is_some();
+        DispatchArgs {
+            name_or_prompt: name.or(prompt.clone()),
+            prompt: if has_name { prompt } else { None },
+            file: self.file.clone(),
+            dangerously_skip_permissions: self.dangerously_skip_permissions,
+            container: self.container,
+            allow_domains: self.allow_domains.clone(),
+            docker_args: self.docker_args.clone(),
+            setup_script: self.setup_script.clone(),
+            docker_image: self.docker_image.clone(),
+            no_forward_keys: self.no_forward_keys,
+            sandbox_args: self.sandbox_args.clone(),
+        }
+    }
+}
+
+// Implementation blocks for internal structs
+impl StartArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        if let Some(ref name) = self.name {
+            validate_session_name(name)?;
+        }
+        Ok(())
+    }
+}
+
+impl DispatchArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        use std::io::IsTerminal;
+
+        // Allow no arguments if stdin is piped
+        if !std::io::stdin().is_terminal() {
+            return Ok(());
+        }
+
+        self.validate_args()
+    }
+
+    fn validate_args(&self) -> crate::utils::Result<()> {
+        match (&self.name_or_prompt, &self.prompt, &self.file) {
+            (None, None, None) => Err(crate::utils::ParaError::invalid_args(
+                "dispatch requires a prompt text or file path",
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    #[cfg(test)]
+    #[allow(dead_code)]
+    pub fn validate_impl(&self, skip_stdin_check: bool) -> crate::utils::Result<()> {
+        use std::io::IsTerminal;
+
+        // Allow no arguments if stdin is piped (unless skipped for testing)
+        if !skip_stdin_check && !std::io::stdin().is_terminal() {
+            return Ok(());
+        }
+
+        self.validate_args()
+    }
+}
+
+impl ResumeArgs {
+    pub fn validate(&self) -> crate::utils::Result<()> {
+        if self.prompt.is_some() && self.file.is_some() {
+            return Err(crate::utils::ParaError::invalid_args(
+                "Cannot specify both --prompt and --file. Please use only one.",
+            ));
+        }
+        Ok(())
+    }
 }
