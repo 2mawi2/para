@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::core::sandbox::config::SandboxResolver;
 use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
+use crate::utils::gitignore::GitignoreManager;
 use crate::utils::{ParaError, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -143,6 +144,19 @@ pub fn launch_claude_with_context(
     fs::write(&tasks_file, tasks_json)
         .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {e}")))?;
 
+    // Add .vscode/tasks.json to gitignore to prevent it from showing in git status
+    // This handles the case where VS Code might recreate the file after our cleanup
+    let gitignore_manager = GitignoreManager::new(session_path.to_str().unwrap_or("."));
+
+    // First try to add a comment if gitignore doesn't exist or doesn't have our entry
+    let _ = gitignore_manager
+        .add_entry("# Para: Ignore VS Code tasks file used for Claude auto-launch");
+
+    if let Err(e) = gitignore_manager.add_entry(".vscode/tasks.json") {
+        // Log warning but don't fail - this is a best-effort operation
+        eprintln!("Warning: Failed to add .vscode/tasks.json to gitignore: {e}");
+    }
+
     // Launch IDE wrapper
     let (ide_command, ide_name) = (&config.ide.wrapper.command, &config.ide.wrapper.name);
     let mut cmd = Command::new(ide_command);
@@ -214,13 +228,38 @@ fn create_claude_task_json(command: &str) -> String {
 fn spawn_tasks_cleanup(tasks_file: PathBuf) {
     thread::spawn(move || {
         // Wait for VS Code to read and execute the task
-        // 5 seconds should be enough time for VS Code to start and read the file
-        thread::sleep(Duration::from_secs(5));
+        // Try multiple times with increasing delays to handle VS Code recreating the file
+        let delays = [5, 10, 20]; // seconds
 
-        // Attempt to remove the tasks.json file
-        if let Err(e) = fs::remove_file(&tasks_file) {
-            // Don't propagate errors - this is best-effort cleanup
-            eprintln!("Warning: Failed to clean up tasks.json: {e}");
+        for (attempt, delay) in delays.iter().enumerate() {
+            thread::sleep(Duration::from_secs(*delay));
+
+            // Check if file still exists before trying to remove it
+            if !tasks_file.exists() {
+                // File already removed, we're done
+                return;
+            }
+
+            // Attempt to remove the tasks.json file
+            match fs::remove_file(&tasks_file) {
+                Ok(_) => {
+                    // Successfully removed, check once more after a short delay
+                    thread::sleep(Duration::from_secs(2));
+                    if !tasks_file.exists() {
+                        // File is gone and stayed gone, success
+                        return;
+                    }
+                    // File was recreated, continue trying
+                }
+                Err(e) => {
+                    // Only log on the last attempt
+                    if attempt == delays.len() - 1 {
+                        eprintln!(
+                            "Warning: Failed to clean up tasks.json after multiple attempts: {e}"
+                        );
+                    }
+                }
+            }
         }
     });
 }
@@ -349,6 +388,19 @@ mod tests {
         assert!(tasks_content.contains(r#""FORCE_COLOR": "1""#));
         assert!(tasks_content.contains(r#""COLORTERM": "truecolor""#));
         assert!(tasks_content.contains(r#""TERM": "xterm-256color""#));
+
+        // Verify gitignore was created with .vscode/tasks.json entry
+        let gitignore_path = session_path.join(".gitignore");
+        assert!(gitignore_path.exists(), "Gitignore should be created");
+        let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
+        assert!(
+            gitignore_content.contains(".vscode/tasks.json"),
+            "Gitignore should contain .vscode/tasks.json entry"
+        );
+        assert!(
+            gitignore_content.contains("# Para: Ignore VS Code tasks file"),
+            "Gitignore should contain explanatory comment"
+        );
     }
 
     #[test]
@@ -793,5 +845,64 @@ mod tests {
 
         // Should complete without errors
         assert!(!tasks_file.exists());
+    }
+
+    #[test]
+    fn test_launch_claude_adds_gitignore_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        // Create existing gitignore with some content
+        let gitignore_path = session_path.join(".gitignore");
+        fs::write(&gitignore_path, "*.log\ntarget/\n").unwrap();
+
+        let config = create_test_config();
+        let options = ClaudeLaunchOptions::default();
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Verify gitignore was updated
+        let gitignore_content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(
+            gitignore_content.contains("*.log"),
+            "Original content should be preserved"
+        );
+        assert!(
+            gitignore_content.contains("target/"),
+            "Original content should be preserved"
+        );
+        assert!(
+            gitignore_content.contains(".vscode/tasks.json"),
+            "Should add .vscode/tasks.json entry"
+        );
+        assert!(
+            gitignore_content.contains("# Para: Ignore VS Code tasks file"),
+            "Should add explanatory comment"
+        );
+    }
+
+    #[test]
+    fn test_launch_claude_handles_duplicate_gitignore_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        // Create existing gitignore that already has the entry
+        let gitignore_path = session_path.join(".gitignore");
+        fs::write(&gitignore_path, "*.log\n.vscode/tasks.json\n").unwrap();
+
+        let config = create_test_config();
+        let options = ClaudeLaunchOptions::default();
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // Verify gitignore wasn't duplicated
+        let gitignore_content = fs::read_to_string(&gitignore_path).unwrap();
+        // Count occurrences of .vscode/tasks.json
+        let count = gitignore_content.matches(".vscode/tasks.json").count();
+        assert_eq!(count, 1, "Should not duplicate .vscode/tasks.json entry");
     }
 }
