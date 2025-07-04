@@ -184,13 +184,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "para_start",
-        description: "Create new para sessions (interactive or AI-assisted). Combines functionality of old start and dispatch commands.\n\nUSAGE PATTERNS:\n1. NEW INTERACTIVE: para_start() or para_start(name_or_session: 'feature-x')\n2. NEW WITH AGENT: para_start(prompt: 'implement feature X')\n3. NEW WITH NAME + AGENT: para_start(name_or_session: 'feature-x', prompt: 'implement auth')\n4. FROM FILE: para_start(file: 'tasks/auth.md')\n\nNOTE: For resuming existing sessions, use para_resume instead for clearer intent.\n\nThe command intelligently determines your intent:\n- No args → new interactive session\n- Name only → create new session with that name\n- Prompt only → new session with AI agent\n- Name + prompt → new named session with AI agent",
+        description: "Start NEW para sessions. This tool creates fresh isolated Git worktrees for new development work.\n\n🎯 CORE PURPOSE: Start new sessions for AI agents or interactive development\n\n📋 USAGE PATTERNS:\n1. AI AGENT SESSION: para_start(prompt: \"implement user authentication\")\n2. AI FROM FILE: para_start(file: \"tasks/auth_requirements.md\") \n3. NAMED AI SESSION: para_start(name_or_session: \"auth-feature\", prompt: \"add JWT tokens\")\n4. INTERACTIVE SESSION: para_start(name_or_session: \"my-feature\") or para_start()\n\n📁 FILE INPUT: Use 'file' parameter to read complex requirements, specifications, or task descriptions from files. Files can contain:\n- Technical specifications\n- Code examples\n- Multi-step instructions  \n- Project requirements\n\n⚠️ IMPORTANT: This tool is ONLY for NEW sessions. If a session already exists, para_start will error and direct you to use para_resume instead.\n\n🔄 FOR EXISTING SESSIONS: Use para_resume to continue work on existing sessions with additional context or follow-up tasks.",
         inputSchema: {
           type: "object",
           properties: {
             name_or_session: {
               type: "string",
-              description: "Session name (for new) or existing session to resume"
+              description: "Name for the NEW session (e.g., 'auth-feature', 'payment-api'). If omitted, para generates a unique name."
             },
             prompt: {
               type: "string",
@@ -198,7 +198,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             file: {
               type: "string",
-              description: "Read prompt/context from file (e.g., tasks/auth.md)"
+              description: "File containing task description, requirements, or specifications for the NEW session (e.g., 'tasks/auth-requirements.md', 'specs/api-design.txt', 'prompts/implement-feature.md')"
             },
             dangerously_skip_permissions: {
               type: "boolean",
@@ -269,7 +269,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "para_resume",
-        description: "Resume an existing para session with optional additional context. Focused command for continuing work on existing sessions.\n\nUSAGE:\n- para_resume() → Resume session in current directory\n- para_resume(session: 'auth-feature') → Resume specific session\n- para_resume(session: 'auth', prompt: 'add password reset') → Resume with new instructions\n- para_resume(session: 'api', file: 'new-requirements.txt') → Resume with file context\n\nUse this when you specifically want to continue existing work, or when para_start's smart detection doesn't match your intent.",
+        description: "Resume EXISTING para sessions with additional context or follow-up tasks. This tool continues work on sessions that were previously started.\n\n🎯 CORE PURPOSE: Continue existing sessions with new instructions, requirements, or context\n\n📋 USAGE PATTERNS:\n1. RESUME CURRENT: para_resume() → Detects and resumes session in current directory\n2. RESUME SPECIFIC: para_resume(session: \"auth-feature\") → Resume named session\n3. ADD NEW TASK: para_resume(session: \"auth\", prompt: \"add password reset functionality\")\n4. NEW REQUIREMENTS: para_resume(session: \"api\", file: \"additional-requirements.md\")\n\n📁 FILE INPUT: Use 'file' parameter to provide:\n- Follow-up requirements or specifications\n- Additional tasks or features to implement\n- Updated technical requirements\n- Bug reports or fixes needed\n- New user stories or acceptance criteria\n\n💡 KEY BENEFIT: Perfect for iterative development where you want to add more functionality or address new requirements in an existing session without starting over.\n\n⚠️ IMPORTANT: Session must already exist. If session doesn't exist, you'll get an error suggesting to use para_start instead.",
         inputSchema: {
           type: "object",
           properties: {
@@ -279,11 +279,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             prompt: {
               type: "string",
-              description: "Additional prompt or instructions for the resumed session"
+              description: "Additional instructions, new tasks, or follow-up requirements for the existing session (e.g., 'add validation to the login form', 'fix the bug in user registration')"
             },
             file: {
               type: "string",
-              description: "Read additional instructions from specified file"
+              description: "File containing follow-up tasks, additional requirements, or new specifications to add to the existing session (e.g., 'tasks/phase2-requirements.md', 'bugs/login-issues.txt')"
             },
             dangerously_skip_permissions: {
               type: "boolean",
