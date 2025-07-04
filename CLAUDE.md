@@ -124,7 +124,7 @@ mcp-server-ts/        # Model Context Protocol server implementation
 - `para dispatch [name] "prompt" [--file prompt.txt]` - AI-powered session creation
 
 ### MCP Commands
-- `para mcp init --claude-code` - Set up MCP integration in current repo
+- `para mcp init` - Set up MCP integration in current repo
 - `para mcp` - Manage MCP server configuration
 
 ## File Structure Notes

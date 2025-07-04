@@ -1,5 +1,4 @@
 use crate::utils::{ParaError, Result};
-use dialoguer::Select;
 use std::fs;
 use std::process::Command;
 
@@ -118,61 +117,20 @@ pub fn create_mcp_json() -> Result<bool> {
     Ok(true)
 }
 
-/// Prompt user to select IDE
-pub fn prompt_for_ide() -> Result<&'static str> {
-    let choices = vec![
-        "Claude Code (adds user config for better integration)",
-        "Cursor (project config only)",
-        "VS Code with Roo Code (project config only)",
-        "Skip IDE-specific setup",
-    ];
-
-    let selection = Select::new()
-        .with_prompt("🎯 Choose your IDE")
-        .items(&choices)
-        .default(0)
-        .interact()
-        .map_err(|e| ParaError::invalid_args(format!("Failed to get user input: {e}")))?;
-
-    match selection {
-        0 => Ok("claude-code"),
-        1 => Ok("cursor"),
-        2 => Ok("vscode"),
-        3 => Ok("skip"),
-        _ => Ok("skip"), // Fallback
-    }
-}
-
-/// Configure Claude Code IDE integration
-pub fn configure_claude_code() -> Result<()> {
-    // Check if Claude Code is available
+/// Check if Claude Code is available (informational only)
+pub fn check_claude_code_availability() {
     match Command::new("claude").arg("--version").output() {
         Ok(output) => {
-            let version_output = String::from_utf8_lossy(&output.stdout);
-            println!("🔧 Configuring Claude Code user settings...");
-            println!("   Found Claude Code: {}", version_output.trim());
-
-            // Use the server discovery logic
-            match find_mcp_server() {
-                Ok(server_config) => {
-                    println!("✅ Found MCP server: {}", server_config.description);
-                    println!("✅ Claude Code will use project-scoped .mcp.json");
-                    println!("💡 Verify with: claude mcp list");
-                }
-                Err(e) => {
-                    println!("❌ MCP server setup incomplete:");
-                    println!("   {e}");
-                    return Err(e);
-                }
+            if output.status.success() {
+                let version_output = String::from_utf8_lossy(&output.stdout);
+                println!("✅ Claude Code detected: {}", version_output.trim());
             }
         }
         Err(_) => {
-            println!("⚠️  Claude Code not found in PATH");
-            println!("   📥 Install Claude Code from: https://claude.ai/download");
-            println!("   🔄 After installation, run 'para mcp init --claude-code' again");
-            println!("   ✅ The .mcp.json configuration will work automatically once Claude Code is installed");
+            println!("ℹ️  Claude Code not found in PATH");
+            println!(
+                "   If you plan to use Claude Code, install it from: https://claude.ai/download"
+            );
         }
     }
-
-    Ok(())
 }

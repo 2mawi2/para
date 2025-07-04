@@ -13,7 +13,7 @@ brew install 2mawi2/tap/para
 cd your-project
 
 # One-time MCP setup
-para mcp init --claude-code
+para mcp init
 ```
 
 ### Development Installation
@@ -26,12 +26,6 @@ just install        # Installs para + MCP server to ~/.local/bin/
 # Navigate to your project
 cd your-project
 para mcp init --claude-code
-```
-
-### Interactive Setup
-```bash
-para mcp init
-# Choose your IDE from the interactive menu
 ```
 
 **That's it!** Open Claude Code in your repo and Para tools will be available.
@@ -106,31 +100,17 @@ Para automatically finds the best available MCP server:
 }
 ```
 
-**Important**: `.mcp.json` contains user-specific paths and should be added to `.gitignore`. Each team member should run `para mcp init --claude-code` in their local repo to generate their own config.
+**Important**: `.mcp.json` contains user-specific paths and should be added to `.gitignore`. Each team member should run `para mcp init` in their local repo to generate their own config.
 
 ## IDE Support
 
-### Claude Code (Recommended)
-```bash
-para mcp init --claude-code
-```
-- Project-scoped `.mcp.json` configuration
-- Native tool integration with automatic discovery
-- Verify with: `claude mcp list`
+Para MCP server works with any IDE that supports the Model Context Protocol (MCP).
 
-### Cursor
-```bash
-para mcp init --cursor
-```
-- Project-scoped `.mcp.json` configuration
-- Supports MCP protocol
+- **Claude Code**: Native MCP support with automatic tool discovery
+- **Cursor**: Project-scoped `.mcp.json` configuration
+- **VS Code with Roo Cline**: Works with the Roo Cline extension
 
-### VS Code with Roo Cline
-```bash
-para mcp init --vscode
-```
-- Project-scoped `.mcp.json` configuration
-- Works with Roo Cline extension
+After running `para mcp init`, restart your IDE to enable Para tools.
 
 ## Available Para Tools
 
@@ -223,7 +203,7 @@ para_config_show()  # Check configuration for coordination
 
 ### MCP Server Not Found
 ```bash
-para mcp init --claude-code
+para mcp init
 # Error: No para MCP server found
 ```
 
@@ -242,7 +222,7 @@ para mcp init --claude-code
 If you move your para installation:
 ```bash
 rm .mcp.json
-para mcp init --claude-code  # Regenerates with correct paths
+para mcp init  # Regenerates with correct paths
 ```
 
 ### Permission Issues
@@ -336,12 +316,12 @@ git commit -m "Ignore user-specific MCP config"
 2. **Document in README**:
 ```markdown
 ## MCP Setup
-Run `para mcp init --claude-code` to enable Para tools in Claude Code.
+Run `para mcp init` to enable Para tools in your IDE.
 ```
 
 3. **Each team member runs**:
 ```bash
-para mcp init --claude-code
+para mcp init
 ```
 
 This generates the correct paths for their system while keeping the repo clean.
