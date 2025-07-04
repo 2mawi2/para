@@ -50,7 +50,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             args.dangerously_skip_permissions,
         )?;
 
-        // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
         // Run setup script if specified
@@ -93,7 +92,6 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             args.sandbox_args.sandbox_profile.clone(),
         );
 
-        // Create regular worktree session with sandbox settings
         let session = session_manager.create_session_with_all_flags(
             session_name.clone(),
             None,

@@ -48,7 +48,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
     // Track whether we're using Docker and network isolation settings
     let (is_container, network_isolation, _allowed_domains) = if args.container {
-        // Create Docker container session
         let (network_isolation, allowed_domains) = if let Some(ref domains) = args.allow_domains {
             // Enable network isolation when --allow-domains is used
             let additional_domains: Vec<String> = domains
@@ -82,7 +81,6 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
         fs::write(&task_file, &prompt)
             .map_err(|e| ParaError::fs_error(format!("Failed to write task file: {e}")))?;
 
-        // Create CLAUDE.local.md in the session directory
         create_claude_local_md(&session.worktree_path, &session.name)?;
 
         // Run setup script if specified
