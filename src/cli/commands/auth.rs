@@ -16,14 +16,12 @@ pub fn execute(args: AuthArgs) -> Result<()> {
 fn execute_setup(force: bool) -> Result<()> {
     println!("🔐 Setting up Docker container authentication for Claude Code\n");
 
-    // Check if authenticated image already exists
     if check_authenticated_image()? && !force {
         println!("✅ Authentication already configured!");
         println!("\nAuthenticated Docker image exists. Use --force to re-authenticate.");
         return Ok(());
     }
 
-    // Check Docker availability first
     match Command::new("docker").arg("version").output() {
         Ok(output) if output.status.success() => {}
         _ => {
@@ -33,7 +31,6 @@ fn execute_setup(force: bool) -> Result<()> {
         }
     }
 
-    // Check if base image exists
     match Command::new("docker")
         .args(["image", "inspect", "para-claude:latest"])
         .output()
@@ -52,11 +49,9 @@ fn execute_setup(force: bool) -> Result<()> {
         _ => {}
     }
 
-    // Create and run the automated authentication flow
     let user_id = std::process::id().to_string();
     let auth_container = format!("para-auth-{user_id}");
 
-    // Remove any existing auth container
     let _ = Command::new("docker")
         .args(["rm", "-f", &auth_container])
         .output();
@@ -93,13 +88,11 @@ fn execute_setup(force: bool) -> Result<()> {
     println!("  1. Complete the login process");
     println!("  2. Exit Claude when done (Ctrl+C or 'exit')\n");
 
-    // Run interactive claude session
     let _status = Command::new("docker")
         .args(["exec", "-it", &auth_container, "claude"])
         .status()
         .map_err(|e| ParaError::docker_error(format!("Failed to run claude: {e}")))?;
 
-    // Check if credentials were created by looking in the volume
     let check_output = Command::new("docker")
         .args([
             "exec",
@@ -112,7 +105,6 @@ fn execute_setup(force: bool) -> Result<()> {
         .map_err(|e| ParaError::docker_error(format!("Failed to check credentials: {e}")))?;
 
     if !check_output.status.success() {
-        // Cleanup
         let _ = Command::new("docker")
             .args(["rm", "-f", &auth_container])
             .output();
@@ -123,7 +115,6 @@ fn execute_setup(force: bool) -> Result<()> {
 
     println!("\n✅ Authentication successful! Creating authenticated image...");
 
-    // Create the authenticated image
     let commit_output = Command::new("docker")
         .args(["commit", &auth_container, "para-authenticated:latest"])
         .output()
@@ -139,7 +130,6 @@ fn execute_setup(force: bool) -> Result<()> {
         )));
     }
 
-    // Cleanup
     let _ = Command::new("docker")
         .args(["rm", "-f", &auth_container])
         .output();
@@ -153,10 +143,8 @@ fn execute_setup(force: bool) -> Result<()> {
 fn execute_cleanup(dry_run: bool) -> Result<()> {
     println!("🧹 Cleaning up Docker authentication artifacts\n");
 
-    // Remove containers using the authenticated image
     remove_authenticated_containers(dry_run)?;
 
-    // Collect items to clean
     let items_to_clean = collect_cleanup_items()?;
 
     if items_to_clean.is_empty() {
@@ -164,7 +152,6 @@ fn execute_cleanup(dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Report what was found
     report_cleanup_targets(&items_to_clean);
 
     if dry_run {
@@ -225,7 +212,6 @@ fn list_authenticated_containers() -> Result<Vec<String>> {
 fn collect_cleanup_items() -> Result<Vec<(&'static str, String)>> {
     let mut items_to_clean: Vec<(&'static str, String)> = Vec::new();
 
-    // Check if authenticated image exists
     if check_authenticated_image()? {
         items_to_clean.push((
             "Docker authenticated image",
@@ -233,7 +219,6 @@ fn collect_cleanup_items() -> Result<Vec<(&'static str, String)>> {
         ));
     }
 
-    // Check for auth volumes
     let auth_volumes = find_auth_volumes()?;
     for volume in auth_volumes {
         items_to_clean.push(("Docker auth volume", volume));
@@ -269,7 +254,6 @@ fn confirm_cleanup() -> Result<bool> {
 }
 
 fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
-    // Remove the authenticated image (force to handle any issues)
     let output = Command::new("docker")
         .args(["rmi", "-f", "para-authenticated:latest"])
         .output()
@@ -282,7 +266,6 @@ fn perform_cleanup_operations(items_to_clean: &[(&str, String)]) -> Result<()> {
         );
     }
 
-    // Remove auth volumes
     for (desc, name) in items_to_clean {
         if desc == &"Docker auth volume" {
             // Ignore volume removal errors to avoid cleanup interruption
@@ -320,7 +303,6 @@ fn report_cleanup_cancelled() {
 fn execute_status(verbose: bool) -> Result<()> {
     println!("🔍 Checking Docker authentication status\n");
 
-    // Check Docker availability
     println!("Docker status:");
     match Command::new("docker").arg("version").output() {
         Ok(output) if output.status.success() => {
@@ -333,7 +315,6 @@ fn execute_status(verbose: bool) -> Result<()> {
         }
     }
 
-    // Check base image
     println!("\nBase image status:");
     match Command::new("docker")
         .args(["image", "inspect", "para-claude:latest"])
@@ -348,7 +329,6 @@ fn execute_status(verbose: bool) -> Result<()> {
         }
     }
 
-    // Check authenticated image
     println!("\nAuthentication status:");
     match check_authenticated_image() {
         Ok(true) => {
@@ -390,10 +370,8 @@ fn execute_status(verbose: bool) -> Result<()> {
 fn execute_reauth() -> Result<()> {
     println!("🔄 Re-authenticating Claude in Docker container\n");
 
-    // First cleanup (silently, without prompts)
     println!("Cleaning up existing authentication...");
 
-    // Stop and remove any containers using the authenticated image
     let ps_output = Command::new("docker")
         .args([
             "ps",
@@ -412,7 +390,6 @@ fn execute_reauth() -> Result<()> {
             .output();
     }
 
-    // Remove the authenticated image
     // Ignore image removal errors during cleanup to proceed with setup
     let _ = Command::new("docker")
         .args(["rmi", "-f", "para-authenticated:latest"])
@@ -425,7 +402,6 @@ fn execute_reauth() -> Result<()> {
 }
 
 fn execute_default() -> Result<()> {
-    // Run setup by default for convenience
     execute_setup(false)
 }
 
