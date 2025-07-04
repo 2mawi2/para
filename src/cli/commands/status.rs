@@ -155,81 +155,118 @@ impl StatusDisplayHandler {
     }
 
     fn show_specific_session(&self, session_name: &str, json: bool) -> Result<()> {
-        let mut status = Status::load(&self.state_dir, session_name)
-            .map_err(|e| ParaError::config_error(e.to_string()))?;
-
-        // For container sessions, check for container status file
-        if let Ok(session_state) = self.session_manager.load_state(session_name) {
-            if session_state.is_container() {
-                // Check for container status.json file
-                let signal_paths = crate::core::docker::signal_files::SignalFilePaths::new(
-                    &session_state.worktree_path,
-                );
-                if let Ok(Some(container_status)) =
-                    crate::core::docker::signal_files::read_signal_file::<
-                        crate::core::docker::signal_files::ContainerStatus,
-                    >(&signal_paths.status)
-                {
-                    // Update status with container information
-                    if let Some(ref mut s) = status {
-                        s.current_task = container_status.task;
-                        if let Some(tests) = container_status.tests {
-                            if let Ok(test_status) = Status::parse_test_status(&tests) {
-                                s.test_status = test_status;
-                            }
-                        }
-                        if let Some(todos) = container_status.todos {
-                            if let Ok((completed, total)) = Status::parse_todos(&todos) {
-                                s.todos_completed = Some(completed);
-                                s.todos_total = Some(total);
-                            }
-                        }
-                        s.blocked_reason = if container_status.blocked {
-                            Some(s.current_task.clone())
-                        } else {
-                            None
-                        };
-                        // Parse timestamp string to DateTime<Utc>
-                        if let Ok(parsed_time) =
-                            chrono::DateTime::parse_from_rfc3339(&container_status.timestamp)
-                        {
-                            s.last_update = parsed_time.with_timezone(&chrono::Utc);
-                        }
-
-                        // Calculate diff stats on the host
-                        if let Ok(Some(diff_stats)) =
-                            calculate_diff_stats_for_session(&session_state)
-                        {
-                            s.diff_stats = Some(diff_stats);
-                        }
-                    }
-                }
-            }
-        }
+        let status = self.load_basic_status(session_name)?;
 
         match status {
             Some(mut s) => {
-                // Try to enrich with diff stats if we have session state
-                if let Ok(session_state) = self.session_manager.load_state(session_name) {
-                    if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
-                        s = s.with_diff_stats(diff_stats);
-                    }
-                }
-
-                if json {
-                    self.output_json(&s)?;
-                } else {
-                    display_status(&s);
-                }
+                s = self.enrich_container_status(s, session_name)?;
+                s = self.add_diff_statistics(s, session_name)?;
+                self.output_status(&s, json)?;
             }
             None => {
-                if !json {
-                    println!("No status found for session '{session_name}'");
-                }
+                self.handle_missing_status(session_name, json);
             }
         }
 
         Ok(())
+    }
+
+    fn load_basic_status(&self, session_name: &str) -> Result<Option<Status>> {
+        Status::load(&self.state_dir, session_name)
+            .map_err(|e| ParaError::config_error(e.to_string()))
+    }
+
+    fn enrich_container_status(&self, mut status: Status, session_name: &str) -> Result<Status> {
+        if let Ok(session_state) = self.session_manager.load_state(session_name) {
+            if session_state.is_container() {
+                if let Some(container_status) = self.read_container_signal_file(&session_state)? {
+                    status = self.apply_container_status_updates(status, &container_status);
+                    status = self.add_container_diff_stats(status, &session_state)?;
+                }
+            }
+        }
+        Ok(status)
+    }
+
+    fn read_container_signal_file(
+        &self,
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<Option<crate::core::docker::signal_files::ContainerStatus>> {
+        let signal_paths =
+            crate::core::docker::signal_files::SignalFilePaths::new(&session_state.worktree_path);
+        // Gracefully handle signal file parsing errors by returning None
+        Ok(crate::core::docker::signal_files::read_signal_file::<
+            crate::core::docker::signal_files::ContainerStatus,
+        >(&signal_paths.status)
+        .unwrap_or(None))
+    }
+
+    fn apply_container_status_updates(
+        &self,
+        mut status: Status,
+        container_status: &crate::core::docker::signal_files::ContainerStatus,
+    ) -> Status {
+        status.current_task = container_status.task.clone();
+
+        if let Some(ref tests) = container_status.tests {
+            if let Ok(test_status) = Status::parse_test_status(tests) {
+                status.test_status = test_status;
+            }
+        }
+
+        if let Some(ref todos) = container_status.todos {
+            if let Ok((completed, total)) = Status::parse_todos(todos) {
+                status.todos_completed = Some(completed);
+                status.todos_total = Some(total);
+            }
+        }
+
+        status.blocked_reason = if container_status.blocked {
+            Some(status.current_task.clone())
+        } else {
+            None
+        };
+
+        if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(&container_status.timestamp) {
+            status.last_update = parsed_time.with_timezone(&chrono::Utc);
+        }
+
+        status
+    }
+
+    fn add_container_diff_stats(
+        &self,
+        mut status: Status,
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<Status> {
+        if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(session_state) {
+            status.diff_stats = Some(diff_stats);
+        }
+        Ok(status)
+    }
+
+    fn add_diff_statistics(&self, mut status: Status, session_name: &str) -> Result<Status> {
+        if let Ok(session_state) = self.session_manager.load_state(session_name) {
+            if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
+                status = status.with_diff_stats(diff_stats);
+            }
+        }
+        Ok(status)
+    }
+
+    fn output_status(&self, status: &Status, json: bool) -> Result<()> {
+        if json {
+            self.output_json(status)
+        } else {
+            display_status(status);
+            Ok(())
+        }
+    }
+
+    fn handle_missing_status(&self, session_name: &str, json: bool) {
+        if !json {
+            println!("No status found for session '{session_name}'");
+        }
     }
 
     fn show_all_sessions(&self, json: bool) -> Result<()> {
@@ -1301,5 +1338,310 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Cannot update status for sessions in Review state"));
+    }
+
+    #[test]
+    fn test_show_specific_session_regular_session() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a regular (non-container) session and status
+        let session_manager = SessionManager::new(&config);
+        let session_state = crate::core::session::SessionState::new(
+            "regular-session".to_string(),
+            "test/branch".to_string(),
+            git_temp.path().join("worktree"),
+        );
+        session_manager.save_state(&session_state).unwrap();
+
+        let status = Status::new(
+            "regular-session".to_string(),
+            "Working on regular feature".to_string(),
+            crate::core::status::TestStatus::Passed,
+        )
+        .with_todos(2, 5);
+        status.save(&state_dir).unwrap();
+
+        // Test the specific function directly
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("regular-session", false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_container_session_with_signal_file() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a container session
+        let session_manager = SessionManager::new(&config);
+        let worktree_path = git_temp.path().join("container-worktree");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session_state =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "container-session".to_string(),
+                "test/container-branch".to_string(),
+                worktree_path.clone(),
+                Some("container123".to_string()),
+                "main".to_string(),
+                false,
+            );
+        session_manager.save_state(&session_state).unwrap();
+
+        // Create initial status file
+        let status = Status::new(
+            "container-session".to_string(),
+            "Initial task".to_string(),
+            crate::core::status::TestStatus::Unknown,
+        );
+        status.save(&state_dir).unwrap();
+
+        // Create signal file for container status
+        let signal_dir = worktree_path.join(".para");
+        std::fs::create_dir_all(&signal_dir).unwrap();
+        let signal_file = signal_dir.join("status.json");
+
+        let container_status = crate::core::docker::signal_files::ContainerStatus {
+            task: "Working on container feature".to_string(),
+            tests: Some("failed".to_string()),
+            todos: Some("1/3".to_string()),
+            blocked: true,
+            timestamp: "2024-01-20T10:30:00Z".to_string(),
+        };
+
+        crate::core::docker::signal_files::write_signal_file(&signal_file, &container_status)
+            .unwrap();
+
+        // Test the specific function directly
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("container-session", false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_container_session_without_signal_file() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a container session
+        let session_manager = SessionManager::new(&config);
+        let worktree_path = git_temp.path().join("container-worktree-no-signal");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session_state =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "container-no-signal".to_string(),
+                "test/container-branch".to_string(),
+                worktree_path.clone(),
+                Some("container456".to_string()),
+                "main".to_string(),
+                false,
+            );
+        session_manager.save_state(&session_state).unwrap();
+
+        // Create initial status file (no signal file)
+        let status = Status::new(
+            "container-no-signal".to_string(),
+            "Original task".to_string(),
+            crate::core::status::TestStatus::Passed,
+        );
+        status.save(&state_dir).unwrap();
+
+        // Test the specific function directly
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("container-no-signal", false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_json_output() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a session and status
+        let session_manager = SessionManager::new(&config);
+        let session_state = crate::core::session::SessionState::new(
+            "json-session".to_string(),
+            "test/branch".to_string(),
+            git_temp.path().join("worktree"),
+        );
+        session_manager.save_state(&session_state).unwrap();
+
+        let status = Status::new(
+            "json-session".to_string(),
+            "JSON test task".to_string(),
+            crate::core::status::TestStatus::Failed,
+        );
+        status.save(&state_dir).unwrap();
+
+        // Test JSON output
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("json-session", true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_no_status_found() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Don't create any status file
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("nonexistent-session", false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_no_status_found_json() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Don't create any status file, test JSON output
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("nonexistent-session", true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_specific_session_signal_file_parsing_error() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a container session
+        let session_manager = SessionManager::new(&config);
+        let worktree_path = git_temp.path().join("container-worktree-bad-signal");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session_state =
+            crate::core::session::SessionState::new_container_with_parent_branch_and_flags(
+                "container-bad-signal".to_string(),
+                "test/container-branch".to_string(),
+                worktree_path.clone(),
+                Some("container789".to_string()),
+                "main".to_string(),
+                false,
+            );
+        session_manager.save_state(&session_state).unwrap();
+
+        // Create initial status file
+        let status = Status::new(
+            "container-bad-signal".to_string(),
+            "Original task".to_string(),
+            crate::core::status::TestStatus::Unknown,
+        );
+        status.save(&state_dir).unwrap();
+
+        // Create malformed signal file
+        let signal_dir = worktree_path.join(".para");
+        std::fs::create_dir_all(&signal_dir).unwrap();
+        let signal_file = signal_dir.join("status.json");
+        std::fs::write(&signal_file, "invalid json {").unwrap();
+
+        // Test should handle parsing error gracefully
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("container-bad-signal", false);
+        assert!(result.is_ok()); // Should not fail, just ignore bad signal file
+    }
+
+    #[test]
+    fn test_show_specific_session_with_diff_stats() {
+        let (git_temp, _git_service) = setup_test_repo();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+
+        // Pre-create .para and state directories
+        let para_dir = git_temp.path().join(".para");
+        let state_dir = para_dir.join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = state_dir.to_string_lossy().to_string();
+
+        // Create a session with parent branch (needed for diff stats)
+        let session_manager = SessionManager::new(&config);
+        let session_state = crate::core::session::SessionState::with_parent_branch_and_flags(
+            "diff-stats-session".to_string(),
+            "test/feature-branch".to_string(),
+            git_temp.path().join("worktree"),
+            "main".to_string(),
+            false,
+        );
+        session_manager.save_state(&session_state).unwrap();
+
+        let status = Status::new(
+            "diff-stats-session".to_string(),
+            "Feature with changes".to_string(),
+            crate::core::status::TestStatus::Passed,
+        );
+        status.save(&state_dir).unwrap();
+
+        // Test the specific function directly
+        let handler = StatusDisplayHandler::new(config).unwrap();
+        let result = handler.show_specific_session("diff-stats-session", false);
+        assert!(result.is_ok());
     }
 }
