@@ -79,7 +79,6 @@ fn update_status(config: Config, args: StatusArgs) -> Result<()> {
     // Create status object
     let mut status = Status::new(session_name.clone(), task, test_status);
 
-    // Add diff stats if available
     if let Some(stats) = diff_stats {
         status = status.with_diff_stats(stats);
     }
