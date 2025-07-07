@@ -54,7 +54,7 @@ just test
 para status "Ready to finish" --tests passed --todos X/X
 ```
 
-**MANDATORY: When ALL work is complete:**
+**MANDATORY: When ALL work is complete AND you are confident in the solution:**
 ```bash
 # 1. REQUIRED: Final status update (5 words max)
 para status "Completed auth module" --tests passed --todos 5/5
@@ -62,11 +62,17 @@ para status "Completed auth module" --tests passed --todos 5/5
 # 2. Provide your summary to the user
 # [Your summary here explaining what was accomplished]
 
-# 3. REQUIRED: Finish the session with commit message
+# 3. REQUIRED: Finish the session with commit message ONLY if task is fully implemented
 para finish "Add user authentication with JWT tokens"
 ```
 
-**CRITICAL: You MUST call `para finish` when your work is complete!**
+**DO NOT call `para finish` if:**
+- You need user input or clarification
+- The task is only partially implemented
+- You're unsure about the solution
+- Tests are failing or you haven't verified the implementation works correctly
+
+**CRITICAL: You MUST call `para finish` ONLY when your work is completely implemented and you are confident in the solution!**
 
 Remember: 
 - **STATUS MUST BE 5 WORDS MAX** (e.g., "Fixing auth tests", "Adding API endpoint")
@@ -93,12 +99,12 @@ This ensures the orchestrator can see your progress in real-time!
 
 ## MANDATORY: Final Status, Summary, and Finish
 
-**CRITICAL REQUIREMENT**: When your work is complete, you MUST follow this exact sequence:
+**CRITICAL REQUIREMENT**: When your work is complete AND you are confident in the solution, you MUST follow this exact sequence:
 
 1. Send a final status update with your current state
 2. Include test results and any remaining todos
 3. Provide your summary
-4. **CALL `para finish` TO COMPLETE THE SESSION**
+4. **CALL `para finish` TO COMPLETE THE SESSION - BUT ONLY IF TASK IS FULLY IMPLEMENTED**
 
 Example:
 ```bash
@@ -108,12 +114,18 @@ para status "Completed auth module" --tests passed --todos 5/5
 # STEP 2: Provide your summary to the user
 # [Your summary explaining what was accomplished]
 
-# STEP 3: MANDATORY - Finish the session
+# STEP 3: ONLY if task is completely implemented - Finish the session
 para finish "Add user authentication with JWT tokens"
 ```
+
+**When NOT to call `para finish`:**
+- If you need user input or clarification on requirements
+- If the implementation is incomplete or only partially working
+- If you're unsure about the correctness of your solution
+- If tests are failing or you haven't properly verified the implementation
 
 **CRITICAL RULES:**
 1. Status messages MUST be 5 words or less
 2. NEVER provide a summary without first sending a final status update
 3. Final status MUST show actual test results (not your intentions)
-4. **ALWAYS call `para finish` when your work is complete - this is NOT optional!**
+4. **ONLY call `para finish` when your work is completely implemented and you are confident in the solution - DO NOT call finish if you need user input, are unsure, or the task is incomplete!**
