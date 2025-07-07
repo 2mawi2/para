@@ -8,6 +8,15 @@ set shell := ["bash", "-c"]
 default:
     @just --list
 
+# Install cargo-nextest for 3x faster test execution
+install-nextest:
+    @if ! command -v cargo-nextest >/dev/null 2>&1; then \
+        echo "📦 Installing cargo-nextest for faster tests..."; \
+        cargo install cargo-nextest; \
+    else \
+        echo "✅ cargo-nextest is already installed"; \
+    fi
+
 # Build debug binary
 build:
     cargo build
@@ -122,7 +131,11 @@ test *FILTER:
     # Check if filter is provided
     if [ "{{FILTER}}" != "" ]; then
         echo "🧪 Running Rust tests for: {{FILTER}}"
-        cargo test {{FILTER}}
+        if command -v cargo-nextest >/dev/null 2>&1; then
+            cargo nextest run --filter {{FILTER}}
+        else
+            cargo test {{FILTER}}
+        fi
         exit 0
     fi
     
@@ -138,20 +151,39 @@ test *FILTER:
         exit 1
     fi
     
-    # Rust Tests
+    # Rust Tests - Use cargo-nextest if available for better performance
     printf "   Rust Tests: "
-    if test_output=$(cargo test --message-format=short 2>&1); then
-        if echo "$test_output" | grep -q "test result:"; then
-            summary=$(echo "$test_output" | grep "test result:" | tail -1 | sed 's/test result: //')
-            echo "✅ $summary"
+    if command -v cargo-nextest >/dev/null 2>&1; then
+        # Use nextest for 3x faster test execution
+        if test_output=$(cargo nextest run --no-fail-fast 2>&1); then
+            # Extract summary from nextest output
+            if summary=$(echo "$test_output" | grep -E "Summary" | tail -1); then
+                echo "✅ passed (nextest)"
+            else
+                echo "✅ passed"
+            fi
         else
-            echo "✅ passed"
+            echo "❌ FAILED"
+            echo ""
+            echo "$test_output"
+            exit 1
         fi
     else
-        echo "❌ FAILED"
-        echo ""
-        echo "$test_output"
-        exit 1
+        # Fallback to regular cargo test with recommendation
+        echo "(install cargo-nextest for 3x faster tests)"
+        if test_output=$(cargo test --message-format=short 2>&1); then
+            if echo "$test_output" | grep -q "test result:"; then
+                summary=$(echo "$test_output" | grep "test result:" | tail -1 | sed 's/test result: //')
+                echo "✅ $summary"
+            else
+                echo "✅ passed"
+            fi
+        else
+            echo "❌ FAILED"
+            echo ""
+            echo "$test_output"
+            exit 1
+        fi
     fi
     
     # Clippy linting
