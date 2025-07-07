@@ -25,8 +25,8 @@ build:
 build-release:
     cargo build --release
 
-# Install para CLI and MCP server
-install: build-release
+# Install para CLI, MCP server, and dev tools
+install: build-release install-nextest
     #!/usr/bin/env bash
     set -euo pipefail
     
