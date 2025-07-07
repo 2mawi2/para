@@ -23,22 +23,29 @@ Use your internal `Task` tool to review each branch in parallel. IMPORTANT you m
 > 
 > **QUALITY:** (Brief assessment of code quality, test coverage, and adherence to project standards)"
 
-**Phase 2: Decision and Merge**
+**Phase 2: Follow-up Fixes (if needed)**
 1.  Wait for all reviews to complete.
 2.  **Provide Review Summary to User:**
     - List all branches reviewed with their STATUS
     - For OK branches: Show the SUMMARY and COMPLETENESS sections
     - For NEEDS_FIX branches: Show SUMMARY, ISSUES, and planned fixes
-    - Give user a brief overview before proceeding with fixes/merges
-3.  If any review failed:
+    - Give user a brief overview before proceeding
+3.  If any review returned NEEDS_FIX:
     a. Create follow-up task files with detailed fix instructions for each failed review
-    b. Resume the failed sessions using `para resume <session-name> --file <follow-up-task-file> --dangerously-skip-permissions` (try not to use dispatch rather prefer resume for a follow-up)
-    c. Wait for agents to complete fixes and commit changes
-    d. Re-review the fixed branches to ensure issues are resolved
-4.  If all reviews returned `OK`, merge the branches into `<current_branch>` sequentially, resolving any conflicts.
-5.  After a successful merge, delete the local and remote feature branch.
+    b. Resume ALL failed sessions using `para resume <session-name> --file <follow-up-task-file> --dangerously-skip-permissions`
+    c. Monitor progress: `para list` to see active sessions
+    d. Wait for ALL agents to complete their fixes and finish their sessions
 
-**Phase 3: Follow-up Task Requirements**
+**Phase 3: Final Review and Merge**
+1.  Once all follow-up fixes are complete (no more active para sessions):
+    a. Re-review all previously failed branches to ensure issues are resolved
+    b. If any still have issues, repeat Phase 2
+2.  When all branches pass review:
+    a. Merge branches sequentially into `<current_branch>`, resolving any conflicts
+    b. Start with independent branches, then dependent ones
+    c. After each successful merge, delete the local and remote feature branch
+
+**Follow-up Task Requirements**
 When creating follow-up tasks for failed reviews, ensure each task includes:
 - Detailed explanation of what needs to be fixed based on the review feedback
 - Complete code examples for the fixes required
@@ -57,4 +64,4 @@ IMPORTANT:
 - Ensure that each TASK is instructed not to checkout the branch
 - Ensure that each TASK also knows the location of the original (or follow up) task file that the para dispatch agent was launched with if you know the task
 - For failed reviews, always resume sessions with follow-up tasks that include commit and finish instructions
-- Succeeded sessions that are not dependent on non succeeded sessions, can and should be merged directly and already integreated after the failed sessions where resumed.
+- Succeeded sessions that are not dependent on non succeeded sessions, can and should be merged directly and already integreated after the failed sessions where resumed. 
