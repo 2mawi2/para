@@ -1,2 +1,3 @@
-Think deeply about the following topic: "$ARGUMENTS".
-Your goal is to find the root cause or provide a comprehensive analysis. Search the codebase, trace the logic, then think deeply and conclude with a summary of your findings and recommended next steps.
+Investigate the following topic: "$ARGUMENTS".
+First collect necessary infos and search for all the details you need.
+Then ultrathink about the topic and solve the topic, brainstorm or make a plan (whatever the topic requires) recommended next steps.

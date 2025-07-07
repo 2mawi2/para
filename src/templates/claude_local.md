@@ -54,10 +54,19 @@ just test
 para status "Ready to finish" --tests passed --todos X/X
 ```
 
-**When complete:**
+**MANDATORY: When ALL work is complete:**
 ```bash
+# 1. REQUIRED: Final status update (5 words max)
+para status "Completed auth module" --tests passed --todos 5/5
+
+# 2. Provide your summary to the user
+# [Your summary here explaining what was accomplished]
+
+# 3. REQUIRED: Finish the session with commit message
 para finish "Add user authentication with JWT tokens"
 ```
+
+**CRITICAL: You MUST call `para finish` when your work is complete!**
 
 Remember: 
 - **STATUS MUST BE 5 WORDS MAX** (e.g., "Fixing auth tests", "Adding API endpoint")
@@ -82,23 +91,29 @@ para status "Current task description" --tests [status] --todos X/Y
 
 This ensures the orchestrator can see your progress in real-time!
 
-## MANDATORY: Final Status Before Summary
+## MANDATORY: Final Status, Summary, and Finish
 
-**CRITICAL REQUIREMENT**: Before providing any final summary or conclusion, you MUST:
+**CRITICAL REQUIREMENT**: When your work is complete, you MUST follow this exact sequence:
 
 1. Send a final status update with your current state
 2. Include test results and any remaining todos
-3. ONLY THEN provide your summary
+3. Provide your summary
+4. **CALL `para finish` TO COMPLETE THE SESSION**
 
 Example:
 ```bash
-# REQUIRED: Send final status first (5 WORDS MAX!)
+# STEP 1: REQUIRED final status (5 WORDS MAX!)
 para status "Completed auth module" --tests passed --todos 5/5
 
-# Then provide your summary...
+# STEP 2: Provide your summary to the user
+# [Your summary explaining what was accomplished]
+
+# STEP 3: MANDATORY - Finish the session
+para finish "Add user authentication with JWT tokens"
 ```
 
 **CRITICAL RULES:**
 1. Status messages MUST be 5 words or less
 2. NEVER provide a summary without first sending a final status update
 3. Final status MUST show actual test results (not your intentions)
+4. **ALWAYS call `para finish` when your work is complete - this is NOT optional!**
