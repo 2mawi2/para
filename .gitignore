@@ -63,3 +63,4 @@ test-repos/
 # Ignore everything in .para except Dockerfile.custom
 .para/*
 !.para/Dockerfile.custom
+.vscode/tasks.json

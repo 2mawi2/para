@@ -36,41 +36,33 @@ pub mod test_helpers {
     }
 
     pub fn setup_test_repo() -> (TempDir, GitService) {
+        setup_test_repo_fast()
+    }
+
+    /// Optimized git repository setup that reduces process spawning overhead
+    pub fn setup_test_repo_fast() -> (TempDir, GitService) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path();
 
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["init", "--initial-branch=main"])
-            .status()
-            .expect("Failed to init git repo");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.name", "Test User"])
-            .status()
-            .expect("Failed to set git user name");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["config", "user.email", "test@example.com"])
-            .status()
-            .expect("Failed to set git user email");
-
+        // Create README before git init to reduce operations
         fs::write(repo_path.join("README.md"), "# Test Repository")
             .expect("Failed to write README");
 
-        Command::new("git")
+        // Initialize git repo with all config in one command
+        Command::new("sh")
             .current_dir(repo_path)
-            .args(["add", "README.md"])
+            .arg("-c")
+            .arg(
+                r#"
+                git init --initial-branch=main &&
+                git config user.name "Test User" &&
+                git config user.email "test@example.com" &&
+                git add . &&
+                git commit -m "Initial commit"
+            "#,
+            )
             .status()
-            .expect("Failed to add README");
-
-        Command::new("git")
-            .current_dir(repo_path)
-            .args(["commit", "-m", "Initial commit"])
-            .status()
-            .expect("Failed to commit README");
+            .expect("Failed to setup git repo");
 
         let service = GitService::discover_from(repo_path).expect("Failed to discover repo");
         (temp_dir, service)
