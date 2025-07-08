@@ -44,6 +44,7 @@ pub fn launch_claude_with_context(
         options.sandbox_override == Some(false),
         options.sandbox_profile.clone(),
         options.network_sandbox,
+        options.allowed_domains.clone(),
     );
 
     // Check if sandboxing is enabled and available
@@ -143,17 +144,17 @@ pub fn launch_claude_with_context(
         let sandbox_options = SandboxOptions {
             profile: profile.to_string(),
             proxy_address: proxy_address.clone(),
-            allowed_domains: options.allowed_domains.clone(),
+            allowed_domains: sandbox_settings.allowed_domains.clone(),
         };
 
         match wrap_command_with_sandbox(&claude_task_cmd, session_path, &sandbox_options) {
             Ok(sandboxed_cmd) => {
                 if options.network_sandbox {
                     println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
-                    if !options.allowed_domains.is_empty() {
+                    if !sandbox_settings.allowed_domains.is_empty() {
                         println!(
                             "   Additional allowed domains: {}",
-                            options.allowed_domains.join(", ")
+                            sandbox_settings.allowed_domains.join(", ")
                         );
                     }
                 } else {
@@ -770,6 +771,7 @@ mod tests {
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
             profile: "permissive-open".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let options = ClaudeLaunchOptions::default();
@@ -803,6 +805,7 @@ mod tests {
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: false,
             profile: "permissive-open".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let options = ClaudeLaunchOptions::default();
@@ -849,6 +852,7 @@ mod tests {
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
             profile: "permissive-open".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let options = ClaudeLaunchOptions {

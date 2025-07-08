@@ -207,6 +207,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             args.sandbox_args.no_sandbox,
             args.sandbox_args.sandbox_profile.clone(),
             args.sandbox_args.sandbox_no_network,
+            args.sandbox_args.allowed_domains.clone(),
         );
 
         // Create regular worktree session with sandbox settings
