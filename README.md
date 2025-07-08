@@ -86,13 +86,14 @@ para mcp init
 
 ### AI-Powered Development
 ```bash
-para start "prompt"                       # Create session with AI prompt
-para start name "prompt"                  # Named session with AI prompt
+para start -p "prompt"                   # Create session with AI prompt
+para start --prompt "prompt"             # Create session with AI prompt (long form)
+para start name -p "prompt"              # Named session with AI prompt
 para start --file prompt.txt             # Create session with prompt from file
 para start -f ./auth.prompt               # Create session with prompt from file (short form)
 
 # Skip permission warnings in trusted environments (CI, scripts)
-para start --dangerously-skip-permissions "prompt"
+para start --dangerously-skip-permissions -p "prompt"
 para start --dangerously-skip-permissions name
 ```
 
@@ -121,7 +122,7 @@ para finish "Fix bug" --branch existing-feature
 - Cannot end with `/`
 - Cannot contain sequences like `..`, `@{`, `//`, or `/.`
 
-The `start` command with prompts creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+The `start` command with the `-p/--prompt` flag creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
 
 **MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management.
 
@@ -220,7 +221,7 @@ Override default settings for specific sessions:
 ```bash
 # Force sandbox on
 para start my-session --sandbox
-para start my-task "implement feature" --sandbox
+para start my-task -p "implement feature" --sandbox
 
 # Force sandbox off (use with caution)
 para start my-session --no-sandbox
@@ -267,7 +268,7 @@ echo ".mcp.json" >> .gitignore
 ### Traditional AI Development
 ```bash
 # Create AI session with prompt
-para start "Implement user authentication with best security practices"
+para start -p "Implement user authentication with best security practices"
 
 # Or use a prompt file for complex prompts
 para start --file auth-requirements.prompt
@@ -453,7 +454,7 @@ When using `--dangerously-skip-permissions` for autonomous agents, be aware of t
 - **Network**: Full access
 
 ```bash
-para start "implement feature" --sandbox
+para start -p "implement feature" --sandbox
 ```
 
 **2. Network-Isolated Sandboxing** (`--sandbox-no-network`, macOS only)
@@ -464,8 +465,8 @@ para start "implement feature" --sandbox
 - **True isolation**: Use `--allow-domains ""` to block all network access
 
 ```bash
-para start "add tests" --sandbox-no-network
-para start "fetch data" --sandbox-no-network --allow-domains "example.com"
+para start -p "add tests" --sandbox-no-network
+para start -p "fetch data" --sandbox-no-network --allow-domains "example.com"
 ```
 
 **3. Docker Containerization** (`--container`, all platforms)
@@ -474,7 +475,7 @@ para start "fetch data" --sandbox-no-network --allow-domains "example.com"
 - **Customizable**: Use `--docker-image ubuntu:22.04` for specific environments
 
 ```bash
-para start "analyze code" --container
+para start -p "analyze code" --container
 ```
 
 ### Security Considerations

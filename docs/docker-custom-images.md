@@ -19,10 +19,10 @@ Para supports using custom Docker images for container sessions, allowing you to
 para start --container --docker-image node:18-alpine my-node-session
 
 # Create AI session with a custom image
-para start --container --docker-image python:3.11 "implement data processing"
+para start -p "implement data processing" --container --docker-image python:3.11
 
 # Use a private registry image
-para start --container --docker-image mycompany/dev-env:latest "implement feature"
+para start -p "implement feature" --container --docker-image mycompany/dev-env:latest
 ```
 
 ### Configuring Default Images
@@ -92,7 +92,7 @@ For enhanced security, you can disable API key forwarding:
 para start --container --docker-image untrusted:latest --no-forward-keys
 
 # Create AI session without API keys
-para start --container --docker-image public:latest --no-forward-keys "task"
+para start -p "task" --container --docker-image public:latest --no-forward-keys
 ```
 
 ### Configuring Forwarded Keys
@@ -148,7 +148,7 @@ Combine custom images with network isolation for enhanced security:
 
 ```bash
 # Restricted network access with custom image
-para start --container --docker-image node:18 --allow-domains "api.github.com"
+para start -p "implement API integration" --container --docker-image node:18 --allow-domains "api.github.com"
 ```
 
 ### 4. Private Registries
@@ -172,13 +172,13 @@ para start --container --docker-image registry.mycompany.com/dev:latest
 
 ```bash
 # Python development
-para start --container --docker-image python:3.11-slim "implement ML model"
+para start -p "implement ML model" --container --docker-image python:3.11-slim
 
 # Node.js development
-para start --container --docker-image node:18-alpine "create REST API"
+para start -p "create REST API" --container --docker-image node:18-alpine
 
 # Go development
-para start --container --docker-image golang:1.21 "build CLI tool"
+para start -p "build CLI tool" --container --docker-image golang:1.21
 ```
 
 ### 2. Full Development Environments
@@ -188,7 +188,7 @@ para start --container --docker-image golang:1.21 "build CLI tool"
 para start --container --docker-image ubuntu:22.04 dev-session
 
 # Alpine with specific tools
-para start --container --docker-image alpine:latest --docker-args "-e TERM=xterm"
+para start -p "minimal environment task" --container --docker-image alpine:latest --docker-args "-e TERM=xterm"
 ```
 
 ### 3. Team Standardization
@@ -274,5 +274,5 @@ Large images can be slow to pull. Consider:
 
 Then use CLI flags as needed:
 ```bash
-para start --container --allow-domains "" --no-forward-keys
+para start -p "secure isolated task" --container --allow-domains "" --no-forward-keys
 ```

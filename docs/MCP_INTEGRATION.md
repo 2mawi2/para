@@ -153,9 +153,10 @@ Para's MCP integration enables Claude Code instances to act as **orchestrators**
 ### Orchestration Workflow
 ```bash
 # As orchestrator, create multiple AI agents for parallel work
-para_start("api-endpoints", "Implement REST API with authentication")
-para_start("frontend-ui", "Create responsive user interface components")  
-para_start("database-schema", "Design and implement database schema")
+# Note: When using MCP tools, prompts are passed as a separate parameter
+para_start("api-endpoints", {"prompt": "Implement REST API with authentication"})
+para_start("frontend-ui", {"prompt": "Create responsive user interface components"})  
+para_start("database-schema", {"prompt": "Design and implement database schema"})
 
 # Monitor agent progress
 para_list()  # Shows: api-endpoints (Active), frontend-ui (Active), database-schema (Active)
@@ -175,15 +176,15 @@ para_finish("Implement user authentication")  # REQUIRED to complete
 
 **Parallel Agent Creation:**
 ```
-para_start("agent1", "Task: Implement API endpoints. Must call para_finish() when done.")
-para_start("agent2", "Task: Create UI components. Must call para_finish() when done.")
-para_start("agent3", "Task: Database schema. Must call para_finish() when done.")
+para_start("agent1", {"prompt": "Task: Implement API endpoints. Must call para_finish() when done."})
+para_start("agent2", {"prompt": "Task: Create UI components. Must call para_finish() when done."})
+para_start("agent3", {"prompt": "Task: Database schema. Must call para_finish() when done."})
 ```
 
 **Task File Integration:**
 ```
 # Create task file: TASK_1_API.md with complete requirements
-para_start("api-agent", "See TASK_1_API.md for requirements", {"file": "TASK_1_API.md"})
+para_start("api-agent", {"prompt": "See TASK_1_API.md for requirements", "file": "TASK_1_API.md"})
 ```
 
 **Orchestrator Monitoring:**
@@ -273,9 +274,9 @@ echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocol_version":"2024-
 ### Parallel Development with AI Agents
 ```bash
 # Create task files for agents
-para start agent1 --file TASK_1_API.md -d
-para start agent2 --file TASK_2_UI.md -d  
-para start agent3 --file TASK_3_DB.md -d
+para start agent1 --file TASK_1_API.md --dangerously-skip-permissions
+para start agent2 --file TASK_2_UI.md --dangerously-skip-permissions  
+para start agent3 --file TASK_3_DB.md --dangerously-skip-permissions
 
 # Agents can use MCP tools to:
 # - Check their session status

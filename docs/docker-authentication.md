@@ -27,7 +27,7 @@ Once the authenticated image is built, Para will automatically use it for all co
 para start my-feature --container
 
 # Start an AI-assisted session with container
-para start "implement feature X" --container
+para start -p "implement feature X" --container
 ```
 
 ## How It Works

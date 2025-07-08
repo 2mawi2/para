@@ -37,7 +37,7 @@ para start --container my-session
 # ⚠️  Network isolation: OFF (use --allow-domains to enable)
 
 # Start AI-assisted session with container (no network isolation by default)
-para start --container "implement user authentication"
+para start -p "implement user authentication" --container
 # ⚠️  Network isolation: OFF (use --allow-domains to enable)
 ```
 
@@ -45,23 +45,23 @@ para start --container "implement user authentication"
 
 ```bash
 # Enable network isolation with default allowed domains
-para start --container --allow-domains "" my-session
+para start my-session --container --allow-domains ""
 
 # Enable with additional custom domains
-para start --container --allow-domains "api.example.com,cdn.example.com" my-session
+para start my-session --container --allow-domains "api.example.com,cdn.example.com"
 
 # Start AI-assisted session with network isolation enabled
-para start --container --allow-domains "" "implement user authentication"
+para start -p "implement user authentication" --container --allow-domains ""
 ```
 
 ### Custom Allowed Domains
 
 ```bash
 # Add specific domains for your use case
-para start --container --allow-domains "api.stripe.com,api.sendgrid.com" payment-feature
+para start payment-feature --container --allow-domains "api.stripe.com,api.sendgrid.com"
 
 # Multiple domains in AI-assisted session
-para start --container --allow-domains "custom-api.com,internal-service.com" "implement feature"
+para start -p "implement feature" --container --allow-domains "custom-api.com,internal-service.com"
 ```
 
 ### Explicitly Disabling Network Isolation
@@ -79,21 +79,21 @@ para start --container --no-network-isolation my-session
 When using npm packages that require network access during installation:
 ```bash
 # Allow npm registry access
-para start --container --allow-domains "registry.npmjs.org,cdn.jsdelivr.net" my-session
+para start my-session --container --allow-domains "registry.npmjs.org,cdn.jsdelivr.net"
 ```
 
 #### Python Package Installation
 For Python development with pip:
 ```bash
 # Allow PyPI access
-para start --container --allow-domains "pypi.org,files.pythonhosted.org" my-session
+para start my-session --container --allow-domains "pypi.org,files.pythonhosted.org"
 ```
 
 #### Custom API Development
 When developing against custom APIs:
 ```bash
 # Allow your API endpoints
-para start --container --allow-domains "api.mycompany.com,staging-api.mycompany.com" my-session
+para start my-session --container --allow-domains "api.mycompany.com,staging-api.mycompany.com"
 ```
 
 ### Configuration File
@@ -164,10 +164,10 @@ If you see firewall verification errors:
 
 ```bash
 # For internal development
-para start --container --allow-domains "localhost:3000,dev.mycompany.com"
+para start my-session --container --allow-domains "localhost:3000,dev.mycompany.com"
 
 # For specific APIs
-para start --container --allow-domains "api.stripe.com,api.sendgrid.com" "implement payments"
+para start -p "implement payments" --container --allow-domains "api.stripe.com,api.sendgrid.com"
 ```
 
 ### Debugging Network Issues

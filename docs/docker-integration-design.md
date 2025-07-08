@@ -301,7 +301,7 @@ para docker cleanup
 para start <name> --docker [--image <image>]
 
 # AI-assisted session with Docker
-para start "prompt" --docker
+para start -p "prompt" --docker
 
 # Monitor shows container status
 para monitor  # Now includes container health

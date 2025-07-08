@@ -9,7 +9,7 @@ mod tests {
     fn test_sandbox_cli_flags_new_session() {
         // Test that UnifiedStartArgs accepts all sandbox flags for new sessions
         let args = UnifiedStartArgs {
-            name_or_session: Some("test".to_string()),
+            name: Some("test".to_string()),
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
@@ -40,7 +40,7 @@ mod tests {
     fn test_sandbox_cli_flags_agent_session() {
         // Test that UnifiedStartArgs accepts all sandbox flags for agent sessions (old dispatch equivalent)
         let args = UnifiedStartArgs {
-            name_or_session: Some("test-agent".to_string()),
+            name: Some("test-agent".to_string()),
             prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,

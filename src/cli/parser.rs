@@ -392,22 +392,25 @@ pub struct StatusArgs {
     para start
     para start feature-xyz
     
-    # Start new session with AI agent (dispatch functionality)
-    para start \"implement user authentication\"
-    para start feature-xyz \"implement authentication\"
+    # Start new session with AI agent (requires -p/--prompt or -f/--file)
+    para start -p \"implement user authentication\"
+    para start --prompt \"implement authentication\"
+    para start feature-xyz -p \"implement feature\"
     
     # Use task file
-    para start --file tasks/auth.md
-    para start feature-xyz --file context.md
+    para start -f tasks/auth.md
+    para start --file context.md
+    para start feature-xyz -f tasks.md
     
     # Docker container sessions
-    para start --container \"implement feature\"
-    para start --container --allow-domains github.com,api.example.com")]
+    para start --container -p \"implement feature\"
+    para start --container --allow-domains github.com,api.example.com -p \"fetch data\"")]
 pub struct UnifiedStartArgs {
-    /// Session name, existing session, or prompt text
-    pub name_or_session: Option<String>,
+    /// Session name (optional)
+    pub name: Option<String>,
 
-    /// Additional prompt text (when first arg is session name)
+    /// Prompt for AI-assisted session
+    #[arg(long, short = 'p', help = "Prompt for AI-assisted session")]
     pub prompt: Option<String>,
 
     /// Read prompt/context from file
@@ -617,12 +620,12 @@ pub enum DaemonCommands {
 impl UnifiedStartArgs {
     /// Validate the unified start arguments
     pub fn validate(&self) -> crate::utils::Result<()> {
-        // Can't specify both --prompt and --file
-        if self.prompt.is_some() && self.file.is_some() {
-            return Err(crate::utils::ParaError::invalid_args(
-                "Cannot specify both --prompt and --file",
-            ));
+        // Validate session name if provided
+        if let Some(ref name) = self.name {
+            validate_session_name(name)?;
         }
+
+        // Note: Both prompt and file can be provided - file takes precedence
 
         // Validate sandbox args
         if self.sandbox_args.sandbox && self.sandbox_args.no_sandbox {

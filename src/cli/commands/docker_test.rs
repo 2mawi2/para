@@ -6,7 +6,7 @@ mod tests {
     fn test_unified_start_docker_image_new_session() {
         // Test that UnifiedStartArgs accepts docker_image for new sessions
         let args = UnifiedStartArgs {
-            name_or_session: Some("test".to_string()),
+            name: Some("test".to_string()),
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
@@ -33,7 +33,7 @@ mod tests {
     fn test_unified_start_docker_image_with_agent() {
         // Test that UnifiedStartArgs accepts docker_image for agent sessions (old dispatch equivalent)
         let args = UnifiedStartArgs {
-            name_or_session: Some("test-session".to_string()),
+            name: Some("test-session".to_string()),
             prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,
@@ -60,7 +60,7 @@ mod tests {
     fn test_no_forward_keys_flag() {
         // Test the no_forward_keys flag for new session
         let args = UnifiedStartArgs {
-            name_or_session: Some("secure".to_string()),
+            name: Some("secure".to_string()),
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
@@ -83,7 +83,7 @@ mod tests {
 
         // Test no_forward_keys flag for agent session (old dispatch equivalent)
         let agent_args = UnifiedStartArgs {
-            name_or_session: Some("secure-task".to_string()),
+            name: Some("secure-task".to_string()),
             prompt: Some("secure task".to_string()),
             file: None,
             dangerously_skip_permissions: false,

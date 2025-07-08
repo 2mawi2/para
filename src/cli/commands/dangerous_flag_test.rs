@@ -96,7 +96,7 @@ mod tests {
 
         // Unified start with dangerous flag (equivalent to old dispatch)
         let _start_args = UnifiedStartArgs {
-            name_or_session: Some("test-start".to_string()),
+            name: Some("test-start".to_string()),
             prompt: Some("Test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: true,

@@ -17,7 +17,7 @@ import {
 import { exec, execSync } from "child_process";
 
 interface ParaStartArgs {
-  name_or_session?: string;
+  name?: string;
   prompt?: string;
   file?: string;
   dangerously_skip_permissions?: boolean;
@@ -186,13 +186,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "para_start",
-        description: "Start NEW para sessions. This tool creates fresh isolated Git worktrees for new development work.\n\n🎯 CORE PURPOSE: Start new sessions for AI agents or interactive development\n\n📋 USAGE PATTERNS:\n1. AI AGENT SESSION: para_start(prompt: \"implement user authentication\")\n2. AI FROM FILE: para_start(file: \"tasks/auth_requirements.md\") \n3. NAMED AI SESSION: para_start(name_or_session: \"auth-feature\", prompt: \"add JWT tokens\")\n4. INTERACTIVE SESSION: para_start(name_or_session: \"my-feature\") or para_start()\n\n📁 FILE INPUT: Use 'file' parameter to read complex requirements, specifications, or task descriptions from files. Files can contain:\n- Technical specifications\n- Code examples\n- Multi-step instructions  \n- Project requirements\n\n🔒 SANDBOXING FOR AUTONOMOUS AGENTS:\n1. BASIC SANDBOX (macOS): para_start(prompt: \"task\", dangerously_skip_permissions: true, sandbox: true)\n   - Restricts file writes to session directory only\n   - Full network access allowed\n   - Protects against prompt injection modifying system files\n\n2. NETWORK ISOLATION (macOS): para_start(prompt: \"task\", sandbox_no_network: true)\n   - Same file restrictions as basic sandbox\n   - Network limited to GitHub API only (via proxy)\n   - Optional: allow_domains: \"example.com,api.openai.com\" for additional domains\n\n3. DOCKER CONTAINER (all platforms): para_start(prompt: \"task\", container: true)\n   - Complete isolation from host system\n   - Only worktree mounted in container\n   - Optional: docker_image: \"ubuntu:22.04\" for custom images\n\n⚠️ IMPORTANT: This tool is ONLY for NEW sessions. If a session already exists, para_start will error and direct you to use para_resume instead.\n\n🔄 FOR EXISTING SESSIONS: Use para_resume to continue work on existing sessions with additional context or follow-up tasks.",
+        description: "Start NEW para sessions. This tool creates fresh isolated Git worktrees for new development work.\n\n🎯 CORE PURPOSE: Start new sessions for AI agents or interactive development\n\n📋 USAGE PATTERNS:\n1. AI AGENT SESSION: para_start(prompt: \"implement user authentication\")\n2. AI FROM FILE: para_start(file: \"tasks/auth_requirements.md\") \n3. NAMED AI SESSION: para_start(name: \"auth-feature\", prompt: \"add JWT tokens\")\n4. INTERACTIVE SESSION: para_start(name: \"my-feature\") or para_start()\n\n📁 FILE INPUT: Use 'file' parameter to read complex requirements, specifications, or task descriptions from files. Files can contain:\n- Technical specifications\n- Code examples\n- Multi-step instructions  \n- Project requirements\n\n🔒 SANDBOXING FOR AUTONOMOUS AGENTS:\n1. BASIC SANDBOX (macOS): para_start(prompt: \"task\", dangerously_skip_permissions: true, sandbox: true)\n   - Restricts file writes to session directory only\n   - Full network access allowed\n   - Protects against prompt injection modifying system files\n\n2. NETWORK ISOLATION (macOS): para_start(prompt: \"task\", sandbox_no_network: true)\n   - Same file restrictions as basic sandbox\n   - Network limited to GitHub API only (via proxy)\n   - Optional: allow_domains: \"example.com,api.openai.com\" for additional domains\n\n3. DOCKER CONTAINER (all platforms): para_start(prompt: \"task\", container: true)\n   - Complete isolation from host system\n   - Only worktree mounted in container\n   - Optional: docker_image: \"ubuntu:22.04\" for custom images\n\n⚠️ IMPORTANT: This tool is ONLY for NEW sessions. If a session already exists, para_start will error and direct you to use para_resume instead.\n\n🔄 FOR EXISTING SESSIONS: Use para_resume to continue work on existing sessions with additional context or follow-up tasks.",
         inputSchema: {
           type: "object",
           properties: {
-            name_or_session: {
+            name: {
               type: "string",
-              description: "Name for the NEW session (e.g., 'auth-feature', 'payment-api'). If omitted, para generates a unique name."
+              description: "Name for the NEW session (e.g., 'auth-feature', 'payment-api'). Must contain only alphanumeric characters, hyphens, and underscores. If omitted, para generates a unique name."
             },
             prompt: {
               type: "string",
@@ -435,12 +435,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const startArgs = args as ParaStartArgs;
           const cmdArgs = ["start"];
           
-          // Handle unified start arguments
-          if (startArgs.name_or_session) {
-            cmdArgs.push(startArgs.name_or_session);
+          // Handle new argument structure
+          if (startArgs.name) {
+            cmdArgs.push(startArgs.name);
           }
           if (startArgs.prompt) {
-            cmdArgs.push(startArgs.prompt);
+            cmdArgs.push("-p", startArgs.prompt);
           }
           if (startArgs.file) {
             cmdArgs.push("--file", startArgs.file);
