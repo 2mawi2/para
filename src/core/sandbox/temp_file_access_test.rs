@@ -9,12 +9,16 @@ mod tests {
         // Create a test worktree directory
         let worktree = TempDir::new().unwrap();
 
-        // Test various /var/folders patterns that tools might use
+        // Get the actual temp directory to build realistic test paths
+        let temp_dir = std::env::temp_dir();
+        let temp_str = temp_dir.to_string_lossy();
+
+        // Test various temp directory patterns that tools might use
         let test_paths = vec![
-            "/var/folders/bl/5pq1htk93_v7n8zv5wsxnzqm0000gn/T/just-xKAsgP",
-            "/var/folders/xy/abc123def456/T/temp-file-12345",
-            "/var/folders/a/b/c/some-tool-temp",
-            "/var/folders/nested/deep/path/to/temp/file.tmp",
+            format!("{}/just-test", temp_str),
+            format!("{}/temp-file-12345", temp_str),
+            format!("{}/some-tool-temp", temp_str),
+            "/tmp/test-file".to_string(),
         ];
 
         let options = SandboxOptions {
@@ -66,12 +70,17 @@ mod tests {
             allowed_domains: vec![],
         };
 
-        // The exact path that Just is trying to create
-        let just_temp_path = "/var/folders/bl/5pq1htk93_v7n8zv5wsxnzqm0000gn/T/just-ZmK2Hp";
+        // Use the actual system temp directory instead of hardcoded path
+        let temp_dir = std::env::temp_dir();
+        let just_temp_path = temp_dir.join(format!("just-test-{}", std::process::id()));
 
-        // Test if we can create a file at this exact path
-        let command =
-            format!("mkdir -p '{just_temp_path}' && echo 'test' > '{just_temp_path}/test.txt'");
+        // Test if we can create a file at this path (simulating Just's behavior)
+        let command = format!(
+            "mkdir -p '{}' && echo 'test' > '{}/test.txt' && rm -rf '{}'",
+            just_temp_path.display(),
+            just_temp_path.display(),
+            just_temp_path.display()
+        );
         let wrapped = wrap_command_with_sandbox(&command, worktree.path(), &options).unwrap();
 
         // Try to execute it
