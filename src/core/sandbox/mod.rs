@@ -36,3 +36,6 @@ mod network_sandbox_test;
 
 #[cfg(test)]
 mod temp_file_access_test;
+
+#[cfg(test)]
+mod config_tests;

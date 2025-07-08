@@ -263,7 +263,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.dangerously_skip_permissions,
             sandbox_settings.enabled,
             if sandbox_settings.enabled {
-                Some(sandbox_settings.profile)
+                Some(sandbox_settings.profile.clone())
             } else {
                 None
             },
@@ -297,10 +297,14 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             &session_state.worktree_path,
             &prompt,
             args.dangerously_skip_permissions,
-            &args,
+            &sandbox_settings,
         )?;
 
-        (false, false, vec![])
+        (
+            sandbox_settings.enabled && sandbox_settings.profile == "standard-proxied",
+            sandbox_settings.network_sandbox,
+            sandbox_settings.allowed_domains,
+        )
     };
 
     // Get session state for display
@@ -364,7 +368,7 @@ fn launch_claude_code(
     session_path: &Path,
     prompt: &str,
     skip_permissions: bool,
-    args: &DispatchArgs,
+    sandbox_settings: &crate::core::sandbox::config::SandboxSettings,
 ) -> Result<()> {
     let options = crate::core::claude_launcher::ClaudeLaunchOptions {
         skip_permissions,
@@ -375,16 +379,10 @@ fn launch_claude_code(
         } else {
             Some(prompt.to_string())
         },
-        sandbox_override: if args.sandbox_args.no_sandbox {
-            Some(false)
-        } else if args.sandbox_args.sandbox || args.sandbox_args.sandbox_no_network {
-            Some(true)
-        } else {
-            None
-        },
-        sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
-        network_sandbox: args.sandbox_args.sandbox_no_network,
-        allowed_domains: args.sandbox_args.allowed_domains.clone(),
+        sandbox_override: Some(sandbox_settings.enabled),
+        sandbox_profile: Some(sandbox_settings.profile.clone()),
+        network_sandbox: sandbox_settings.network_sandbox,
+        allowed_domains: sandbox_settings.allowed_domains.clone(),
     };
 
     crate::core::claude_launcher::launch_claude_with_context(config, session_path, options)

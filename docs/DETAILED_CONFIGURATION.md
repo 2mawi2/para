@@ -9,7 +9,7 @@ Para supports hierarchical configuration with the following precedence (highest 
 3. **User configuration** - Your personal Para config
 4. **System defaults** - Built-in Para defaults
 
-This allows teams to share project-specific settings while maintaining personal preferences.
+**How it works**: Para loads BOTH your user config and project config (if present), then intelligently merges them together. Project settings override user settings for specific fields, while arrays are combined. This allows teams to share project-specific settings while maintaining personal preferences.
 
 ## Project-Level Configuration
 
@@ -33,6 +33,8 @@ para config project set ide.preferred "cursor"
 ```
 
 ### Project Configuration Options
+
+Project configuration is **partial** - you only need to specify what you want to override or add. All other settings from the user config are preserved.
 
 **Sandbox Settings:**
 - `sandbox.enabled` - Enable/disable sandboxing for all team members
@@ -64,17 +66,32 @@ para config project set ide.preferred "cursor"
 
 ### Configuration Merging
 
-When you run Para commands, configurations are merged intelligently:
+When you run Para commands, **both** user and project configurations are loaded and merged:
 
-- **Sandbox enabled/profile**: Project overrides user settings
-- **Allowed domains**: Project domains are **added** to user domains (merged and deduplicated)
-- **IDE preference**: Project preference overrides user preference
+1. **User config is loaded first** from your personal config file
+2. **Project config is loaded** if `.para/config.json` exists in the repository
+3. **Smart merging happens**:
+   - **Sandbox enabled/profile**: Project overrides user settings
+   - **Allowed domains**: Project domains are **added** to user domains (merged and deduplicated)
+   - **IDE preference**: Project preference overrides user preference
+   - **Other settings**: User config values are preserved if not specified in project config
 
 **Example merge:**
 ```bash
-# User config allows: ["github.com"] 
-# Project config allows: ["api.internal.com", "github.com"]
-# Final merged domains: ["api.internal.com", "github.com"]
+# User config has:
+#   sandbox.enabled: false
+#   sandbox.allowed_domains: ["github.com", "gitlab.com"]
+#   ide.name: "claude"
+#
+# Project config has:
+#   sandbox.enabled: true
+#   sandbox.allowed_domains: ["api.internal.com", "github.com"]
+#   ide.preferred: "cursor"
+#
+# Final merged config:
+#   sandbox.enabled: true (from project)
+#   sandbox.allowed_domains: ["api.internal.com", "github.com", "gitlab.com"] (merged)
+#   ide.name: "cursor" (from project.ide.preferred)
 ```
 
 ### Team Workflow
