@@ -50,7 +50,7 @@ Parallel:
 ### 4. Agent Creation and Integration
 ```bash
 # Orchestrator creates agent sessions
-para_start(name_or_session="api-spec", file="tasks/TASK_1_api_spec.md")
+para_start(name="api-spec", file="tasks/TASK_1_api_spec.md")
 
 # Agent completes and creates branch for review
 para finish "Add API specification" --branch feature/api-v1

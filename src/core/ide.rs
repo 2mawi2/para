@@ -214,8 +214,7 @@ impl IdeManager {
             options.allowed_domains.clone(),
         );
 
-        let should_sandbox =
-            (settings.enabled || options.network_sandbox) && cfg!(target_os = "macos");
+        let should_sandbox = settings.enabled && cfg!(target_os = "macos");
 
         if should_sandbox && !is_sandbox_available() {
             eprintln!(
@@ -229,7 +228,7 @@ impl IdeManager {
 
         if should_sandbox && is_sandbox_available() {
             // Determine profile and proxy settings
-            let (profile, proxy_address) = if options.network_sandbox {
+            let (profile, proxy_address) = if settings.network_sandbox {
                 // For network sandboxing, use the proxied profile
                 (
                     "standard-proxied",
@@ -247,7 +246,7 @@ impl IdeManager {
 
             match wrap_command_with_sandbox(&ide_command, path, &sandbox_options) {
                 Ok(sandboxed_cmd) => {
-                    if options.network_sandbox {
+                    if settings.network_sandbox {
                         println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
                         if !settings.allowed_domains.is_empty() {
                             println!(

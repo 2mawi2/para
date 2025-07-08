@@ -1,0 +1,13 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "profile": "standard-proxied",
+    "allowed_domains": [
+      "api.example.com",
+      "npmjs.org"
+    ]
+  },
+  "ide": {
+    "preferred": "cursor"
+  }
+}

@@ -126,14 +126,13 @@ pub fn launch_claude_with_context(
         }
     };
 
-    // Check if we need sandboxing (either from config or network sandboxing)
-    let should_sandbox =
-        (sandbox_settings.enabled || options.network_sandbox) && cfg!(target_os = "macos");
+    // Check if we need sandboxing
+    let should_sandbox = sandbox_settings.enabled && cfg!(target_os = "macos");
 
     // Apply sandboxing if enabled
     let (final_command, needs_wrapper_script) = if should_sandbox && is_sandbox_available() {
         // Determine profile and proxy settings
-        let (profile, proxy_address) = if options.network_sandbox {
+        let (profile, proxy_address) = if sandbox_settings.network_sandbox {
             // For network sandboxing, use the proxied profile
             let proxy_addr = format!("127.0.0.1:{DEFAULT_PROXY_PORT}");
             ("standard-proxied", Some(proxy_addr))
@@ -149,7 +148,7 @@ pub fn launch_claude_with_context(
 
         match wrap_command_with_sandbox(&claude_task_cmd, session_path, &sandbox_options) {
             Ok(sandboxed_cmd) => {
-                if options.network_sandbox {
+                if sandbox_settings.network_sandbox {
                     println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
                     if !sandbox_settings.allowed_domains.is_empty() {
                         println!(

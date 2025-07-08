@@ -33,14 +33,14 @@ pub fn execute_command_with_config(
         Some(Commands::Monitor(_)) | None => match test_config {
             Some(cfg) => Some(cfg),
             None => Some(
-                ConfigManager::load_or_create()
+                ConfigManager::load_with_project_config()
                     .map_err(|e| ParaError::config_error(format!("Failed to load config: {e}")))?,
             ),
         },
         _ => match test_config {
             Some(cfg) => Some(cfg),
             None => Some(
-                ConfigManager::load_or_create()
+                ConfigManager::load_with_project_config()
                     .map_err(|e| ParaError::config_error(format!("Failed to load config: {e}")))?,
             ),
         },

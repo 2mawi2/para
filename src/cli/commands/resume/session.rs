@@ -3,6 +3,7 @@ use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::ide::{IdeManager, LaunchOptions};
+use crate::core::sandbox::config::SandboxResolver;
 use crate::core::session::state::SessionState;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
@@ -310,22 +311,24 @@ fn launch_ide_for_session_with_state(
         .unwrap_or(false)
         || args.dangerously_skip_permissions;
 
+    // Resolve sandbox settings using the resolver
+    let resolver = SandboxResolver::new(config);
+    let sandbox_settings = resolver.resolve_with_network(
+        args.sandbox_args.sandbox,
+        args.sandbox_args.no_sandbox,
+        args.sandbox_args.sandbox_profile.clone(),
+        args.sandbox_args.sandbox_no_network,
+        args.sandbox_args.allowed_domains.clone(),
+    );
+
     // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
             skip_permissions,
-            sandbox_override: if args.sandbox_args.no_sandbox {
-                Some(false)
-            } else if args.sandbox_args.sandbox {
-                Some(true)
-            } else {
-                // Use stored sandbox settings from session if available
-                session_state.and_then(|s| s.sandbox_enabled)
-            },
-            sandbox_profile: args.sandbox_args.sandbox_profile.clone().or_else(|| {
-                // Use stored sandbox profile from session if available
-                session_state.and_then(|s| s.sandbox_profile.clone())
-            }),
+            sandbox_override: Some(sandbox_settings.enabled),
+            sandbox_profile: Some(sandbox_settings.profile.clone()),
+            network_sandbox: sandbox_settings.network_sandbox,
+            allowed_domains: sandbox_settings.allowed_domains.clone(),
             ..Default::default()
         };
 
@@ -369,8 +372,8 @@ fn launch_ide_for_session_with_state(
             prompt_content: processed_context.cloned(),
             sandbox_override: launch_options.sandbox_override,
             sandbox_profile: launch_options.sandbox_profile,
-            network_sandbox: args.sandbox_args.sandbox_no_network,
-            allowed_domains: args.sandbox_args.allowed_domains.clone(),
+            network_sandbox: launch_options.network_sandbox,
+            allowed_domains: launch_options.allowed_domains.clone(),
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {

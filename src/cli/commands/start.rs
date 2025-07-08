@@ -217,7 +217,7 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
             args.dangerously_skip_permissions,
             sandbox_settings.enabled,
             if sandbox_settings.enabled {
-                Some(sandbox_settings.profile)
+                Some(sandbox_settings.profile.clone())
             } else {
                 None
             },
@@ -235,21 +235,19 @@ pub fn execute(config: Config, args: StartArgs) -> Result<()> {
         let ide_manager = IdeManager::new(&config);
         let launch_options = crate::core::ide::LaunchOptions {
             skip_permissions: args.dangerously_skip_permissions,
-            sandbox_override: if args.sandbox_args.no_sandbox {
-                Some(false)
-            } else if args.sandbox_args.sandbox || args.sandbox_args.sandbox_no_network {
-                Some(true)
-            } else {
-                None
-            },
-            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
-            network_sandbox: args.sandbox_args.sandbox_no_network,
-            allowed_domains: args.sandbox_args.allowed_domains.clone(),
+            sandbox_override: Some(sandbox_settings.enabled),
+            sandbox_profile: Some(sandbox_settings.profile.clone()),
+            network_sandbox: sandbox_settings.network_sandbox,
+            allowed_domains: sandbox_settings.allowed_domains.clone(),
             ..Default::default()
         };
         ide_manager.launch_with_options(&session.worktree_path, launch_options)?;
 
-        (false, false, vec![])
+        (
+            sandbox_settings.enabled && sandbox_settings.profile == "standard-proxied",
+            sandbox_settings.network_sandbox,
+            sandbox_settings.allowed_domains,
+        )
     };
 
     let session_state = session_manager

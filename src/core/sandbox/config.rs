@@ -42,6 +42,7 @@ impl SandboxResolver {
                 enabled: false,
                 profile: default_profile,
                 allowed_domains: Vec::new(),
+                network_sandbox: false,
             };
         }
 
@@ -62,8 +63,9 @@ impl SandboxResolver {
 
             return SandboxSettings {
                 enabled: true,
-                profile,
+                profile: profile.clone(),
                 allowed_domains,
+                network_sandbox: profile == "standard-proxied",
             };
         }
 
@@ -88,17 +90,22 @@ impl SandboxResolver {
 
                 SandboxSettings {
                     enabled: config.enabled,
-                    profile,
+                    profile: profile.clone(),
                     allowed_domains,
+                    network_sandbox: config.enabled && profile == "standard-proxied",
                 }
             }
-            None => SandboxSettings {
-                enabled: false,
-                profile: cli_profile
+            None => {
+                let profile = cli_profile
                     .map(|p| self.validate_profile(p, "CLI argument", &default_profile))
-                    .unwrap_or(default_profile),
-                allowed_domains: cli_allowed_domains,
-            },
+                    .unwrap_or(default_profile);
+                SandboxSettings {
+                    enabled: false,
+                    profile: profile.clone(),
+                    allowed_domains: cli_allowed_domains,
+                    network_sandbox: false, // network_sandbox requires sandbox to be enabled
+                }
+            }
         }
     }
 
@@ -127,6 +134,7 @@ impl SandboxResolver {
                 enabled: true,
                 profile: "standard-proxied".to_string(),
                 allowed_domains,
+                network_sandbox: true,
             };
         }
 
@@ -158,6 +166,7 @@ pub struct SandboxSettings {
     pub enabled: bool,
     pub profile: String,
     pub allowed_domains: Vec<String>,
+    pub network_sandbox: bool,
 }
 
 #[cfg(test)]
