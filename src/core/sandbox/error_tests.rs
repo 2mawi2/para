@@ -98,6 +98,7 @@ mod error_path_tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_sandbox_launcher_invalid_profile() {
         use launcher::{wrap_command_with_sandbox, SandboxOptions};
 

@@ -2,6 +2,8 @@
 mod tests {
     use crate::cli::parser::SandboxArgs;
     use crate::core::ide::LaunchOptions;
+
+    #[cfg(target_os = "macos")]
     use crate::core::sandbox::launcher::{wrap_command_with_sandbox, SandboxOptions};
 
     #[test]

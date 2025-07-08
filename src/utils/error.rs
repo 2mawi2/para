@@ -37,7 +37,6 @@ pub enum ParaError {
     StateCorruption { message: String },
 
     #[error("Docker operation failed: {message}")]
-    #[allow(dead_code)]
     DockerOperation { message: String },
 
     #[error("Proxy operation failed: {message}")]
@@ -143,7 +142,6 @@ impl ParaError {
         }
     }
 
-    #[allow(dead_code)]
     pub fn docker_error(message: impl Into<String>) -> Self {
         Self::DockerOperation {
             message: message.into(),

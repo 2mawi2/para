@@ -27,7 +27,7 @@ pub struct SandboxedCommand {
 /// This new version returns structured information instead of just a string
 pub fn wrap_command_with_sandbox(
     command: &str,
-    worktree_path: &Path,
+    _worktree_path: &Path,
     options: &SandboxOptions,
 ) -> Result<SandboxedCommand> {
     // Validate profile name on all platforms for consistency
@@ -38,6 +38,12 @@ pub fn wrap_command_with_sandbox(
     #[cfg(not(target_os = "macos"))]
     {
         // On non-macOS, return the command unchanged
+        // Note: proxy_address is not used on non-macOS platforms but we access it to avoid dead code warnings
+        let _proxy_port: Option<u16> = options
+            .proxy_address
+            .as_ref()
+            .and_then(|addr| addr.split(':').nth(1)?.parse().ok());
+
         Ok(SandboxedCommand {
             command: command.to_string(),
             needs_wrapper_script: false,

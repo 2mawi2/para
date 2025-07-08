@@ -426,12 +426,6 @@ impl DockerManager {
 
         Ok(safe_cmd)
     }
-
-    /// Get pool statistics
-    #[allow(dead_code)] // Used for debugging and future monitoring features
-    pub fn pool_stats(&self) -> (usize, usize) {
-        (self.pool.active_containers(), self.pool.max_size())
-    }
 }
 
 #[cfg(test)]
