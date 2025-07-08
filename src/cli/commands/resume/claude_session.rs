@@ -10,6 +10,36 @@ pub struct ClaudeSession {
 
 /// Find Claude session ID for a given worktree path
 pub fn find_claude_session(worktree_path: &Path) -> Result<Option<ClaudeSession>> {
+    let project_dir = get_claude_project_dir(worktree_path)?;
+    let project_dir = match project_dir {
+        Some(dir) => dir,
+        None => return Ok(None),
+    };
+
+    let session_files = get_valid_session_files(&project_dir)?;
+    if session_files.is_empty() {
+        return Ok(None);
+    }
+
+    // Find the most recent session that has actual content (not empty/broken)
+    for session_file in session_files.iter().rev() {
+        if let Some(session) = try_extract_session(session_file)? {
+            return Ok(Some(session));
+        }
+    }
+
+    // If no session with content > 1000 bytes, fall back to the most recent regardless of size
+    if let Some(latest_session) = session_files.last() {
+        if let Some(session) = try_extract_session_fallback(latest_session)? {
+            return Ok(Some(session));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Get the Claude project directory for a given worktree path
+fn get_claude_project_dir(worktree_path: &Path) -> Result<Option<PathBuf>> {
     let home_dir = if cfg!(test) {
         // In tests, allow overriding the home directory with PARA_TEST_HOME
         std::env::var("PARA_TEST_HOME")
@@ -40,19 +70,14 @@ pub fn find_claude_session(worktree_path: &Path) -> Result<Option<ClaudeSession>
         return Ok(None);
     }
 
-    // Find the most recent session file
-    let mut session_files: Vec<_> = fs::read_dir(&project_dir)?
+    Ok(Some(project_dir))
+}
+
+/// Get valid session files sorted by modification time
+fn get_valid_session_files(project_dir: &Path) -> Result<Vec<fs::DirEntry>> {
+    let mut session_files: Vec<_> = fs::read_dir(project_dir)?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            let path = entry.path();
-            // Check it's a .jsonl file with a valid UUID-like name
-            path.extension().map(|ext| ext == "jsonl").unwrap_or(false)
-                && path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(|s| !s.is_empty() && s.len() >= 10)
-                    .unwrap_or(false)
-        })
+        .filter(is_valid_session_file)
         .collect();
 
     // Sort by modification time to get the most recent
@@ -63,35 +88,64 @@ pub fn find_claude_session(worktree_path: &Path) -> Result<Option<ClaudeSession>
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
     });
 
-    // Find the most recent session that has actual content (not empty/broken)
-    for session_file in session_files.iter().rev() {
-        if let Some(session_id) = session_file.path().file_stem().and_then(|s| s.to_str()) {
-            // Validate session ID format (should be a UUID-like string)
-            if !session_id.is_empty() && session_id.len() >= 10 {
-                // Check if the session file has meaningful content (> 1000 bytes indicates a real session)
-                if let Ok(metadata) = session_file.metadata() {
-                    if metadata.len() > 1000 {
-                        return Ok(Some(ClaudeSession {
-                            id: session_id.to_string(),
-                        }));
-                    }
-                }
-            }
-        }
-    }
+    Ok(session_files)
+}
 
-    // If no session with content > 1000 bytes, fall back to the most recent regardless of size
-    if let Some(latest_session) = session_files.last() {
-        if let Some(session_id) = latest_session.path().file_stem().and_then(|s| s.to_str()) {
-            if !session_id.is_empty() && session_id.len() >= 10 {
-                return Ok(Some(ClaudeSession {
-                    id: session_id.to_string(),
-                }));
-            }
-        }
+/// Check if a directory entry is a valid session file
+fn is_valid_session_file(entry: &fs::DirEntry) -> bool {
+    let path = entry.path();
+    // Check it's a .jsonl file with a valid UUID-like name
+    path.extension().map(|ext| ext == "jsonl").unwrap_or(false)
+        && path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| !s.is_empty() && s.len() >= 10)
+            .unwrap_or(false)
+}
+
+/// Try to extract a session from a file if it has meaningful content
+fn try_extract_session(session_file: &fs::DirEntry) -> Result<Option<ClaudeSession>> {
+    let path = session_file.path();
+    let session_id = match get_session_id_from_path(&path) {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
+    if has_meaningful_content(session_file)? {
+        return Ok(Some(ClaudeSession {
+            id: session_id.to_string(),
+        }));
     }
 
     Ok(None)
+}
+
+/// Try to extract a session from a file regardless of content size (fallback)
+fn try_extract_session_fallback(session_file: &fs::DirEntry) -> Result<Option<ClaudeSession>> {
+    let path = session_file.path();
+    let session_id = match get_session_id_from_path(&path) {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
+    Ok(Some(ClaudeSession {
+        id: session_id.to_string(),
+    }))
+}
+
+/// Extract session ID from a file path
+fn get_session_id_from_path(path: &Path) -> Option<&str> {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty() && s.len() >= 10)
+}
+
+/// Check if a session file has meaningful content (> 1000 bytes indicates a real session)
+fn has_meaningful_content(session_file: &fs::DirEntry) -> Result<bool> {
+    match session_file.metadata() {
+        Ok(metadata) => Ok(metadata.len() > 1000),
+        Err(_) => Ok(false),
+    }
 }
 
 /// Sanitize a path to match Claude's directory naming convention

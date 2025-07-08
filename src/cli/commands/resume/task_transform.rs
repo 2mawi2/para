@@ -179,25 +179,46 @@ fn apply_add_continue_flag_transformation(
 ) -> Result<()> {
     let mut json = load_tasks_json(tasks_file)?;
 
-    // Navigate to tasks array and update command fields
-    if let Some(tasks) = json.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-        for task in tasks {
-            if let Some(command_value) = task.get_mut("command") {
-                // Only transform string commands, preserve arrays and other types unchanged
-                if let Some(command_str) = command_value.as_str() {
-                    let updated_command =
-                        transform_claude_command(command_str, has_skip_permissions);
-
-                    if updated_command != command_str {
-                        *command_value = Value::String(updated_command);
-                    }
-                }
-                // Arrays and other non-string values are left unchanged
-            }
-        }
-    }
+    update_task_commands(&mut json, has_skip_permissions);
 
     save_tasks_json(tasks_file, json)
+}
+
+/// Update commands in the tasks array
+fn update_task_commands(json: &mut Value, has_skip_permissions: bool) {
+    let tasks = match get_tasks_array_mut(json) {
+        Some(tasks) => tasks,
+        None => return,
+    };
+
+    for task in tasks {
+        update_single_task_command(task, has_skip_permissions);
+    }
+}
+
+/// Get mutable reference to tasks array
+fn get_tasks_array_mut(json: &mut Value) -> Option<&mut Vec<Value>> {
+    json.get_mut("tasks").and_then(|t| t.as_array_mut())
+}
+
+/// Update command field in a single task
+fn update_single_task_command(task: &mut Value, has_skip_permissions: bool) {
+    let command_value = match task.get_mut("command") {
+        Some(cmd) => cmd,
+        None => return,
+    };
+
+    // Only transform string commands, preserve arrays and other types unchanged
+    let command_str = match command_value.as_str() {
+        Some(cmd) => cmd,
+        None => return, // Arrays and other non-string values are left unchanged
+    };
+
+    let updated_command = transform_claude_command(command_str, has_skip_permissions);
+
+    if updated_command != command_str {
+        *command_value = Value::String(updated_command);
+    }
 }
 
 #[cfg(test)]
