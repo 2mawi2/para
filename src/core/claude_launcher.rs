@@ -203,6 +203,7 @@ pub fn launch_claude_with_context(
 
         println!("\n📝 Network sandboxing configured");
         println!("   VS Code will run the sandboxed Claude when you allow the task");
+        println!("   The launcher script will self-delete after execution");
 
         // The task will run the script
         "./.vscode/para-sandbox-launcher.sh".to_string()

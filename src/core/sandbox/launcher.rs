@@ -27,7 +27,7 @@ pub struct SandboxedCommand {
 /// This new version returns structured information instead of just a string
 pub fn wrap_command_with_sandbox(
     command: &str,
-    _worktree_path: &Path,
+    worktree_path: &Path,
     options: &SandboxOptions,
 ) -> Result<SandboxedCommand> {
     // Validate profile name on all platforms for consistency
@@ -43,6 +43,9 @@ pub fn wrap_command_with_sandbox(
             .proxy_address
             .as_ref()
             .and_then(|addr| addr.split(':').nth(1)?.parse().ok());
+
+        // Suppress unused parameter warning for non-macOS
+        let _ = worktree_path;
 
         Ok(SandboxedCommand {
             command: command.to_string(),
@@ -150,6 +153,9 @@ pub fn generate_network_sandbox_wrapper(
 
 echo "🚀 Starting Claude with network sandboxing..."
 
+# Save the script path for self-deletion
+SCRIPT_PATH="$0"
+
 # Start proxy in background (OUTSIDE sandbox)
 echo "🌐 Starting network proxy on port {proxy_port}..."
 para proxy --port {proxy_port}{domains_arg} >/dev/null 2>&1 &
@@ -159,6 +165,8 @@ PROXY_PID=$!
 cleanup() {{
     echo "🛑 Stopping proxy..."
     kill $PROXY_PID 2>/dev/null || true
+    # Self-delete this script
+    rm -f "$SCRIPT_PATH" 2>/dev/null || true
 }}
 
 # Set up signal handlers

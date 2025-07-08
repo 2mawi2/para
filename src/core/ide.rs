@@ -312,7 +312,7 @@ impl IdeManager {
 
             println!("\n📝 Network sandboxing configured");
             println!("   VS Code will run the sandboxed Claude when you allow the task");
-            println!("   The launcher script will self-delete immediately after starting");
+            println!("   The launcher script will self-delete after execution");
         }
 
         Ok(())
