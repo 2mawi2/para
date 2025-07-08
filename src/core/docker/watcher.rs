@@ -16,13 +16,13 @@ use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 /// Commands that can be sent to the watcher thread
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum WatcherCommand {
     Stop,
 }
@@ -37,16 +37,15 @@ pub struct SignalFileWatcher {
 }
 
 /// Handle to control the watcher thread
-#[allow(dead_code)]
 pub struct WatcherHandle {
     command_tx: Sender<WatcherCommand>,
     thread_handle: Option<thread::JoinHandle<()>>,
+    #[cfg(test)]
     stop_rx: Arc<Mutex<Receiver<()>>>,
 }
 
 impl WatcherHandle {
     /// Stop the watcher thread gracefully
-    #[allow(dead_code)]
     pub fn stop(mut self) -> Result<()> {
         // Send stop command
         let _ = self.command_tx.send(WatcherCommand::Stop);
@@ -62,7 +61,7 @@ impl WatcherHandle {
     }
 
     /// Check if the watcher has stopped (used by tests)
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn has_stopped(&self) -> bool {
         if let Ok(stop_rx) = self.stop_rx.lock() {
             stop_rx.try_recv().is_ok()
@@ -76,8 +75,10 @@ impl SignalFileWatcher {
     /// Create and start a new signal file watcher
     pub fn spawn(session_name: String, worktree_path: PathBuf, config: Config) -> WatcherHandle {
         let (command_tx, command_rx) = mpsc::channel();
-        let (stop_tx, stop_rx) = mpsc::channel();
-        let stop_rx = Arc::new(Mutex::new(stop_rx));
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        #[cfg(test)]
+        let stop_rx = Arc::new(Mutex::new(_stop_rx));
+        #[cfg(test)]
         let stop_rx_clone = Arc::clone(&stop_rx);
 
         let watcher = SignalFileWatcher {
@@ -97,6 +98,7 @@ impl SignalFileWatcher {
         WatcherHandle {
             command_tx,
             thread_handle: Some(thread_handle),
+            #[cfg(test)]
             stop_rx: stop_rx_clone,
         }
     }

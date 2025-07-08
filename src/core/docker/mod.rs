@@ -4,7 +4,6 @@
 
 pub mod cleanup;
 pub mod error;
-pub mod extraction;
 pub mod ide_integration;
 pub mod manager;
 pub mod pool;

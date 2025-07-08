@@ -698,19 +698,6 @@ impl DispatchArgs {
             _ => Ok(()),
         }
     }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub fn validate_impl(&self, skip_stdin_check: bool) -> crate::utils::Result<()> {
-        use std::io::IsTerminal;
-
-        // Allow no arguments if stdin is piped (unless skipped for testing)
-        if !skip_stdin_check && !std::io::stdin().is_terminal() {
-            return Ok(());
-        }
-
-        self.validate_args()
-    }
 }
 
 impl ResumeArgs {
