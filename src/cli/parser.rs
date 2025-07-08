@@ -349,6 +349,28 @@ pub enum ConfigCommands {
         /// Value to set
         value: String,
     },
+    /// Manage project-level configuration
+    Project {
+        #[command(subcommand)]
+        command: Option<ProjectConfigCommands>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ProjectConfigCommands {
+    /// Initialize project configuration
+    Init,
+    /// Show project configuration
+    Show,
+    /// Edit project configuration
+    Edit,
+    /// Set project configuration value
+    Set {
+        /// JSON path using dot notation (e.g., sandbox.enabled, ide.preferred)
+        path: String,
+        /// Value to set
+        value: String,
+    },
 }
 
 #[derive(Args, Debug)]

@@ -13,6 +13,20 @@ pub use wizard::{run_config_wizard, run_quick_setup};
 use crate::core::sandbox::SandboxConfig;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ProjectConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<SandboxConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ide: Option<ProjectIdeConfig>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ProjectIdeConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
     pub ide: IdeConfig,
     pub directories: DirectoryConfig,
@@ -106,7 +120,7 @@ impl From<serde_json::Error> for ConfigError {
 
 impl Config {
     pub fn load_or_create() -> Result<Self> {
-        ConfigManager::load_or_create()
+        ConfigManager::load_with_project_config()
     }
 
     pub fn validate(&self) -> Result<()> {

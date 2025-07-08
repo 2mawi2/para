@@ -1,8 +1,8 @@
 use super::defaults::{default_config, get_config_file_path};
-use super::{Config, Result};
+use super::{Config, ProjectConfig, Result};
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct ConfigManager;
 
@@ -12,8 +12,48 @@ impl ConfigManager {
         Ok(config_path.to_string_lossy().to_string())
     }
 
+    /// Find project config file by walking up from current directory
+    pub fn find_project_config() -> Option<PathBuf> {
+        let current_dir = std::env::current_dir().ok()?;
+        let mut dir = current_dir.as_path();
+
+        loop {
+            let config_path = dir.join(".para").join("config.json");
+            if config_path.exists() {
+                return Some(config_path);
+            }
+
+            // Stop at filesystem root
+            dir = dir.parent()?;
+        }
+    }
+
+    /// Load project configuration if available
+    pub fn load_project_config() -> Result<Option<ProjectConfig>> {
+        match Self::find_project_config() {
+            Some(path) => {
+                let content = fs::read_to_string(&path)?;
+                let config: ProjectConfig = serde_json::from_str(&content)?;
+                Ok(Some(config))
+            }
+            None => Ok(None),
+        }
+    }
+
     pub fn load_or_create() -> Result<Config> {
         Self::load_or_create_with_path(None)
+    }
+
+    /// Load configuration with project config merging
+    pub fn load_with_project_config() -> Result<Config> {
+        // Load user config
+        let user_config = Self::load_or_create()?;
+
+        // Load project config if available
+        let project_config = Self::load_project_config()?;
+
+        // Merge and return
+        Ok(Self::merge_configs(user_config, project_config))
     }
 
     pub fn load_or_create_with_path(config_path: Option<&Path>) -> Result<Config> {
@@ -110,6 +150,59 @@ impl ConfigManager {
         file.sync_all()?;
 
         Ok(())
+    }
+
+    /// Save project configuration
+    pub fn save_project_config(config: &ProjectConfig, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let json = serde_json::to_string_pretty(config)?;
+        let mut file = fs::File::create(path)?;
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+
+        Ok(())
+    }
+
+    /// Merge project config into user config
+    pub fn merge_configs(user_config: Config, project_config: Option<ProjectConfig>) -> Config {
+        let mut config = user_config;
+
+        if let Some(project) = project_config {
+            // Merge sandbox settings
+            if let Some(project_sandbox) = project.sandbox {
+                match &mut config.sandbox {
+                    Some(sandbox) => {
+                        // Project overrides for enabled and profile
+                        sandbox.enabled = project_sandbox.enabled;
+                        sandbox.profile = project_sandbox.profile;
+
+                        // Merge allowed_domains (deduplicate)
+                        let mut all_domains = sandbox.allowed_domains.clone();
+                        all_domains.extend(project_sandbox.allowed_domains);
+                        all_domains.sort();
+                        all_domains.dedup();
+                        sandbox.allowed_domains = all_domains;
+                    }
+                    None => {
+                        // Use project sandbox config entirely
+                        config.sandbox = Some(project_sandbox);
+                    }
+                }
+            }
+
+            // Merge IDE settings
+            if let Some(project_ide) = project.ide {
+                if let Some(preferred) = project_ide.preferred {
+                    // Override the IDE name with project preference
+                    config.ide.name = preferred;
+                }
+            }
+        }
+
+        config
     }
 }
 
@@ -328,5 +421,108 @@ mod tests {
             migrated_config.ide.wrapper.name == "cursor"
                 || migrated_config.ide.wrapper.name == "code"
         );
+    }
+
+    #[test]
+    fn test_merge_configs_sandbox_settings() {
+        use super::super::defaults::{
+            default_directory_config, default_git_config, default_session_config,
+        };
+
+        let user_config = super::super::Config {
+            ide: super::super::IdeConfig {
+                name: "cursor".to_string(),
+                command: "cursor".to_string(),
+                user_data_dir: None,
+                wrapper: super::super::WrapperConfig {
+                    enabled: true,
+                    name: "cursor".to_string(),
+                    command: "cursor".to_string(),
+                },
+            },
+            directories: default_directory_config(),
+            git: default_git_config(),
+            session: default_session_config(),
+            docker: None,
+            setup_script: None,
+            sandbox: Some(crate::core::sandbox::SandboxConfig {
+                enabled: false,
+                profile: "permissive".to_string(),
+                allowed_domains: vec!["github.com".to_string()],
+            }),
+        };
+
+        let project_config = Some(super::super::ProjectConfig {
+            sandbox: Some(crate::core::sandbox::SandboxConfig {
+                enabled: true,
+                profile: "standard".to_string(),
+                allowed_domains: vec!["api.internal.com".to_string(), "github.com".to_string()],
+            }),
+            ide: None,
+        });
+
+        let merged = ConfigManager::merge_configs(user_config, project_config);
+
+        // Project overrides enabled and profile
+        assert!(merged.sandbox.as_ref().unwrap().enabled);
+        assert_eq!(merged.sandbox.as_ref().unwrap().profile, "standard");
+
+        // Domains are merged and deduplicated
+        let domains = &merged.sandbox.as_ref().unwrap().allowed_domains;
+        assert_eq!(domains.len(), 2);
+        assert!(domains.contains(&"github.com".to_string()));
+        assert!(domains.contains(&"api.internal.com".to_string()));
+    }
+
+    #[test]
+    fn test_merge_configs_ide_preference() {
+        use super::super::defaults::{
+            default_directory_config, default_git_config, default_session_config,
+        };
+
+        let user_config = super::super::Config {
+            ide: super::super::IdeConfig {
+                name: "cursor".to_string(),
+                command: "cursor".to_string(),
+                user_data_dir: None,
+                wrapper: super::super::WrapperConfig {
+                    enabled: true,
+                    name: "cursor".to_string(),
+                    command: "cursor".to_string(),
+                },
+            },
+            directories: default_directory_config(),
+            git: default_git_config(),
+            session: default_session_config(),
+            docker: None,
+            setup_script: None,
+            sandbox: None,
+        };
+
+        let project_config = Some(super::super::ProjectConfig {
+            sandbox: None,
+            ide: Some(crate::config::ProjectIdeConfig {
+                preferred: Some("claude".to_string()),
+            }),
+        });
+
+        let merged = ConfigManager::merge_configs(user_config, project_config);
+
+        // Project overrides IDE name
+        assert_eq!(merged.ide.name, "claude");
+        // But not the command (it keeps original)
+        assert_eq!(merged.ide.command, "cursor");
+    }
+
+    #[test]
+    fn test_merge_configs_no_project() {
+        use super::super::defaults::default_config;
+
+        let user_config = default_config();
+        let ide_name = user_config.ide.name.clone();
+        let merged = ConfigManager::merge_configs(user_config, None);
+
+        // Should be unchanged
+        assert_eq!(merged.ide.name, ide_name);
     }
 }

@@ -211,6 +211,7 @@ impl IdeManager {
             options.sandbox_override.map(|v| !v).unwrap_or(false),
             options.sandbox_profile.clone(),
             options.network_sandbox,
+            options.allowed_domains.clone(),
         );
 
         let should_sandbox =
@@ -241,17 +242,17 @@ impl IdeManager {
             let sandbox_options = SandboxOptions {
                 profile: profile.to_string(),
                 proxy_address,
-                allowed_domains: options.allowed_domains.clone(),
+                allowed_domains: settings.allowed_domains.clone(),
             };
 
             match wrap_command_with_sandbox(&ide_command, path, &sandbox_options) {
                 Ok(sandboxed_cmd) => {
                     if options.network_sandbox {
                         println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
-                        if !options.allowed_domains.is_empty() {
+                        if !settings.allowed_domains.is_empty() {
                             println!(
                                 "   Additional allowed domains: {}",
-                                options.allowed_domains.join(", ")
+                                settings.allowed_domains.join(", ")
                             );
                         }
                     } else {
