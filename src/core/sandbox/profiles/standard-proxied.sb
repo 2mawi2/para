@@ -1,8 +1,8 @@
 (version 1)
 
-;; Para Sandboxing Profile - Standard
-;; Protects against prompt injection by limiting file write access
-;; Based on Gemini's minimal security model
+;; Para Sandboxing Profile - Standard with Network Proxy
+;; Based on standard profile but restricts network access to proxy only
+;; Requires proxy running on localhost:8877
 
 ;; Deny everything by default
 (deny default)
@@ -72,6 +72,11 @@
     ;; Claude configuration
     (subpath (string-append (param "HOME_DIR") "/.claude"))
     (literal (string-append (param "HOME_DIR") "/.claude.json"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json.lock"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json.backup"))
+    
+    ;; NPM directories (for package updates)
+    (subpath (string-append (param "HOME_DIR") "/.npm"))
     
     ;; Git configuration (for commits)
     (literal (string-append (param "HOME_DIR") "/.gitconfig"))
@@ -88,8 +93,20 @@
 
 
 
-;; Allow network access (required for Claude API)
-(allow network*)
+;; NETWORK RESTRICTIONS - This is the key difference from standard profile
+;; Deny all network access except through proxy
+(deny network*)
+
+;; Allow outbound connections only to proxy
+;; Note: sandbox-exec only accepts "localhost" or "*" as host, not IP addresses
+(allow network-outbound (remote tcp "localhost:8877"))
+
+;; Allow DNS resolution (required for proxy to work)
+(allow network-outbound (remote udp "*:53"))
+
+;; Allow local server binding (for development servers)
+(allow network-bind (local ip "*:*"))
+(allow network-inbound (local ip "localhost:*"))
 
 ;; Allow terminal I/O operations (required for interactive mode)
 (allow file-ioctl (regex #"^/dev/tty.*"))

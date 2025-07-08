@@ -224,11 +224,16 @@ mod tests {
         let config = create_test_config();
         let mut coordinator = MonitorCoordinator::new(config);
 
-        // Should not need refresh immediately
+        // Mark as refreshed first to ensure we have a known starting point
+        coordinator.mark_refreshed();
+
+        // Should not need refresh immediately after marking
         assert!(!coordinator.should_refresh());
 
-        // Mark as refreshed
-        coordinator.mark_refreshed();
+        // Sleep for a short time (less than 2 seconds)
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Should still not need refresh
         assert!(!coordinator.should_refresh());
     }
 

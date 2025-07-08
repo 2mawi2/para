@@ -57,6 +57,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
         assert!(args.validate().is_ok());
@@ -70,6 +72,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
         assert!(args.validate().is_ok());
@@ -84,6 +88,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
         assert!(args.validate().is_err());

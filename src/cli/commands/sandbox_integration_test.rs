@@ -23,6 +23,8 @@ mod tests {
                 sandbox: true,
                 no_sandbox: false,
                 sandbox_profile: Some("restrictive".to_string()),
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -52,6 +54,8 @@ mod tests {
                 sandbox: true,
                 no_sandbox: false,
                 sandbox_profile: Some("permissive".to_string()),
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 

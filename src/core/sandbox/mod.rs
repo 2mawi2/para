@@ -2,6 +2,7 @@ pub mod cleanup;
 pub mod config;
 pub mod launcher;
 pub mod profiles;
+pub mod proxy;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SandboxConfig {
@@ -26,3 +27,9 @@ fn default_profile() -> String {
 
 #[cfg(test)]
 mod error_tests;
+
+#[cfg(test)]
+mod network_sandbox_test;
+
+#[cfg(test)]
+mod temp_file_access_test;

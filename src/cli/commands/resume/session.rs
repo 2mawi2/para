@@ -369,6 +369,8 @@ fn launch_ide_for_session_with_state(
             prompt_content: processed_context.cloned(),
             sandbox_override: launch_options.sandbox_override,
             sandbox_profile: launch_options.sandbox_profile,
+            network_sandbox: args.sandbox_args.sandbox_no_network,
+            allowed_domains: args.sandbox_args.allowed_domains.clone(),
         };
         crate::core::claude_launcher::launch_claude_with_context(config, path, claude_options)
     } else {
@@ -429,6 +431,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
         resume_specific_session(&config, &git_service, "test4", &args).unwrap();
@@ -479,6 +483,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -548,6 +554,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -609,6 +617,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -676,6 +686,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -741,6 +753,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -861,6 +875,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -899,6 +915,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 

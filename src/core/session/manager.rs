@@ -43,15 +43,6 @@ impl SessionManager {
         &self.state_dir
     }
 
-    #[allow(dead_code)]
-    pub fn create_session(
-        &mut self,
-        name: String,
-        base_branch: Option<String>,
-    ) -> Result<SessionState> {
-        self.create_session_with_type(name, base_branch, None, false)
-    }
-
     pub fn create_session_with_all_flags(
         &mut self,
         name: String,

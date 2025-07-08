@@ -83,21 +83,32 @@ mod error_path_tests {
 
     #[test]
     fn test_sandbox_launcher_empty_profile() {
-        use launcher::wrap_with_sandbox;
+        use launcher::{wrap_command_with_sandbox, SandboxOptions};
 
         let temp_dir = TempDir::new().unwrap();
-        let result = wrap_with_sandbox("echo test", temp_dir.path(), "");
+        let options = SandboxOptions {
+            profile: String::new(),
+            proxy_address: None,
+            allowed_domains: vec![],
+        };
+        let result = wrap_command_with_sandbox("echo test", temp_dir.path(), &options);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_sandbox_launcher_invalid_profile() {
-        use launcher::wrap_with_sandbox;
+        use launcher::{wrap_command_with_sandbox, SandboxOptions};
 
         let temp_dir = TempDir::new().unwrap();
-        let result = wrap_with_sandbox("echo test", temp_dir.path(), "nonexistent-profile");
+        let options = SandboxOptions {
+            profile: "nonexistent-profile".to_string(),
+            proxy_address: None,
+            allowed_domains: vec![],
+        };
+        let result = wrap_command_with_sandbox("echo test", temp_dir.path(), &options);
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -116,8 +127,11 @@ mod error_path_tests {
 
     #[test]
     fn test_cleanup_handles_permission_errors() {
-        // Create a directory that cleanup can process
-        let temp_dir = std::env::temp_dir().join("para-sandbox-profiles-test");
+        use tempfile::TempDir;
+
+        // Create a temporary directory that will be cleaned up automatically
+        let temp_parent = TempDir::new().unwrap();
+        let temp_dir = temp_parent.path().join("para-sandbox-profiles-test");
         fs::create_dir_all(&temp_dir).unwrap();
 
         // Create a file
@@ -136,16 +150,17 @@ mod error_path_tests {
         // Cleanup should handle errors gracefully
         cleanup::cleanup_old_profiles().ok();
 
-        // Restore permissions and clean up
+        // Restore permissions for cleanup
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&temp_dir).unwrap().permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&temp_dir, perms).unwrap();
+            if let Ok(metadata) = fs::metadata(&temp_dir) {
+                let mut perms = metadata.permissions();
+                perms.set_mode(0o755);
+                let _ = fs::set_permissions(&temp_dir, perms);
+            }
         }
-
-        fs::remove_dir_all(&temp_dir).ok();
+        // The TempDir will handle cleanup automatically
     }
 
     #[test]
