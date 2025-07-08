@@ -9,7 +9,7 @@ Para's MCP tools allow an orchestrator agent (like Claude) to manage multiple AI
 ## MCP vs CLI Tools
 
 ### MCP Tools (for Orchestrator)
-- **para_start** - Primary tool for launching agents (replaces old para_dispatch)
+- **para_start** - Primary tool for launching agents (use with prompt parameter for AI sessions)
 - **para_finish** - Complete sessions with optional auto-integration
 - **para_list** - Check status
 - **para_resume** - Continue existing sessions with additional context
@@ -112,6 +112,6 @@ The MCP tools include comprehensive documentation in their descriptions. Key poi
 
 Users can customize the workflow in their `CLAUDE.md`:
 - Use `para finish` for manual review workflow (with optional custom branch names)
-- Add `-d` flag preferences for automation
+- Add `--dangerously-skip-permissions` flag preferences for automation
 
 The MCP tools adapt to these preferences, making the system flexible for different team workflows.

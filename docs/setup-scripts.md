@@ -210,10 +210,10 @@ Setup scripts also work with AI-assisted `para start`:
 
 ```bash
 # With explicit script
-para start --setup-script scripts/ai-setup.sh "implement new feature"
+para start -p "implement new feature" --setup-script scripts/ai-setup.sh
 
 # Auto-detect .para/setup.sh
-para start "fix bug in authentication"
+para start -p "fix bug in authentication"
 ```
 
 ## Docker Container Support

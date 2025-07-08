@@ -1,18 +1,20 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::cli::commands::unified_start::{determine_intent, StartIntent};
     use crate::cli::parser::{SandboxArgs, UnifiedStartArgs};
+    use crate::config::Config;
+    use crate::core::session::SessionManager;
     use crate::test_utils::test_helpers::*;
     use tempfile::TempDir;
 
     fn create_test_args(
-        name_or_session: Option<&str>,
+        name: Option<&str>,
         prompt: Option<&str>,
         sandbox_no_network: bool,
         allowed_domains: Vec<&str>,
     ) -> UnifiedStartArgs {
         UnifiedStartArgs {
-            name_or_session: name_or_session.map(String::from),
+            name: name.map(String::from),
             prompt: prompt.map(String::from),
             file: None,
             dangerously_skip_permissions: true,
@@ -33,13 +35,8 @@ mod tests {
     }
 
     #[test]
-    fn test_single_arg_with_spaces_should_be_treated_as_prompt() {
-        let temp_dir = TempDir::new().unwrap();
-        let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
-        let config = create_test_config();
-        let session_manager = SessionManager::new(&config);
-
-        // This should be treated as a prompt, not a session name
+    fn test_invalid_session_name_with_spaces_fails() {
+        // Names with spaces are invalid session names
         let args = create_test_args(
             Some("please download golem.de"),
             None,
@@ -47,28 +44,19 @@ mod tests {
             vec!["golem.de"],
         );
 
-        let result = determine_intent(&args, &session_manager);
-        
-        // Currently this fails because it's treated as an invalid session name
-        assert!(result.is_ok(), "Should treat text with spaces as prompt");
-        
-        match result.unwrap() {
-            StartIntent::NewWithAgent { name, prompt } => {
-                assert!(name.is_none(), "Should auto-generate session name");
-                assert_eq!(prompt, "please download golem.de");
-            }
-            _ => panic!("Expected NewWithAgent intent"),
-        }
+        let result = args.validate();
+        assert!(result.is_err(), "Session name with spaces should fail validation");
+        assert!(result.unwrap_err().to_string().contains("Session name can only contain"));
     }
 
     #[test]
-    fn test_valid_session_name_is_treated_as_session_name() {
+    fn test_valid_session_name_creates_interactive_session() {
         let temp_dir = TempDir::new().unwrap();
         let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
         let config = create_test_config();
         let session_manager = SessionManager::new(&config);
 
-        // Valid session name should be treated as such
+        // Valid session name without prompt creates interactive session
         let args = create_test_args(
             Some("download-task"),
             None,
@@ -88,13 +76,13 @@ mod tests {
     }
 
     #[test]
-    fn test_prompt_with_network_sandbox_args() {
+    fn test_prompt_flag_with_name_creates_agent_session() {
         let temp_dir = TempDir::new().unwrap();
         let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
         let config = create_test_config();
         let session_manager = SessionManager::new(&config);
 
-        // Explicit session name + prompt should work
+        // Using -p flag with session name creates agent session
         let args = create_test_args(
             Some("my-task"),
             Some("download golem.de and analyze it"),
@@ -115,15 +103,15 @@ mod tests {
     }
 
     #[test]
-    fn test_single_word_prompts_are_ambiguous() {
+    fn test_no_args_creates_interactive_session() {
         let temp_dir = TempDir::new().unwrap();
         let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
         let config = create_test_config();
         let session_manager = SessionManager::new(&config);
 
-        // Single word could be either session name or prompt
+        // No arguments creates interactive session
         let args = create_test_args(
-            Some("download"),
+            None,
             None,
             false,
             vec![],
@@ -132,24 +120,23 @@ mod tests {
         let result = determine_intent(&args, &session_manager);
         assert!(result.is_ok());
         
-        // Currently treated as session name
         match result.unwrap() {
             StartIntent::NewInteractive { name } => {
-                assert_eq!(name, Some("download".to_string()));
+                assert_eq!(name, None);
             }
             _ => panic!("Expected NewInteractive intent"),
         }
     }
 
     #[test]
-    fn test_prompt_detection_with_special_characters() {
+    fn test_prompt_flag_required_for_ai_sessions() {
         let temp_dir = TempDir::new().unwrap();
         let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
         let config = create_test_config();
         let session_manager = SessionManager::new(&config);
 
-        // Text with special chars should be treated as prompt
-        let test_cases = vec![
+        // Using -p flag creates AI session
+        let test_prompts = vec![
             "implement the TODO items",
             "fix bug #123",
             "add feature: user auth",
@@ -157,21 +144,20 @@ mod tests {
             "analyze website.com",
         ];
 
-        for test_prompt in test_cases {
+        for test_prompt in test_prompts {
             let args = create_test_args(
-                Some(test_prompt),
                 None,
+                Some(test_prompt),
                 false,
                 vec![],
             );
 
             let result = determine_intent(&args, &session_manager);
-            
-            // These should be treated as prompts, not session names
             assert!(result.is_ok(), "Failed for prompt: {}", test_prompt);
             
-            match result {
-                Ok(StartIntent::NewWithAgent { prompt, .. }) => {
+            match result.unwrap() {
+                StartIntent::NewWithAgent { name, prompt } => {
+                    assert_eq!(name, None);
                     assert_eq!(prompt, test_prompt);
                 }
                 _ => panic!("Expected NewWithAgent for: {}", test_prompt),
@@ -180,17 +166,34 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_prompt_flag_would_be_nice() {
-        // This test demonstrates what we'd like to have
-        // Currently there's no --prompt flag in UnifiedStartArgs
+    fn test_file_flag_creates_ai_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = setup_isolated_test_environment(&temp_dir).unwrap();
+        let config = create_test_config();
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test file
+        let prompt_file = temp_dir.path().join("test_prompt.txt");
+        std::fs::write(&prompt_file, "Test prompt from file").unwrap();
+
+        // Using -f flag creates AI session
+        let mut args = create_test_args(
+            None,
+            None,
+            false,
+            vec![],
+        );
+        args.file = Some(prompt_file);
+
+        let result = determine_intent(&args, &session_manager);
+        assert!(result.is_ok());
         
-        // Ideal API:
-        // para start --prompt "download something" --sandbox-no-network
-        // This would remove ambiguity
-        
-        // For now, we have to use workarounds:
-        // 1. Two args: para start session-name "prompt text"
-        // 2. File: para start --file prompt.txt
-        // 3. Stdin: echo "prompt" | para start
+        match result.unwrap() {
+            StartIntent::NewWithAgent { name, prompt } => {
+                assert_eq!(name, None);
+                assert_eq!(prompt, "Test prompt from file");
+            }
+            _ => panic!("Expected NewWithAgent intent"),
+        }
     }
 }

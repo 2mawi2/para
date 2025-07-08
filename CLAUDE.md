@@ -115,13 +115,14 @@ mcp-server-ts/        # Model Context Protocol server implementation
 - `para start` - **UNIFIED COMMAND**: Create or resume para sessions
   - No args: Create new interactive session
   - With name only: Resume if exists, else create new
-  - With prompt: Create new session with AI agent
+  - With prompt flag: Create new session with AI agent
   - With file: Read prompt/context from file
   - Examples:
     - `para start` - New interactive session
     - `para start feature-x` - Resume or create session
-    - `para start "implement auth"` - New AI agent session
-    - `para start feature-x "add tests"` - Resume with context
+    - `para start -p "implement auth"` - New AI agent session
+    - `para start --prompt "implement auth"` - New AI agent session (long form)
+    - `para start feature-x -p "add tests"` - Named session with AI prompt
     - `para start --file tasks/auth.md` - From file
 - `para finish "message" [--branch name]` - Complete session with commit
 - `para list` - Show all active sessions
@@ -132,8 +133,8 @@ mcp-server-ts/        # Model Context Protocol server implementation
 - `para status` - Update/view session status (for AI agents)
 
 ### Command Changes
-- `para dispatch` - **REMOVED** - Use: `para start [name] "prompt"` for AI-assisted sessions
-- `para start` - Now handles both interactive and AI-assisted session creation
+- `para dispatch` - **REMOVED** - Use: `para start [name] -p "prompt"` for AI-assisted sessions
+- `para start` - Now handles both interactive and AI-assisted session creation (use `-p/--prompt` flag for AI sessions)
 - `para resume` - **Separate command** for continuing existing sessions
 
 ### MCP Commands

@@ -56,7 +56,6 @@ claude mcp add para node /path/to/para/mcp-server-ts/build/para-mcp-server.js
 
 - `para_start` - Start new isolated session
 - `para_finish` - Complete current session with commit message
-- `para_dispatch` - Start session with AI agent dispatch
 - `para_list` - List all active sessions
 - `para_recover` - Recover previous session
 - `para_config_show` - Display current configuration

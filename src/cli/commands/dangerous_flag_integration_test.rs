@@ -50,7 +50,7 @@ mod integration_tests {
         // Step 3: Simulate monitor resume (which would call unified start with the session)
         // In the real monitor, this happens via spawned command
         let monitor_resume_args = UnifiedStartArgs {
-            name_or_session: Some("dangerous-session".to_string()),
+            name: Some("dangerous-session".to_string()),
             prompt: None,
             file: None,
             dangerously_skip_permissions: true, // Monitor would add this based on session state

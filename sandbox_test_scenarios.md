@@ -52,7 +52,7 @@ para start --sandbox-no-network --allowed-domains "github.com,*.openai.com"
 
 # Works with all start methods
 para start my-feature --sandbox-no-network
-para start "implement feature" --sandbox-no-network
+para start -p "implement feature" --sandbox-no-network
 para start --file prompt.txt --sandbox-no-network
 ```
 

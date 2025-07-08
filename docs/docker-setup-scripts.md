@@ -23,7 +23,7 @@ Specify a setup script directly when starting a session:
 para start --container --setup-script scripts/dev-setup.sh
 
 # With AI-assisted start command
-para start --container --setup-script scripts/init-env.sh "implement feature X"
+para start -p "implement feature X" --container --setup-script scripts/init-env.sh
 ```
 
 ### 2. Default Script Location

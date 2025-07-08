@@ -8,7 +8,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert!(args.name_or_session.is_none());
+                assert!(args.name.is_none());
                 assert!(!args.dangerously_skip_permissions);
             }
             _ => panic!("Expected Start command"),
@@ -20,7 +20,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "my-feature"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, Some("my-feature".to_string()));
+                assert_eq!(args.name, Some("my-feature".to_string()));
                 assert!(!args.dangerously_skip_permissions);
             }
             _ => panic!("Expected Start command"),
@@ -32,7 +32,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "--dangerously-skip-permissions"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert!(args.name_or_session.is_none());
+                assert!(args.name.is_none());
                 assert!(args.dangerously_skip_permissions);
             }
             _ => panic!("Expected Start command"),
@@ -44,7 +44,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "implement feature"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, Some("implement feature".to_string()));
+                assert_eq!(args.name, Some("implement feature".to_string()));
                 assert!(args.prompt.is_none());
             }
             _ => panic!("Expected Start command"),
@@ -53,11 +53,17 @@ mod cli_tests {
 
     #[test]
     fn test_unified_start_with_session_and_prompt() {
-        let cli =
-            Cli::try_parse_from(["para", "start", "my-session", "implement feature"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "para",
+            "start",
+            "my-session",
+            "--prompt",
+            "implement feature",
+        ])
+        .unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, Some("my-session".to_string()));
+                assert_eq!(args.name, Some("my-session".to_string()));
                 assert_eq!(args.prompt, Some("implement feature".to_string()));
             }
             _ => panic!("Expected Start command"),
@@ -69,7 +75,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "--file", "task.txt"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert!(args.name_or_session.is_none());
+                assert!(args.name.is_none());
                 assert!(args.prompt.is_none());
                 assert_eq!(args.file, Some(std::path::PathBuf::from("task.txt")));
             }
@@ -242,10 +248,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "Add user authentication"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(
-                    args.name_or_session,
-                    Some("Add user authentication".to_string())
-                );
+                assert_eq!(args.name, Some("Add user authentication".to_string()));
                 assert!(args.prompt.is_none());
                 assert!(args.file.is_none());
             }
@@ -255,11 +258,17 @@ mod cli_tests {
 
     #[test]
     fn test_unified_start_command_with_name_and_prompt() {
-        let cli =
-            Cli::try_parse_from(["para", "start", "feature-name", "Add authentication"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "para",
+            "start",
+            "feature-name",
+            "--prompt",
+            "Add authentication",
+        ])
+        .unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, Some("feature-name".to_string()));
+                assert_eq!(args.name, Some("feature-name".to_string()));
                 assert_eq!(args.prompt, Some("Add authentication".to_string()));
                 assert!(args.file.is_none());
             }
@@ -272,7 +281,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start", "--file", "prompt.txt"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert!(args.name_or_session.is_none());
+                assert!(args.name.is_none());
                 assert!(args.prompt.is_none());
                 assert_eq!(args.file, Some(std::path::PathBuf::from("prompt.txt")));
             }
@@ -284,9 +293,9 @@ mod cli_tests {
     fn test_unified_start_args_validation() {
         use crate::cli::parser::{SandboxArgs, UnifiedStartArgs};
 
-        // Test that prompt and file conflict
+        // Test that prompt and file are both allowed (file takes precedence)
         let args = UnifiedStartArgs {
-            name_or_session: None,
+            name: None,
             prompt: Some("test prompt".to_string()),
             file: Some(std::path::PathBuf::from("test.txt")),
             dangerously_skip_permissions: false,
@@ -304,11 +313,11 @@ mod cli_tests {
                 allowed_domains: vec![],
             },
         };
-        assert!(args.validate().is_err());
+        assert!(args.validate().is_ok());
 
         // Test that sandbox flags conflict
         let args = UnifiedStartArgs {
-            name_or_session: None,
+            name: None,
             prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,
@@ -330,7 +339,7 @@ mod cli_tests {
 
         // Test valid args
         let args = UnifiedStartArgs {
-            name_or_session: Some("test-session".to_string()),
+            name: Some("test-session".to_string()),
             prompt: Some("test prompt".to_string()),
             file: None,
             dangerously_skip_permissions: false,
@@ -376,11 +385,17 @@ mod cli_tests {
     #[test]
     fn test_unified_start_resume_with_prompt() {
         // Test resuming a session with additional prompt
-        let cli = Cli::try_parse_from(["para", "start", "existing-session", "add error handling"])
-            .unwrap();
+        let cli = Cli::try_parse_from([
+            "para",
+            "start",
+            "existing-session",
+            "--prompt",
+            "add error handling",
+        ])
+        .unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, Some("existing-session".to_string()));
+                assert_eq!(args.name, Some("existing-session".to_string()));
                 assert_eq!(args.prompt, Some("add error handling".to_string()));
             }
             _ => panic!("Expected Start command"),
@@ -390,13 +405,19 @@ mod cli_tests {
     #[test]
     fn test_unified_start_with_container_and_prompt() {
         // Test container session with prompt
-        let cli =
-            Cli::try_parse_from(["para", "start", "--container", "api", "implement endpoint"])
-                .unwrap();
+        let cli = Cli::try_parse_from([
+            "para",
+            "start",
+            "--container",
+            "api",
+            "--prompt",
+            "implement endpoint",
+        ])
+        .unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
                 assert!(args.container);
-                assert_eq!(args.name_or_session, Some("api".to_string()));
+                assert_eq!(args.name, Some("api".to_string()));
                 assert_eq!(args.prompt, Some("implement endpoint".to_string()));
             }
             _ => panic!("Expected Start command"),
@@ -422,7 +443,7 @@ mod cli_tests {
                     args.sandbox_args.sandbox_profile,
                     Some("restrictive".to_string())
                 );
-                assert_eq!(args.name_or_session, Some("feature".to_string()));
+                assert_eq!(args.name, Some("feature".to_string()));
             }
             _ => panic!("Expected Start command"),
         }
@@ -434,7 +455,7 @@ mod cli_tests {
         let cli = Cli::try_parse_from(["para", "start"]).unwrap();
         match cli.command.unwrap() {
             Commands::Start(args) => {
-                assert_eq!(args.name_or_session, None);
+                assert_eq!(args.name, None);
                 assert_eq!(args.prompt, None);
                 assert_eq!(args.file, None);
             }
@@ -466,7 +487,7 @@ mod cli_tests {
                     Some("api.example.com,cdn.example.com".to_string())
                 );
                 assert!(args.no_forward_keys);
-                assert_eq!(args.name_or_session, Some("docker-session".to_string()));
+                assert_eq!(args.name, Some("docker-session".to_string()));
             }
             _ => panic!("Expected Start command"),
         }

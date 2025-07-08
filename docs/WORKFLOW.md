@@ -11,7 +11,7 @@ stateDiagram-v2
     [*] --> Idle: para ready
     
     Idle --> Starting: para start <session-name>
-    Idle --> Starting: para start <prompt>
+    Idle --> Starting: para start -p <prompt>
     
     Starting --> Active: worktree + branch created
     Starting --> Active: session auto-created
@@ -39,7 +39,7 @@ flowchart TD
     A[User Input] --> B{Command Type}
     
     B --> C[para start]
-    B --> D[para start <prompt>]
+    B --> D[para start -p <prompt>]
     B --> F[para finish]
     B --> G[para cancel]
     B --> H[para recover]

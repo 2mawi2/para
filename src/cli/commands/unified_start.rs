@@ -2,7 +2,7 @@ use crate::cli::parser::UnifiedStartArgs;
 use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::SessionManager;
-use crate::utils::{validate_session_name, ParaError, Result};
+use crate::utils::{ParaError, Result};
 use std::path::PathBuf;
 
 /// Represents the user's intent when using the start command
@@ -22,77 +22,38 @@ pub fn determine_intent(
     args: &UnifiedStartArgs,
     session_manager: &SessionManager,
 ) -> Result<StartIntent> {
+    // Check if session already exists
+    if let Some(ref name) = args.name {
+        if session_manager.session_exists(name) {
+            let suggestion = if args.prompt.is_some() || args.file.is_some() {
+                format!("Use 'para resume {name}' with --prompt or --file to continue with additional context.")
+            } else {
+                format!("Use 'para resume {name}' to continue existing session.")
+            };
+            return Err(ParaError::invalid_args(format!(
+                "Session '{name}' already exists. {suggestion}"
+            )));
+        }
+    }
+
     // Resolve prompt content from various sources
     let prompt_content = resolve_prompt_content(args)?;
 
-    match (&args.name_or_session, prompt_content) {
-        // No arguments: new interactive session
-        (None, None) => Ok(StartIntent::NewInteractive { name: None }),
-
-        // Name only: need to determine if it's a session name or prompt
-        (Some(text), None) => {
-            // Check if session already exists
-            if session_manager.session_exists(text) {
-                return Err(ParaError::invalid_args(format!(
-                    "Session '{text}' already exists. Use 'para resume {text}' to continue existing session."
-                )));
-            }
-
-            // Try to determine if this is a prompt or session name
-            if looks_like_prompt(text) {
-                // Treat as prompt with auto-generated name
-                Ok(StartIntent::NewWithAgent {
-                    name: None,
-                    prompt: text.clone(),
-                })
-            } else {
-                // Treat as session name
-                Ok(StartIntent::NewInteractive {
-                    name: Some(text.clone()),
-                })
-            }
-        }
-
-        // With prompt: create new session (error if name exists)
-        (name_opt, Some(prompt)) => match name_opt {
-            Some(name) if session_manager.session_exists(name) => {
-                Err(ParaError::invalid_args(format!(
-                    "Session '{name}' already exists. Use 'para resume {name} --prompt \"{prompt}\"' to continue with additional context."
-                )))
-            }
-            Some(name) => Ok(StartIntent::NewWithAgent {
-                name: Some(name.clone()),
+    match prompt_content {
+        Some(prompt) => {
+            // AI-assisted session
+            Ok(StartIntent::NewWithAgent {
+                name: args.name.clone(),
                 prompt,
-            }),
-            None => Ok(StartIntent::NewWithAgent { name: None, prompt }),
-        },
+            })
+        }
+        None => {
+            // Interactive session
+            Ok(StartIntent::NewInteractive {
+                name: args.name.clone(),
+            })
+        }
     }
-}
-
-/// Heuristic to determine if a string looks more like a prompt than a session name
-fn looks_like_prompt(text: &str) -> bool {
-    // If it's a valid session name, it's probably meant as one
-    if validate_session_name(text).is_ok() {
-        return false;
-    }
-
-    // Otherwise, treat as prompt if it contains:
-    // - Spaces (session names can't have spaces)
-    // - Special characters that aren't allowed in session names
-    // - Common prompt patterns
-    text.contains(' ')
-        || text.contains('#')
-        || text.contains(':')
-        || text.contains('?')
-        || text.contains('.')
-        || text.contains('+')
-        || text.contains('!')
-        || text.contains(',')
-        || text.contains(';')
-        || text.contains('\'')
-        || text.contains('"')
-        || text.contains('/')
-        || text.contains('\\')
 }
 
 /// Resolve prompt content from various sources (inline, file, stdin)
@@ -112,7 +73,10 @@ fn resolve_prompt_content(args: &UnifiedStartArgs) -> Result<Option<String>> {
     }
 
     // Check for stdin input only if no other input provided
-    if args.name_or_session.is_none() && !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+    if args.name.is_none()
+        && args.prompt.is_none()
+        && !std::io::IsTerminal::is_terminal(&std::io::stdin())
+    {
         use std::io::Read;
         let mut buffer = String::new();
         std::io::stdin()
@@ -231,7 +195,7 @@ mod tests {
 
     fn create_test_args() -> UnifiedStartArgs {
         UnifiedStartArgs {
-            name_or_session: None,
+            name: None,
             prompt: None,
             file: None,
             dangerously_skip_permissions: false,
@@ -273,7 +237,7 @@ mod tests {
         let session_manager = SessionManager::new(&config);
 
         let mut args = create_test_args();
-        args.name_or_session = Some("new-feature".to_string());
+        args.name = Some("new-feature".to_string());
 
         let intent = determine_intent(&args, &session_manager).unwrap();
         match intent {
@@ -310,7 +274,7 @@ mod tests {
         let session_manager = SessionManager::new(&config);
 
         let mut args = create_test_args();
-        args.name_or_session = Some("feature-x".to_string());
+        args.name = Some("feature-x".to_string());
         args.prompt = Some("implement feature X".to_string());
 
         let intent = determine_intent(&args, &session_manager).unwrap();
@@ -399,14 +363,14 @@ mod tests {
         session_manager.save_state(&session_state).unwrap();
 
         let mut args = create_test_args();
-        args.name_or_session = Some("existing-feature".to_string());
+        args.name = Some("existing-feature".to_string());
         args.prompt = Some("add error handling".to_string());
 
         let result = determine_intent(&args, &session_manager);
         assert!(result.is_err());
         let error_message = result.err().unwrap().to_string();
         assert!(error_message.contains("Session 'existing-feature' already exists"));
-        assert!(error_message.contains("para resume existing-feature --prompt"));
+        assert!(error_message.contains("'para resume existing-feature' with --prompt"));
     }
 
     #[test]
@@ -444,7 +408,7 @@ mod tests {
         session_manager.save_state(&session_state).unwrap();
 
         let mut args = create_test_args();
-        args.name_or_session = Some("existing-work".to_string());
+        args.name = Some("existing-work".to_string());
 
         let result = determine_intent(&args, &session_manager);
         assert!(result.is_err());
@@ -459,37 +423,34 @@ mod tests {
         let git_temp = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let config = create_test_config();
-        let session_manager = SessionManager::new(&config);
+        let _session_manager = SessionManager::new(&config);
 
-        // This should be treated as a prompt, not a session name
+        // This should now fail as an invalid session name
         let mut args = create_test_args();
-        args.name_or_session = Some("please download golem.de".to_string());
+        args.name = Some("please download golem.de".to_string());
         args.sandbox_args.sandbox_no_network = true;
         args.sandbox_args.allowed_domains = vec!["golem.de".to_string()];
 
-        let result = determine_intent(&args, &session_manager);
-
-        // With the looks_like_prompt heuristic, this should be treated as a prompt
-        assert!(result.is_ok());
-        match result.unwrap() {
-            StartIntent::NewWithAgent { name, prompt } => {
-                // It should treat the text as a prompt with auto-generated name
-                assert!(name.is_none(), "Should auto-generate session name");
-                assert_eq!(prompt, "please download golem.de");
-            }
-            other => panic!("Expected NewWithAgent but got {other:?}"),
-        }
+        let result = args.validate();
+        assert!(
+            result.is_err(),
+            "Should reject invalid session name with spaces"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Session name can only contain"));
     }
 
     #[test]
-    fn test_prompt_detection_with_special_characters() {
+    fn test_prompt_flag_creates_agent_session() {
         let temp_dir = TempDir::new().unwrap();
         let git_temp = TempDir::new().unwrap();
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
         let config = create_test_config();
         let session_manager = SessionManager::new(&config);
 
-        // Text with special chars should be treated as prompt
+        // Using --prompt flag should create agent session
         let test_cases = vec![
             "implement the TODO items",
             "fix bug #123",
@@ -500,11 +461,9 @@ mod tests {
 
         for test_prompt in test_cases {
             let mut args = create_test_args();
-            args.name_or_session = Some(test_prompt.to_string());
+            args.prompt = Some(test_prompt.to_string());
 
             let result = determine_intent(&args, &session_manager);
-
-            // With the looks_like_prompt heuristic, these should be treated as prompts
             assert!(result.is_ok(), "Failed for prompt: {test_prompt}");
 
             match result.unwrap() {
@@ -539,7 +498,7 @@ mod tests {
 
         for name in valid_names {
             let mut args = create_test_args();
-            args.name_or_session = Some(name.to_string());
+            args.name = Some(name.to_string());
 
             let result = determine_intent(&args, &session_manager);
             assert!(result.is_ok(), "Failed for name: {name}");
@@ -554,49 +513,151 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_cases_for_prompt_detection() {
-        let temp_dir = TempDir::new().unwrap();
-        let git_temp = TempDir::new().unwrap();
-        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
-        let config = create_test_config();
-        let session_manager = SessionManager::new(&config);
-
-        // Edge cases - some are valid session names, some are prompts
-        let edge_cases = vec![
-            // Invalid session names -> treated as prompts
-            ("what?", true),      // question mark (invalid char)
-            ("test.py", true),    // dot (invalid char)
-            ("path\\file", true), // backslash (invalid char)
-            ("bug:fix", true),    // colon (invalid char)
-            // Valid session names -> NOT treated as prompts
-            ("implement!", false),  // exclamation mark is allowed
-            ("2+2", false),         // plus sign is allowed
-            ("fix/bug", false),     // slash is allowed
-            ("item,item", false),   // comma is allowed
-            ("code;", false),       // semicolon is allowed
-            ("'quoted'", false),    // single quotes are allowed
-            ("\"quoted\"", false),  // double quotes are allowed
-            ("feature#123", false), // hash is allowed
+    fn test_session_name_validation() {
+        // Test that session names are properly validated
+        let invalid_names = vec![
+            "what?",       // question mark
+            "test.py",     // dot
+            "path\\file",  // backslash
+            "bug:fix",     // colon
+            "hello world", // space
+            "test@email",  // at sign
+            "feature#123", // hash
+            "item,item",   // comma
+            "code;",       // semicolon
+            "'quoted'",    // quotes
+            "\"quoted\"",  // quotes
+            "fix/bug",     // slash
+            "implement!",  // exclamation
         ];
 
-        for (text, should_be_prompt) in edge_cases {
+        for name in invalid_names {
             let mut args = create_test_args();
-            args.name_or_session = Some(text.to_string());
+            args.name = Some(name.to_string());
+
+            let result = args.validate();
+            assert!(result.is_err(), "'{name}' should be invalid session name");
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("Session name can only contain"));
+        }
+
+        let valid_names = vec![
+            "feature-auth",
+            "bugfix-123",
+            "refactor_code",
+            "test123",
+            "NEW-FEATURE",
+            "fix",
+            "implement",
+            "2plus2",
+        ];
+
+        for name in valid_names {
+            let mut args = create_test_args();
+            args.name = Some(name.to_string());
+
+            let result = args.validate();
+            assert!(result.is_ok(), "'{name}' should be valid session name");
+        }
+    }
+
+    #[test]
+    fn test_file_takes_precedence_over_prompt() {
+        let temp_dir = TempDir::new().unwrap();
+        let prompt_file = temp_dir.path().join("prompt.txt");
+        std::fs::write(&prompt_file, "File content takes precedence").unwrap();
+
+        let mut args = create_test_args();
+        args.file = Some(prompt_file);
+        args.prompt = Some("This should be ignored".to_string());
+
+        let prompt_content = resolve_prompt_content(&args).unwrap();
+        assert_eq!(
+            prompt_content,
+            Some("File content takes precedence".to_string())
+        );
+    }
+
+    #[test]
+    fn test_deterministic_behavior_no_ambiguity() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = create_test_config_with_dir(&temp_dir);
+        let session_manager = SessionManager::new(&config);
+
+        // Test cases that would have been ambiguous with heuristics
+        let test_cases: Vec<(Option<&str>, Option<&str>, bool)> = vec![
+            // These are now clearly session names (no prompt flag)
+            (Some("what"), None, false),      // single word
+            (Some("implement"), None, false), // could be seen as a prompt
+            (Some("fix-bug"), None, false),   // valid session name
+            // These are clearly prompts (with -p flag)
+            (None, Some("what are you doing?"), true),
+            (None, Some("implement feature"), true),
+            (None, Some("fix bug"), true),
+            // Named AI sessions
+            (Some("my-task"), Some("what should I do?"), true),
+            (Some("feature-x"), Some("implement"), true),
+        ];
+
+        for (name, prompt, should_be_ai) in test_cases {
+            let mut args = create_test_args();
+            args.name = name.map(String::from);
+            args.prompt = prompt.map(String::from);
 
             let result = determine_intent(&args, &session_manager);
-            assert!(result.is_ok(), "Failed for text: {text}");
+            assert!(
+                result.is_ok(),
+                "Failed for name={name:?}, prompt={prompt:?}"
+            );
 
-            match (result.unwrap(), should_be_prompt) {
+            match (result.unwrap(), should_be_ai) {
                 (StartIntent::NewWithAgent { .. }, true) => {
-                    // Expected prompt, got prompt - good
+                    // Expected AI session, got AI session - good
                 }
                 (StartIntent::NewInteractive { .. }, false) => {
-                    // Expected session name, got session name - good
+                    // Expected interactive session, got interactive session - good
                 }
-                (intent, expected_prompt) => {
-                    panic!("For '{text}' expected prompt={expected_prompt} but got {intent:?}");
+                (intent, expected_ai) => {
+                    panic!(
+                        "For name={name:?}, prompt={prompt:?} expected AI={expected_ai} but got {intent:?}"
+                    );
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_file_not_found_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent_file = temp_dir.path().join("does_not_exist.txt");
+
+        let mut args = create_test_args();
+        args.file = Some(nonexistent_file);
+
+        let result = resolve_prompt_content(&args);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_both_prompt_and_file_allowed() {
+        // Unlike the old validation, both prompt and file can be provided
+        // File takes precedence
+        let temp_dir = TempDir::new().unwrap();
+        let prompt_file = temp_dir.path().join("test.txt");
+        std::fs::write(&prompt_file, "File wins").unwrap();
+
+        let mut args = create_test_args();
+        args.prompt = Some("Prompt loses".to_string());
+        args.file = Some(prompt_file);
+
+        // Validation should pass
+        assert!(args.validate().is_ok());
+
+        // File should take precedence
+        let content = resolve_prompt_content(&args).unwrap();
+        assert_eq!(content, Some("File wins".to_string()));
     }
 }
