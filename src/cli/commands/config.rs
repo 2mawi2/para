@@ -1,6 +1,7 @@
-use crate::cli::parser::{ConfigArgs, ConfigCommands};
-use crate::config::{self, ConfigManager};
+use crate::cli::parser::{ConfigArgs, ConfigCommands, ProjectConfigCommands};
+use crate::config::{self, ConfigManager, ProjectConfig};
 use crate::utils::{ParaError, Result};
+use std::path::PathBuf;
 use std::process::Command;
 
 pub fn execute(args: ConfigArgs) -> Result<()> {
@@ -11,6 +12,7 @@ pub fn execute(args: ConfigArgs) -> Result<()> {
         Some(ConfigCommands::Edit) => execute_edit(),
         Some(ConfigCommands::Reset) => execute_reset(),
         Some(ConfigCommands::Set { path, value }) => execute_set(&path, &value),
+        Some(ConfigCommands::Project { command }) => execute_project(command),
         None => execute_default(),
     }
 }
@@ -186,6 +188,178 @@ fn parse_config_value(value: &str) -> serde_json::Value {
             }
         }
     }
+}
+
+fn execute_project(command: Option<ProjectConfigCommands>) -> Result<()> {
+    match command {
+        Some(ProjectConfigCommands::Init) => execute_project_init(),
+        Some(ProjectConfigCommands::Show) => execute_project_show(),
+        Some(ProjectConfigCommands::Edit) => execute_project_edit(),
+        Some(ProjectConfigCommands::Set { path, value }) => execute_project_set(&path, &value),
+        None => execute_project_show(),
+    }
+}
+
+fn execute_project_init() -> Result<()> {
+    let project_config_path = PathBuf::from(".para/config.json");
+
+    // Check if already exists
+    if project_config_path.exists() {
+        return Err(ParaError::config_error(
+            "Project configuration already exists at .para/config.json",
+        ));
+    }
+
+    // Create default project config
+    let default_config = ProjectConfig {
+        sandbox: Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "standard".to_string(),
+            allowed_domains: vec![],
+        }),
+        ide: None,
+    };
+
+    // Save it
+    ConfigManager::save_project_config(&default_config, &project_config_path)
+        .map_err(|e| ParaError::config_error(format!("Failed to create project config: {e}")))?;
+
+    println!("✅ Created project configuration at .para/config.json");
+    println!("\nYou can now edit this file to customize project-specific settings.");
+    println!("Project config will override user config for:");
+    println!("- Sandbox settings (enabled, profile, allowed_domains)");
+    println!("- Preferred IDE");
+
+    Ok(())
+}
+
+fn execute_project_show() -> Result<()> {
+    match ConfigManager::load_project_config() {
+        Ok(Some(config)) => {
+            println!("{}", serde_json::to_string_pretty(&config).unwrap());
+            Ok(())
+        }
+        Ok(None) => {
+            println!("No project configuration found.");
+            println!("\nRun 'para config project init' to create one.");
+            Ok(())
+        }
+        Err(e) => Err(ParaError::config_error(format!(
+            "Failed to load project configuration: {e}"
+        ))),
+    }
+}
+
+fn execute_project_edit() -> Result<()> {
+    let project_config_path = match ConfigManager::find_project_config() {
+        Some(path) => path,
+        None => {
+            return Err(ParaError::config_error(
+                "No project configuration found. Run 'para config project init' first.",
+            ));
+        }
+    };
+
+    // Try to get the editor from environment
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+
+    Command::new(editor)
+        .arg(&project_config_path)
+        .status()
+        .map_err(|e| ParaError::config_error(format!("Failed to open editor: {e}")))?;
+
+    // Validate the edited config
+    match ConfigManager::load_project_config() {
+        Ok(Some(_)) => {
+            println!("✅ Project configuration updated successfully");
+            Ok(())
+        }
+        Ok(None) => Ok(()),
+        Err(e) => {
+            eprintln!("⚠️  Warning: Invalid configuration format: {e}");
+            Ok(())
+        }
+    }
+}
+
+fn execute_project_set(path: &str, value: &str) -> Result<()> {
+    let project_config_path = PathBuf::from(".para/config.json");
+
+    // Load existing or create new
+    let mut config = match ConfigManager::load_project_config() {
+        Ok(Some(config)) => config,
+        Ok(None) => ProjectConfig {
+            sandbox: None,
+            ide: None,
+        },
+        Err(e) => {
+            return Err(ParaError::config_error(format!(
+                "Failed to load project config: {e}"
+            )));
+        }
+    };
+
+    // Parse the path and update the value
+    match path {
+        "sandbox.enabled" => {
+            let enabled = value
+                .parse::<bool>()
+                .map_err(|_| ParaError::config_error("Invalid boolean value"))?;
+            match &mut config.sandbox {
+                Some(sandbox) => sandbox.enabled = enabled,
+                None => {
+                    config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+                        enabled,
+                        profile: "standard".to_string(),
+                        allowed_domains: vec![],
+                    });
+                }
+            }
+        }
+        "sandbox.profile" => match &mut config.sandbox {
+            Some(sandbox) => sandbox.profile = value.to_string(),
+            None => {
+                config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+                    enabled: false,
+                    profile: value.to_string(),
+                    allowed_domains: vec![],
+                });
+            }
+        },
+        "sandbox.allowed_domains" => {
+            let domains: Vec<String> = value.split(',').map(|s| s.trim().to_string()).collect();
+            match &mut config.sandbox {
+                Some(sandbox) => sandbox.allowed_domains = domains,
+                None => {
+                    config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+                        enabled: false,
+                        profile: "standard".to_string(),
+                        allowed_domains: domains,
+                    });
+                }
+            }
+        }
+        "ide.preferred" => match &mut config.ide {
+            Some(ide) => ide.preferred = Some(value.to_string()),
+            None => {
+                config.ide = Some(crate::config::ProjectIdeConfig {
+                    preferred: Some(value.to_string()),
+                });
+            }
+        },
+        _ => {
+            return Err(ParaError::config_error(format!(
+                "Unknown configuration path: {path}. Valid paths: sandbox.enabled, sandbox.profile, sandbox.allowed_domains, ide.preferred"
+            )));
+        }
+    }
+
+    // Save the updated config
+    ConfigManager::save_project_config(&config, &project_config_path)
+        .map_err(|e| ParaError::config_error(format!("Failed to save project config: {e}")))?;
+
+    println!("✅ Updated project configuration: {path} = {value}");
+    Ok(())
 }
 
 #[cfg(test)]

@@ -66,6 +66,12 @@ para finish "Add new feature"
 - `para config edit` - Edit configuration file
 - `para config reset` - Reset configuration to defaults
 
+#### Project-Level Configuration
+- `para config project init` - Create `.para/config.json` for team-shared settings
+- `para config project show` - Display project configuration
+- `para config project edit` - Edit project configuration file
+- `para config project set <path> <value>` - Set project configuration values
+
 ## AI Integration
 
 ### Claude Code MCP Integration
@@ -184,6 +190,15 @@ Para supports sandboxing for Claude CLI sessions on macOS, providing protection 
 **Enable by default (recommended for AI development):**
 ```bash
 para config set sandbox.enabled true
+```
+
+**Team-wide configuration (recommended for shared projects):**
+```bash
+# Enable sandbox for all team members
+para config project set sandbox.enabled true
+
+# Add project-specific allowed domains
+para config project set sandbox.allowed_domains "api.company.com,docs.internal.com"
 ```
 
 **Check current settings:**

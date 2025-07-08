@@ -146,6 +146,7 @@ fn configure_sandbox_simple() -> Result<Option<crate::core::sandbox::SandboxConf
     Ok(Some(crate::core::sandbox::SandboxConfig {
         enabled: true,
         profile: "standard".to_string(),
+        allowed_domains: Vec::new(),
     }))
 }
 
@@ -252,6 +253,7 @@ mod tests {
             sandbox: Some(crate::core::sandbox::SandboxConfig {
                 enabled: true,
                 profile: "restrictive".to_string(),
+                allowed_domains: Vec::new(),
             }),
         };
 
@@ -317,6 +319,7 @@ mod tests {
         config.sandbox = Some(crate::core::sandbox::SandboxConfig {
             enabled: true,
             profile: "standard".to_string(),
+            allowed_domains: Vec::new(),
         });
         display_config_summary(&config);
 
