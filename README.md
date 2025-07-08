@@ -441,4 +441,47 @@ The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and s
 
 **⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
 
+## Sandboxing Options
+
+When using `--dangerously-skip-permissions` for autonomous agents, be aware of the security implications. Para provides multiple sandboxing levels - choose based on your project needs and environment.
+
+### Available Security Levels
+
+**1. Basic Sandboxing** (`--sandbox`, macOS only)
+- **File writes**: Restricted to session worktree, temp directories, and specific config files
+- **File reads**: Unrestricted (agents need to analyze codebases)
+- **Network**: Full access
+
+```bash
+para start "implement feature" --sandbox
+```
+
+**2. Network-Isolated Sandboxing** (`--sandbox-no-network`, macOS only)
+- **File writes**: Same restrictions as basic sandboxing
+- **File reads**: Unrestricted
+- **Network**: Limited to GitHub/Git operations and Anthropic API by default
+- **Additional domains**: Use `--allow-domains "example.com,api.openai.com"`
+- **True isolation**: Use `--allow-domains ""` to block all network access
+
+```bash
+para start "add tests" --sandbox-no-network
+para start "fetch data" --sandbox-no-network --allow-domains "example.com"
+```
+
+**3. Docker Containerization** (`--container`, all platforms)
+- **Complete isolation** from host system
+- **Mounted access**: Only the session worktree
+- **Customizable**: Use `--docker-image ubuntu:22.04` for specific environments
+
+```bash
+para start "analyze code" --container
+```
+
+### Security Considerations
+
+- The `--dangerously-skip-permissions` flag bypasses IDE permission prompts - use with caution
+- Choose your security level based on trust in the prompts and your environment
+- Read access is intentionally broad across all sandbox levels (required for code analysis)
+- Each level provides progressively stronger isolation at the cost of some functionality
+
 That's it! Run `para config` to get started.

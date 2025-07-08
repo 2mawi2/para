@@ -1,7 +1,7 @@
-use std::fs;
-
 /// Cleanup old sandbox profile files
+#[cfg(test)]
 pub fn cleanup_old_profiles() -> anyhow::Result<()> {
+    use std::fs;
     let temp_base = std::env::temp_dir();
 
     // Look for all para-sandbox-* directories (both old and new naming patterns)
@@ -24,7 +24,10 @@ pub fn cleanup_old_profiles() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn cleanup_profile_directory(temp_dir: &std::path::Path) -> anyhow::Result<()> {
+    use std::fs;
+
     if !temp_dir.exists() {
         return Ok(());
     }
@@ -60,17 +63,10 @@ fn cleanup_profile_directory(temp_dir: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Cleanup hook to be called on startup
-#[allow(dead_code)]
-pub fn cleanup_on_startup() {
-    if let Err(e) = cleanup_old_profiles() {
-        eprintln!("Failed to clean up old sandbox profiles: {e}");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     #[test]

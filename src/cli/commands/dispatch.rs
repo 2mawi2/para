@@ -247,10 +247,11 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
 
         // Resolve sandbox settings using the resolver
         let resolver = SandboxResolver::new(&config);
-        let sandbox_settings = resolver.resolve(
+        let sandbox_settings = resolver.resolve_with_network(
             args.sandbox_args.sandbox,
             args.sandbox_args.no_sandbox,
             args.sandbox_args.sandbox_profile.clone(),
+            args.sandbox_args.sandbox_no_network,
         );
 
         let mut session_state = SessionState::with_all_flags(
@@ -375,12 +376,14 @@ fn launch_claude_code(
         },
         sandbox_override: if args.sandbox_args.no_sandbox {
             Some(false)
-        } else if args.sandbox_args.sandbox {
+        } else if args.sandbox_args.sandbox || args.sandbox_args.sandbox_no_network {
             Some(true)
         } else {
             None
         },
         sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
+        network_sandbox: args.sandbox_args.sandbox_no_network,
+        allowed_domains: args.sandbox_args.allowed_domains.clone(),
     };
 
     crate::core::claude_launcher::launch_claude_with_context(config, session_path, options)
@@ -646,6 +649,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -671,6 +676,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -699,6 +706,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -728,6 +737,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -757,6 +768,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -785,6 +798,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -810,6 +825,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -854,6 +871,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -888,6 +907,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -931,6 +952,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -971,6 +994,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -996,6 +1021,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 
@@ -1024,6 +1051,8 @@ mod tests {
                 sandbox: false,
                 no_sandbox: false,
                 sandbox_profile: None,
+                sandbox_no_network: false,
+                allowed_domains: vec![],
             },
         };
 

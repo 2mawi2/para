@@ -1,5 +1,9 @@
 use crate::config::{Config, IdeConfig};
-use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
+use crate::core::sandbox::launcher::{
+    generate_network_sandbox_wrapper, is_sandbox_available, wrap_command_with_sandbox,
+    SandboxOptions,
+};
+use crate::core::sandbox::proxy::DEFAULT_PROXY_PORT;
 use crate::utils::{ParaError, Result};
 use std::fs;
 use std::path::Path;
@@ -14,6 +18,8 @@ pub struct LaunchOptions {
     pub prompt: Option<String>,
     pub sandbox_override: Option<bool>,  // CLI flag override
     pub sandbox_profile: Option<String>, // CLI profile override
+    pub network_sandbox: bool,           // Enable network sandboxing
+    pub allowed_domains: Vec<String>,    // Additional allowed domains for proxy
 }
 
 pub struct IdeManager {
@@ -200,13 +206,15 @@ impl IdeManager {
             sandbox: self.sandbox_config.clone(),
         });
 
-        let settings = resolver.resolve(
+        let settings = resolver.resolve_with_network(
             options.sandbox_override.unwrap_or(false),
             options.sandbox_override.map(|v| !v).unwrap_or(false),
             options.sandbox_profile.clone(),
+            options.network_sandbox,
         );
 
-        let should_sandbox = settings.enabled && cfg!(target_os = "macos");
+        let should_sandbox =
+            (settings.enabled || options.network_sandbox) && cfg!(target_os = "macos");
 
         if should_sandbox && !is_sandbox_available() {
             eprintln!(
@@ -214,13 +222,48 @@ impl IdeManager {
             );
         }
 
-        if should_sandbox && is_sandbox_available() {
-            let profile = &settings.profile;
+        let mut needs_wrapper_script = false;
+        let mut proxy_port = DEFAULT_PROXY_PORT;
+        let mut sandbox_allowed_domains = vec![];
 
-            match wrap_with_sandbox(&ide_command, path, profile) {
+        if should_sandbox && is_sandbox_available() {
+            // Determine profile and proxy settings
+            let (profile, proxy_address) = if options.network_sandbox {
+                // For network sandboxing, use the proxied profile
+                (
+                    "standard-proxied",
+                    Some(format!("127.0.0.1:{DEFAULT_PROXY_PORT}")),
+                )
+            } else {
+                (settings.profile.as_str(), None)
+            };
+
+            let sandbox_options = SandboxOptions {
+                profile: profile.to_string(),
+                proxy_address,
+                allowed_domains: options.allowed_domains.clone(),
+            };
+
+            match wrap_command_with_sandbox(&ide_command, path, &sandbox_options) {
                 Ok(sandboxed_cmd) => {
-                    println!("🔒 Sandboxing enabled for Claude CLI");
-                    ide_command = sandboxed_cmd;
+                    if options.network_sandbox {
+                        println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
+                        if !options.allowed_domains.is_empty() {
+                            println!(
+                                "   Additional allowed domains: {}",
+                                options.allowed_domains.join(", ")
+                            );
+                        }
+                    } else {
+                        println!("🔒 Sandboxing enabled for Claude CLI");
+                    }
+
+                    ide_command = sandboxed_cmd.command;
+                    needs_wrapper_script = sandboxed_cmd.needs_wrapper_script;
+                    if let Some(port) = sandboxed_cmd.proxy_port {
+                        proxy_port = port;
+                    }
+                    sandbox_allowed_domains = sandboxed_cmd.allowed_domains;
                 }
                 Err(e) => {
                     eprintln!("⚠️  Warning: Failed to apply sandbox: {e}");
@@ -235,6 +278,42 @@ impl IdeManager {
         let tasks_file = vscode_dir.join("tasks.json");
         fs::write(&tasks_file, task_json)
             .map_err(|e| ParaError::ide_error(format!("Failed to write tasks.json: {e}")))?;
+
+        // For network sandboxing, create a temporary script that the task will execute
+        if needs_wrapper_script {
+            // Create the sandboxed command script
+            let script_path = vscode_dir.join("para-sandbox-launcher.sh");
+
+            // Generate the wrapper script
+            let script_content = generate_network_sandbox_wrapper(
+                &ide_command,
+                proxy_port,
+                &sandbox_allowed_domains,
+            );
+
+            fs::write(&script_path, script_content).map_err(|e| {
+                ParaError::ide_error(format!("Failed to write launcher script: {e}"))
+            })?;
+
+            // Make it executable on Unix systems
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&script_path)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&script_path, perms)?;
+            }
+
+            // Update the task to run the script instead of the complex command
+            let script_command = "./.vscode/para-sandbox-launcher.sh";
+            let updated_task_json = self.generate_ide_task_json(&task_label, script_command);
+            fs::write(&tasks_file, updated_task_json)
+                .map_err(|e| ParaError::ide_error(format!("Failed to update tasks.json: {e}")))?;
+
+            println!("\n📝 Network sandboxing configured");
+            println!("   VS Code will run the sandboxed Claude when you allow the task");
+            println!("   The launcher script will self-delete after execution");
+        }
 
         Ok(())
     }

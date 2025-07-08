@@ -1,6 +1,10 @@
 use crate::config::Config;
 use crate::core::sandbox::config::SandboxResolver;
-use crate::core::sandbox::launcher::{is_sandbox_available, wrap_with_sandbox};
+use crate::core::sandbox::launcher::{
+    generate_network_sandbox_wrapper, is_sandbox_available, wrap_command_with_sandbox,
+    SandboxOptions,
+};
+use crate::core::sandbox::proxy::DEFAULT_PROXY_PORT;
 use crate::utils::gitignore::GitignoreManager;
 use crate::utils::{ParaError, Result};
 use std::fs;
@@ -18,6 +22,8 @@ pub struct ClaudeLaunchOptions {
     pub prompt_content: Option<String>,
     pub sandbox_override: Option<bool>,
     pub sandbox_profile: Option<String>,
+    pub network_sandbox: bool,
+    pub allowed_domains: Vec<String>,
 }
 
 /// Launch Claude Code with session continuation and optional prompt content
@@ -33,10 +39,11 @@ pub fn launch_claude_with_context(
 
     // Resolve sandbox settings using the resolver
     let resolver = SandboxResolver::new(config);
-    let sandbox_settings = resolver.resolve(
+    let sandbox_settings = resolver.resolve_with_network(
         options.sandbox_override.unwrap_or(false),
         options.sandbox_override == Some(false),
         options.sandbox_profile.clone(),
+        options.network_sandbox,
     );
 
     // Check if sandboxing is enabled and available
@@ -118,28 +125,94 @@ pub fn launch_claude_with_context(
         }
     };
 
+    // Check if we need sandboxing (either from config or network sandboxing)
+    let should_sandbox =
+        (sandbox_settings.enabled || options.network_sandbox) && cfg!(target_os = "macos");
+
     // Apply sandboxing if enabled
-    let final_command = if should_sandbox && is_sandbox_available() {
-        match wrap_with_sandbox(&claude_task_cmd, session_path, &sandbox_settings.profile) {
+    let (final_command, needs_wrapper_script) = if should_sandbox && is_sandbox_available() {
+        // Determine profile and proxy settings
+        let (profile, proxy_address) = if options.network_sandbox {
+            // For network sandboxing, use the proxied profile
+            let proxy_addr = format!("127.0.0.1:{DEFAULT_PROXY_PORT}");
+            ("standard-proxied", Some(proxy_addr))
+        } else {
+            (sandbox_settings.profile.as_str(), None)
+        };
+
+        let sandbox_options = SandboxOptions {
+            profile: profile.to_string(),
+            proxy_address: proxy_address.clone(),
+            allowed_domains: options.allowed_domains.clone(),
+        };
+
+        match wrap_command_with_sandbox(&claude_task_cmd, session_path, &sandbox_options) {
             Ok(sandboxed_cmd) => {
-                println!(
-                    "🔒 Sandboxing enabled for Claude CLI (profile: {})",
-                    sandbox_settings.profile
-                );
-                sandboxed_cmd
+                if options.network_sandbox {
+                    println!("🔒 Network-isolated sandboxing enabled for Claude CLI");
+                    if !options.allowed_domains.is_empty() {
+                        println!(
+                            "   Additional allowed domains: {}",
+                            options.allowed_domains.join(", ")
+                        );
+                    }
+                } else {
+                    println!(
+                        "🔒 Sandboxing enabled for Claude CLI (profile: {})",
+                        sandbox_settings.profile
+                    );
+                }
+
+                // For network sandboxing, we need to create a wrapper script
+                if sandboxed_cmd.needs_wrapper_script {
+                    let wrapper = generate_network_sandbox_wrapper(
+                        &sandboxed_cmd.command,
+                        sandboxed_cmd.proxy_port.unwrap_or(DEFAULT_PROXY_PORT),
+                        &sandboxed_cmd.allowed_domains,
+                    );
+                    (wrapper, true)
+                } else {
+                    (sandboxed_cmd.command, false)
+                }
             }
             Err(e) => {
                 eprintln!("⚠️  Warning: Failed to apply sandbox: {e}");
                 eprintln!("   Continuing without sandboxing");
-                claude_task_cmd
+                (claude_task_cmd, false)
             }
         }
     } else {
-        claude_task_cmd
+        (claude_task_cmd, false)
+    };
+
+    // Handle wrapper script or direct command
+    let task_command = if needs_wrapper_script {
+        // Write the wrapper script
+        let script_path = vscode_dir.join("para-sandbox-launcher.sh");
+        fs::write(&script_path, &final_command)
+            .map_err(|e| ParaError::fs_error(format!("Failed to write launcher script: {e}")))?;
+
+        // Make it executable on Unix systems
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&script_path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script_path, perms)?;
+        }
+
+        println!("\n📝 Network sandboxing configured");
+        println!("   VS Code will run the sandboxed Claude when you allow the task");
+        println!("   The launcher script will self-delete after execution");
+
+        // The task will run the script
+        "./.vscode/para-sandbox-launcher.sh".to_string()
+    } else {
+        final_command
     };
 
     // Create tasks.json with the command
-    let tasks_json = create_claude_task_json(&final_command);
+    let tasks_json = create_claude_task_json(&task_command);
     let tasks_file = vscode_dir.join("tasks.json");
     fs::write(&tasks_file, tasks_json)
         .map_err(|e| ParaError::fs_error(format!("Failed to write tasks.json: {e}")))?;
@@ -286,6 +359,8 @@ mod tests {
             prompt_content: Some("Test prompt content".to_string()),
             sandbox_override: Some(true),
             sandbox_profile: Some("restrictive-closed".to_string()),
+            network_sandbox: false,
+            allowed_domains: vec![],
         };
 
         assert!(options.skip_permissions);
@@ -560,6 +635,8 @@ mod tests {
             prompt_content: Some("Complex prompt".to_string()),
             sandbox_override: None,
             sandbox_profile: None,
+            network_sandbox: false,
+            allowed_domains: vec![],
         };
 
         let result = launch_claude_with_context(&config, &session_path, options);
@@ -781,6 +858,8 @@ mod tests {
             prompt_content: Some("Test prompt".to_string()),
             sandbox_override: None,
             sandbox_profile: None,
+            network_sandbox: false,
+            allowed_domains: vec![],
         };
 
         let result = launch_claude_with_context(&config, &session_path, options);

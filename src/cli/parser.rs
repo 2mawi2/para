@@ -25,6 +25,23 @@ pub struct SandboxArgs {
         help = "Sandbox profile to use: permissive (default) or restrictive"
     )]
     pub sandbox_profile: Option<String>,
+
+    /// Enable network-isolated sandboxing
+    #[arg(
+        long = "sandbox-no-network",
+        conflicts_with = "sandbox",
+        help = "Enable sandboxing with network isolation via proxy"
+    )]
+    pub sandbox_no_network: bool,
+
+    /// Additional allowed domains for network sandboxing (comma-separated)
+    #[arg(
+        long = "allowed-domains",
+        value_delimiter = ',',
+        requires = "sandbox_no_network",
+        help = "Additional domains allowed through network proxy (e.g., npmjs.org,pypi.org)"
+    )]
+    pub allowed_domains: Vec<String>,
 }
 
 #[derive(Parser)]
@@ -79,6 +96,9 @@ pub enum Commands {
     /// Manage para daemon (internal use)
     #[command(hide = true)]
     Daemon(DaemonArgs),
+    /// Run network proxy for sandboxing (internal use)
+    #[command(hide = true)]
+    Proxy(ProxyArgs),
 }
 
 /// Internal args struct for delegation to start command (not exposed in CLI)
@@ -572,6 +592,18 @@ pub struct DaemonArgs {
     pub command: DaemonCommands,
 }
 
+/// Proxy arguments for network sandboxing
+#[derive(Args, Debug)]
+pub struct ProxyArgs {
+    /// Port to run the proxy on
+    #[arg(long, default_value = "8877")]
+    pub port: u16,
+
+    /// Additional domains to allow (comma-separated)
+    #[arg(long)]
+    pub allowed_domains: Option<String>,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DaemonCommands {
     /// Start the daemon
@@ -665,19 +697,6 @@ impl DispatchArgs {
             )),
             _ => Ok(()),
         }
-    }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub fn validate_impl(&self, skip_stdin_check: bool) -> crate::utils::Result<()> {
-        use std::io::IsTerminal;
-
-        // Allow no arguments if stdin is piped (unless skipped for testing)
-        if !skip_stdin_check && !std::io::stdin().is_terminal() {
-            return Ok(());
-        }
-
-        self.validate_args()
     }
 }
 

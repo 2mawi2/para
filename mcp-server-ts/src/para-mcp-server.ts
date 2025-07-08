@@ -26,6 +26,7 @@ interface ParaStartArgs {
   sandbox?: boolean;
   no_sandbox?: boolean;
   sandbox_profile?: string;
+  sandbox_no_network?: boolean;
   docker_image?: string;
   allow_domains?: string;
   no_forward_keys?: boolean;
@@ -52,6 +53,7 @@ interface ParaResumeArgs {
   sandbox?: boolean;
   no_sandbox?: boolean;
   sandbox_profile?: string;
+  sandbox_no_network?: boolean;
 }
 
 interface ParaRecoverArgs {
@@ -184,7 +186,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "para_start",
-        description: "Start NEW para sessions. This tool creates fresh isolated Git worktrees for new development work.\n\n🎯 CORE PURPOSE: Start new sessions for AI agents or interactive development\n\n📋 USAGE PATTERNS:\n1. AI AGENT SESSION: para_start(prompt: \"implement user authentication\")\n2. AI FROM FILE: para_start(file: \"tasks/auth_requirements.md\") \n3. NAMED AI SESSION: para_start(name_or_session: \"auth-feature\", prompt: \"add JWT tokens\")\n4. INTERACTIVE SESSION: para_start(name_or_session: \"my-feature\") or para_start()\n\n📁 FILE INPUT: Use 'file' parameter to read complex requirements, specifications, or task descriptions from files. Files can contain:\n- Technical specifications\n- Code examples\n- Multi-step instructions  \n- Project requirements\n\n⚠️ IMPORTANT: This tool is ONLY for NEW sessions. If a session already exists, para_start will error and direct you to use para_resume instead.\n\n🔄 FOR EXISTING SESSIONS: Use para_resume to continue work on existing sessions with additional context or follow-up tasks.",
+        description: "Start NEW para sessions. This tool creates fresh isolated Git worktrees for new development work.\n\n🎯 CORE PURPOSE: Start new sessions for AI agents or interactive development\n\n📋 USAGE PATTERNS:\n1. AI AGENT SESSION: para_start(prompt: \"implement user authentication\")\n2. AI FROM FILE: para_start(file: \"tasks/auth_requirements.md\") \n3. NAMED AI SESSION: para_start(name_or_session: \"auth-feature\", prompt: \"add JWT tokens\")\n4. INTERACTIVE SESSION: para_start(name_or_session: \"my-feature\") or para_start()\n\n📁 FILE INPUT: Use 'file' parameter to read complex requirements, specifications, or task descriptions from files. Files can contain:\n- Technical specifications\n- Code examples\n- Multi-step instructions  \n- Project requirements\n\n🔒 SANDBOXING FOR AUTONOMOUS AGENTS:\n1. BASIC SANDBOX (macOS): para_start(prompt: \"task\", dangerously_skip_permissions: true, sandbox: true)\n   - Restricts file writes to session directory only\n   - Full network access allowed\n   - Protects against prompt injection modifying system files\n\n2. NETWORK ISOLATION (macOS): para_start(prompt: \"task\", sandbox_no_network: true)\n   - Same file restrictions as basic sandbox\n   - Network limited to GitHub API only (via proxy)\n   - Optional: allow_domains: \"example.com,api.openai.com\" for additional domains\n\n3. DOCKER CONTAINER (all platforms): para_start(prompt: \"task\", container: true)\n   - Complete isolation from host system\n   - Only worktree mounted in container\n   - Optional: docker_image: \"ubuntu:22.04\" for custom images\n\n⚠️ IMPORTANT: This tool is ONLY for NEW sessions. If a session already exists, para_start will error and direct you to use para_resume instead.\n\n🔄 FOR EXISTING SESSIONS: Use para_resume to continue work on existing sessions with additional context or follow-up tasks.",
         inputSchema: {
           type: "object",
           properties: {
@@ -215,7 +217,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             sandbox: {
               type: "boolean",
-              description: "Enable sandboxing (overrides config)"
+              description: "Enable sandboxing (macOS only) - restricts file writes to session directory while allowing reads. Protects against prompt injection attacks."
             },
             no_sandbox: {
               type: "boolean",
@@ -223,7 +225,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             sandbox_profile: {
               type: "string",
-              description: "Sandbox profile: permissive (default) or restrictive"
+              description: "Sandbox profile: 'standard' (default - full network) or 'standard-proxied' (GitHub API only via proxy)"
+            },
+            sandbox_no_network: {
+              type: "boolean",
+              description: "Enable network-isolated sandboxing (macOS only) - restricts network access to GitHub API only via proxy. Includes all file write restrictions from basic sandbox."
             },
             docker_image: {
               type: "string",
@@ -291,7 +297,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             sandbox: {
               type: "boolean",
-              description: "Enable sandboxing (overrides config)"
+              description: "Enable sandboxing (macOS only) - restricts file writes to session directory while allowing reads. Protects against prompt injection attacks."
             },
             no_sandbox: {
               type: "boolean",
@@ -299,7 +305,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             sandbox_profile: {
               type: "string",
-              description: "Sandbox profile: permissive (default) or restrictive"
+              description: "Sandbox profile: 'standard' (default - full network) or 'standard-proxied' (GitHub API only via proxy)"
+            },
+            sandbox_no_network: {
+              type: "boolean",
+              description: "Enable network-isolated sandboxing (macOS only) - restricts network access to GitHub API only via proxy. Includes all file write restrictions from basic sandbox."
             }
           },
           required: []
@@ -453,6 +463,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (startArgs.sandbox_profile) {
             cmdArgs.push("--sandbox-profile", startArgs.sandbox_profile);
           }
+          if (startArgs.sandbox_no_network) {
+            cmdArgs.push("--sandbox-no-network");
+          }
           if (startArgs.docker_image) {
             cmdArgs.push("--docker-image", startArgs.docker_image);
           }
@@ -509,6 +522,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (resumeArgs.sandbox_profile) {
             cmdArgs.push("--sandbox-profile", resumeArgs.sandbox_profile);
+          }
+          if (resumeArgs.sandbox_no_network) {
+            cmdArgs.push("--sandbox-no-network");
           }
           result = await runParaCommand(cmdArgs);
         }
