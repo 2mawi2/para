@@ -74,6 +74,7 @@ mod tests {
         config.sandbox = Some(SandboxConfig {
             enabled: false,
             profile: "permissive".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let resolver = SandboxResolver::new(&config);
@@ -113,6 +114,7 @@ mod tests {
         config.sandbox = Some(SandboxConfig {
             enabled: true,
             profile: "permissive".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let resolver = SandboxResolver::new(&config);
@@ -124,6 +126,7 @@ mod tests {
         config.sandbox = Some(SandboxConfig {
             enabled: false,
             profile: "restrictive".to_string(),
+            allowed_domains: Vec::new(),
         });
 
         let resolver = SandboxResolver::new(&config);

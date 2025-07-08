@@ -10,6 +10,8 @@ pub struct SandboxConfig {
     pub enabled: bool,
     #[serde(default = "default_profile")]
     pub profile: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
 }
 
 impl Default for SandboxConfig {
@@ -17,6 +19,7 @@ impl Default for SandboxConfig {
         Self {
             enabled: false,
             profile: default_profile(),
+            allowed_domains: Vec::new(),
         }
     }
 }

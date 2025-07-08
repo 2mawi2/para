@@ -1,5 +1,104 @@
 # Detailed Configuration
 
+## Configuration Hierarchy
+
+Para supports hierarchical configuration with the following precedence (highest to lowest):
+
+1. **Command-line arguments** - Override everything for individual commands
+2. **Project configuration** - `.para/config.json` in your repository
+3. **User configuration** - Your personal Para config
+4. **System defaults** - Built-in Para defaults
+
+This allows teams to share project-specific settings while maintaining personal preferences.
+
+## Project-Level Configuration
+
+Share configuration settings across your team by creating a `.para/config.json` file in your repository. Unlike user config, this file **should be committed** to your repository so all team members use the same settings.
+
+### Quick Setup
+```bash
+# Initialize project configuration with defaults
+para config project init
+
+# Show current project configuration
+para config project show
+
+# Edit project configuration
+para config project edit
+
+# Set specific project values
+para config project set sandbox.enabled true
+para config project set sandbox.allowed_domains "api.company.com,internal.service.com"
+para config project set ide.preferred "cursor"
+```
+
+### Project Configuration Options
+
+**Sandbox Settings:**
+- `sandbox.enabled` - Enable/disable sandboxing for all team members
+- `sandbox.profile` - Default sandbox profile (standard, permissive, restrictive)
+- `sandbox.allowed_domains` - Comma-separated list of additional allowed domains
+
+**IDE Preferences:**
+- `ide.preferred` - Preferred IDE for this project (overrides user preference)
+
+### Example Project Configuration
+
+`.para/config.json`:
+```json
+{
+  "sandbox": {
+    "enabled": true,
+    "profile": "standard", 
+    "allowed_domains": [
+      "api.internal.com",
+      "docs.company.com",
+      "registry.npmjs.org"
+    ]
+  },
+  "ide": {
+    "preferred": "cursor"
+  }
+}
+```
+
+### Configuration Merging
+
+When you run Para commands, configurations are merged intelligently:
+
+- **Sandbox enabled/profile**: Project overrides user settings
+- **Allowed domains**: Project domains are **added** to user domains (merged and deduplicated)
+- **IDE preference**: Project preference overrides user preference
+
+**Example merge:**
+```bash
+# User config allows: ["github.com"] 
+# Project config allows: ["api.internal.com", "github.com"]
+# Final merged domains: ["api.internal.com", "github.com"]
+```
+
+### Team Workflow
+
+1. **Project lead** sets up configuration:
+   ```bash
+   para config project init
+   para config project set sandbox.enabled true
+   para config project set sandbox.allowed_domains "api.company.com"
+   git add .para/config.json
+   git commit -m "Add Para project configuration"
+   ```
+
+2. **Team members** automatically inherit settings:
+   ```bash
+   git pull
+   para start "implement feature"  # Uses project config automatically
+   ```
+
+3. **Individual overrides** still work:
+   ```bash
+   para start --no-sandbox "debug without sandbox"  # CLI override
+   ```
+
 ## IDE Configuration
 
 Para supports multiple IDEs with easy configuration:

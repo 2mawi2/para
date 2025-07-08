@@ -252,6 +252,7 @@ pub fn execute(config: Config, args: DispatchArgs) -> Result<()> {
             args.sandbox_args.no_sandbox,
             args.sandbox_args.sandbox_profile.clone(),
             args.sandbox_args.sandbox_no_network,
+            args.sandbox_args.allowed_domains.clone(),
         );
 
         let mut session_state = SessionState::with_all_flags(

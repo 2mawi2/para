@@ -100,6 +100,8 @@ impl GitignoreManager {
     fn is_para_already_ignored(content: &str) -> bool {
         // Check for various forms of .para ignoring
         let patterns = [".para/", ".para", "/.para/", "/.para", ".para/*"];
+        let mut has_para_pattern = false;
+        let mut has_config_exception = false;
 
         for line in content.lines() {
             let line = line.trim();
@@ -109,17 +111,23 @@ impl GitignoreManager {
 
             for pattern in &patterns {
                 if line == *pattern {
-                    return true;
+                    has_para_pattern = true;
                 }
+            }
+
+            // Check for config.json exception
+            if line == "!.para/config.json" {
+                has_config_exception = true;
             }
         }
 
-        false
+        // Consider it properly ignored only if both patterns exist
+        has_para_pattern && has_config_exception
     }
 
     /// Add .para to gitignore file
     fn add_para_to_gitignore(gitignore_path: &Path) -> Result<()> {
-        let para_entry = "\n# Para directories and state files\n# Ignore everything in .para except Dockerfile.custom\n.para/*\n!.para/Dockerfile.custom\n";
+        let para_entry = "\n# Para directories and state files\n# Ignore everything in .para except Dockerfile.custom and config.json\n.para/*\n!.para/Dockerfile.custom\n!.para/config.json\n";
 
         if gitignore_path.exists() {
             // Append to existing gitignore
@@ -160,6 +168,7 @@ impl GitignoreManager {
                 "# Ignore all para contents except configuration and setup scripts\n\
                  *\n\
                  !.gitignore\n\
+                 !config.json\n\
                  !setup.sh\n\
                  !setup-docker.sh\n\
                  !setup-worktree.sh\n\
@@ -216,6 +225,7 @@ mod tests {
         assert!(content.contains("target/"));
         assert!(content.contains(".para/*"));
         assert!(content.contains("!.para/Dockerfile.custom"));
+        assert!(content.contains("!.para/config.json"));
         assert!(content.contains("Para directories and state files"));
     }
 
@@ -225,26 +235,55 @@ mod tests {
         let repo_root = temp_dir.path();
         let gitignore_path = repo_root.join(".gitignore");
 
-        // Create gitignore with .para/ already ignored
-        fs::write(&gitignore_path, "*.log\n.para/\ntarget/\n").unwrap();
+        // Create gitignore with .para/ already ignored WITH config.json exception
+        fs::write(
+            &gitignore_path,
+            "*.log\n.para/\n!.para/config.json\ntarget/\n",
+        )
+        .unwrap();
 
         GitignoreManager::ensure_para_ignored_in_repository(repo_root).unwrap();
 
         let content = fs::read_to_string(&gitignore_path).unwrap();
-        // Should not add duplicate entry
-        assert_eq!(content.matches(".para/").count(), 1);
+
+        // Count lines that exactly match each pattern (not substrings)
+        let para_lines = content
+            .lines()
+            .filter(|line| line.trim() == ".para/")
+            .count();
+        let config_lines = content
+            .lines()
+            .filter(|line| line.trim() == "!.para/config.json")
+            .count();
+
+        // Should not add duplicate entries
+        assert_eq!(para_lines, 1);
+        assert_eq!(config_lines, 1);
     }
 
     #[test]
     fn test_is_para_already_ignored() {
-        assert!(GitignoreManager::is_para_already_ignored(".para/\n"));
+        // Test with both pattern and exception
         assert!(GitignoreManager::is_para_already_ignored(
+            ".para/\n!.para/config.json\n"
+        ));
+        assert!(GitignoreManager::is_para_already_ignored(
+            "*.log\n.para/\n!.para/config.json\ntarget/\n"
+        ));
+        assert!(GitignoreManager::is_para_already_ignored(
+            ".para/*\n!.para/config.json\n"
+        ));
+
+        // Test without config.json exception - should fail
+        assert!(!GitignoreManager::is_para_already_ignored(".para/\n"));
+        assert!(!GitignoreManager::is_para_already_ignored(
             "*.log\n.para/\ntarget/\n"
         ));
-        assert!(GitignoreManager::is_para_already_ignored("/.para/\n"));
-        assert!(GitignoreManager::is_para_already_ignored(".para\n"));
-        assert!(GitignoreManager::is_para_already_ignored(".para/*\n"));
+        assert!(!GitignoreManager::is_para_already_ignored("/.para/\n"));
+        assert!(!GitignoreManager::is_para_already_ignored(".para\n"));
+        assert!(!GitignoreManager::is_para_already_ignored(".para/*\n"));
 
+        // Test without any para pattern
         assert!(!GitignoreManager::is_para_already_ignored(
             "*.log\ntarget/\n"
         ));
@@ -266,6 +305,7 @@ mod tests {
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert!(content.contains("*"));
         assert!(content.contains("!.gitignore"));
+        assert!(content.contains("!config.json"));
         assert!(content.contains("!setup.sh"));
         assert!(content.contains("!setup-docker.sh"));
         assert!(content.contains("!setup-worktree.sh"));

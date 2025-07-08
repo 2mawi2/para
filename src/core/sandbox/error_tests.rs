@@ -69,6 +69,7 @@ mod error_path_tests {
             sandbox: Some(SandboxConfig {
                 enabled: true,
                 profile: "../../../../etc/passwd".to_string(),
+                allowed_domains: Vec::new(),
             }),
             ..crate::config::defaults::default_config()
         };
