@@ -49,7 +49,8 @@
 )
 
 ;; Allow file writes to specific paths only
-(allow file-write*
+;; Note: file-write* does NOT include file-write-create, so we need both
+(allow file-write* file-write-create
     ;; Project directory - primary workspace
     (subpath (param "TARGET_DIR"))
     
@@ -58,7 +59,11 @@
     (subpath "/tmp")
     (subpath "/private/tmp")
     (subpath "/var/folders")  ; macOS temp directory root
+    (subpath "/private/var/folders")  ; Real path (var is symlink to private/var)
     (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")  ; macOS temp dirs and subdirs
+    (regex #"^/private/var/folders/[^/]+/[^/]+/[^/]+/.*")  ; Real path version
+    (regex #"^/var/folders/.*")  ; Allow all subdirectories under /var/folders for broader compatibility
+    (regex #"^/private/var/folders/.*")  ; Real path version
     
     ;; Cache directory
     (subpath (param "CACHE_DIR"))
@@ -81,15 +86,7 @@
     (regex #"^/dev/pty[0-9]+")
 )
 
-;; Allow directory creation in permitted paths
-(allow file-write-create
-    (subpath (param "TARGET_DIR"))
-    (subpath (string-append (param "HOME_DIR") "/.claude"))
-    (subpath (string-append (param "HOME_DIR") "/.cache"))
-    (subpath (param "TMP_DIR"))
-    (subpath "/var/folders")
-    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")
-)
+
 
 ;; Allow network access (required for Claude API)
 (allow network*)
