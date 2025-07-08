@@ -155,67 +155,109 @@ impl StatusDisplayHandler {
     }
 
     fn show_specific_session(&self, session_name: &str, json: bool) -> Result<()> {
-        let mut status = Status::load(&self.state_dir, session_name)
-            .map_err(|e| ParaError::config_error(e.to_string()))?;
+        let status = self.load_session_status(session_name)?;
+        let enriched_status = self.enrich_status(status, session_name)?;
+        self.format_session_output(enriched_status, session_name, json)
+    }
 
-        // For container sessions, check for container status file
+    fn load_session_status(&self, session_name: &str) -> Result<Option<Status>> {
+        Status::load(&self.state_dir, session_name)
+            .map_err(|e| ParaError::config_error(e.to_string()))
+    }
+
+    fn enrich_status(
+        &self,
+        mut status: Option<Status>,
+        session_name: &str,
+    ) -> Result<Option<Status>> {
         if let Ok(session_state) = self.session_manager.load_state(session_name) {
-            if session_state.is_container() {
-                // Check for container status.json file
-                let signal_paths = crate::core::docker::signal_files::SignalFilePaths::new(
-                    &session_state.worktree_path,
-                );
-                if let Ok(Some(container_status)) =
-                    crate::core::docker::signal_files::read_signal_file::<
-                        crate::core::docker::signal_files::ContainerStatus,
-                    >(&signal_paths.status)
-                {
-                    // Update status with container information
-                    if let Some(ref mut s) = status {
-                        s.current_task = container_status.task;
-                        if let Some(tests) = container_status.tests {
-                            if let Ok(test_status) = Status::parse_test_status(&tests) {
-                                s.test_status = test_status;
-                            }
-                        }
-                        if let Some(todos) = container_status.todos {
-                            if let Ok((completed, total)) = Status::parse_todos(&todos) {
-                                s.todos_completed = Some(completed);
-                                s.todos_total = Some(total);
-                            }
-                        }
-                        s.blocked_reason = if container_status.blocked {
-                            Some(s.current_task.clone())
-                        } else {
-                            None
-                        };
-                        // Parse timestamp string to DateTime<Utc>
-                        if let Ok(parsed_time) =
-                            chrono::DateTime::parse_from_rfc3339(&container_status.timestamp)
-                        {
-                            s.last_update = parsed_time.with_timezone(&chrono::Utc);
-                        }
+            status = self.enrich_with_container_status(status, &session_state)?;
+            status = self.enrich_with_diff_stats(status, &session_state)?;
+        }
+        Ok(status)
+    }
 
-                        // Calculate diff stats on the host
-                        if let Ok(Some(diff_stats)) =
-                            calculate_diff_stats_for_session(&session_state)
-                        {
-                            s.diff_stats = Some(diff_stats);
-                        }
-                    }
+    fn enrich_with_container_status(
+        &self,
+        mut status: Option<Status>,
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<Option<Status>> {
+        if session_state.is_container() {
+            let signal_paths = crate::core::docker::signal_files::SignalFilePaths::new(
+                &session_state.worktree_path,
+            );
+            if let Ok(Some(container_status)) = crate::core::docker::signal_files::read_signal_file::<
+                crate::core::docker::signal_files::ContainerStatus,
+            >(&signal_paths.status)
+            {
+                if let Some(ref mut s) = status {
+                    self.update_status_from_container(s, container_status, session_state)?;
                 }
             }
         }
+        Ok(status)
+    }
 
+    fn update_status_from_container(
+        &self,
+        status: &mut Status,
+        container_status: crate::core::docker::signal_files::ContainerStatus,
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<()> {
+        status.current_task = container_status.task;
+
+        if let Some(tests) = container_status.tests {
+            if let Ok(test_status) = Status::parse_test_status(&tests) {
+                status.test_status = test_status;
+            }
+        }
+
+        if let Some(todos) = container_status.todos {
+            if let Ok((completed, total)) = Status::parse_todos(&todos) {
+                status.todos_completed = Some(completed);
+                status.todos_total = Some(total);
+            }
+        }
+
+        status.blocked_reason = if container_status.blocked {
+            Some(status.current_task.clone())
+        } else {
+            None
+        };
+
+        if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(&container_status.timestamp) {
+            status.last_update = parsed_time.with_timezone(&chrono::Utc);
+        }
+
+        if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(session_state) {
+            status.diff_stats = Some(diff_stats);
+        }
+
+        Ok(())
+    }
+
+    fn enrich_with_diff_stats(
+        &self,
+        mut status: Option<Status>,
+        session_state: &crate::core::session::SessionState,
+    ) -> Result<Option<Status>> {
+        if let Some(mut s) = status {
+            if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(session_state) {
+                s = s.with_diff_stats(diff_stats);
+            }
+            status = Some(s);
+        }
+        Ok(status)
+    }
+
+    fn format_session_output(
+        &self,
+        status: Option<Status>,
+        session_name: &str,
+        json: bool,
+    ) -> Result<()> {
         match status {
-            Some(mut s) => {
-                // Try to enrich with diff stats if we have session state
-                if let Ok(session_state) = self.session_manager.load_state(session_name) {
-                    if let Ok(Some(diff_stats)) = calculate_diff_stats_for_session(&session_state) {
-                        s = s.with_diff_stats(diff_stats);
-                    }
-                }
-
+            Some(s) => {
                 if json {
                     self.output_json(&s)?;
                 } else {
@@ -228,7 +270,6 @@ impl StatusDisplayHandler {
                 }
             }
         }
-
         Ok(())
     }
 
