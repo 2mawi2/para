@@ -107,6 +107,14 @@ pub fn execute_command_with_config(
         Some(Commands::Status(args)) => commands::status::execute(config.unwrap(), args),
         Some(Commands::Auth(args)) => commands::auth::execute(args),
         Some(Commands::Daemon(args)) => commands::daemon::execute(args),
+        Some(Commands::Proxy(args)) => commands::proxy::execute(
+            args.port,
+            args.allowed_domains
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect(),
+        ),
         None => commands::monitor::execute(config.unwrap(), crate::cli::parser::MonitorArgs {}),
     }
 }

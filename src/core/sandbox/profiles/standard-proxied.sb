@@ -1,0 +1,128 @@
+(version 1)
+
+;; Para Sandboxing Profile - Standard with Network Proxy
+;; Based on standard profile but restricts network access to proxy only
+;; Requires proxy running on localhost:8877
+
+;; Deny everything by default
+(deny default)
+
+;; Allow reading files from anywhere on host
+(allow file-read*)
+
+;; Allow process execution and forking (children inherit policy)
+(allow process-exec)
+(allow process-fork)
+
+;; Allow signals to self (e.g., SIGPIPE on write to closed pipe)
+(allow signal (target self))
+
+;; Allow read access to system information
+;; From Chromium's sandbox policy for macOS
+(allow sysctl-read
+    (sysctl-name "hw.activecpu")
+    (sysctl-name "hw.busfrequency_compat")
+    (sysctl-name "hw.byteorder")
+    (sysctl-name "hw.cacheconfig")
+    (sysctl-name "hw.cachelinesize_compat")
+    (sysctl-name "hw.cpufamily")
+    (sysctl-name "hw.cpufrequency_compat")
+    (sysctl-name "hw.cputype")
+    (sysctl-name "hw.l1dcachesize_compat")
+    (sysctl-name "hw.l1icachesize_compat")
+    (sysctl-name "hw.l2cachesize_compat")
+    (sysctl-name "hw.l3cachesize_compat")
+    (sysctl-name "hw.logicalcpu_max")
+    (sysctl-name "hw.machine")
+    (sysctl-name "hw.ncpu")
+    (sysctl-name "hw.pagesize_compat")
+    (sysctl-name "hw.physicalcpu_max")
+    (sysctl-name "hw.tbfrequency_compat")
+    (sysctl-name "kern.hostname")
+    (sysctl-name "kern.maxfilesperproc")
+    (sysctl-name "kern.osproductversion")
+    (sysctl-name "kern.osrelease")
+    (sysctl-name "kern.ostype")
+    (sysctl-name "kern.osversion")
+    (sysctl-name "kern.secure_kernel")
+    (sysctl-name "kern.version")
+)
+
+;; Allow file writes to specific paths only
+(allow file-write*
+    ;; Project directory - primary workspace
+    (subpath (param "TARGET_DIR"))
+    
+    ;; Temporary directories
+    (subpath (param "TMP_DIR"))
+    (subpath "/tmp")
+    (subpath "/private/tmp")
+    (subpath "/var/folders")  ; macOS temp directory root
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")  ; macOS temp dirs and subdirs
+    
+    ;; Cache directory
+    (subpath (param "CACHE_DIR"))
+    (subpath (string-append (param "HOME_DIR") "/.cache"))
+    
+    ;; Claude configuration
+    (subpath (string-append (param "HOME_DIR") "/.claude"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json.lock"))
+    (literal (string-append (param "HOME_DIR") "/.claude.json.backup"))
+    
+    ;; NPM directories (for package updates)
+    (subpath (string-append (param "HOME_DIR") "/.npm"))
+    
+    ;; Git configuration (for commits)
+    (literal (string-append (param "HOME_DIR") "/.gitconfig"))
+    
+    ;; Standard I/O devices
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (literal "/dev/ptmx")
+    (regex #"^/dev/ttys[0-9]+")
+    (regex #"^/dev/pty[0-9]+")
+)
+
+;; Allow directory creation in permitted paths
+(allow file-write-create
+    (subpath (param "TARGET_DIR"))
+    (subpath (string-append (param "HOME_DIR") "/.claude"))
+    (subpath (string-append (param "HOME_DIR") "/.cache"))
+    (subpath (string-append (param "HOME_DIR") "/.npm"))
+    (subpath (param "TMP_DIR"))
+    (subpath "/var/folders")
+    (regex #"^/var/folders/[^/]+/[^/]+/[^/]+/.*")
+)
+
+;; NETWORK RESTRICTIONS - This is the key difference from standard profile
+;; Deny all network access except through proxy
+(deny network*)
+
+;; Allow outbound connections only to proxy
+;; Note: sandbox-exec only accepts "localhost" or "*" as host, not IP addresses
+(allow network-outbound (remote tcp "localhost:8877"))
+
+;; Allow DNS resolution (required for proxy to work)
+(allow network-outbound (remote udp "*:53"))
+
+;; Allow local server binding (for development servers)
+(allow network-bind (local ip "*:*"))
+(allow network-inbound (local ip "localhost:*"))
+
+;; Allow terminal I/O operations (required for interactive mode)
+(allow file-ioctl (regex #"^/dev/tty.*"))
+
+;; Allow mach lookups for essential services
+(allow mach-lookup 
+    (global-name "com.apple.sysmond")  ; For process listing
+)
+
+;; Allow file attribute operations needed for file creation
+(allow file-write-setugid)
+(allow file-write-mode)
+(allow file-write-owner)
+(allow file-write-times)
+(allow file-write-flags)

@@ -12,6 +12,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxProfile {
     Standard,
+    StandardProxied,
 }
 
 /// Validate profile name contains only safe characters
@@ -31,6 +32,7 @@ impl SandboxProfile {
 
         match s {
             "standard" => Some(Self::Standard),
+            "standard-proxied" => Some(Self::StandardProxied),
             // Legacy names for backwards compatibility
             "permissive" => Some(Self::Standard),
             "restrictive" => Some(Self::Standard),
@@ -49,6 +51,7 @@ impl SandboxProfile {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Standard => "standard",
+            Self::StandardProxied => "standard-proxied",
         }
     }
 
@@ -56,6 +59,7 @@ impl SandboxProfile {
     pub fn content(&self) -> &'static str {
         match self {
             Self::Standard => include_str!("profiles/standard.sb"),
+            Self::StandardProxied => include_str!("profiles/standard-proxied.sb"),
         }
     }
 }
@@ -113,6 +117,10 @@ mod tests {
             SandboxProfile::from_name("standard"),
             Some(SandboxProfile::Standard)
         );
+        assert_eq!(
+            SandboxProfile::from_name("standard-proxied"),
+            Some(SandboxProfile::StandardProxied)
+        );
         // Test legacy names for backwards compatibility
         assert_eq!(
             SandboxProfile::from_name("permissive"),
@@ -137,6 +145,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn test_profile_name() {
         assert_eq!(SandboxProfile::Standard.name(), "standard");
+        assert_eq!(SandboxProfile::StandardProxied.name(), "standard-proxied");
     }
 
     #[test]

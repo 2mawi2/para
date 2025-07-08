@@ -69,6 +69,26 @@ impl SandboxResolver {
         }
     }
 
+    /// Resolve sandbox settings with network sandboxing support
+    pub fn resolve_with_network(
+        &self,
+        cli_sandbox: bool,
+        cli_no_sandbox: bool,
+        cli_profile: Option<String>,
+        cli_network_sandbox: bool,
+    ) -> SandboxSettings {
+        // Network sandboxing implies sandboxing is enabled with a specific profile
+        if cli_network_sandbox {
+            return SandboxSettings {
+                enabled: true,
+                profile: "standard-proxied".to_string(),
+            };
+        }
+
+        // Otherwise use regular resolution
+        self.resolve(cli_sandbox, cli_no_sandbox, cli_profile)
+    }
+
     /// Validate profile name and return it if valid, otherwise return default
     fn validate_profile(&self, profile: String, source: &str, default: &str) -> String {
         match SandboxProfile::from_name(&profile) {
