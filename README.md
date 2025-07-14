@@ -1,503 +1,332 @@
 # Para - Parallel IDE Workflow Helper
 
-Work on multiple features simultaneously using Git worktrees and your favorite IDE. Built with Rust for performance and reliability.
+Para enables developers to run multiple Claude Code sessions simultaneously. Each session operates in an isolated Git worktree with its own VS Code instance, allowing parallel development without merge conflicts.
+
+## The Problem
+
+When using Claude Code for development, you're limited to one task at a time. Switching between features means losing context and waiting for sequential completion.
+
+## The Solution
+
+Para orchestrates multiple Claude Code sessions in parallel. While one Claude works on authentication, another builds the API, and a third creates the UI - all simultaneously in separate VS Code windows.
+
+## Simple Example
+
+```bash
+# Start multiple Claude Code sessions for different tasks
+para start auth -p "implement user authentication"    # Opens VS Code with Claude working on auth
+para start api -p "create REST API endpoints"        # Opens another VS Code with Claude on API
+
+# Each Claude session:
+# - Works in its own VS Code window
+# - Has its own Git branch and isolated files
+# - You can edit code, review diffs, and guide Claude
+# - Full terminal access for running tests, etc.
+
+# When Claude completes a task:
+para finish "Add authentication"  # Creates feature branch locally for review
+```
+
+## Key Features
+- **Parallel Execution**: Run multiple Claude Code instances concurrently in separate VS Code windows
+- **Developer Control**: Direct access to each session's filesystem, terminal, and Git state
+- **Isolation**: Git worktrees prevent conflicts between parallel development tasks
+- **Monitoring**: Real-time dashboard showing session progress, test results, and blockers
+- **Intervention**: Jump into any session to debug, guide Claude, or complete tasks manually
+
+## Demo Videos
+
+**Parallel Session Creation (0:03)**  
+Shows orchestrator Claude creating and dispatching three parallel development tasks via MCP.
+
+![Demo: Starting Para sessions](docs/media/recording_starting_agents.mov)
+
+**Real-time Monitoring Dashboard (0:04)**  
+Demonstrates the Para monitor tracking multiple active sessions and their progress.
+
+![Demo: Para monitor dashboard](docs/media/recording_para_monitor.mov)
+
+## How Para Works
+
+1. **Session Creation**: Each `para start` creates an isolated Git worktree with its own branch
+2. **Claude Integration**: Claude Code launches in a new VS Code window with your specified task
+3. **Parallel Execution**: Multiple sessions run independently without file conflicts
+4. **Developer Access**: Full terminal, Git, and filesystem access in each VS Code window
+5. **Monitoring**: Real-time dashboard tracks all active sessions via `para monitor`
+6. **Completion**: `para finish` creates feature branches from completed work
 
 ## Installation
 
 ```bash
-# Homebrew (recommended)
 brew install 2mawi2/tap/para
-
-# Or build from source
-git clone https://github.com/2mawi2/para.git
-cd para
-cargo build --release
-sudo cp target/release/para /usr/local/bin/
 ```
 
-## Quick Start
+For building from source, see the [Development Guide](docs/DEVELOPMENT.md).
+
+## Getting Started
 
 ```bash
-# Configure your IDE (one-time setup)
+# Configure Claude Code as your IDE
 para config
 
-# Optional: Enable shell completion for faster workflow
-para init
+# Enable MCP integration in your project
+para mcp init
 
-# Create a new session (opens your IDE)
-para start
+# Start your first parallel session
+para start backend -p "create REST API with Express"
 
-# Work in the new IDE window...
+# Start another session (opens in new VS Code window)
+para start frontend -p "build React dashboard"
 
-# Create feature branch for review
-para finish "Add new feature"
+# Monitor all sessions
+para monitor
 ```
 
-## Why Para?
 
-**Problem:** You want to work on multiple features, experiments, or bug fixes at the same time, but switching Git branches disrupts your workflow and mixes up uncommitted changes.
 
-**Solution:** Para creates isolated development environments (separate directories + Git branches) so you can:
-- Have multiple IDE windows open, each working on different features
-- Switch instantly between projects without losing context
-- Let AI agents work in parallel without interfering with each other
-- Keep your main branch always clean
+## Orchestrating Parallel Development
 
-**Perfect for:** AI-assisted development, feature prototyping, parallel experiments, or any workflow where you need multiple isolated workspaces.
+### Using Claude as Your Development Orchestrator
 
-## Core Commands
+Work with one Claude Code session to coordinate your entire project. Claude has built-in knowledge of Para commands through MCP integration, allowing it to:
 
-### Session Management
-- `para start [name]` - Create new parallel session (opens configured IDE)
-- `para finish "message"` - Auto-stage & finish session with commit message
-- `para finish "message" --branch custom-name` - Finish with custom branch name
-- `para list` - Show all active sessions
-- `para cancel [session] [--force]` - Discard current or specified session (use --force to skip confirmation)
-- `para clean` - Remove all sessions
-- `para resume [session]` - Resume session in IDE
-- `para resume [session] --prompt "text"` - Resume with additional instructions
-- `para resume [session] --file context.md` - Resume with context from file
-- `para recover [session]` - Recover cancelled session from backup
+- Break down complex features into parallel tasks
+- Start new Claude sessions for each task
+- Monitor progress across all sessions
+- Help review and integrate completed work
 
-### Configuration
-- `para config` - Interactive configuration wizard
-- `para config auto` - Auto-detect IDE and create config
-- `para config show` - Display current settings
-- `para config edit` - Edit configuration file
-- `para config reset` - Reset configuration to defaults
+### Example: Building a Web Application
 
-#### Project-Level Configuration
-- `para config project init` - Create `.para/config.json` for team-shared settings
-- `para config project show` - Display project configuration
-- `para config project edit` - Edit project configuration file
-- `para config project set <path> <value>` - Set project configuration values
+```
+Task Breakdown:
+1. Database schema (must complete first)
+2. API endpoints (depends on schema)
+3. Frontend UI (can start with API)
+4. Authentication (parallel with UI)
+5. Integration tests (after all complete)
+
+Parallel Execution:
+- Session 1: Database → API endpoints
+- Session 2: Frontend UI
+- Session 3: Authentication
+- Session 4: Tests (starts later)
+```
+
+### Automating Your Workflow
+
+Create custom Claude slash commands to match your team's development process:
+
+```bash
+# Example commands in .claude/commands/
+/breakdown   # Analyzes feature and creates parallel tasks
+/review      # Reviews all completed branches
+/integrate   # Suggests merge order
+
+# Customize for your workflow:
+- PR creation vs local branches
+- Branch naming conventions
+- Review requirements
+- Integration strategy
+```
+
+The key insight: With multiple Claude sessions working in parallel, code review becomes the primary constraint. Automation helps manage this increased throughput.
+
+## Security Considerations
+
+### Autonomous Execution
+
+When running Claude with `--dangerously-skip-permissions` (bypasses IDE permission prompts), use sandboxing for safety:
+
+```bash
+# macOS: Restrict file writes to session directory
+para start -p "build feature" --dangerously-skip-permissions --sandbox
+
+# macOS: Also restrict network access  
+para start -p "refactor code" --dangerously-skip-permissions --sandbox-no-network
+
+# All platforms: Full isolation with Docker
+para start -p "risky task" --dangerously-skip-permissions --container
+```
+
+For detailed sandboxing configuration and security options, see the [Sandboxing Guide](docs/SANDBOXING.md).
+
+### Important Notes
+
+- **Code Review**: Always review generated code before merging
+- **Sandboxing**: Recommended when using `--dangerously-skip-permissions`
+- **Disclaimer**: Users are responsible for reviewing and validating all AI-generated code
+
+
+## When to Use Para
+
+Para is designed for developers who want to leverage multiple Claude Code sessions for faster development:
+
+- **Feature Development**: Run parallel Claude sessions for frontend, backend, and tests
+- **Large Refactoring**: Split refactoring across modules with multiple Claude instances  
+- **Bug Fixing**: One Claude fixes bugs while another adds features
+- **Experimentation**: You can ask claude to run multiple para sessions on the same plan file and keep the best result
+
+Without Para, you're limited to one Claude Code session at a time. With Para, you can orchestrate an entire team of Claude instances.
 
 ## AI Integration
 
-### Claude Code MCP Integration
+### MCP Integration
 
-Para integrates seamlessly with Claude Code through MCP (Model Context Protocol):
+Para integrates with Claude Code through MCP (Model Context Protocol). The typical workflow is:
 
-```bash
-# One-time setup (navigate to any repo where you want Para tools)
-para mcp init
+1. **Plan Development** - Work with Claude to create detailed implementation plans
+2. **Save Plans** - Write these plans to .md files (wherever you prefer)
+3. **Execute in Parallel** - Claude starts Para sessions from these plan files
 
-# This creates .mcp.json with the correct paths for your system
-# (Note: .mcp.json contains user-specific paths, so add it to .gitignore)
+Example workflow prompts:
 
-# Now Claude Code has Para tools available:
-# - para_start, para_finish, para_resume, para_list, etc.
-# - Use Para tools directly from Claude Code interface
-```
+**Planning Phase:**
+- "Let's plan how to implement user authentication. Write a simple plan covering database, API, and frontend"
+- "Break down this payment integration into independent tasks that can be developed in parallel"
+- "Create a simple MVP implementation plan for this feature that avoids merge conflicts between components"
 
-### AI-Powered Development
-```bash
-para start -p "prompt"                   # Create session with AI prompt
-para start --prompt "prompt"             # Create session with AI prompt (long form)
-para start name -p "prompt"              # Named session with AI prompt
-para start --file prompt.txt             # Create session with prompt from file
-para start -f ./auth.prompt               # Create session with prompt from file (short form)
+**Best Practice:** Start with simple, MVP-focused plans. Avoid overengineering in agent sessions - you can always iterate and expand later.
 
-# Skip permission warnings in trusted environments (CI, scripts)
-para start --dangerously-skip-permissions -p "prompt"
-para start --dangerously-skip-permissions name
-```
+**Saving Plans** (you choose where):
+- "Write this plan to `tasks/auth-implementation.md`"
+- "Save each component plan to separate files in `planning/`" 
+- "Create numbered task files: `TASK_1_database.md`, `TASK_2_api.md`"
 
-## Custom Branch Names
+**Executing Plans:**
+- "Start a Para session from the auth implementation plan we just created"
+- "Launch Para sessions for each of the task files in the planning directory"
+- "Begin parallel development using the plans in `tasks/TASK_*.md`"
 
-Para supports custom branch names when finishing sessions:
+The key is that **you and Claude agree on the implementation details first**, then Para executes these well-defined plans in parallel. This constrains the degree of freedom each Claude Agent and reduces the probability of YAGNI and reward hacking.
 
-```bash
-# Default behavior - uses session name with timestamp
-para finish "Implement user authentication"
-# Creates branch: para/session-name-20240531-184623
+Note: You can use any planning tool you prefer - local .md files, GitHub issues, or tools like [claude-task-master](https://github.com/eyaltoledano/claude-task-master). Para just needs access to read the plan files.
 
-# Custom branch name
-para finish "Implement auth" --branch feature-authentication
-# Creates branch: feature-authentication
+## Complete Example: Building a Todo App
 
-# Branch conflict resolution
-para finish "Fix bug" --branch existing-feature
-# If 'existing-feature' exists, creates: existing-feature-1
-```
+Here's how the full workflow looks in practice:
 
-### Branch Validation
-- Branch names must be valid Git branch names
-- Cannot contain spaces or special characters (~ ^ : ? * [ \ @)
-- Cannot start with `-` or `.`
-- Cannot end with `/`
-- Cannot contain sequences like `..`, `@{`, `//`, or `/.`
+1. **Plan with Claude**: "Let's build a todo app. Create a simple plan covering backend API, frontend UI, and database setup"
 
-The `start` command with the `-p/--prompt` flag creates new sessions and immediately opens Claude Code with your prompt, perfect for AI-assisted development.
+2. **Claude creates plan files**:
+   ```
+   tasks/todo-backend.md   - REST API with Express
+   tasks/todo-frontend.md  - React UI components  
+   tasks/todo-database.md  - PostgreSQL schema
+   ```
 
-**MCP Integration:** After running `para mcp init --claude-code` in your repo, Claude Code gains native Para tools for session management.
+3. **Start parallel sessions**: "Launch Para sessions for each of these task files"
+   - Claude runs `para_start` for each plan file
+   - 3 VS Code windows open, each with Claude working on a different component
 
-**Note:** AI-assisted sessions (start with prompts) only work with Claude Code. Use `para config` to switch IDEs if needed.
+4. **Monitor progress**: You run `para monitor` or just `para` to watch all sessions
+   - See which sessions are coding, testing, or blocked
+   - Real-time updates on progress and test results
 
-## How It Works
+5. **Intervene when needed**: Frontend session has styling issues
+   - Jump into that VS Code window: `cd .para/worktrees/todo-frontend` (or resume in the para monitor)
+   - Fix the CSS, guide Claude, run tests locally
+   - Continue development together
 
-1. **Configure**: `para config` detects and configures your IDE (Cursor, Claude Code, VS Code, etc.)
-2. **Create**: `para start` creates a timestamped Git branch and separate directory
-3. **Work**: Each session gets its own IDE window and isolated workspace
-4. **Finish**: `para finish` automatically stages changes and creates feature branch for review
-5. **Clean**: Sessions clean up automatically
+6. **Complete and integrate**: Sessions finish their work
+   - Each creates a feature branch: `para finish "Add todo backend"`
+   - You review the 3 branches and merge them
+   - Full todo app is ready
 
-**File Structure:**
-```
-your-repo/
-├── .git/                    # Your main repo
-└── .para/                   # Para directory (auto-managed)
-    ├── .gitignore           # Prevents tracking Para files  
-    ├── state/               # Session state files
-    └── worktrees/           # Para sessions live here
-        ├── feature-auth-*/  # Session 1: authentication work
-        ├── feature-ui-*/    # Session 2: UI updates  
-        └── bugfix-login-*/  # Session 3: bug fix
-```
+This workflow lets you build complex applications 3-5x faster while maintaining full control.
 
-## IDE Setup
-
-Run `para config` to set up your IDE - it will auto-detect and configure:
-
-- **Claude Code** (recommended for AI development)
-- **VS Code** (default)
-- **Cursor** 
-- **Any IDE with CLI support**
+## Essential Commands
 
 ```bash
-para config              # Interactive setup wizard
-para config auto         # Auto-detect IDE  
-para config show         # Show current settings
-para config edit         # Edit config file
+# Start new sessions
+para start backend -p "create REST API"           # New AI session  
+para start --file tasks/auth-plan.md              # From plan file
+para start frontend                               # Manual session
+
+# Monitor and control
+para monitor                                      # Real-time dashboard
+para list                                         # Show active sessions  
+para finish "Add user authentication"            # Complete session
+para config                                      # Setup IDE
 ```
 
-### Configuration File Locations
-
-Para stores configuration files in platform-specific locations:
-
-**Rust Implementation:**
-- **macOS:** `~/Library/Application Support/para/config.json`
-- **Linux:** `~/.config/para/config.json`
-- **Windows:** `%APPDATA%\para\config.json`
-
-Para uses JSON format and is automatically created on first run.
-
-## Sandbox Security (macOS)
-
-Para supports sandboxing for Claude CLI sessions on macOS, providing protection against prompt injection attacks by limiting file write access.
-
-### Configuring Sandbox
-
-**Enable by default (recommended for AI development):**
-```bash
-para config set sandbox.enabled true
-```
-
-**Team-wide configuration (recommended for shared projects):**
-```bash
-# Enable sandbox for all team members
-para config project set sandbox.enabled true
-
-# Add project-specific allowed domains
-para config project set sandbox.allowed_domains "api.company.com,docs.internal.com"
-```
-
-**Check current settings:**
-```bash
-para config show | grep -A 2 sandbox
-```
-
-### Sandbox Profile
-
-Para uses a single standard profile that protects against malicious file writes while allowing Claude to function normally:
-
-**Allowed write locations:**
-- Project directory (current repo)
-- Temporary files (/tmp, /var/folders)
-- Claude configuration (~/.claude)
-- Git configuration (~/.gitconfig)
-- Cache directories (~/.cache)
-
-**Blocked write locations:**
-- Home directory (except allowed paths)
-- System directories
-- SSH keys (~/.ssh)
-- Shell configurations (~/.bashrc, ~/.zshrc)
-- Other sensitive locations
-
-**Always allowed:**
-- Full read access to all files
-- Network access for Claude API
-- Process execution
-
-### Per-Session Control
-
-Override default settings for specific sessions:
-```bash
-# Force sandbox on
-para start my-session --sandbox
-para start my-task -p "implement feature" --sandbox
-
-# Force sandbox off (use with caution)
-para start my-session --no-sandbox
-
-# Sessions remember their sandbox settings when resumed
-para resume my-session  # Uses original sandbox settings
-```
+For complete command reference, see [CLI Documentation](docs/CLI_REFERENCE.md).
 
 ## Example Workflows
 
-### Regular Parallel Development
+### Orchestrated Development (Recommended)
 ```bash
-# Start multiple parallel sessions
-para start feature-auth     # Session 1: authentication
-para start feature-ui       # Session 2: UI updates  
-para start bugfix-login     # Session 3: bug fix
+# 1. Plan with Claude
+"Break down user authentication into parallel tasks"
+# Claude creates: tasks/auth-api.md, tasks/auth-ui.md, tasks/auth-tests.md
 
-# Each opens in a separate IDE window
-# Work in parallel without interference
+# 2. Execute plan  
+"Start Para sessions for each auth task file"
+# 3 VS Code windows open with Claude working
 
-# Finish sessions when ready (from any directory)
-para finish "Add OAuth login"      # Finishes current session
-para finish "Update dashboard UI"  # Finishes current session  
-para finish "Fix login redirect"   # Finishes current session
-
-# All features now ready for review as feature branches
+# 3. Monitor and guide
+para monitor              # Watch progress
+# Jump into sessions as needed to help
 ```
 
-### AI-Powered Development with MCP
+### Manual Session Management  
 ```bash
-# One-time setup in your repo
-para mcp init --claude-code
+# Start individual Claude sessions directly
+para start auth -p "implement JWT authentication"
+para start ui -p "create login form"
+para start tests -p "add auth unit tests"
 
-# This creates .mcp.json (add to .gitignore - contains local paths)
-echo ".mcp.json" >> .gitignore
-
-# Claude Code now has native Para tools:
-# - para_start: Create new sessions  
-# - para_finish: Complete sessions with commits
-# - para_list: View active sessions
-# - para_resume: Resume existing sessions
+# Or start manual sessions (no AI prompt)
+para start feature-payments    # You work directly in VS Code
+para start bugfix-login       # Manual debugging session
 ```
 
-### Traditional AI Development
-```bash
-# Create AI session with prompt
-para start -p "Implement user authentication with best security practices"
+Both approaches use isolated Git worktrees to prevent conflicts.
 
-# Or use a prompt file for complex prompts
-para start --file auth-requirements.prompt
+## Advanced Features
 
-# Claude Code opens with your prompt for AI-assisted development
+- **Custom Branch Names**: `para finish "message" --branch custom-name`
+- **Session Recovery**: Auto-backup of last 3 cancelled sessions  
+- **Resume with Context**: Add instructions when resuming sessions
+- **IDE Integration**: Works with Claude Code, VS Code, Cursor, and others
 
-# Finish when ready
-para finish "Implement OAuth authentication"
-```
+For detailed configuration and advanced usage, see the [Documentation](#documentation) section.
 
-
-## Resuming Sessions with Context
-
-You can resume existing sessions with additional context or updated instructions:
-
-```bash
-# Resume normally (opens IDE)
-para resume my-session
-
-# Resume with additional instructions
-para resume my-session --prompt "Add unit tests for the auth module"
-
-# Resume with context from a file
-para resume my-session --file updated-requirements.md
-
-# Resume from current directory (auto-detects session)
-cd .para/worktrees/my-session
-para resume --prompt "Continue where we left off"
-```
-
-The additional context is saved to `.para/sessions/{session}/resume_context.md` for reference.
-
-## Session Recovery
-
-Para automatically backs up the last 3 cancelled sessions for recovery:
-
-```bash
-# Cancel a session (automatically backed up)
-para cancel my-session
-# 💡 Session backed up for recovery. Use 'para recover my-session' to restore.
-
-# View available backups
-para recover
-# Shows list of recoverable sessions
-
-# Recover a cancelled session
-para recover my-session
-# ✅ recovered cancelled session my-session
-# ↳ branch: para/my-session-20240531-184623
-# ↳ worktree: .para/worktrees/my-session-20240531-184623
-# ↳ resume: para resume my-session
-```
-
-**Note:** Only the last 3 cancelled sessions are kept as backups. The oldest backup is automatically removed when a new session is cancelled.
-
-## Perfect For AI Development
-
-Para is ideal when working with AI assistants:
-
-- **Isolated workspaces**: Each session works independently without conflicts
-- **Safe iteration**: Main branch stays clean while you experiment  
-- **Easy comparison**: See results side-by-side in different IDE windows
-- **Focused development**: Each session maintains its own context and state
 
 ## Documentation
 
-- **[MCP Integration](docs/MCP_INTEGRATION.md)** - Complete guide to Claude Code MCP integration
-- **[MCP Orchestration](docs/MCP_ORCHESTRATION.md)** - AI orchestration patterns and MCP tool documentation
-- **[Sample Instructions](docs/SAMPLE_PARA_INSTRUCTIONS.md)** - Example CLAUDE.md for CLI-based workflows
+### Getting Started
+- **[CLI Reference](docs/CLI_REFERENCE.md)** - Complete command documentation
+- **[Shell Completion Guide](docs/SHELL_COMPLETION.md)** - Shell completion setup and configuration
 - **[Detailed Configuration](docs/DETAILED_CONFIGURATION.md)** - Advanced IDE setup and environment variables
-- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing, architecture, testing
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+### AI Integration  
+- **[MCP Integration](docs/MCP_INTEGRATION.md)** - Complete guide to Claude Code MCP integration
+- **[MCP Orchestration](docs/MCP_ORCHESTRATION.md)** - AI orchestration patterns and workflows
+- **[Sample Instructions](docs/SAMPLE_PARA_INSTRUCTIONS.md)** - Example CLAUDE.md for CLI-based workflows
+
+### Security & Advanced
+- **[Sandboxing Guide](docs/SANDBOXING.md)** - Complete sandboxing configuration and security options
 - **[Workflow Guide](docs/WORKFLOW.md)** - Visual diagrams of Para workflows and state transitions
 - **[IDE Behavior](docs/IDE_BEHAVIOR.md)** - IDE window management during integration and conflicts
+
+### Support
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions  
+- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing, architecture, testing
 
 ## Requirements
 
 - Git 2.5+ (for worktree support)
 - Your preferred IDE with CLI support
 
-## Environment Variables
+## Getting Productive
 
-Para supports several environment variables for configuration:
+1. **Install**: `brew install 2mawi2/tap/para`
+2. **Configure**: `para config` (sets up your IDE)
+3. **Enable MCP**: `para mcp init` (for Claude Code integration)
+4. **Start building**: Use the planning workflow above
 
-- **`IDE_NAME`** - IDE to use (`cursor`, `claude`, `code`, or custom)
-- **`IDE_CMD`** - Command to launch the IDE
-- **`IDE_USER_DATA_DIR`** - User data directory for IDE isolation
-- **`BASE_BRANCH`** - Base branch for sessions (default: `main`)
-- **`PARA_NON_INTERACTIVE`** - Skip interactive prompts (useful for CI/scripts)
+For shell completion: `para init`
 
-### CI/Automation Usage
+## Advanced Configuration
 
-For automated environments, set `PARA_NON_INTERACTIVE=true` to skip welcome prompts:
-
-```bash
-export PARA_NON_INTERACTIVE=true
-para start my-session
-```
-
-Para also auto-detects CI environments by checking for `CI` or `GITHUB_ACTIONS` environment variables.
-
-## Shell Completion
-
-Para provides intelligent tab completion for all commands, options, and dynamic data. The completion system is context-aware and helps with sessions, branches, files, and more.
-
-### Quick Setup
-
-**Automatic (Recommended):**
-```bash
-para init
-# Auto-detects your shell and installs completions
-# Restart your shell or follow the on-screen instructions
-```
-
-**Manual Setup:**
-
-**Bash:**
-```bash
-mkdir -p ~/.local/share/bash-completion/completions
-PARA_COMPLETION_SCRIPT=1 para completion bash > ~/.local/share/bash-completion/completions/para
-# Restart shell or run: source ~/.local/share/bash-completion/completions/para
-```
-
-**Zsh:**
-```bash
-mkdir -p ~/.local/share/zsh/site-functions
-PARA_COMPLETION_SCRIPT=1 para completion zsh > ~/.local/share/zsh/site-functions/_para
-echo 'fpath=(~/.local/share/zsh/site-functions $fpath)' >> ~/.zshrc
-echo 'autoload -U compinit && compinit' >> ~/.zshrc
-# Restart shell
-```
-
-**Fish:**
-```bash
-mkdir -p ~/.config/fish/completions  
-PARA_COMPLETION_SCRIPT=1 para completion fish > ~/.config/fish/completions/para.fish
-# Restart shell or run: fish_update_completions
-```
-
-### Smart Completions
-
-The completion system provides intelligent suggestions:
-
-**📁 Session Management:**
-- `para resume <TAB>` → Shows active sessions
-- `para cancel <TAB>` → Shows active sessions  
-- `para recover <TAB>` → Shows archived sessions
-
-**🌿 Branch & Integration:**
-- `para finish --branch <TAB>` → Shows git branches
-
-**📄 File & Task Completion:**
-- `para start --file <TAB>` → Prioritizes TASK_*.md files and .md files
-- Smart file filtering for task-based workflows
-
-**⚙️ Configuration:**
-- `para config <TAB>` → Shows: `setup`, `auto`, `show`, `edit`, `reset`
-- `para completion <TAB>` → Shows: `bash`, `zsh`, `fish`
-
-**🎯 Flag Completion:**
-- `para clean --<TAB>` → Shows: `--force`, `--dry-run`, `--backups`
-- `para list --<TAB>` → Shows: `--verbose`, `--archived`, `--quiet`
-
-### Homebrew Users
-
-If you installed para via Homebrew, completions are automatically available! The formula includes completion caveats that guide you through the setup.
-
-## Security Notes
-
-The `--dangerously-skip-permissions` flag bypasses IDE permission warnings and should only be used in trusted environments like CI pipelines or automation scripts. It works with `start` and `resume` commands.
-
-**⚠️ Use with caution** - this flag may allow IDEs to access system resources without permission prompts.
-
-## Sandboxing Options
-
-When using `--dangerously-skip-permissions` for autonomous agents, be aware of the security implications. Para provides multiple sandboxing levels - choose based on your project needs and environment.
-
-### Available Security Levels
-
-**1. Basic Sandboxing** (`--sandbox`, macOS only)
-- **File writes**: Restricted to session worktree, temp directories, and specific config files
-- **File reads**: Unrestricted (agents need to analyze codebases)
-- **Network**: Full access
-
-```bash
-para start -p "implement feature" --sandbox
-```
-
-**2. Network-Isolated Sandboxing** (`--sandbox-no-network`, macOS only)
-- **File writes**: Same restrictions as basic sandboxing
-- **File reads**: Unrestricted
-- **Network**: Limited to GitHub/Git operations and Anthropic API by default
-- **Additional domains**: Use `--allow-domains "example.com,api.openai.com"`
-- **True isolation**: Use `--allow-domains ""` to block all network access
-
-```bash
-para start -p "add tests" --sandbox-no-network
-para start -p "fetch data" --sandbox-no-network --allow-domains "example.com"
-```
-
-**3. Docker Containerization** (`--container`, all platforms)
-- **Complete isolation** from host system
-- **Mounted access**: Only the session worktree
-- **Customizable**: Use `--docker-image ubuntu:22.04` for specific environments
-
-```bash
-para start -p "analyze code" --container
-```
-
-### Security Considerations
-
-- The `--dangerously-skip-permissions` flag bypasses IDE permission prompts - use with caution
-- Choose your security level based on trust in the prompts and your environment
-- Read access is intentionally broad across all sandbox levels (required for code analysis)
-- Each level provides progressively stronger isolation at the cost of some functionality
-
-That's it! Run `para config` to get started.
+Para supports environment variables, CI automation, and detailed customization. See the documentation links below for complete configuration options.

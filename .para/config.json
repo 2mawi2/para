@@ -1,6 +1,6 @@
 {
   "sandbox": {
-    "enabled": true,
+    "enabled": false,
     "profile": "standard-proxied",
     "allowed_domains": [
       "api.example.com",
