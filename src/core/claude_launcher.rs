@@ -976,4 +976,55 @@ mod tests {
         let count = gitignore_content.matches(".vscode/tasks.json").count();
         assert_eq!(count, 1, "Should not duplicate .vscode/tasks.json entry");
     }
+
+    #[test]
+    fn test_resume_claude_double_resolution_bug() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_path = temp_dir.path().join("test-session");
+        fs::create_dir_all(&session_path).unwrap();
+
+        // Create config with specific sandbox settings
+        let mut config = create_test_config();
+        config.sandbox = Some(crate::core::sandbox::SandboxConfig {
+            enabled: true,
+            profile: "standard".to_string(),
+            allowed_domains: vec!["example.com".to_string()],
+        });
+
+        // This simulates what the resume command does INCORRECTLY:
+        // It resolves sandbox settings first, then passes them to claude launcher
+        // which resolves them AGAIN, causing double resolution
+        let resolver = crate::core::sandbox::config::SandboxResolver::new(&config);
+        let sandbox_settings = resolver.resolve_with_network(
+            false,      // sandbox CLI flag not set
+            false,      // no_sandbox CLI flag not set
+            None,       // no CLI profile override
+            false,      // no network sandbox CLI flag
+            Vec::new(), // no CLI allowed domains
+        );
+
+        // This is what resume function creates (the bug):
+        // It passes the RESOLVED settings as if they were CLI overrides
+        let options = ClaudeLaunchOptions {
+            session_id: Some("resume-session-123".to_string()),
+            sandbox_override: Some(sandbox_settings.enabled), // BUG: This is already resolved!
+            sandbox_profile: Some(sandbox_settings.profile),  // BUG: This is already resolved!
+            network_sandbox: sandbox_settings.network_sandbox, // BUG: This is already resolved!
+            allowed_domains: sandbox_settings.allowed_domains, // BUG: This is already resolved!
+            ..Default::default()
+        };
+
+        let result = launch_claude_with_context(&config, &session_path, options);
+        assert!(result.is_ok());
+
+        // The tasks.json should be created properly despite the double resolution
+        let tasks_content = fs::read_to_string(session_path.join(".vscode/tasks.json")).unwrap();
+        assert!(tasks_content.contains("-r"));
+        assert!(tasks_content.contains("resume-session-123"));
+
+        // This test demonstrates the issue exists but doesn't fail because
+        // the double resolution happens to work in most cases.
+        // The real issue is architectural - resume shouldn't pre-resolve settings
+        // before passing them to claude_launcher which resolves them again.
+    }
 }

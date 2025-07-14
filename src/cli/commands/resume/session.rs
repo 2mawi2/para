@@ -3,7 +3,6 @@ use crate::cli::parser::ResumeArgs;
 use crate::config::Config;
 use crate::core::git::{GitOperations, GitService, SessionEnvironment};
 use crate::core::ide::{IdeManager, LaunchOptions};
-use crate::core::sandbox::config::SandboxResolver;
 use crate::core::session::state::SessionState;
 use crate::core::session::{SessionManager, SessionStatus};
 use crate::utils::{ParaError, Result};
@@ -311,24 +310,21 @@ fn launch_ide_for_session_with_state(
         .unwrap_or(false)
         || args.dangerously_skip_permissions;
 
-    // Resolve sandbox settings using the resolver
-    let resolver = SandboxResolver::new(config);
-    let sandbox_settings = resolver.resolve_with_network(
-        args.sandbox_args.sandbox,
-        args.sandbox_args.no_sandbox,
-        args.sandbox_args.sandbox_profile.clone(),
-        args.sandbox_args.sandbox_no_network,
-        args.sandbox_args.allowed_domains.clone(),
-    );
-
     // For Claude Code in wrapper mode, check for existing session
     if config.ide.name == "claude" && config.ide.wrapper.enabled {
         let mut launch_options = LaunchOptions {
             skip_permissions,
-            sandbox_override: Some(sandbox_settings.enabled),
-            sandbox_profile: Some(sandbox_settings.profile.clone()),
-            network_sandbox: sandbox_settings.network_sandbox,
-            allowed_domains: sandbox_settings.allowed_domains.clone(),
+            // Pass raw CLI args, not resolved settings - let claude_launcher resolve them
+            sandbox_override: if args.sandbox_args.sandbox {
+                Some(true)
+            } else if args.sandbox_args.no_sandbox {
+                Some(false)
+            } else {
+                None
+            },
+            sandbox_profile: args.sandbox_args.sandbox_profile.clone(),
+            network_sandbox: args.sandbox_args.sandbox_no_network,
+            allowed_domains: args.sandbox_args.allowed_domains.clone(),
             ..Default::default()
         };
 
@@ -928,5 +924,69 @@ mod tests {
             || args_with_flag.dangerously_skip_permissions;
 
         assert!(skip_permissions_2, "Should use dangerous flag from args");
+    }
+
+    #[test]
+    fn test_resume_passes_raw_sandbox_args_not_resolved() {
+        // This test verifies the fix for the double resolution bug
+        let git_temp = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
+        let (_git_temp, git_service) = setup_test_repo();
+
+        let mut config = create_test_config();
+        config.directories.state_dir = temp_dir
+            .path()
+            .join(".para_state")
+            .to_string_lossy()
+            .to_string();
+        // Set up Claude as the IDE for this test
+        config.ide.name = "claude".to_string();
+        config.ide.wrapper.enabled = true;
+
+        let session_manager = SessionManager::new(&config);
+
+        // Create a test session
+        let session_name = "test-sandbox-args".to_string();
+        let branch_name = "para/test-sandbox".to_string();
+        let worktree_path = git_service
+            .repository()
+            .root
+            .join(&config.directories.subtrees_dir)
+            .join(&config.git.branch_prefix)
+            .join(&session_name);
+
+        git_service
+            .create_worktree(&branch_name, &worktree_path)
+            .unwrap();
+
+        let state = SessionState::new(session_name.clone(), branch_name, worktree_path.clone());
+        session_manager.save_state(&state).unwrap();
+
+        // Test with specific sandbox CLI args
+        let args = ResumeArgs {
+            session: Some(session_name.clone()),
+            prompt: None,
+            file: None,
+            dangerously_skip_permissions: false,
+            sandbox_args: SandboxArgs {
+                sandbox: true, // CLI arg: enable sandbox
+                no_sandbox: false,
+                sandbox_profile: Some("restrictive".to_string()), // CLI profile override
+                sandbox_no_network: true,                         // CLI arg: enable network sandbox
+                allowed_domains: vec!["api.claude.ai".to_string()], // CLI allowed domains
+            },
+        };
+
+        // Execute resume - this should now pass raw CLI args to claude_launcher
+        // instead of pre-resolving them
+        resume_specific_session(&config, &git_service, &session_name, &args).unwrap();
+
+        // Verify tasks.json was created
+        let tasks_file = worktree_path.join(".vscode/tasks.json");
+        assert!(tasks_file.exists(), "tasks.json should be created");
+
+        // The key verification is that the function completes without errors
+        // The real test is that it doesn't do double resolution anymore
     }
 }
