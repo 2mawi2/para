@@ -14,7 +14,7 @@ pub mod platform_tests {
     fn test_close_ide_window_panics_in_tests() {
         // This test verifies that close_ide_window properly panics when called from tests
         let platform = get_platform_manager();
-        let _ = platform.close_ide_window("test-session", "cursor");
+        let _ = platform.close_ide_window("test-session", "cursor", "/tmp/state");
     }
 
     #[cfg(target_os = "macos")]
@@ -30,7 +30,7 @@ pub mod platform_tests {
         fn test_macos_close_ide_window_panics_in_tests() {
             // Verify that MacOSPlatform specifically panics in test environment
             let platform = MacOSPlatform;
-            let _ = platform.close_ide_window("test-session", "cursor");
+            let _ = platform.close_ide_window("test-session", "cursor", "/tmp/state");
         }
 
         #[test]
