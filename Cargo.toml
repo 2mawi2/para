@@ -4,6 +4,12 @@ version = "1.1.38"
 edition = "2021"
 description = "Parallel IDE Workflow Helper - Rust implementation"
 license = "MIT"
+authors = ["Marius Wichtner"]
+repository = "https://github.com/2mawi2/para"
+homepage = "https://github.com/2mawi2/para"
+readme = "README.md"
+keywords = ["cli", "git", "worktree", "ide", "development"]
+categories = ["command-line-utilities", "development-tools"]
 
 [lib]
 name = "para"
