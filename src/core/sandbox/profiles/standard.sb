@@ -54,6 +54,9 @@
     ;; Project directory - primary workspace
     (subpath (param "TARGET_DIR"))
     
+    ;; Para state directory in main repository - required for status updates
+    (subpath (string-append (param "MAIN_REPO_DIR") "/.para"))
+    
     ;; Temporary directories
     (subpath (param "TMP_DIR"))
     (subpath "/tmp")
