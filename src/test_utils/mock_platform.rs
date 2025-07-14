@@ -22,7 +22,7 @@ impl MockPlatformManager {
 }
 
 impl PlatformManager for MockPlatformManager {
-    fn close_ide_window(&self, session_id: &str, ide_name: &str) -> Result<()> {
+    fn close_ide_window(&self, session_id: &str, ide_name: &str, _state_dir: &str) -> Result<()> {
         self.close_calls
             .borrow_mut()
             .push((session_id.to_string(), ide_name.to_string()));

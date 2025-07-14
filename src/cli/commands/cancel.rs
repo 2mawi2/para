@@ -52,7 +52,11 @@ pub fn execute(config: Config, args: CancelArgs) -> Result<()> {
 
     if config.is_real_ide_environment() {
         let platform = get_platform_manager();
-        if let Err(e) = platform.close_ide_window(&session_state.name, &config.ide.name) {
+        if let Err(e) = platform.close_ide_window(
+            &session_state.name,
+            &config.ide.name,
+            config.get_state_dir(),
+        ) {
             eprintln!("Warning: Failed to close IDE window: {e}");
         }
     }

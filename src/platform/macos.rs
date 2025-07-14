@@ -131,14 +131,14 @@ end run
 }
 
 impl PlatformManager for MacOSPlatform {
-    fn close_ide_window(&self, session_id: &str, ide_name: &str) -> Result<()> {
+    fn close_ide_window(&self, session_id: &str, ide_name: &str, state_dir: &str) -> Result<()> {
         // Runtime check: This method should NEVER be called from tests
         // Tests should use mock IDE commands or cfg!(test) guards to prevent reaching this code
         if cfg!(test) {
             panic!(
                 "CRITICAL: close_ide_window called from test environment! \
                  This indicates a test isolation failure. \
-                 Session: {session_id}, IDE: {ide_name}"
+                 Session: {session_id}, IDE: {ide_name}, State: {state_dir}"
             );
         }
 
@@ -148,7 +148,7 @@ impl PlatformManager for MacOSPlatform {
         }
 
         // Determine the actual IDE used by reading the launch file
-        let actual_ide = self.determine_actual_ide(session_id, ide_name)?;
+        let actual_ide = self.determine_actual_ide(session_id, ide_name, state_dir)?;
 
         // Parse session information
         let session_info = self.parse_session_info(session_id)?;
@@ -160,11 +160,14 @@ impl PlatformManager for MacOSPlatform {
 }
 
 impl MacOSPlatform {
-    fn determine_actual_ide(&self, session_id: &str, ide_name: &str) -> Result<String> {
+    fn determine_actual_ide(
+        &self,
+        session_id: &str,
+        ide_name: &str,
+        state_dir: &str,
+    ) -> Result<String> {
         // Read launch file to determine actual IDE used (like legacy implementation)
-        let state_dir = std::env::current_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            .join(".para_state");
+        let state_dir = std::path::Path::new(state_dir);
         let launch_file = state_dir.join(format!("{session_id}.launch"));
 
         let actual_ide = if launch_file.exists() {

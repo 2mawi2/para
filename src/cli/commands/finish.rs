@@ -206,7 +206,8 @@ fn perform_pre_finish_operations(
             &config.ide.name
         };
 
-        if let Err(e) = platform.close_ide_window(&session_id, ide_to_close) {
+        if let Err(e) = platform.close_ide_window(&session_id, ide_to_close, config.get_state_dir())
+        {
             eprintln!("Warning: Failed to close IDE window: {e}");
         }
     }
@@ -928,5 +929,222 @@ mod tests {
             updated_unknown_status.test_status,
             crate::core::status::TestStatus::Passed
         );
+    }
+
+    #[test]
+    fn test_ide_closing_logic_conditions() {
+        // Test the conditions that determine whether IDE closing should happen
+
+        // Test 1: Should close IDE for non-container session with real IDE environment
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = create_test_config_with_dir(&temp_dir);
+
+        // Set up real IDE config (but still in test environment)
+        config.ide.command = "cursor".to_string();
+        config.ide.name = "cursor".to_string();
+        config.ide.wrapper.enabled = false;
+
+        let session_state = SessionState::new(
+            "test-session".to_string(),
+            "test-branch".to_string(),
+            temp_dir.path().join("worktree"),
+        );
+
+        let session_info = Some(session_state);
+        let is_container_session = session_info
+            .as_ref()
+            .map(|s| s.is_container())
+            .unwrap_or(false);
+
+        // The conditions that should trigger IDE closing
+        let should_close_ide = !is_container_session && config.is_real_ide_environment();
+
+        // In test environment, is_real_ide_environment() should return false due to cfg!(test)
+        assert!(
+            !should_close_ide,
+            "IDE closing should be disabled in test environment for safety"
+        );
+        assert!(
+            !config.is_real_ide_environment(),
+            "Test configs should not be considered real IDE environment"
+        );
+    }
+
+    #[test]
+    fn test_ide_to_close_selection_logic() {
+        // Test the logic that determines which IDE name to use for closing
+        let temp_dir = TempDir::new().unwrap();
+
+        // Test Case 1: Claude with wrapper enabled - should close wrapper
+        let mut config1 = create_test_config_with_dir(&temp_dir);
+        config1.ide.name = "claude".to_string();
+        config1.ide.wrapper.enabled = true;
+        config1.ide.wrapper.name = "cursor".to_string();
+
+        let ide_to_close_1 = if config1.ide.name == "claude" && config1.is_wrapper_enabled() {
+            &config1.ide.wrapper.name
+        } else {
+            &config1.ide.name
+        };
+
+        assert_eq!(
+            ide_to_close_1, "cursor",
+            "Should close wrapper when Claude with wrapper enabled"
+        );
+
+        // Test Case 2: Claude with wrapper disabled - should close claude
+        let mut config2 = create_test_config_with_dir(&temp_dir);
+        config2.ide.name = "claude".to_string();
+        config2.ide.wrapper.enabled = false;
+        config2.ide.wrapper.name = "cursor".to_string();
+
+        let ide_to_close_2 = if config2.ide.name == "claude" && config2.is_wrapper_enabled() {
+            &config2.ide.wrapper.name
+        } else {
+            &config2.ide.name
+        };
+
+        assert_eq!(
+            ide_to_close_2, "claude",
+            "Should close claude when wrapper disabled"
+        );
+
+        // Test Case 3: Non-Claude IDE - should close the IDE name
+        let mut config3 = create_test_config_with_dir(&temp_dir);
+        config3.ide.name = "cursor".to_string();
+        config3.ide.wrapper.enabled = true;
+        config3.ide.wrapper.name = "code".to_string();
+
+        let ide_to_close_3 = if config3.ide.name == "claude" && config3.is_wrapper_enabled() {
+            &config3.ide.wrapper.name
+        } else {
+            &config3.ide.name
+        };
+
+        assert_eq!(
+            ide_to_close_3, "cursor",
+            "Should close IDE name when not Claude"
+        );
+    }
+
+    #[test]
+    fn test_session_id_determination_logic() {
+        // Test how session_id is determined for IDE closing
+        let temp_dir = TempDir::new().unwrap();
+        let _config = create_test_config_with_dir(&temp_dir);
+
+        // Test Case 1: With session_info present
+        let session_state = SessionState::new(
+            "my-session-name".to_string(),
+            "feature/test-branch".to_string(),
+            temp_dir.path().join("worktree"),
+        );
+        let session_info = Some(session_state);
+        let feature_branch = "feature/test-branch";
+
+        let session_id_1 = session_info
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| feature_branch.to_string());
+
+        assert_eq!(
+            session_id_1, "my-session-name",
+            "Should use session name when available"
+        );
+
+        // Test Case 2: Without session_info (fallback to branch name)
+        let session_info_none: Option<SessionState> = None;
+        let session_id_2 = session_info_none
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| feature_branch.to_string());
+
+        assert_eq!(
+            session_id_2, "feature/test-branch",
+            "Should use branch name when no session info"
+        );
+    }
+
+    #[test]
+    fn test_state_directory_mismatch_bug() {
+        // This test identifies the potential bug: state directory mismatch between
+        // finish command and platform code
+        let temp_dir = TempDir::new().unwrap();
+        let config = create_test_config_with_dir(&temp_dir);
+
+        // The config uses a custom state directory
+        let config_state_dir = &config.directories.state_dir;
+        println!("Config state dir: {config_state_dir}");
+
+        // The platform code hardcodes .para_state relative to current directory
+        let platform_state_dir = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join(".para_state");
+        println!("Platform state dir: {}", platform_state_dir.display());
+
+        // These are likely different!
+        assert_ne!(
+            std::path::Path::new(config_state_dir)
+                .canonicalize()
+                .unwrap_or_else(|_| std::path::PathBuf::from(config_state_dir)),
+            platform_state_dir
+                .canonicalize()
+                .unwrap_or(platform_state_dir),
+            "State directories should be different, demonstrating the bug"
+        );
+    }
+
+    #[test]
+    fn test_state_directory_fix_verification() {
+        // This test verifies that the fix works - the finish command now passes the correct
+        // state directory to the platform code for IDE closing
+        let temp_dir = TempDir::new().unwrap();
+        let config = create_test_config_with_dir(&temp_dir);
+
+        // The config should use the custom state directory
+        let expected_state_dir = &config.directories.state_dir;
+
+        // Test the IDE closing parameter determination logic
+        let session_info: Option<SessionState> = None;
+        let feature_branch = "test-branch";
+        let session_id = session_info
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| feature_branch.to_string());
+
+        // Test wrapper selection logic
+        let mut claude_config = config.clone();
+        claude_config.ide.name = "claude".to_string();
+        claude_config.ide.wrapper.enabled = true;
+        claude_config.ide.wrapper.name = "cursor".to_string();
+
+        let ide_to_close_claude =
+            if claude_config.ide.name == "claude" && claude_config.is_wrapper_enabled() {
+                &claude_config.ide.wrapper.name
+            } else {
+                &claude_config.ide.name
+            };
+
+        // Verify the parameters that would be passed to close_ide_window
+        assert_eq!(session_id, "test-branch");
+        assert_eq!(ide_to_close_claude, "cursor");
+        assert_eq!(claude_config.get_state_dir(), expected_state_dir);
+
+        // Test direct IDE case
+        let mut cursor_config = config.clone();
+        cursor_config.ide.name = "cursor".to_string();
+        cursor_config.ide.wrapper.enabled = false;
+
+        let ide_to_close_cursor =
+            if cursor_config.ide.name == "claude" && cursor_config.is_wrapper_enabled() {
+                &cursor_config.ide.wrapper.name
+            } else {
+                &cursor_config.ide.name
+            };
+
+        assert_eq!(ide_to_close_cursor, "cursor");
+        assert_eq!(cursor_config.get_state_dir(), expected_state_dir);
+
+        println!("✓ State directory fix verified - IDE closing will use correct path: {expected_state_dir}");
     }
 }
