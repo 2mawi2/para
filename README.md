@@ -39,18 +39,12 @@ para finish "Add authentication"  # Creates feature branch locally for review
 **Parallel Session Creation (0:03)**  
 Shows orchestrator Claude creating and dispatching three parallel development tasks via MCP.
 
-<video width="800" controls>
-  <source src="docs/media/recording_starting_agents.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+https://github.com/user-attachments/assets/9edb6a12-c81b-4221-b42a-18fb3f8e2df7
 
 **Real-time Monitoring Dashboard (0:04)**  
 Demonstrates the Para monitor tracking multiple active sessions and their progress.
 
-<video width="800" controls>
-  <source src="docs/media/recording_para_monitor.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+https://github.com/user-attachments/assets/5737e21d-ab96-428c-87d3-683657f8d5c0
 
 ## How Para Works
 
