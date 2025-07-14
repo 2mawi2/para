@@ -90,13 +90,27 @@ pub fn wrap_command_with_sandbox(
         // Escape the command for shell
         let escaped_command = command.replace('\'', "'\\''");
 
+        // Get the main repository directory (parent of .para/worktrees)
+        let main_repo_dir = if worktree_path_str.contains("/.para/worktrees/") {
+            // Extract main repo from worktree path
+            worktree_path_str
+                .split("/.para/worktrees/")
+                .next()
+                .unwrap_or(&worktree_path_str)
+                .to_string()
+        } else {
+            // If not in a worktree, use the current path as main repo
+            worktree_path_str.clone()
+        };
+
         // Build the sandbox-exec command
         let mut sandbox_cmd = format!(
             "sandbox-exec \
              -D 'TARGET_DIR={worktree_path_str}' \
              -D 'TMP_DIR={temp_dir_str}' \
              -D 'HOME_DIR={home_dir_str}' \
-             -D 'CACHE_DIR={cache_dir_str}'"
+             -D 'CACHE_DIR={cache_dir_str}' \
+             -D 'MAIN_REPO_DIR={main_repo_dir}'"
         );
 
         // Add proxy address parameter if provided
