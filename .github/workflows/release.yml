@@ -131,6 +131,7 @@ jobs:
             --exclude='.bats_tmp*' \
             --exclude='mcp-server-ts/node_modules' \
             --exclude='mcp-server-ts/build' \
+            --exclude='artifacts' \
             .
 
       - name: Create checksums
