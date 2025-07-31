@@ -28,7 +28,7 @@ mod tests {
 
         // Simulate loading by creating test config and session manager
         let test_config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = test_config;
@@ -53,7 +53,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -86,7 +87,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let mut config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
         std::fs::create_dir_all(&state_dir).unwrap();
 
@@ -122,7 +123,7 @@ mod tests {
         let session_name = format!("resume-test-{}", uuid::Uuid::new_v4());
 
         let mut config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
@@ -159,7 +160,7 @@ mod tests {
         let session_name = format!("override-test-{}", uuid::Uuid::new_v4());
 
         let mut config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
@@ -202,7 +203,7 @@ mod tests {
         let session_name = format!("danger-sandbox-test-{}", uuid::Uuid::new_v4());
 
         let mut config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
 

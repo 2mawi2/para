@@ -125,7 +125,8 @@ mod tests {
         config.directories.subtrees_dir = "subtrees/custom".to_string();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.session.preserve_on_finish = true;

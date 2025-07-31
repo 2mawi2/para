@@ -12,7 +12,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -52,7 +53,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -90,7 +92,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -141,7 +144,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 

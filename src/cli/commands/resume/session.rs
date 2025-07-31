@@ -396,7 +396,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -448,7 +449,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -510,7 +512,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -582,7 +585,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -646,7 +650,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -717,7 +722,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees/para".to_string();
@@ -775,7 +781,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         let session_manager = SessionManager::new(&config);
@@ -837,7 +844,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -937,7 +945,8 @@ mod tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         // Set up Claude as the IDE for this test

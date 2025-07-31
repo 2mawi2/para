@@ -1076,10 +1076,11 @@ mod tests {
         let config_state_dir = &config.directories.state_dir;
         println!("Config state dir: {config_state_dir}");
 
-        // The platform code hardcodes .para_state relative to current directory
+        // The platform code hardcodes .para/state relative to current directory
         let platform_state_dir = std::env::current_dir()
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            .join(".para_state");
+            .join(".para")
+            .join("state");
         println!("Platform state dir: {}", platform_state_dir.display());
 
         // These are likely different!

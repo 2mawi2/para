@@ -391,7 +391,8 @@ fn launch_claude_code(
 fn create_launch_metadata(config: &Config, session_path: &Path) -> Result<()> {
     let state_dir = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".para_state");
+        .join(".para")
+        .join("state");
 
     fs::create_dir_all(&state_dir)
         .map_err(|e| ParaError::fs_error(format!("Failed to create state directory: {e}")))?;

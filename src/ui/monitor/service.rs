@@ -662,7 +662,7 @@ mod tests {
             },
             directories: crate::config::DirectoryConfig {
                 subtrees_dir: "/tmp/subtrees".to_string(),
-                state_dir: "/tmp/.para_state".to_string(),
+                state_dir: "/tmp/.para/state".to_string(),
             },
             git: crate::config::GitConfig {
                 branch_prefix: "para".to_string(),
@@ -695,7 +695,7 @@ mod tests {
             },
             directories: crate::config::DirectoryConfig {
                 subtrees_dir: "/tmp/subtrees".to_string(),
-                state_dir: "/tmp/.para_state_test".to_string(),
+                state_dir: "/tmp/.para/state_test".to_string(),
             },
             git: crate::config::GitConfig {
                 branch_prefix: "para".to_string(),

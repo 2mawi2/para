@@ -53,7 +53,7 @@
 **Solutions:**
 - Check for uncommitted changes that prevent cleanup
 - Manually remove worktree directories in `subtrees/` if needed
-- Remove state files in `.para_state/` if they become corrupted
+- Remove state files in `.para/state/` if they become corrupted
 
 ### Performance Issues
 **Problem:** Para feels slow  
@@ -79,7 +79,7 @@ If para's automatic cleanup fails:
 rm -rf subtrees/
 
 # Remove state directory
-rm -rf .para_state/
+rm -rf .para/state/
 
 # Remove any remaining branches (be careful!)
 git branch | grep "para/" | xargs git branch -D

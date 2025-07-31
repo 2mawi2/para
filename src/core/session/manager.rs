@@ -761,7 +761,8 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         let manager = SessionManager::new(&config);
@@ -779,7 +780,8 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         let manager = SessionManager::new(&config);
@@ -823,7 +825,8 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = temp_dir
@@ -856,7 +859,8 @@ mod tests {
         let mut config = default_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = temp_dir

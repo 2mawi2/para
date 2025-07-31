@@ -252,7 +252,7 @@ mod tests {
     fn test_valid_directory_names() {
         assert!(is_valid_directory_name("subtrees"));
         assert!(is_valid_directory_name("subtrees/para"));
-        assert!(is_valid_directory_name(".para_state"));
+        assert!(is_valid_directory_name(".para/state"));
         assert!(is_valid_directory_name("my-dir/subdir"));
     }
 
@@ -329,13 +329,13 @@ mod tests {
     fn test_directory_config_validation() {
         let valid_config = DirectoryConfig {
             subtrees_dir: "subtrees/para".to_string(),
-            state_dir: ".para_state".to_string(),
+            state_dir: ".para/state".to_string(),
         };
         assert!(validate_directory_config(&valid_config).is_ok());
 
         let invalid_config = DirectoryConfig {
             subtrees_dir: "/absolute/path".to_string(),
-            state_dir: ".para_state".to_string(),
+            state_dir: ".para/state".to_string(),
         };
         assert!(validate_directory_config(&invalid_config).is_err());
     }

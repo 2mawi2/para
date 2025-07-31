@@ -16,7 +16,8 @@ mod integration_tests {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
 
@@ -111,7 +112,7 @@ mod integration_tests {
     #[test]
     fn test_monitor_dangerous_flag_behavior() {
         let temp_dir = TempDir::new().unwrap();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();

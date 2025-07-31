@@ -187,7 +187,7 @@ mod tests {
 
         // Create a temporary directory for state
         let temp_dir = TempDir::new().unwrap();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         std::fs::create_dir_all(&state_dir).unwrap();
 
         let mut config = create_test_config();

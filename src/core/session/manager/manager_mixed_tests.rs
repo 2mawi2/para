@@ -203,7 +203,7 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         let mut config = create_test_config();
-        let state_dir = temp_dir.path().join(".para_state");
+        let state_dir = temp_dir.path().join(".para").join("state");
         config.directories.state_dir = state_dir.to_string_lossy().to_string();
 
         let manager = SessionManager::new(&config);

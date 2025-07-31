@@ -27,7 +27,8 @@ pub mod test_helpers {
         let mut config = create_test_config();
         config.directories.state_dir = temp_dir
             .path()
-            .join(".para_state")
+            .join(".para")
+            .join("state")
             .to_string_lossy()
             .to_string();
         config.directories.subtrees_dir = "subtrees".to_string();

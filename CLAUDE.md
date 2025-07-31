@@ -185,7 +185,7 @@ fn test_with_git_environment() {
     let (_git_temp, git_service) = setup_test_repo();
     
     let mut config = create_test_config();
-    config.directories.state_dir = temp_dir.path().join(".para_state").to_string_lossy().to_string();
+    config.directories.state_dir = temp_dir.path().join(".para").join("state").to_string_lossy().to_string();
     
     // Your test code here using the isolated git environment
 }
