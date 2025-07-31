@@ -57,11 +57,51 @@ https://github.com/user-attachments/assets/5737e21d-ab96-428c-87d3-683657f8d5c0
 
 ## Installation
 
+### Homebrew (Recommended)
+
 ```bash
 brew install 2mawi2/tap/para
 ```
 
-For building from source, see the [Development Guide](docs/DEVELOPMENT.md).
+### Build from Source
+
+```bash
+git clone https://github.com/2mawi2/para.git
+cd para
+just install    # or: cargo install --path .
+```
+
+After manual installation, add to PATH:
+```bash
+# bash/zsh: add to ~/.bashrc or ~/.zshrc
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+For detailed build instructions, see the [Development Guide](docs/DEVELOPMENT.md).
+
+## Uninstallation
+
+```bash
+# Homebrew
+brew uninstall 2mawi2/tap/para
+
+# Manual
+just uninstall    # or: rm ~/.cargo/bin/para
+```
+
+### Complete Cleanup (Optional)
+
+Remove all Para data, config, and sessions:
+```bash
+rm -rf ~/Library/Application\ Support/para  # macOS config
+rm -rf ~/.config/para                       # Linux config
+rm -rf .para/                               # Session state (per repo)
+
+# Remove all Git worktrees
+git worktree list | grep para/ | awk '{print $1}' | xargs -I {} git worktree remove {} --force
+```
+
+**Warning**: Save any work in active sessions before cleanup.
 
 ## Getting Started
 
