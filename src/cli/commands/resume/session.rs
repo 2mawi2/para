@@ -434,6 +434,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
         resume_specific_session(&config, &git_service, "test4", &args).unwrap();
     }
@@ -487,6 +488,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Execute resume (with echo IDE it won't actually launch anything)
@@ -559,6 +561,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Execute resume
@@ -623,6 +626,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Execute resume - should work exactly as before
@@ -693,6 +697,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Execute resume
@@ -761,6 +766,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Execute resume
@@ -885,6 +891,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // In a real test, we'd mock the IDE launch, but here we verify the logic
@@ -925,6 +932,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let loaded_safe = session_manager.load_state("test-safe-session").unwrap();
@@ -985,6 +993,7 @@ mod tests {
                 sandbox_no_network: true,                         // CLI arg: enable network sandbox
                 allowed_domains: vec!["api.claude.ai".to_string()], // CLI allowed domains
             },
+            terminal: false,
         };
 
         // Execute resume - this should now pass raw CLI args to claude_launcher

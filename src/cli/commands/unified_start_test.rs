@@ -31,6 +31,7 @@ mod tests {
                 sandbox_no_network,
                 allowed_domains: allowed_domains.into_iter().map(String::from).collect(),
             },
+            terminal: false,
         }
     }
 

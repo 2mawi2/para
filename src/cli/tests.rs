@@ -312,6 +312,7 @@ mod cli_tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
         assert!(args.validate().is_ok());
 
@@ -334,6 +335,7 @@ mod cli_tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
         assert!(args.validate().is_err());
 
@@ -356,6 +358,7 @@ mod cli_tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
         assert!(args.validate().is_ok());
     }

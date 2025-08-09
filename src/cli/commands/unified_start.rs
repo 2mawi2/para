@@ -1,8 +1,12 @@
 use crate::cli::parser::UnifiedStartArgs;
+use crate::cli::terminal_mode::{
+    self, SessionInfo as TerminalSessionInfo, StartResponse, TerminalConfig,
+};
 use crate::config::Config;
 use crate::core::git::GitService;
 use crate::core::session::SessionManager;
 use crate::utils::{ParaError, Result};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Represents the user's intent when using the start command
@@ -125,6 +129,11 @@ fn read_prompt_file(path: &PathBuf) -> Result<String> {
 pub fn execute(config: Config, args: UnifiedStartArgs) -> Result<()> {
     args.validate()?;
 
+    // Handle terminal mode
+    if args.terminal {
+        return execute_terminal_mode(config, args);
+    }
+
     let _git_service = GitService::discover()
         .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
     let session_manager = SessionManager::new(&config);
@@ -185,6 +194,114 @@ fn validate_claude_code_ide(config: &Config) -> Result<()> {
     )))
 }
 
+/// Execute start command in terminal mode
+fn execute_terminal_mode(config: Config, args: UnifiedStartArgs) -> Result<()> {
+    // Validate terminal mode restrictions
+    terminal_mode::validate_terminal_mode_args(
+        args.terminal,
+        args.container,
+        args.sandbox_args.sandbox,
+        args.sandbox_args.sandbox_no_network,
+    )
+    .map_err(ParaError::invalid_args)?;
+
+    let _git_service = GitService::discover()
+        .map_err(|e| ParaError::git_error(format!("Failed to discover git repository: {e}")))?;
+    let session_manager = SessionManager::new(&config);
+
+    // Determine intent
+    let intent = determine_intent(&args, &session_manager)?;
+
+    // Create session based on intent
+    let (session_name, prompt_content) = match intent {
+        StartIntent::NewInteractive { name } => {
+            // For interactive sessions in terminal mode, we still create the session
+            // but return terminal configuration instead of launching IDE
+            (name, None)
+        }
+        StartIntent::NewWithAgent { name, prompt } => (name, Some(prompt)),
+    };
+
+    // Generate session name if not provided
+    let session_name =
+        session_name.unwrap_or_else(crate::utils::names::generate_friendly_name);
+
+    // Create the session through session manager
+    let mut session_manager = session_manager; // Make mutable
+    let session_info = session_manager.create_session_with_all_flags(
+        session_name.clone(),
+        None, // base_branch
+        args.dangerously_skip_permissions,
+        false, // sandbox_enabled - terminal mode doesn't support sandboxing
+        None,  // sandbox_profile
+    )?;
+    let worktree_path = session_info.worktree_path.clone();
+
+    // Build terminal configuration
+    let mut env_vars = HashMap::new();
+    env_vars.insert("PARA_SESSION".to_string(), session_name.clone());
+    env_vars.insert(
+        "PARA_WORKTREE".to_string(),
+        worktree_path.display().to_string(),
+    );
+
+    // Build AI command and arguments
+    let ai_command = config.ide.command.clone();
+    let mut ai_args = Vec::new();
+
+    // Add Claude-specific flags if applicable
+    if config.ide.name.to_lowercase() == "claude" || config.ide.name.to_lowercase() == "claude code"
+    {
+        if args.dangerously_skip_permissions {
+            ai_args.push("--dangerously-skip-permissions".to_string());
+        }
+
+        // If we have a prompt, it will be passed as an argument
+        if let Some(ref prompt) = prompt_content {
+            // The prompt will be passed as the last argument
+            ai_args.push(prompt.clone());
+        }
+    }
+
+    let terminal_config = TerminalConfig {
+        working_directory: worktree_path.clone(),
+        ai_command: ai_command.clone(),
+        ai_args,
+        initial_prompt: prompt_content.clone(),
+        resume_prompt: None,
+        claude_session_id: None,
+        environment: env_vars,
+        note: if prompt_content.is_some() {
+            Some("AI agent session - prompt will be passed via stdin or arguments".to_string())
+        } else {
+            Some("Interactive session - no initial prompt".to_string())
+        },
+    };
+
+    let response = StartResponse {
+        success: true,
+        action: if prompt_content.is_some() {
+            "start_agent".to_string()
+        } else {
+            "start_interactive".to_string()
+        },
+        session: TerminalSessionInfo {
+            name: session_name.clone(),
+            id: session_name.clone(),
+            worktree_path: worktree_path.clone(),
+            branch: format!("para/{session_name}"),
+            base_branch: "main".to_string(),      // Default to main
+            has_uncommitted_changes: Some(false), // New session, no changes yet
+        },
+        terminal_config,
+        metadata: terminal_mode::build_metadata("start"),
+    };
+
+    // Output JSON response
+    println!("{}", serde_json::to_string_pretty(&response).unwrap());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +329,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         }
     }
 

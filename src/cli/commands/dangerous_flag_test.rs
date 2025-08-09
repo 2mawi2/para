@@ -116,6 +116,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Note: unified_start::execute requires Claude Code in wrapper mode

@@ -23,6 +23,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert_eq!(args.docker_image, Some("custom:latest".to_string()));
@@ -50,6 +51,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert_eq!(args.docker_image, Some("python:3.11".to_string()));
@@ -77,6 +79,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert!(args.no_forward_keys);
@@ -100,6 +103,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert!(agent_args.no_forward_keys);

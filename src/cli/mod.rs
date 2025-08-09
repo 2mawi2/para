@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod completion;
 pub mod parser;
+pub mod terminal_mode;
 
 #[cfg(test)]
 mod tests;

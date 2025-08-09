@@ -26,6 +26,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert!(args.sandbox_args.sandbox);
@@ -57,6 +58,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         assert!(args.sandbox_args.sandbox);

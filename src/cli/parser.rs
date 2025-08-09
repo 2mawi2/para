@@ -255,6 +255,15 @@ pub struct ResumeArgs {
     /// Sandbox configuration
     #[command(flatten)]
     pub sandbox_args: SandboxArgs,
+
+    /// Output terminal configuration as JSON instead of launching IDE
+    #[arg(
+        long,
+        help = "Output terminal configuration as JSON instead of launching IDE.\n\
+                Useful for integrating with terminal-based tools.\n\
+                Note: Sandboxing not supported in terminal mode."
+    )]
+    pub terminal: bool,
 }
 
 #[derive(Args, Debug)]
@@ -487,6 +496,15 @@ pub struct UnifiedStartArgs {
     /// Sandbox configuration
     #[command(flatten)]
     pub sandbox_args: SandboxArgs,
+
+    /// Output terminal configuration as JSON instead of launching IDE
+    #[arg(
+        long,
+        help = "Output terminal configuration as JSON instead of launching IDE.\n\
+                Useful for integrating with terminal-based tools.\n\
+                Note: Sandboxing and Docker not supported in terminal mode."
+    )]
+    pub terminal: bool,
 }
 
 #[derive(Subcommand, Debug)]

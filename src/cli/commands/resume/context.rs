@@ -93,6 +93,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -120,6 +121,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -143,6 +145,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let result = process_resume_context(&args).unwrap();
@@ -163,6 +166,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let result = process_resume_context(&args);
@@ -191,6 +195,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         let result = process_resume_context(&args);
@@ -233,6 +238,7 @@ mod tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Process should succeed but with empty content

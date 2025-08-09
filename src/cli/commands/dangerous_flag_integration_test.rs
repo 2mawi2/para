@@ -68,6 +68,7 @@ mod integration_tests {
                 sandbox_no_network: false,
                 allowed_domains: vec![],
             },
+            terminal: false,
         };
 
         // Verify the args would include the flag
