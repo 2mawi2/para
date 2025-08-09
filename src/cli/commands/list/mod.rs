@@ -63,6 +63,7 @@ mod tests {
             verbose: false,
             archived: false,
             quiet: false,
+            json: false,
         };
 
         let result = display_sessions(&sessions, &args);

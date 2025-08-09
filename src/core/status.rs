@@ -9,22 +9,44 @@ use crate::utils::ParaError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DiffStats {
+    pub files_changed: usize,
     pub additions: usize,
     pub deletions: usize,
+    #[serde(alias = "insertions")]
+    pub insertions: usize, // Duplicate of additions for UI compatibility
 }
 
 impl DiffStats {
-    pub fn new(additions: usize, deletions: usize) -> Self {
+    pub fn new(files_changed: usize, additions: usize, deletions: usize) -> Self {
         Self {
+            files_changed,
             additions,
             deletions,
+            insertions: additions, // Set both fields
         }
+    }
+
+    // Backward compatibility constructor for tests
+    #[cfg(test)]
+    pub fn from_additions_deletions(additions: usize, deletions: usize) -> Self {
+        Self::new(0, additions, deletions)
     }
 }
 
 impl std::fmt::Display for DiffStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "+{} -{}", self.additions, self.deletions)
+        if self.files_changed > 0 {
+            write!(
+                f,
+                "{} file{}, +{} -{}",
+                self.files_changed,
+                if self.files_changed == 1 { "" } else { "s" },
+                self.additions,
+                self.deletions
+            )
+        } else {
+            write!(f, "+{} -{}", self.additions, self.deletions)
+        }
     }
 }
 

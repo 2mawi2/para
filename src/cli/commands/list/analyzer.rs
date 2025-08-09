@@ -56,6 +56,13 @@ pub fn list_active_sessions(
             is_current,
             session_type,
             container_status,
+            // Monitor fields - to be populated later if needed
+            session_state: None,
+            current_task: None,
+            test_status: None,
+            todo_percentage: None,
+            is_blocked: None,
+            diff_stats: None,
         };
 
         sessions.push(session_info);
@@ -150,6 +157,13 @@ pub fn create_session_info_from_state(
         is_current: false,
         session_type,
         container_status,
+        // Monitor fields
+        session_state: None,
+        current_task: None,
+        test_status: None,
+        todo_percentage: None,
+        is_blocked: None,
+        diff_stats: None,
     }
 }
 
@@ -190,6 +204,13 @@ pub fn create_session_info_from_branch(session_id: &str, branch_name: &str) -> S
         is_current: false,
         session_type: SessionType::Worktree,
         container_status: None,
+        // Monitor fields
+        session_state: None,
+        current_task: None,
+        test_status: None,
+        todo_percentage: None,
+        is_blocked: None,
+        diff_stats: None,
     }
 }
 
@@ -341,6 +362,13 @@ mod tests {
                     is_current: false,
                     session_type: SessionType::Worktree,
                     container_status: None,
+                    // Monitor fields
+                    session_state: None,
+                    current_task: None,
+                    test_status: None,
+                    todo_percentage: None,
+                    is_blocked: None,
+                    diff_stats: None,
                 };
                 sessions.push(session_info);
             }

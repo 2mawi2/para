@@ -69,6 +69,7 @@ fn validate_branch_exists(executor: &GitCommandExecutor, branch: &str) -> Result
 
 /// Parse git diff numstat output into DiffStats
 fn parse_diff_numstat(output: &str) -> Result<DiffStats> {
+    let mut files_changed = 0;
     let mut additions = 0;
     let mut deletions = 0;
 
@@ -77,6 +78,9 @@ fn parse_diff_numstat(output: &str) -> Result<DiffStats> {
     for line in output.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() >= 2 {
+            // Count this as a changed file
+            files_changed += 1;
+
             // Handle binary files which show as "-"
             if parts[0] != "-" {
                 if let Ok(add) = parts[0].parse::<usize>() {
@@ -91,7 +95,7 @@ fn parse_diff_numstat(output: &str) -> Result<DiffStats> {
         }
     }
 
-    Ok(DiffStats::new(additions, deletions))
+    Ok(DiffStats::new(files_changed, additions, deletions))
 }
 
 /// Calculate git diff statistics between the current HEAD and a base branch
@@ -208,11 +212,18 @@ mod tests {
 
     #[test]
     fn test_diff_stats_display() {
-        let stats = DiffStats::new(123, 45);
-        assert_eq!(stats.to_string(), "+123 -45");
+        let stats = DiffStats::new(5, 123, 45);
+        assert_eq!(stats.to_string(), "5 files, +123 -45");
 
-        let stats_zero = DiffStats::new(0, 0);
+        let stats_single = DiffStats::new(1, 10, 5);
+        assert_eq!(stats_single.to_string(), "1 file, +10 -5");
+
+        let stats_zero = DiffStats::new(0, 0, 0);
         assert_eq!(stats_zero.to_string(), "+0 -0");
+
+        // Test backward compatibility
+        let stats_compat = DiffStats::from_additions_deletions(50, 20);
+        assert_eq!(stats_compat.to_string(), "+50 -20");
     }
 
     #[test]
@@ -285,6 +296,7 @@ mod tests {
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
         // We committed a file with 3 lines and added 1 more line as unstaged
         // So total should be 4 additions compared to main
+        assert_eq!(stats.files_changed, 1);
         assert_eq!(stats.additions, 4);
         assert_eq!(stats.deletions, 0);
     }
@@ -311,6 +323,7 @@ mod tests {
         let stats = calculate_diff_stats(git_temp.path(), "main").unwrap();
         // Staged changes are included (since we're on the same commit as main,
         // only staged/unstaged changes will show up)
+        assert_eq!(stats.files_changed, 1);
         assert_eq!(stats.additions, 2);
         assert_eq!(stats.deletions, 0);
     }
@@ -325,9 +338,9 @@ mod tests {
 
     #[test]
     fn test_diff_stats_equality() {
-        let stats1 = DiffStats::new(10, 5);
-        let stats2 = DiffStats::new(10, 5);
-        let stats3 = DiffStats::new(10, 6);
+        let stats1 = DiffStats::new(2, 10, 5);
+        let stats2 = DiffStats::new(2, 10, 5);
+        let stats3 = DiffStats::new(2, 10, 6);
 
         assert_eq!(stats1, stats2);
         assert_ne!(stats1, stats3);

@@ -43,6 +43,7 @@ interface ParaListArgs {
   verbose?: boolean;
   archived?: boolean;
   quiet?: boolean;
+  json?: boolean;
 }
 
 interface ParaResumeArgs {
@@ -332,6 +333,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             quiet: {
               type: "boolean",
               description: "Minimal output for scripts"
+            },
+            json: {
+              type: "boolean",
+              description: "Output as JSON"
             }
           },
           additionalProperties: false
@@ -542,6 +547,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           if (listArgs.quiet) {
             cmdArgs.push("--quiet");
+          }
+          if (listArgs.json) {
+            cmdArgs.push("--json");
           }
           result = await runParaCommand(cmdArgs);
         }

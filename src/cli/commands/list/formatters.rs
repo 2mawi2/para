@@ -1,9 +1,11 @@
 use crate::cli::parser::ListArgs;
+use crate::core::status::{DiffStats, TestStatus};
 use crate::utils::Result;
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SessionInfo {
     pub session_id: String,
     pub branch: String,
@@ -16,9 +18,24 @@ pub struct SessionInfo {
     pub is_current: bool,
     pub session_type: SessionType,
     pub container_status: Option<String>,
+
+    // Monitor-specific fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_state: Option<String>, // active/idle/review/stale
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_task: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_status: Option<TestStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub todo_percentage: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_blocked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_stats: Option<DiffStats>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SessionStatus {
     Active,
     Dirty,
@@ -26,7 +43,8 @@ pub enum SessionStatus {
     Archived,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SessionType {
     Worktree,
     Container,
@@ -53,7 +71,9 @@ impl SessionStatus {
 }
 
 pub fn display_sessions(sessions: &[SessionInfo], args: &ListArgs) -> Result<()> {
-    let result = if args.quiet {
+    let result = if args.json {
+        display_json_sessions(sessions)
+    } else if args.quiet {
         display_quiet_sessions(sessions)
     } else if args.verbose {
         display_verbose_sessions(sessions)
@@ -61,7 +81,8 @@ pub fn display_sessions(sessions: &[SessionInfo], args: &ListArgs) -> Result<()>
         display_compact_sessions(sessions)
     };
 
-    if !args.quiet && result.is_ok() {
+    // Only show tip for non-JSON, non-quiet output
+    if !args.quiet && !args.json && result.is_ok() {
         println!("\nTip: Use 'para monitor' for interactive session management");
     }
 
@@ -72,6 +93,14 @@ pub fn display_quiet_sessions(sessions: &[SessionInfo]) -> Result<()> {
     for session in sessions {
         println!("{}", session.session_id);
     }
+    Ok(())
+}
+
+pub fn display_json_sessions(sessions: &[SessionInfo]) -> Result<()> {
+    let json = serde_json::to_string_pretty(sessions).map_err(|e| {
+        crate::utils::ParaError::config_error(format!("Failed to serialize sessions to JSON: {e}"))
+    })?;
+    println!("{json}");
     Ok(())
 }
 
@@ -189,6 +218,13 @@ mod tests {
             is_current,
             session_type: SessionType::Worktree,
             container_status: None,
+            // Monitor fields
+            session_state: None,
+            current_task: None,
+            test_status: None,
+            todo_percentage: None,
+            is_blocked: None,
+            diff_stats: None,
         }
     }
 
@@ -312,5 +348,32 @@ mod tests {
         assert_eq!(sessions[1].session_id, "middle");
         assert_eq!(sessions[2].session_id, "earliest");
         assert_eq!(sessions[3].session_id, "none"); // None should be last
+    }
+
+    #[test]
+    fn test_display_json_sessions() -> Result<()> {
+        let sessions = vec![
+            create_test_session_info(
+                "test-session-1",
+                "para/test-branch-1",
+                SessionStatus::Active,
+                false,
+            ),
+            create_test_session_info(
+                "test-session-2",
+                "para/test-branch-2",
+                SessionStatus::Dirty,
+                true,
+            ),
+        ];
+
+        // Verify it serializes without error
+        let json = serde_json::to_string_pretty(&sessions)?;
+        assert!(json.contains("test-session-1"));
+        assert!(json.contains("test-session-2"));
+        assert!(json.contains(r#""status": "active""#));
+        assert!(json.contains(r#""status": "dirty""#));
+
+        Ok(())
     }
 }

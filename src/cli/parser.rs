@@ -316,6 +316,10 @@ pub struct ListArgs {
     /// Quiet output (minimal formatting for completion)
     #[arg(long, short = 'q', help = "Quiet output for completion")]
     pub quiet: bool,
+
+    /// Output as JSON
+    #[arg(long, help = "Output as JSON")]
+    pub json: bool,
 }
 
 #[derive(Args, Debug)]

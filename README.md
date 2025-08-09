@@ -1,6 +1,20 @@
 # Para - Parallel IDE Workflow Helper
 
-Para enables developers to run multiple Claude Code sessions simultaneously. Each session operates in an isolated Git worktree with its own VS Code instance, allowing parallel development without merge conflicts.
+Para enables developers to run multiple Claude Code sessions simultaneously. Each session operates in an isolated Git worktree with its own IDE window, allowing parallel AI-assisted development without merge conflicts.
+
+## What is Para?
+
+Para is a command-line tool specifically designed for [Claude Code](https://claude.ai/code) - Anthropic's AI coding assistant. It allows you to run multiple Claude Code sessions in parallel, each working on different features simultaneously.
+
+## Prerequisites
+
+Before installing Para, ensure you have:
+
+1. **Claude Code** - Available at [claude.ai/code](https://claude.ai/code)
+2. **VS Code or Cursor** - Required as a wrapper for Claude Code ([VS Code](https://code.visualstudio.com/) or [Cursor](https://cursor.sh/))
+3. **Git 2.5+** - Check with `git --version`
+
+> **Note**: Para works exclusively with Claude Code. Other IDEs are not supported.
 
 ## The Problem
 
@@ -8,7 +22,7 @@ When using Claude Code for development, you're limited to one task at a time. Sw
 
 ## The Solution
 
-Para orchestrates multiple Claude Code sessions in parallel. While one Claude works on authentication, another builds the API, and a third creates the UI - all simultaneously in separate VS Code windows.
+Para orchestrates multiple Claude Code sessions in parallel. While one Claude works on authentication, another builds the API, and a third creates the UI - all simultaneously in separate IDE windows.
 
 ## Simple Example
 
@@ -57,13 +71,13 @@ https://github.com/user-attachments/assets/5737e21d-ab96-428c-87d3-683657f8d5c0
 
 ## Installation
 
-### Homebrew (Recommended)
+### Homebrew (Recommended for macOS/Linux)
 
 ```bash
 brew install 2mawi2/tap/para
 ```
 
-### Build from Source
+### Build from Source (All Platforms)
 
 ```bash
 git clone https://github.com/2mawi2/para.git
@@ -75,6 +89,15 @@ After manual installation, add to PATH:
 ```bash
 # bash/zsh: add to ~/.bashrc or ~/.zshrc
 export PATH="$HOME/.cargo/bin:$PATH"
+
+# Windows PowerShell: add to profile
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
+```
+
+### Verify Installation
+
+```bash
+para --version
 ```
 
 For detailed build instructions, see the [Development Guide](docs/DEVELOPMENT.md).
@@ -93,11 +116,19 @@ just uninstall    # or: rm ~/.cargo/bin/para
 
 Remove all Para data, config, and sessions:
 ```bash
-rm -rf ~/Library/Application\ Support/para  # macOS config
-rm -rf ~/.config/para                       # Linux config
-rm -rf .para/                               # Session state (per repo)
+# macOS
+rm -rf ~/Library/Application\ Support/para
+rm -rf .para/
 
-# Remove all Git worktrees
+# Linux
+rm -rf ~/.config/para
+rm -rf .para/
+
+# Windows (PowerShell)
+Remove-Item -Path "$env:APPDATA\para" -Recurse -Force
+Remove-Item -Path ".para" -Recurse -Force
+
+# Remove all Git worktrees (all platforms)
 git worktree list | grep para/ | awk '{print $1}' | xargs -I {} git worktree remove {} --force
 ```
 
@@ -105,24 +136,70 @@ git worktree list | grep para/ | awk '{print $1}' | xargs -I {} git worktree rem
 
 ## Getting Started
 
+### 1. Initial Setup
+
 ```bash
-# Configure Claude Code as your IDE
+# Configure Para to use Claude Code with your preferred wrapper
 para config
 
-# Enable MCP integration in your project
-para mcp init
-
-# Start your first parallel session
-para start backend -p "create REST API with Express"
-
-# Start another session (opens in new VS Code window)
-para start frontend -p "build React dashboard"
-
-# Monitor all sessions
-para monitor
+# This will ask:
+# - Which wrapper IDE to use (VS Code or Cursor)
+# - Confirm Claude Code setup
 ```
 
+### 2. First Session (Start Simple)
 
+```bash
+# Navigate to your project directory
+cd my-project
+
+# Start a single Claude Code session to test
+para start feature-x -p "add user profile page"
+
+# This will:
+# - Create a new Git worktree branch
+# - Open Claude Code in VS Code/Cursor
+# - Claude will start working on your task
+```
+
+### 3. Parallel Development
+
+```bash
+# Once comfortable, start multiple sessions
+para start backend -p "create REST API with Express"
+para start frontend -p "build React dashboard"
+
+# Monitor all active sessions
+para monitor  # or just 'para' for short
+```
+
+### 4. MCP Integration (Optional but Recommended)
+
+```bash
+# Enable Model Context Protocol for better Claude integration
+para mcp init
+
+# This allows Claude to directly manage Para sessions
+```
+
+## Common First-Time Issues
+
+### "Claude Code is not available"
+- **Solution**: Ensure you have Claude Code installed from [claude.ai/code](https://claude.ai/code)
+- Claude Code runs in the cloud and requires an active subscription
+
+### "para: command not found"
+- **Solution**: Add Para to your PATH after installation (see Installation section)
+- Restart your terminal after updating PATH
+
+### "Para only supports Claude Code"
+- **Solution**: Para is designed exclusively for Claude Code
+- Run `para config` to set up Claude Code with VS Code or Cursor
+
+### VS Code/Cursor doesn't open
+- **Solution**: Ensure VS Code (`code`) or Cursor (`cursor`) command is available in terminal
+- VS Code: View → Command Palette → "Shell Command: Install 'code' command in PATH"
+- Cursor: Similar process in Cursor's command palette
 
 ## Orchestrating Parallel Development
 
@@ -210,9 +287,13 @@ Without Para, you're limited to one Claude Code session at a time. With Para, yo
 
 ## AI Integration
 
+### What is MCP?
+
+MCP (Model Context Protocol) is Claude's way of interacting with external tools. When enabled, Claude can directly create and manage Para sessions, making orchestration seamless.
+
 ### MCP Integration
 
-Para integrates with Claude Code through MCP (Model Context Protocol). The typical workflow is:
+Para integrates with Claude Code through MCP. The typical workflow is:
 
 1. **Plan Development** - Work with Claude to create detailed implementation plans
 2. **Save Plans** - Write these plans to .md files (wherever you prefer)
@@ -355,15 +436,41 @@ For detailed configuration and advanced usage, see the [Documentation](#document
 
 ## Requirements
 
-- Git 2.5+ (for worktree support)
-- Your preferred IDE with CLI support
+- **Git 2.5+** - For worktree support (check: `git --version`)
+- **Claude Code** - Available at [claude.ai/code](https://claude.ai/code) 
+- **VS Code or Cursor** - Required as wrapper for Claude Code
+- **Operating System** - macOS, Linux, or Windows (with some limitations)
 
-## Getting Productive
+## Quick Start Summary
 
-1. **Install**: `brew install 2mawi2/tap/para`
-2. **Configure**: `para config` (sets up your IDE)
-3. **Enable MCP**: `para mcp init` (for Claude Code integration)
-4. **Start building**: Use the planning workflow above
+1. **Prerequisites Check**:
+   - Claude Code subscription from [claude.ai/code](https://claude.ai/code)
+   - VS Code or Cursor installed
+   - Git 2.5+ (`git --version`)
+
+2. **Install Para**:
+   ```bash
+   brew install 2mawi2/tap/para  # or build from source
+   para --version                 # verify installation
+   ```
+
+3. **Configure**:
+   ```bash
+   para config     # Set up Claude Code with VS Code/Cursor
+   ```
+
+4. **First Session**:
+   ```bash
+   cd your-project
+   para start my-feature -p "implement user authentication"
+   ```
+
+5. **Go Parallel** (when ready):
+   ```bash
+   para start backend -p "create API"
+   para start frontend -p "build UI"
+   para monitor  # watch progress
+   ```
 
 For shell completion: `para init`
 
