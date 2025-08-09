@@ -343,14 +343,24 @@ fn determine_session_state(session_info: &SessionInfo) -> String {
         _ => {}
     }
 
-    // Use last_modified as proxy for activity
-    if let Some(last_modified) = session_info.last_modified {
-        let now = Utc::now();
-        let elapsed = now - last_modified;
+    // Try to detect real activity from the worktree (like monitor does)
+    let last_activity = if session_info.worktree_path.exists() {
+        // Try to use the monitor's activity detection for more accuracy
+        crate::ui::monitor::activity::detect_last_activity(&session_info.worktree_path)
+            .or(session_info.last_modified)
+    } else {
+        session_info.last_modified
+    };
 
+    // Use the activity time to determine state
+    if let Some(activity_time) = last_activity {
+        let now = Utc::now();
+        let elapsed = now - activity_time;
+
+        // Use the same thresholds as monitor
         match elapsed.num_minutes() {
             0..=5 => "active".to_string(),
-            6..=30 => "idle".to_string(),
+            6..=1440 => "idle".to_string(), // 1440 minutes = 24 hours
             _ => "stale".to_string(),
         }
     } else {
