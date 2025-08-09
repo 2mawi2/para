@@ -1,6 +1,7 @@
 use crate::core::git::{GitOperations, GitService};
 use crate::core::session::{SessionManager, SessionStatus as UnifiedSessionStatus};
-use crate::utils::Result;
+use crate::core::status::Status;
+use crate::utils::{get_main_repository_root, Result};
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
@@ -74,7 +75,10 @@ pub fn list_active_sessions(
             .cmp(&a.last_modified.unwrap_or(DateTime::<Utc>::MIN_UTC))
     });
 
-    Ok(sessions)
+    // Enrich sessions with monitor data
+    let enriched_sessions = enrich_sessions_with_monitor_data(sessions, session_manager.config());
+
+    Ok(enriched_sessions)
 }
 
 pub fn list_archived_sessions(
@@ -257,6 +261,91 @@ pub fn extract_session_id_from_archived_branch(
         }
     }
     None
+}
+
+/// Enrich sessions with monitor data (status, diff stats, test status, etc.)
+pub fn enrich_sessions_with_monitor_data(
+    mut sessions: Vec<SessionInfo>,
+    config: &crate::config::Config,
+) -> Vec<SessionInfo> {
+    // Resolve state directory path correctly
+    let state_dir = if Path::new(&config.directories.state_dir).is_absolute() {
+        PathBuf::from(&config.directories.state_dir)
+    } else {
+        // Get the main repository root and join the relative state directory
+        match get_main_repository_root() {
+            Ok(repo_root) => repo_root.join(&config.directories.state_dir),
+            Err(_) => PathBuf::from(&config.directories.state_dir), // Graceful fallback
+        }
+    };
+
+    for session_info in &mut sessions {
+        // Load agent status if available
+        if let Ok(Some(status)) = Status::load(&state_dir, &session_info.session_id) {
+            // Set current task from status
+            session_info.current_task = Some(status.current_task);
+
+            // Set test status
+            session_info.test_status = Some(status.test_status);
+
+            // Calculate todo percentage
+            if let (Some(completed), Some(total)) = (status.todos_completed, status.todos_total) {
+                if total > 0 {
+                    session_info.todo_percentage =
+                        Some(((completed as f32 / total as f32) * 100.0) as u8);
+                }
+            }
+
+            // Set blocked status
+            session_info.is_blocked = Some(status.is_blocked);
+
+            // Set diff stats if available
+            session_info.diff_stats = status.diff_stats;
+        } else {
+            // Try to calculate diff stats if not in status
+            if session_info.worktree_path.exists() {
+                // Get base branch (default to "main" if not specified)
+                let base_branch = &session_info.base_branch;
+
+                // Try to calculate diff stats
+                if let Ok(diff_stats) = crate::core::git::diff::calculate_diff_stats(
+                    &session_info.worktree_path,
+                    base_branch,
+                ) {
+                    session_info.diff_stats = Some(diff_stats);
+                }
+            }
+        }
+
+        // Determine session state based on activity
+        session_info.session_state = Some(determine_session_state(session_info));
+    }
+
+    sessions
+}
+
+/// Determine monitor-style session state based on activity and status
+fn determine_session_state(session_info: &SessionInfo) -> String {
+    // Check for review/ready states first
+    match session_info.status {
+        SessionStatus::Archived => return "archived".to_string(),
+        SessionStatus::Missing => return "missing".to_string(),
+        _ => {}
+    }
+
+    // Use last_modified as proxy for activity
+    if let Some(last_modified) = session_info.last_modified {
+        let now = Utc::now();
+        let elapsed = now - last_modified;
+
+        match elapsed.num_minutes() {
+            0..=5 => "active".to_string(),
+            6..=30 => "idle".to_string(),
+            _ => "stale".to_string(),
+        }
+    } else {
+        "unknown".to_string()
+    }
 }
 
 #[cfg(test)]
