@@ -9,10 +9,11 @@ use crate::utils::ParaError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DiffStats {
+    #[serde(default)]
     pub files_changed: usize,
     pub additions: usize,
     pub deletions: usize,
-    #[serde(alias = "insertions")]
+    #[serde(default, alias = "insertions")]
     pub insertions: usize, // Duplicate of additions for UI compatibility
 }
 
@@ -204,8 +205,17 @@ impl Status {
                 match file.read_to_string(&mut json) {
                     Ok(_) => {
                         // Try to parse the content
-                        match serde_json::from_str(&json) {
-                            Ok(status) => Ok(Some(status)),
+                        match serde_json::from_str::<Status>(&json) {
+                            Ok(mut status) => {
+                                // Fix backward compatibility for DiffStats
+                                if let Some(ref mut diff_stats) = status.diff_stats {
+                                    // If insertions is 0 but additions is not, copy additions to insertions
+                                    if diff_stats.insertions == 0 && diff_stats.additions > 0 {
+                                        diff_stats.insertions = diff_stats.additions;
+                                    }
+                                }
+                                Ok(Some(status))
+                            }
                             Err(e) => {
                                 // If parsing fails and the file is empty or contains partial data,
                                 // treat it as if the status doesn't exist yet

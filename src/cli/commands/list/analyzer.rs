@@ -299,10 +299,20 @@ pub fn enrich_sessions_with_monitor_data(
             // Set blocked status
             session_info.is_blocked = Some(status.is_blocked);
 
-            // Set diff stats if available
-            session_info.diff_stats = status.diff_stats;
+            // Set diff stats - prefer status data, fallback to calculated
+            if let Some(status_diff_stats) = status.diff_stats {
+                session_info.diff_stats = Some(status_diff_stats);
+            } else if session_info.worktree_path.exists() {
+                // Calculate diff stats if not in status
+                if let Ok(diff_stats) = crate::core::git::diff::calculate_diff_stats(
+                    &session_info.worktree_path,
+                    &session_info.base_branch,
+                ) {
+                    session_info.diff_stats = Some(diff_stats);
+                }
+            }
         } else {
-            // Try to calculate diff stats if not in status
+            // No status file - try to calculate diff stats
             if session_info.worktree_path.exists() {
                 // Get base branch (default to "main" if not specified)
                 let base_branch = &session_info.base_branch;
