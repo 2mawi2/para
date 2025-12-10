@@ -142,8 +142,7 @@ mod tests {
 
         // We can't make strong assertions about the result since it depends on the test environment
         // but we can at least verify it doesn't panic and returns a valid path
-        if result.is_ok() {
-            let repo_root = result.unwrap();
+        if let Ok(repo_root) = result {
             assert!(repo_root.is_absolute());
             assert!(repo_root.exists());
             // Since we canonicalize the path, it should not contain ".." or other relative components

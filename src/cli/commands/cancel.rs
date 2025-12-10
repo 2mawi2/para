@@ -348,9 +348,8 @@ mod tests {
 
         // The actual execute might fail due to git operations in test environment,
         // but we're testing that it doesn't fail due to uncommitted changes
-        if result.is_err() {
-            let error_msg = result.unwrap_err().to_string();
-            assert!(!error_msg.contains("uncommitted changes"));
+        if let Err(e) = result {
+            assert!(!e.to_string().contains("uncommitted changes"));
         }
     }
 
@@ -391,9 +390,8 @@ mod tests {
 
         // The actual execute might fail due to git operations,
         // but should not fail due to non-interactive mode
-        if result.is_err() {
-            let error_msg = result.unwrap_err().to_string();
-            assert!(!error_msg.contains("non-interactive mode"));
+        if let Err(e) = result {
+            assert!(!e.to_string().contains("non-interactive mode"));
         }
 
         std::env::remove_var("PARA_NON_INTERACTIVE");

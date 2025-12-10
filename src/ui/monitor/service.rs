@@ -625,7 +625,7 @@ mod tests {
             is_blocked: false,
         };
 
-        let mut sessions = vec![session1, session2, session3];
+        let mut sessions = [session1, session2, session3];
         let current_session_name = Some("current-session".to_string());
 
         // Test sorting logic from load_sessions
