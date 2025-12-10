@@ -1,5 +1,8 @@
+#[cfg(target_os = "macos")]
 pub mod launch_file_parser;
+#[cfg(target_os = "macos")]
 pub mod macos;
+
 #[cfg(test)]
 mod tests;
 
