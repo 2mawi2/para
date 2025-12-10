@@ -1,5 +1,5 @@
 use crate::utils::error::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub mod archive_branch_iterator;
 pub mod branch;
@@ -22,21 +22,17 @@ pub trait GitOperations {
     fn finish_session(&self, request: FinishRequest) -> Result<FinishResult>;
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>>;
     fn list_branches(&self) -> Result<Vec<BranchInfo>>;
-    fn create_branch(&self, name: &str, base: &str) -> Result<()>;
     fn delete_branch(&self, name: &str, force: bool) -> Result<()>;
     fn branch_exists(&self, name: &str) -> Result<bool>;
     fn has_uncommitted_changes(&self) -> Result<bool>;
     fn is_clean_working_tree(&self) -> Result<bool>;
     fn stage_all_changes(&self) -> Result<()>;
-    fn archive_branch(&self, branch: &str, prefix: &str) -> Result<String>;
     fn archive_branch_with_session_name(
         &self,
         branch: &str,
         session_name: &str,
         prefix: &str,
     ) -> Result<String>;
-    fn restore_archived_branch(&self, archived_branch: &str, prefix: &str) -> Result<String>;
-    fn cleanup_stale_worktrees(&self) -> Result<Vec<PathBuf>>;
 }
 
 impl GitOperations for GitRepository {
@@ -65,11 +61,6 @@ impl GitOperations for GitRepository {
         manager.list_branches()
     }
 
-    fn create_branch(&self, name: &str, base: &str) -> Result<()> {
-        let manager = BranchManager::new(self);
-        manager.create_branch(name, base)
-    }
-
     fn delete_branch(&self, name: &str, force: bool) -> Result<()> {
         let manager = BranchManager::new(self);
         manager.delete_branch(name, force)
@@ -92,11 +83,6 @@ impl GitOperations for GitRepository {
         GitRepository::stage_all_changes(self)
     }
 
-    fn archive_branch(&self, branch: &str, prefix: &str) -> Result<String> {
-        let manager = BranchManager::new(self);
-        manager.move_to_archive(branch, prefix)
-    }
-
     fn archive_branch_with_session_name(
         &self,
         branch: &str,
@@ -105,16 +91,6 @@ impl GitOperations for GitRepository {
     ) -> Result<String> {
         let manager = BranchManager::new(self);
         manager.move_to_archive_with_session_name(branch, session_name, prefix)
-    }
-
-    fn restore_archived_branch(&self, archived_branch: &str, prefix: &str) -> Result<String> {
-        let manager = BranchManager::new(self);
-        manager.restore_from_archive(archived_branch, prefix)
-    }
-
-    fn cleanup_stale_worktrees(&self) -> Result<Vec<PathBuf>> {
-        let manager = WorktreeManager::new(self);
-        manager.cleanup_stale_worktrees()
     }
 }
 
@@ -139,11 +115,11 @@ impl GitService {
         &self.repo
     }
 
-    pub fn worktree_manager(&self) -> WorktreeManager {
+    pub fn worktree_manager(&self) -> WorktreeManager<'_> {
         WorktreeManager::new(&self.repo)
     }
 
-    pub fn branch_manager(&self) -> BranchManager {
+    pub fn branch_manager(&self) -> BranchManager<'_> {
         BranchManager::new(&self.repo)
     }
 
@@ -201,10 +177,6 @@ impl GitOperations for GitService {
         self.repo.list_branches()
     }
 
-    fn create_branch(&self, name: &str, base: &str) -> Result<()> {
-        self.repo.create_branch(name, base)
-    }
-
     fn delete_branch(&self, name: &str, force: bool) -> Result<()> {
         self.repo.delete_branch(name, force)
     }
@@ -225,10 +197,6 @@ impl GitOperations for GitService {
         self.repo.stage_all_changes()
     }
 
-    fn archive_branch(&self, branch: &str, prefix: &str) -> Result<String> {
-        self.repo.archive_branch(branch, prefix)
-    }
-
     fn archive_branch_with_session_name(
         &self,
         branch: &str,
@@ -237,14 +205,6 @@ impl GitOperations for GitService {
     ) -> Result<String> {
         self.repo
             .archive_branch_with_session_name(branch, session_name, prefix)
-    }
-
-    fn restore_archived_branch(&self, archived_branch: &str, prefix: &str) -> Result<String> {
-        self.repo.restore_archived_branch(archived_branch, prefix)
-    }
-
-    fn cleanup_stale_worktrees(&self) -> Result<Vec<PathBuf>> {
-        self.repo.cleanup_stale_worktrees()
     }
 }
 
@@ -270,6 +230,7 @@ mod tests {
             .expect("Failed to get current branch");
 
         service
+            .branch_manager()
             .create_branch("test-trait", &current_branch)
             .expect("Failed to create branch via trait");
 

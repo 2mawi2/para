@@ -51,7 +51,7 @@ fn create_dialog_area(f: &mut Frame, width: u16, height: u16) -> Rect {
     area
 }
 
-fn create_dialog_block(title: &str, border_color: Color) -> Block {
+fn create_dialog_block(title: &str, border_color: Color) -> Block<'_> {
     Block::default()
         .title(title)
         .borders(Borders::ALL)
@@ -72,7 +72,7 @@ fn create_control_buttons_line<'a>(confirm_text: &'a str, cancel_text: &'a str) 
     ])
 }
 
-fn create_styled_span(text: &str, color: Color, bold: bool) -> Span {
+fn create_styled_span(text: &str, color: Color, bold: bool) -> Span<'_> {
     let mut style = Style::default().fg(color);
     if bold {
         style = style.add_modifier(Modifier::BOLD);
@@ -80,7 +80,7 @@ fn create_styled_span(text: &str, color: Color, bold: bool) -> Span {
     Span::styled(text, style)
 }
 
-fn create_default_cell_for_none(default_text: &str, is_stale: bool) -> Cell {
+fn create_default_cell_for_none(default_text: &str, is_stale: bool) -> Cell<'_> {
     let color = if is_stale {
         crate::ui::monitor::types::SessionStatus::dimmed_text_color()
     } else {
