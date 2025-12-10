@@ -1,7 +1,4 @@
 #[cfg(test)]
-pub mod mock_platform;
-
-#[cfg(test)]
 pub mod test_safety;
 
 #[cfg(test)]

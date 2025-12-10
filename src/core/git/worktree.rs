@@ -262,27 +262,6 @@ impl<'a> WorktreeManager<'a> {
             .unwrap_or(false)
     }
 
-    pub fn cleanup_stale_worktrees(&self) -> Result<Vec<PathBuf>> {
-        let mut cleaned_paths = Vec::new();
-        let worktrees = self.list_worktrees()?;
-
-        for worktree in worktrees {
-            if !worktree.path.exists() || worktree.path == self.repo.root {
-                continue;
-            }
-
-            if self.validate_worktree(&worktree.path).is_err() {
-                match self.force_remove_worktree(&worktree.path) {
-                    Ok(()) => cleaned_paths.push(worktree.path),
-                    Err(_) => continue,
-                }
-            }
-        }
-
-        self.prune_worktrees()?;
-        Ok(cleaned_paths)
-    }
-
     fn validate_branch_name(&self, branch_name: &str) -> Result<()> {
         GitValidator::validate_branch_name(branch_name)
     }

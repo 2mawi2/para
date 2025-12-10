@@ -156,7 +156,10 @@ mod tests {
 
         // Create a new branch
         // Create and checkout a new branch
-        git_service.create_branch("test-branch", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("test-branch", "main")
+            .unwrap();
 
         // Manually checkout the branch since checkout_branch is not in GitOperations
         std::process::Command::new("git")
@@ -222,7 +225,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a new branch
-        git_service.create_branch("feature-branch", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("feature-branch", "main")
+            .unwrap();
 
         // Checkout the branch
         std::process::Command::new("git")
@@ -259,7 +265,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a branch to work on
-        git_service.create_branch("work-branch", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("work-branch", "main")
+            .unwrap();
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(["checkout", "work-branch"])
@@ -296,7 +305,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a branch to work on
-        git_service.create_branch("stage-branch", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("stage-branch", "main")
+            .unwrap();
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(["checkout", "stage-branch"])
@@ -343,6 +355,7 @@ mod tests {
 
         // Create a new branch with changes
         git_service
+            .branch_manager()
             .create_branch("test-diff-branch", "main")
             .unwrap();
         std::process::Command::new("git")
@@ -390,7 +403,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a new branch (simulating a para session branch)
-        git_service.create_branch("para/fix-bug", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("para/fix-bug", "main")
+            .unwrap();
 
         // Checkout the branch
         std::process::Command::new("git")
@@ -437,7 +453,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create and checkout a new branch
-        git_service.create_branch("para/test-zero", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("para/test-zero", "main")
+            .unwrap();
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(["checkout", "para/test-zero"])
@@ -489,7 +508,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a feature branch and add a file
-        git_service.create_branch("feature", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("feature", "main")
+            .unwrap();
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(["checkout", "feature"])
@@ -551,7 +573,10 @@ mod tests {
         let _guard = TestEnvironmentGuard::new(&git_temp, &temp_dir).unwrap();
 
         // Create a branch
-        git_service.create_branch("work", "main").unwrap();
+        git_service
+            .branch_manager()
+            .create_branch("work", "main")
+            .unwrap();
         std::process::Command::new("git")
             .current_dir(git_temp.path())
             .args(["checkout", "work"])

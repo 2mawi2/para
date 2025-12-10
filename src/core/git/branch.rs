@@ -76,6 +76,9 @@ impl<'a> BranchManager<'a> {
         Ok(archived_name.to_string())
     }
 
+    /// Archive a branch using the branch name as the session name.
+    /// Only used in tests - production code uses move_to_archive_with_session_name.
+    #[cfg(test)]
     pub fn move_to_archive(&self, branch: &str, prefix: &str) -> Result<String> {
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
         let archived_name = format!("{prefix}/archived/{timestamp}/{branch}");
